@@ -13,7 +13,8 @@ export * from './scheduler/src/main/ets/network/HttpRouteProbe';
 export * from './scheduler/src/main/ets/api/RemoteRouteProfile';
 export * from './scheduler/src/main/ets/api/SchedulerTypes';
 export * from './scheduler/src/main/ets/api/SchedulerClient';
-export * from './scheduler/src/main/ets/placement/PlacementPolicy';`],
+export * from './scheduler/src/main/ets/placement/PlacementPolicy';
+export * from './scheduler/src/main/ets/state/DeviceResourceProfile';`],
   [virtual, `declare module '@kit.BasicServicesKit' { export namespace systemDateTime { enum TimeType { STARTUP } function getUptime(type: TimeType): number; } }
 declare module '@kit.AbilityKit' { export namespace common { interface Context {} } }
 declare module '@kit.ArkData' { export const preferences: { getPreferences(context: Object, options: { name: string }): Promise<{ get(key: string, value: string): Promise<string>; put(key: string, value: string): Promise<void>; flush(): Promise<void> }> }; }
@@ -40,7 +41,7 @@ const alternate = file => { const f=file.replaceAll('\\','/'); return f.startsWi
 host.fileExists = file => files.has(file.replaceAll('\\','/')) || exists(file) || !!(alternate(file) && exists(alternate(file)));
 host.readFile = file => files.get(file.replaceAll('\\','/')) ?? (alternate(file) && exists(alternate(file)) ? read(alternate(file)) : read(file));
 host.getSourceFile = (file, version) => { const text=host.readFile(file); return text === undefined ? undefined : ts.createSourceFile(file,text,version); };
-const entries = ['ShoppingTaskService','CloudShoppingExecutor','CloudApiConfig'].map(name=>root+'/entry/src/main/ets/services/'+name+'.ts');
+const entries = ['ShoppingTaskService','CloudShoppingExecutor','CloudApiConfig','RemoteTaskAdmission'].map(name=>root+'/entry/src/main/ets/services/'+name+'.ts');
 const program=ts.createProgram([...entries,virtual],options,host);
 const diagnostics=ts.getPreEmitDiagnostics(program);
 if(diagnostics.length) { console.error(ts.formatDiagnosticsWithColorAndContext(diagnostics,{getCanonicalFileName:f=>f,getCurrentDirectory:()=>process.cwd(),getNewLine:()=> '\n'}));process.exitCode=1; }

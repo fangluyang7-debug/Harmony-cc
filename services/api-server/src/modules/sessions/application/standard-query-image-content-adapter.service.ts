@@ -33,20 +33,16 @@ export class StandardQueryImageContentAdapterService implements QueryImageConten
   }): Promise<QueryImageCropResult> {
     const imageBuffer = await this.fetchImageBuffer(input.signedUrl, input.expectedHash);
     const ownerId = RuntimeWorkScope.ownerId();
-    if (ownerId && this.phoneDispatch) {
-      const signal = RuntimeWorkScope.signal(30_000);
-      try {
-        const phone = await this.phoneDispatch.cropForShopping(ownerId, input.signedUrl, imageBuffer, input, signal);
-        if (phone) {
-          RuntimeWorkScope.recordPlacement({ capability: 'image.crop.v1', mode: 'PHONE_DEMO',
-            actualDeviceId: phone.result.strategy.replace('phone_crop_demo_', ''), phoneJobId: phone.jobId });
-          return phone.result;
-        }
-      } catch (error) {
-        if (signal.aborted) throw error;
-        RuntimeWorkScope.recordPlacement({ capability: 'image.crop.v1', mode: 'PHONE_DEMO',
-          actualDeviceId: 'cloud-runtime', reason: (error as Error).message });
-      }
+    if (this.dispatch && RuntimeWorkScope.ownerId()) {
+      const capability = 'image.crop.v1';
+      const parameters = {box:input.box,paddingRatio:input.paddingRatio,targetSize:input.targetSize,jpegQuality:input.jpegQuality};
+      const artifact = {artifactId:'crop-input',contentVersion:1,schemaVersion:1,schemaId:'shopping.image',
+        contentHash:createHash('sha256').update(imageBuffer).digest('hex'),data:imageBuffer,sizeBytes:imageBuffer.length};
+      return this.dispatch.dispatch({capability,inputs:[artifact],tasks:[{id:'crop',capability,dependencies:[],inputs:[artifact.artifactId],
+        outputBytes:input.targetSize*input.targetSize*4+65536,memoryMB:128,minQuality:1,parameters}]},
+        {budgetMs:RuntimeWorkScope.remainingBudget(60000),networkAllowed:true,privacyLevel:'AUTHORIZED_REMOTE',...RuntimeWorkScope.scheduling()},
+        {cloudExecutors:{[capability]:async()=>this.cropBuffer(imageBuffer,input)},
+          remoteExecutors:this.phoneDispatch&&ownerId?await this.phoneDispatch.cropAdapters(ownerId,input.signedUrl,imageBuffer,parameters):[]});
     }
     if (this.dispatch) return this.dispatch.crop(imageBuffer, input, () => this.cropBuffer(imageBuffer, input));
     return this.cropBuffer(imageBuffer, input);

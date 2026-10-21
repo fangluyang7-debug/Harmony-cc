@@ -8,6 +8,8 @@ import path from 'node:path';
 import { tmpdir } from 'node:os';
 import sharp from 'sharp';
 import { LeaseManager } from './lease-manager.mjs';
+import { WorkerExecutor, WorkerPolicy } from './worker-policy.mjs';
+import os from 'node:os';
 
 test('expired/cancelled noncooperative work retains the physical slot and cannot publish', async()=>{
   let now=0,finish;const manager=new LeaseManager({clock:()=>now});
@@ -56,8 +58,10 @@ test('real HTTP CPU worker: admission, binary artifacts, normalization checkpoin
     const image=await sharp({create:{width:64,height:64,channels:3,background:{r:80,g:120,b:40}}}).png().toBuffer();
     const imageRef=await request('artifacts',image,'owner',true,'shopping.image');
     const cropLease=await request('leases',{attemptId:'crop-1',memoryBytes:128*1024*1024,remainingBudgetMs:10000});
-    await request('execute',{...execution,leaseId:cropLease.leaseId,fencingToken:cropLease.fencingToken,input:imageRef,capability:'image.crop.v1',parameters:{box:{x:0,y:0,width:1,height:1},paddingRatio:0,targetSize:48,jpegQuality:90}});
+    await request('execute',{...execution,leaseId:cropLease.leaseId,fencingToken:cropLease.fencingToken,input:imageRef,capability:'image.crop.v1',macroContext:{urgency:true,baselineDevice:'cloud-runtime',budgetMs:10000},parameters:{box:{x:0,y:0,width:1,height:1},paddingRatio:0,targetSize:48,jpegQuality:90}});
     const crop=(await settled(cropLease.leaseId)).output;
+    assert.equal(crop.executionConfig.priority,'CRITICAL');
+    assert.equal(crop.executionConfig.threads,Math.min(os.cpus().length,6));
     const expected=await sharp(image).extract({left:0,top:0,width:64,height:64}).resize({width:48,height:48,fit:'contain',background:{r:245,g:245,b:245,alpha:1}}).jpeg({quality:90,mozjpeg:true}).toBuffer();
     assert.equal(crop.artifact.contentHash,createHash('sha256').update(expected).digest('hex'));
     await request('release',{leaseId:cropLease.leaseId});
@@ -79,3 +83,28 @@ test('real HTTP CPU worker: admission, binary artifacts, normalization checkpoin
     if(path.dirname(path.resolve(directory))===path.resolve(tmpdir())&&path.basename(directory).startsWith('harmony-worker-test-'))await rm(directory,{recursive:true,force:true});
   }
 });
+
+ test('WorkerExecutor applies macro context, rejects capacity and retains slots until settlement', async () => {
+  const policy = new WorkerPolicy({ maxSlots: 1, maxMemoryMB: 256 });
+  let finish, selected;
+  const executor = new WorkerExecutor(policy, { runTask: async (task, config) => {
+    selected = config;
+    return new Promise(resolve => { finish = resolve; });
+  }, getState: () => ({activeSlots: executor.activeSlots, usedMemoryMB: executor.usedMemoryMB, cpuUsage: 0, queueLength: 0}) });
+  const task = {id:'test', memoryMB:128, defaultThreads:4};
+  const running = executor.execute({task, macroContext:{urgency:true,baselineDevice:'cloud-runtime'}});
+  assert.equal(selected.priority,'CRITICAL');
+  assert.equal(selected.threads,Math.min(os.cpus().length,6));
+  await assert.rejects(executor.execute({task}),/CAPACITY_FULL/);
+  assert.equal(executor.activeSlots,1);
+  finish({done:true});
+  assert.deepEqual(await running,{done:true});
+  assert.equal(executor.activeSlots,0);
+  assert.equal(executor.usedMemoryMB,0);
+  await assert.rejects(executor.execute({task:{...task,memoryMB:256}}),/CAPACITY_FULL/);
+  executor.taskRunner = async () => { throw new Error('COMPUTE_FAILED'); };
+  await assert.rejects(executor.execute({task}),/COMPUTE_FAILED/);
+  assert.equal(executor.activeSlots,0);
+  assert.equal(executor.usedMemoryMB,0);
+  assert.equal(policy.admit(task,{activeSlots:0,usedMemoryMB:0,cpuUsage:1,queueLength:0}).reason,'CPU_HIGH_LOAD');
+ });

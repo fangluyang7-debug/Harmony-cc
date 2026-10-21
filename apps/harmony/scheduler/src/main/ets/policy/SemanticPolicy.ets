@@ -51,7 +51,9 @@ export class SemanticPolicy {
       (state.availableMemoryMb !== null && state.availableMemoryMb < 192)) {
       rejection = 'MEMORY_CRITICAL_PROTECTION';
     }
-    const remote: boolean = profile.inferenceLocation === InferenceLocation.REMOTE_CLOUD;
+    // ADAPTIVE is placement intent; the concrete transport still uses the cloud coordinator.
+    const remote: boolean = profile.inferenceLocation === InferenceLocation.REMOTE_CLOUD ||
+      profile.inferenceLocation === InferenceLocation.ADAPTIVE;
     if (remote && (template.privacyPolicy === PrivacyPolicy.LOCAL_ONLY ||
       (template.privacyPolicy === PrivacyPolicy.SANITIZED_REMOTE && context.inputSanitized !== true))) {
       rejection = 'PRIVACY_CONSTRAINT';

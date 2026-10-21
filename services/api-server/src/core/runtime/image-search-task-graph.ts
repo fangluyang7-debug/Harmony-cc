@@ -13,7 +13,14 @@ export function buildImageSearchTaskGraph(assetId: string): TaskGraph {
       ...shoppingTask(stage, `shopping.stage.${stage}`, index === 0 ? `asset:${assetId}` : `task:${IMAGE_SEARCH_STAGES[index - 1]}`,
         index === 0 ? [] : [IMAGE_SEARCH_STAGES[index - 1]]),
       outputType: stage === 'result' ? 'ShoppingResult' : `ShoppingStage:${stage}`,
-      constraints: { locality: 'cloud_only', privacy: 'internal', maxLatencyMs: 60000, deadlineMs: 150000, minimumQuality: 0 },
+      // 修复: 移除写死的locality,允许宏观调度器决定
+      // crop/embedding等阶段可在Worker执行,其余在Cloud
+      constraints: {
+        privacy: 'internal',
+        maxLatencyMs: 60000,
+        deadlineMs: 150000,
+        minimumQuality: 0
+      },
     })) };
 }
 

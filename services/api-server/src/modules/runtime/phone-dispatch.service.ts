@@ -1,4 +1,7 @@
-import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException, Optional } from '@nestjs/common';
+import { DeviceDirectoryService } from '../../core/runtime/device-directory.service';
+import { DispatchOptions } from '../../core/runtime/device-dispatch.service';
+import { SchedulingDecision } from '../../core/runtime/macro-scheduler.service';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import sharp = require('sharp');
@@ -9,7 +12,8 @@ const hash = (value: string): string => createHash('sha256').update(value).diges
 const LEASE_MS = 60_000;
 const CROP_WAIT_MS = 25_000;
 
-interface CropInput {
+export interface CropInput {
+  macroContext?: SchedulingDecision['macroContext'];
   imageUrl: string;
   inputHash: string;
   region: { left: number; top: number; width: number; height: number };
@@ -25,7 +29,49 @@ function fixture(): number[][] {
 
 @Injectable()
 export class PhoneDispatchService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService,@Optional() private readonly directory?:DeviceDirectoryService) {}
+
+  async reportProfile(workerUserId:string,deviceId:string,profile:unknown) {
+    this.enabled();
+    if (!this.directory) throw new ServiceUnavailableException('DEVICE_DIRECTORY_UNAVAILABLE');
+    return this.directory.reportPhone(workerUserId,deviceId,profile);
+  }
+
+  async cropAdapters(ownerUserId:string,imageUrl:string,imageBytes:Buffer,
+    parameters:Parameters<PhoneDispatchService['cropForShopping']>[3]):Promise<NonNullable<DispatchOptions['remoteExecutors']>> {
+    if (!this.directory || process.env.PHONE_DISPATCH_EXPERIMENT_ENABLED !== 'true') return [];
+    const profiles=await this.directory.phones(ownerUserId);
+    const result:NonNullable<DispatchOptions['remoteExecutors']>=[];
+    for(const device of profiles) {
+      const p=device.profile;
+      if (!p.capabilities.includes('image.crop.v1') || !p.availableBackends.includes('CPU') || p.availableSlots<1 || p.availableMemoryMB===null ||
+          ['HOT','CRITICAL','UNKNOWN'].includes(p.thermalLevel) || p.cpuUsage===null || p.cpuUsage>90) continue;
+      const active=await this.prisma.phoneDispatchJob.count({where:{deviceId:device.deviceId,state:{in:['PENDING','LEASED','STOP_REQUESTED']}}});
+      if(active)continue;
+      const key=this.phoneSampleKey(device.deviceId,imageBytes.length,parameters);
+      const sample=await this.prisma.runtimeCostSample.findUnique({where:{id:key}});
+      const measured=sample&&Date.now()-sample.observedAt.getTime()<300000?JSON.parse(sample.sampleJson):null;
+      // Unknown devices remain on a conservative declared roundtrip prior, never on fabricated links.
+      // Rollout quality/allowlist gates still have the final authority to activate them.
+      result.push({candidate:{deviceId:device.deviceId,deviceType:'PHONE',executorId:'harmony-har',
+        capabilities:['image.crop.v1'],trusted:true,observedAt:device.observedAt,ttlMs:15000,costScope:'coordinator-roundtrip',
+        resourceSnapshot:{availableSlots:p.availableSlots,availableMemoryMB:p.availableMemoryMB,queueLength:p.queueLength},
+        history:{quality:1,meanMs:measured?.mean??25000,stddevMs:measured?.deviation??5000,sampleCount:measured?.count??0}},
+        execute:async request=>{
+          const start=performance.now();
+          const value=await this.cropForShopping(ownerUserId,imageUrl,imageBytes,parameters,request.signal,device.deviceId,request.macroContext);
+          if(!value)throw new Error('PHONE_ADMISSION_REJECTED');
+          const elapsed=performance.now()-start;
+          const next={mean:measured?measured.mean*.75+elapsed*.25:elapsed,deviation:measured?Math.abs(elapsed-measured.mean):elapsed*.2,count:(measured?.count??0)+1};
+          await this.prisma.runtimeCostSample.upsert({where:{id:key},create:{id:key,sampleJson:JSON.stringify(next),observedAt:new Date()},update:{sampleJson:JSON.stringify(next),observedAt:new Date()}});
+          return value.result;
+        }});
+    }
+    return result;
+  }
+  private phoneSampleKey(deviceId:string,bytes:number,parameters:unknown):string {
+    return 'phone:'+deviceId+':'+Math.floor(Math.log2(Math.max(1,bytes)))+':'+hash(JSON.stringify(parameters));
+  }
 
   private enabled(): void {
     if (process.env.PHONE_DISPATCH_EXPERIMENT_ENABLED !== 'true') {
@@ -116,15 +162,16 @@ export class PhoneDispatchService {
   // must be recently polling; otherwise the normal cloud crop remains available.
   async cropForShopping(ownerUserId: string, imageUrl: string, imageBytes: Buffer,
     parameters: { box: { x: number; y: number; width: number; height: number };
-      paddingRatio: number; targetSize: number; jpegQuality: number }, signal: AbortSignal):
+      paddingRatio: number; targetSize: number; jpegQuality: number }, signal: AbortSignal,
+    selectedDeviceId?:string,macroContext?:SchedulingDecision['macroContext']):
     Promise<{ jobId: string; result: QueryImageCropResult } | null> {
-    if (process.env.PHONE_DISPATCH_SHOPPING_DEMO_ENABLED !== 'true' ||
+    if ((!selectedDeviceId && process.env.PHONE_DISPATCH_SHOPPING_DEMO_ENABLED !== 'true') ||
         process.env.PHONE_DISPATCH_EXPERIMENT_ENABLED !== 'true') return null;
     this.enabled();
     if (!/^https:\/\//.test(imageUrl) || imageUrl.length > 4096 || imageBytes.length > 8 * 1024 * 1024 ||
         !Number.isInteger(parameters.targetSize) || parameters.targetSize < 64 || parameters.targetSize > 1024) return null;
     const device = await this.prisma.phoneDispatchDevice.findFirst({
-      where: { ownerUserId, status: 'active', lastSeenAt: { gt: new Date(Date.now() - 10_000) } },
+      where: { ownerUserId, ...(selectedDeviceId?{id:selectedDeviceId}:{}), status: 'active', lastSeenAt: { gt: new Date(Date.now() - 10_000) } },
       orderBy: { lastSeenAt: 'desc' },
     });
     if (!device) return null;
@@ -143,6 +190,7 @@ export class PhoneDispatchService {
     const right = Math.max(left + 1, Math.min(width, Math.round(cx + side / 2)));
     const bottom = Math.max(top + 1, Math.min(height, Math.round(cy + side / 2)));
     const input: CropInput = {
+      macroContext,
       imageUrl, inputHash: '',
       region: { left, top, width: right - left, height: bottom - top },
       targetSize: parameters.targetSize, jpegQuality: parameters.jpegQuality,
@@ -155,7 +203,7 @@ export class PhoneDispatchService {
         deviceId: device.id, state: 'PENDING', kind: 'image.crop.v1',
         inputJson: JSON.stringify(input), inputHash: input.inputHash },
     });
-    const deadline = Date.now() + CROP_WAIT_MS;
+    const deadline = Date.now() + Math.min(CROP_WAIT_MS,macroContext?.budgetMs??CROP_WAIT_MS);
     try {
       while (Date.now() < deadline) {
         signal.throwIfAborted();
@@ -235,7 +283,15 @@ export class PhoneDispatchService {
         where: { workerUserId, deviceId, state: 'PENDING' }, orderBy: { createdAt: 'asc' },
       });
       if (!candidate) return { job: null, stopJobId: null };
-      const now = new Date(), leaseUntil = new Date(now.getTime() + LEASE_MS);
+      const now = new Date();
+      const cropInput=candidate.kind==='image.crop.v1'?JSON.parse(candidate.inputJson) as CropInput:null;
+      const remaining=cropInput?.macroContext?cropInput.macroContext.budgetMs-(now.getTime()-candidate.createdAt.getTime()):LEASE_MS;
+      if (remaining<=0) {
+        await this.prisma.phoneDispatchJob.updateMany({where:{id:candidate.id,state:'PENDING'},data:{state:'CANCELLED_SETTLED',finishedAt:now}});
+        continue;
+      }
+      const leaseUntil = new Date(now.getTime() + Math.min(LEASE_MS,remaining));
+      if(cropInput?.macroContext)cropInput.macroContext.budgetMs=remaining;
       let updated;
       try {
         updated = await this.prisma.phoneDispatchJob.updateMany({
@@ -250,7 +306,7 @@ export class PhoneDispatchService {
       }
       if (updated.count === 1) return { job: { jobId: candidate.id, kind: candidate.kind,
         ...(candidate.kind === 'image.crop.v1'
-          ? { crop: JSON.parse(candidate.inputJson) }
+          ? { crop: cropInput }
           : { rows: JSON.parse(candidate.inputJson) }),
         inputHash: candidate.inputHash, fence: candidate.fence + 1, deadlineAt: leaseUntil.toISOString() },
         stopJobId: null };

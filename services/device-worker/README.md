@@ -27,7 +27,7 @@ npm run worker:test
 - POST `/v1/artifacts`：二进制上传，`x-schema-id` 为 shopping.image 或 shopping.normalization-input；8 MiB 上限。
 - POST `/v1/artifacts/resolve`：owner + 完整 ArtifactRef 校验和字节 SHA-256 验证。
 - POST `/v1/leases`：attemptId、memoryBytes、remainingBudgetMs，目标原子准入。
-- POST `/v1/execute`：leaseId、fencingToken、capability、input、parameters、可选 checkpoint，以及 networkAllowed/隐私授权。
+- POST `/v1/execute`：leaseId、fencingToken、capability、input、parameters、可选 checkpoint，以及 networkAllowed/隐私授权和可选 `macroContext`（baselineDevice、selectedReason、urgency、budgetMs）。
 - POST `/v1/query`、`cancel`、`release`：均使用 leaseId。回执持久化后才对外返回。
 
 默认一个计算槽、256 MiB 申报内存预算，计算在线程内进行。取消/过期先撤销 fence；不响应停止的线程仍占槽，只有线程退出及发布完成才算物理结算。release 不删除去重回执。重启后未完成记录标记 WORKER_RESTARTED，不能自动假设执行完成；已有完成输出可查。实例不提供多进程共享目录的共识或锁，**一个数据目录只能运行一个 worker**。
@@ -49,3 +49,11 @@ PLACEMENT_POLICY_JSON 与本地策略模式相互独立。OBSERVE/SHADOW 不申�
 ## 测试边界
 
 `worker:test` 使用独立 HTTP 子进程、实际 Sharp 图片与实际 CPU 向量计算；验证双来源竞争、owner、重复派发、非协作取消占槽、迟到输出、同数量索引换版、块恢复、裁剪 hash 一致和重启回执。它是同一台电脑上的进程测试，**不是两台物理设备性能实验**。
+
+## 宏观上下文与 WorkerPolicy
+
+实际入口为 `server.mjs`。执行前通过 `WorkerExecutor` 检查槽位、申报内存和 CPU 负载；自身租约不重复计入已用资源。准入失败返回 HTTP 503 / CAPACITY_FULL。执行配置记录在日志和输出 `executionConfig` 中，线程数传入计算线程并应用到 Sharp；priority 是策略标签，通过 TASK_PRIORITY 传递，不代表操作系统实时调度优先级。
+
+API 的 TaskGraph 输入可附带 `data: Uint8Array`，上传时验证 contentHash 并保留 schemaId；不附带 data 时，引用必须已存在于目标 Worker 且归属当前 owner。任务参数通过 TaskSpec.parameters 传递。`dispatch` 接受多节点图，按完整分配拓扑执行；每个 Worker 租约仍只执行单节点、单输入计算。依赖输出以 `<nodeId>-output` 引用，通过云端中转并校验 hash；规划成本包含中间结果下载和再次上传。依赖节点需要上游返回 buffer。云端能力由本次调用的 cloudExecutors 显式提供。
+
+购物 RuntimeRunner 已接入阶段派发钩子，纯裁剪使用通用图。涉及数据库和提交语义的业务阶段仍通过云端回调执行；并未实现整条购物流程一次性跨设备放置，也未统一第二手机演示协议。设备目录仍来自配置。多节点图应提供有效实测 links；单裁剪可使用现有校准样本，缺少可用链路时保留云基线。Worker 反馈的计算耗时与传输耗时分别计量。

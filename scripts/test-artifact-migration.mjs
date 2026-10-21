@@ -18,7 +18,7 @@ try {
         await apply(client, '000001_init');
         await client.$executeRawUnsafe(`INSERT INTO ImageAsset (id,assetGroupId,variantType,isPrimaryRecognitionAsset,bucketGroup,objectKey,uploadStatus) VALUES ('keep','group','original_source',0,'recognition','old.jpg','uploaded')`);
       }
-      for (const name of ['000002_artifacts','000003_workflows','000004_session_mutations']) { await apply(client,name); await apply(client,name); }
+      for (const name of ['000002_artifacts','000003_workflows','000004_session_mutations','000007_device_directory']) { await apply(client,name); await apply(client,name); }
       await client.artifactRecord.create({ data: { id: 'artifact_test', ownerId: 'owner', kind: 'shopping.query', schemaId: 'shopping.query', schemaVersion: 1,
         contentVersion: 1, contentHash: '0'.repeat(64), sizeBytes: 2, mediaType: 'application/json', state: 'COMMITTED', locatorJson: '{}', dependenciesJson: '[]', payloadJson: '{}' } });
       assert.equal(await client.artifactRecord.count(), 1);

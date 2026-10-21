@@ -22,9 +22,9 @@ export class ShoppingTaskService {
   private revisions: Map<string, number> = new Map<string, number>();
   private readonly template: TaskTemplate = {
     capability: 'product_search', taskType: TaskType.USER_INITIATED,
-    inferenceLocation: InferenceLocation.REMOTE_CLOUD, privacyPolicy: PrivacyPolicy.REMOTE_ALLOWED,
+    inferenceLocation: InferenceLocation.ADAPTIVE, privacyPolicy: PrivacyPolicy.REMOTE_ALLOWED,
     interruptibility: Interruptibility.CANCEL_RESTART, duplicatePolicy: DuplicatePolicy.KEEP_LATEST,
-    timeoutMs: 150000, remoteOptions: { provider: 'cloud-shopping-api', maxRetries: 1, maxConcurrency: 2, allowLocalFallback: false },
+    timeoutMs: 150000, remoteOptions: { provider: 'cloud-shopping-api', maxRetries: 1, maxConcurrency: 2, allowLocalFallback: true },
     resourceHints: { modelVersion: 'zeabur-shopping-workflow-v1' },
     qualityLevels: [{ id: 'cloud', modelTier: ModelTier.HIGH_ACCURACY, estimatedLatencyMs: 10000,
       estimatedMemoryMb: 48, relativeEnergyCost: 1, supportedBackends: [Backend.CPU], supportedThreadCounts: [1] }]

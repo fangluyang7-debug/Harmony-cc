@@ -1,10 +1,13 @@
 import { DeviceCalibrationController } from './controllers/device-calibration.controller';
+import { DeviceDirectoryController } from './controllers/device-directory.controller';
+import { DeviceDirectoryService } from '../../core/runtime/device-directory.service';
 import { PhoneDispatchController } from './controllers/phone-dispatch.controller';
 import { PhoneDispatchService } from './phone-dispatch.service';
 import { DeviceDispatchService } from '../../core/runtime/device-dispatch.service';
 import { AuthModule } from '../auth/auth.module';
 import { RuntimeMaintenanceGuard } from './runtime-maintenance.guard';
 import { RuntimeProbeController } from './controllers/runtime-probe.controller';
+import { MacroSchedulerService } from '../../core/runtime/macro-scheduler.service';
 import { Injectable, Module, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { AgentRuntimeService } from "../../core/runtime/agent-runtime.service";
@@ -40,8 +43,9 @@ class ShoppingPluginRegistration implements OnModuleInit {
 
 @Module({
   imports: [AuthModule],
-  controllers: [DeviceCalibrationController, PhoneDispatchController, RuntimeController, RuntimeProbeController],
-  providers: [DeviceDispatchService, PhoneDispatchService, RuntimeMaintenanceGuard,
+  controllers: [DeviceDirectoryController, DeviceCalibrationController, PhoneDispatchController, RuntimeController, RuntimeProbeController],
+  providers: [DeviceDirectoryService, DeviceDispatchService, PhoneDispatchService, RuntimeMaintenanceGuard,
+    MacroSchedulerService,
     ExecutorRegistryService, RuntimeRunnerService, CloudReadinessService, TencentCosStorageAdapterService,
     ToolRegistryService,
     PerformanceRegistryService,
@@ -58,7 +62,8 @@ class ShoppingPluginRegistration implements OnModuleInit {
     AgentRuntimeService,
     ShoppingPluginRegistration,
   ],
-  exports: [DeviceDispatchService, PhoneDispatchService,
+  exports: [DeviceDirectoryService, DeviceDispatchService, PhoneDispatchService,
+    MacroSchedulerService,
     ExecutorRegistryService, RuntimeRunnerService, CloudReadinessService,
     ToolRegistryService,
     PerformanceRegistryService,

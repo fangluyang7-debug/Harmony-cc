@@ -1,9 +1,11 @@
 import http from 'node:http';
+import { deviceProfile, startHeartbeat } from './device-profile.mjs';
 import { Worker } from 'node:worker_threads';
 import { mkdir, readFile, writeFile, rename, readdir, stat } from 'node:fs/promises';
 import { createHash, randomUUID, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { LeaseManager } from './lease-manager.mjs';
+import { WorkerExecutor, WorkerPolicy } from './worker-policy.mjs';
 
 const token=process.env.WORKER_TOKEN;
 if(!token||token.length<32) throw new Error('WORKER_TOKEN_REQUIRED_MIN_32');
@@ -13,6 +15,18 @@ let allocatedBytes=0;
 for(const name of await readdir(directory)) allocatedBytes+=(await stat(path.join(directory,name))).size;
 const maximumBytes=512*1024*1024;
 const instanceId=randomUUID(),manager=new LeaseManager(),hash=b=>createHash('sha256').update(b).digest('hex');
+const executor = new WorkerExecutor(new WorkerPolicy({ maxSlots: manager.slots, maxMemoryMB: manager.memoryBytes / (1024 * 1024) }), {
+  getState: task => {
+    // The task's own lease already reserves its resources; count other leases only.
+    const others = [...manager.leases.values()].filter(l => !l.settled && l.leaseId !== task.id);
+    return { ...WorkerPolicy.getCurrentState(), activeSlots: others.length,
+      usedMemoryMB: others.reduce((sum, l) => sum + l.memoryBytes, 0) / (1024 * 1024), queueLength: 0 };
+  },
+  runTask: async (task, config) => {
+    await persist();
+    return compute(task.ownerId, task.request, task.signal, config);
+  }
+});
 const atomically=async(file,bytes)=>{const temp=file+'.'+randomUUID()+'.tmp';await writeFile(temp,bytes);await rename(temp,file);};
 let journal=Promise.resolve();
 function persist() {
@@ -43,7 +57,7 @@ async function resolve(ownerId,ref) {
   const bytes=await readFile(file);if(bytes.length!==manifest.sizeBytes||hash(bytes)!==ref.contentHash)throw new Error('ARTIFACT_CORRUPT');
   return {file,bytes,manifest};
 }
-async function compute(ownerId,request,signal) {
+async function compute(ownerId,request,signal,config) {
   const input=await resolve(ownerId,request.input);
   const chunks=[];let resume=null;
   if(request.checkpoint) {
@@ -58,7 +72,7 @@ async function compute(ownerId,request,signal) {
   const cancel=()=>Atomics.store(flag,0,1);signal.addEventListener('abort',cancel,{once:true});if(signal.aborted)cancel();
   return new Promise((resolveResult,reject)=> {
     const worker=new Worker(new URL('./compute.mjs',import.meta.url),{workerData:{path:input.file,inputHash:request.input.contentHash,
-      capability:request.capability,parameters:request.parameters??{},cancelFlag,resume},resourceLimits:{maxOldGenerationSizeMb:128}});
+      capability:request.capability,parameters:request.parameters??{},cancelFlag,resume,executionConfig:config},env:{...process.env,TASK_THREADS:String(config.threads),TASK_PRIORITY:config.priority},resourceLimits:{maxOldGenerationSizeMb:128}});
     let result,error,checkpointRef=request.checkpoint;let publications=Promise.resolve();
     worker.on('message',message=>{
       publications=publications.then(async()=> {
@@ -74,7 +88,7 @@ async function compute(ownerId,request,signal) {
         if(message.result) {
           result=message.result;
           if(result.bytes) { const artifact=await put(ownerId,Buffer.from(result.bytes),'shopping.image',result.mediaType);delete result.bytes;result.artifact=artifact; }
-          result.checkpointRef=checkpointRef;result.inputHash=request.input.contentHash;result.executorId='cpu-worker';result.instanceId=instanceId;
+          result.checkpointRef=checkpointRef;result.inputHash=request.input.contentHash;result.executionConfig=config;result.executorId='cpu-worker';result.instanceId=instanceId;
         }
       }).catch(failure=>{error=failure;cancel();worker.postMessage({ack:false});});
     });
@@ -93,7 +107,7 @@ const server=http.createServer(async(req,res)=>{
     if(!timingSafeEqual(Buffer.from(hash(supplied),'hex'),Buffer.from(hash(token),'hex')))return send(401,{error:'UNAUTHORIZED'});
     const ownerId=String(req.headers['x-owner-id']??'');if(!/^[\w.-]{1,128}$/.test(ownerId))throw new Error('OWNER_REQUIRED');
     const route=req.url;
-    if(req.method==='GET'&&route==='/v1/descriptor')return send(200,{protocolVersion:1,deviceId:process.env.WORKER_DEVICE_ID??'cpu-worker',instanceId,adapterVersion:'1',
+    if(req.method==='GET'&&route==='/v1/descriptor')return send(200,{protocolVersion:1,deviceId:process.env.WORKER_DEVICE_ID??'cpu-worker',instanceId,adapterVersion:'1',profile:deviceProfile(manager),
       source:'REAL',resourceDomain:'cpu-worker-process',capacity:{slots:Math.max(0,manager.slots-[...manager.leases.values()].filter(l=>!l.settled).length),memoryBytes:Math.max(0,manager.memoryBytes-[...manager.leases.values()].filter(l=>!l.settled).reduce((sum,l)=>sum+l.memoryBytes,0))},
       capabilities:['image.crop.v1','vector.normalize.v1'],checkpointFormats:['shopping.normalization.v1'],observedAt:Date.now(),ttlMs:3000});
     if(req.method==='POST'&&route==='/v1/artifacts') {
@@ -109,15 +123,26 @@ const server=http.createServer(async(req,res)=>{
       const lease=manager.require(ownerId,data.leaseId);
       if(lease.memoryBytes<(data.capability==='image.crop.v1'?128:32)*1024*1024)throw new Error('MEMORY_RESERVATION_TOO_SMALL');
       await resolve(ownerId,data.input);
-      const identity=hash(JSON.stringify({capability:data.capability,input:data.input,parameters:data.parameters,checkpoint:data.checkpoint}));
-      const receipt=manager.execute(ownerId,data.leaseId,data.fencingToken,identity,async signal=>{await persist();return compute(ownerId,data,signal);});
+      const macroContext = data.macroContext ?? {};
+      if (typeof macroContext !== 'object' || Array.isArray(macroContext) ||
+        (macroContext.urgency !== undefined && typeof macroContext.urgency !== 'boolean')) throw new Error('MACRO_CONTEXT_INVALID');
+      const task = { id: lease.leaseId, capability: data.capability, memoryMB: lease.memoryBytes / (1024 * 1024),
+        defaultThreads: 4, ownerId, request: data };
+      if (lease.identity === undefined && !lease.settled && !lease.stopRequested && lease.fencingToken === data.fencingToken) {
+        try { executor.checkAdmission(task, macroContext); }
+        catch (error) { manager.cancel(ownerId, data.leaseId); await persist(); throw error; }
+      }
+      const identity=hash(JSON.stringify({capability:data.capability,input:data.input,parameters:data.parameters,checkpoint:data.checkpoint,macroContext}));
+      const receipt=manager.execute(ownerId,data.leaseId,data.fencingToken,identity,signal=>executor.execute({task:{...task,signal},macroContext}));
       await persist();return send(202,receipt);
     }
     if(req.method==='POST'&&route==='/v1/query') {const data=await body(req),lease=manager.require(ownerId,data.leaseId);await persist();return send(200,{...manager.receipt(lease),checkpointRef:lease.checkpointRef??null});}
     if(req.method==='POST'&&route==='/v1/cancel') {const data=await body(req),receipt=manager.cancel(ownerId,data.leaseId);await persist();return send(200,receipt);}
     if(req.method==='POST'&&route==='/v1/release') {const data=await body(req);manager.release(ownerId,data.leaseId);await persist();return send(200,{released:true});}
     send(404,{error:'NOT_FOUND'});
-  }catch(error){send(409,{error:/^[A-Z0-9_]{1,100}$/.test(error?.message)?error.message:'WORKER_REQUEST_FAILED'});}
+  }catch(error){send(error?.message==='CAPACITY_FULL'?503:409,{error:/^[A-Z0-9_]{1,100}$/.test(error?.message)?error.message:'WORKER_REQUEST_FAILED'});}
 });
 const sweep=setInterval(()=>{manager.sweep();void persist().catch(()=>{});},1000);sweep.unref();
 server.listen(Number(process.env.WORKER_PORT??3020),process.env.WORKER_HOST??'127.0.0.1',()=>console.log(JSON.stringify({ready:true,port:server.address().port,instanceId})));
+const stopHeartbeat=startHeartbeat(manager);
+server.on('close',()=>stopHeartbeat?.());

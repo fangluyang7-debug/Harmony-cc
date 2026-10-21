@@ -9,7 +9,8 @@ export interface RuntimeWorkMeasurements {
   storageWriteMs: number;
   modelMs: number;
 }
-interface WorkScope { deadline?: number; ownerId?: string; pending: Set<Promise<unknown>>; signal: AbortSignal; measurements: RuntimeWorkMeasurements; }
+export interface WorkSchedulingContext { userWaiting: boolean; importance: number; }
+interface WorkScope { scheduling?: WorkSchedulingContext; deadline?: number; ownerId?: string; pending: Set<Promise<unknown>>; signal: AbortSignal; measurements: RuntimeWorkMeasurements; }
 const scopes = new AsyncLocalStorage<WorkScope>();
 
 export class RuntimeWorkScope {
@@ -29,9 +30,10 @@ export class RuntimeWorkScope {
   static settlement<T>(work: () => Promise<T>): Promise<T> { return scopes.exit(work); }
   static recordAttempt(attemptId:string):void { const scope=scopes.getStore(); if(scope)scope.measurements.attemptId=attemptId; }
   static recordPlacement(value: Record<string,unknown>): void { const scope=scopes.getStore(); if(scope) { const records=scope.measurements.placementDecisions ?? []; if(records.length<16) records.push(value); scope.measurements.placementDecisions=records; } }
+  static scheduling(): WorkSchedulingContext { return scopes.getStore()?.scheduling ?? { userWaiting: false, importance: 0 }; }
   static ownerId(): string | undefined { return scopes.getStore()?.ownerId; }
-  static run<T>(signal: AbortSignal, measurements: RuntimeWorkMeasurements, work: () => Promise<T>, ownerId?: string, remainingBudgetMs?: number): Promise<T> {
-    const scope: WorkScope = { signal, measurements, pending: new Set(), ownerId, deadline: remainingBudgetMs === undefined ? undefined : performance.now() + remainingBudgetMs };
+  static run<T>(signal: AbortSignal, measurements: RuntimeWorkMeasurements, work: () => Promise<T>, ownerId?: string, remainingBudgetMs?: number, scheduling?: WorkSchedulingContext): Promise<T> {
+    const scope: WorkScope = { scheduling: scheduling ?? scopes.getStore()?.scheduling, signal, measurements, pending: new Set(), ownerId, deadline: remainingBudgetMs === undefined ? undefined : performance.now() + remainingBudgetMs };
     return scopes.run(scope, async () => {
       try { return await work(); }
       finally {

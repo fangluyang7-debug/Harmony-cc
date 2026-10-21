@@ -5,6 +5,7 @@ export interface PlacementReplica { deviceId: string; readMs: number | null; }
 export interface PlacementArtifact { id: string; bytes: number; replicas: PlacementReplica[]; }
 export interface PlacementLink { from: string; to: string; bytesPerSecond: number; fixedMs: number; effective: boolean; observedAt: number; ttlMs: number; source: 'REAL' | 'MOCK'; }
 export interface PlacementCandidate {
+  costScope?: 'execution' | 'coordinator-roundtrip';
   deviceId: string; executorId: string; capability: string; trusted: boolean; source: 'REAL' | 'MOCK';
   observedAt: number; ttlMs: number; availableSlots: number; availableMemoryBytes: number;
   quality: number | null; computeMs: number | null; queueMs: number | null; coldMs: number | null;
@@ -20,6 +21,8 @@ export interface PlacementRequest {
   networkAllowed: boolean; privacy: 'LOCAL_ONLY' | 'AUTHORIZED_REMOTE'; localDeviceId: string;
   now: number; committedNodeIds: string[]; committedArtifacts: PlacementArtifact[];
   finalDestination?: string;
+  // Some dispatchers materialize every output through a coordinator instead of peer transfers.
+  materializeOutputsAt?: string;
 }
 export interface PlannerLimits { maxCandidates: number; lookahead: number; beamWidth: number; planningBudgetMs: number; switchCostMs: number; hysteresisMs: number; }
 export interface PlannerAssignment { nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
@@ -97,12 +100,16 @@ export class WorkflowPlacementPlanner {
   private extend(state:Beam,node:PlacementNode,c:PlacementCandidate,r:PlacementRequest):Beam|null {
     let transfer=0;
     const artifacts=new Map(state.artifacts);
-    for(const id of new Set(node.inputs)){const artifact=state.artifacts.get(id);if(!artifact)return null;const cost=this.transfer(artifact,c.deviceId,r);if(cost===null)return null;transfer+=cost;
-      if(!artifact.replicas.some(replica=>replica.deviceId===c.deviceId)) artifacts.set(id,{...artifact,replicas:[...artifact.replicas,{deviceId:c.deviceId,readMs:0}]});
+    const roundtrip=c.costScope==='coordinator-roundtrip'&&r.materializeOutputsAt===r.localDeviceId;
+    for(const id of new Set(node.inputs)){const artifact=state.artifacts.get(id);if(!artifact)return null;const cost=roundtrip&&artifact.replicas.some(replica=>replica.deviceId===r.localDeviceId)?0:this.transfer(artifact,c.deviceId,r);if(cost===null)return null;transfer+=cost;
+      if(!r.materializeOutputsAt&&!artifact.replicas.some(replica=>replica.deviceId===c.deviceId)) artifacts.set(id,{...artifact,replicas:[...artifact.replicas,{deviceId:c.deviceId,readMs:0}]});
     }
-    const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs;
+    const output:PlacementArtifact={id:node.output.id,bytes:node.output.bytes,replicas:[{deviceId:c.deviceId,readMs:0}]};
+    const publication=roundtrip?0:r.materializeOutputsAt?this.transfer(output,r.materializeOutputsAt,r):0;
+    if(publication===null)return null;
+    const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs+publication;
     const cost=state.cost+transfer+execution+c.uncertaintyMs;if(cost>r.remainingBudgetMs)return null;
-    artifacts.set(node.output.id,{id:node.output.id,bytes:node.output.bytes,replicas:[{deviceId:c.deviceId,readMs:0}]});
+    artifacts.set(node.output.id,r.materializeOutputsAt?{...output,replicas:[{deviceId:r.materializeOutputsAt,readMs:0}]}:output);
     return {cost,artifacts,assignments:[...state.assignments,{nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,inputTransferMs:transfer,executionMs:execution,uncertaintyMs:c.uncertaintyMs}]};
   }
   private finish(state:Beam|null,nodes:PlacementNode[],r:PlacementRequest):Beam|null {

@@ -1,3 +1,4 @@
+import { DeviceDispatchService } from '../../../core/runtime/device-dispatch.service';
 import { TurnsService } from '../../turns/application/turns.service';
 import { CandidatesService } from '../../candidates/application/candidates.service';
 import { createHash, randomUUID } from 'node:crypto';
@@ -44,7 +45,7 @@ export class ShoppingRuntimeService implements OnModuleInit {
   private readonly unversionedPipeline = randomUUID();
   constructor(private readonly registry: ExecutorRegistryService, private readonly runner: RuntimeRunnerService,
     private readonly runs: RuntimeRunService, private readonly sessions: SessionsService,
-    private readonly debug: SearchDebugService, private readonly imageStages: ShoppingImageStagesService, private readonly prisma: PrismaService, @Optional() private readonly artifacts?: ArtifactStoreService, @Optional() private readonly workflows?: WorkflowStoreService, @Optional() private readonly mutations?: SessionMutationService, @Optional() private readonly turns?: TurnsService, @Optional() private readonly candidateService?: CandidatesService) {}
+    private readonly debug: SearchDebugService, private readonly imageStages: ShoppingImageStagesService, private readonly prisma: PrismaService, @Optional() private readonly artifacts?: ArtifactStoreService, @Optional() private readonly workflows?: WorkflowStoreService, @Optional() private readonly mutations?: SessionMutationService, @Optional() private readonly turns?: TurnsService, @Optional() private readonly candidateService?: CandidatesService, @Optional() private readonly deviceDispatch?: DeviceDispatchService) {}
 
   onModuleInit() {
     this.registry.register({ executorId: 'zeabur-shopping-workflow', toolIds: IMAGE_STAGE_TOOLS,
@@ -128,7 +129,8 @@ export class ShoppingRuntimeService implements OnModuleInit {
     }
     signal?.throwIfAborted();
     const run = await this.runs.start(graph, ownerId);
-    const result = await this.runner.execute<Record<string, unknown>>(run.runId, request, signal);
+    const result = await this.runner.execute<Record<string, unknown>>(run.runId, request, signal,
+      this.deviceDispatch ? (stage, execute) => this.deviceDispatch!.dispatchRuntimeStage(stage, execute) : undefined);
     const session = result.session as { sessionId?: string } | undefined;
     return { ...result, runtimeRunId: run.runId, runId: run.runId, taskId: request.taskId ?? graph.nodes[0].taskId,
       status: 'succeeded', resultRef: result.resultRef ?? (session?.sessionId ? 'session:' + session.sessionId : undefined),

@@ -3,8 +3,14 @@ import { TaskGraph, TaskIntent } from './runtime.contracts';
 
 export function shoppingTask(taskId: string, toolId: string, inputRef: string, dependencies: string[] = []): TaskIntent {
   return { taskId, toolId, inputRef, outputType: 'ShoppingResult', dependencies,
-    taskType: 'user_initiated', constraints: { locality: 'cloud_only', privacy: 'internal',
-      deadlineMs: 120000, maxLatencyMs: 120000, minimumQuality: 0 },
+    taskType: 'user_initiated',
+    // 修复: 移除写死的locality,由调度器根据capability和设备能力决定
+    constraints: {
+      privacy: 'internal',
+      deadlineMs: 120000,
+      maxLatencyMs: 120000,
+      minimumQuality: 0
+    },
     fallbackPolicy: { enabled: false, actions: [], maxAttempts: 1, replanAtStageBoundary: false },
     cloudRoutes: [{ executorId: 'zeabur-shopping-workflow', inputResidence: 'zeabur_volume',
       outputDestination: 'zeabur_volume', accessMode: 'co_located', transferAuthorized: true,

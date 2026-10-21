@@ -29,6 +29,7 @@ try {
     checkpoint(); parentPort.postMessage({result:{format:'shopping.normalization.v1',cursor:data.rows.length,indexSnapshotId:data.indexSnapshotId,dimension:data.dimension,modelVersion:data.modelVersion}});
   } else if(workerData.capability==='image.crop.v1') {
     const {default:sharp}=await import('sharp'); const parameters=workerData.parameters;
+    if (workerData.executionConfig) sharp.concurrency(workerData.executionConfig.threads);
     const metadata=await sharp(bytes,{limitInputPixels:16777216}).metadata();
     const width=metadata.width,height=metadata.height,b=parameters.box,padding=parameters.paddingRatio;
     if(!width||!height||!b||![b.x,b.y,b.width,b.height,padding].every(Number.isFinite)||b.x<0||b.y<0||b.width<=0||b.height<=0||b.x+b.width>1||b.y+b.height>1||padding<0||padding>0.5||

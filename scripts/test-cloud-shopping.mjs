@@ -213,3 +213,36 @@ assert.equal(calls.filter(c=>c.url.endsWith('/assets/images')).length, 0, 'An al
 assert.equal(imageInput.preparedBody.assetId, 'asset_upload');
 assert.ok(!JSON.stringify(imageInput.preparedBody).includes('Base64'));
 console.log('PASS binary image upload, cancellation/deadline admission and uploaded asset reuse');
+
+assert.equal(service.template.inferenceLocation, types.InferenceLocation.ADAPTIVE);
+assert.equal(service.template.remoteOptions.allowLocalFallback, true);
+let adaptiveRequest;
+const adaptiveClient = new SchedulerClient({ registerExecutor:()=>{}, unregisterExecutor:async()=>0,
+  submitTask:async request=>{ adaptiveRequest=request; return { result:Promise.resolve({taskId:request.taskId,status:types.TaskStatus.SUCCEEDED,output:{ok:true}}) }; },
+  signalTask:async()=>{} });
+adaptiveClient.registerTemplate(service.template);
+adaptiveClient.registerExecutor({capability:'product_search',inferenceLocation:types.InferenceLocation.REMOTE_CLOUD,
+  supports:()=>true,dispose:async()=>{},execute:async()=>({output:{ok:true}})});
+const adaptiveResult = await adaptiveClient.submit('product_search',{}, {userVisible:true,userWaiting:true,
+  accuracyFloor:types.ModelTier.HIGH_ACCURACY,networkAllowed:true}).result;
+assert.equal(adaptiveResult.status,types.TaskStatus.SUCCEEDED);
+assert.equal(adaptiveRequest.inferenceLocation,types.InferenceLocation.ADAPTIVE);
+const {SemanticPolicy} = load(path.join(root,'scheduler/src/main/ets/policy/SemanticPolicy.ets'));
+const {ExecutorRegistry} = load(path.join(root,'scheduler/src/main/ets/executor/ExecutorRegistry.ets'));
+const adaptiveState = {appVisibility:types.AppVisibility.FOREGROUND,thermalLevel:types.ThermalLevel.NORMAL,
+  memoryPressure:types.MemoryPressure.NORMAL,availableMemoryMb:4096,batteryPercent:80,isCharging:true,
+  availableBackends:[types.Backend.CPU],systemCpuUsage:0};
+const adaptivePolicy = new SemanticPolicy();
+const adaptivePlan = adaptivePolicy.evaluate(adaptiveRequest,adaptiveState,types.PolicyMode.ADAPTIVE);
+assert.equal(adaptivePlan.inferenceLocation,types.InferenceLocation.REMOTE_CLOUD);
+assert.equal(adaptivePlan.queueAction,types.QueueAction.ENQUEUE);
+const concreteRegistry = new ExecutorRegistry();
+concreteRegistry.register(new CloudShoppingExecutor());
+assert.ok(concreteRegistry.find('product_search',adaptivePlan),'ADAPTIVE resolves to a supported coordinator transport');
+const offlinePlan = adaptivePolicy.evaluate({...adaptiveRequest,context:{...adaptiveRequest.context,networkAllowed:false}},adaptiveState,types.PolicyMode.ADAPTIVE);
+assert.equal(offlinePlan.queueAction,types.QueueAction.REJECT);
+assert.ok(offlinePlan.reasonCodes.includes('NETWORK_NOT_ALLOWED'));
+assert.equal(adaptiveRequest.template.inferenceLocation,types.InferenceLocation.ADAPTIVE);
+assert.equal(adaptiveRequest.remoteOptions.allowLocalFallback,true);
+await adaptiveClient.dispose();
+console.log('PASS adaptive intent preserved through concrete gateway transport and executor registration');

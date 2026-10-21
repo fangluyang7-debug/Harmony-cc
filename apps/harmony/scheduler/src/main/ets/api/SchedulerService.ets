@@ -1503,7 +1503,7 @@ export class SchedulerService implements SchedulerRuntime {
         'Local tasks must not define remote execution options.'
       );
     }
-    if (request.inferenceLocation === InferenceLocation.REMOTE_CLOUD) {
+    if (request.inferenceLocation === InferenceLocation.REMOTE_CLOUD || request.inferenceLocation === InferenceLocation.ADAPTIVE) {
       if (request.remoteOptions === undefined || request.remoteOptions.provider.trim().length === 0) {
         throw new SchedulerError(
           SchedulerErrorCode.INVALID_TASK,

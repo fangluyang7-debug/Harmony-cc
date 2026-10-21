@@ -17,6 +17,11 @@ function field(body: unknown, name: string): string {
 export class PhoneDispatchController {
   constructor(private readonly dispatch: PhoneDispatchService) {}
 
+  @Post('devices/:deviceId/profile')
+  async profile(@Req() request:AuthenticatedRequest,@Param('deviceId') deviceId:string,@Body() body:unknown) {
+    return ok(await this.dispatch.reportProfile(request.user!.userId,deviceId,body));
+  }
+
   @Post('pairings')
   async createPairing(@Req() request: AuthenticatedRequest) {
     return ok(await this.dispatch.createPairing(request.user!.userId));

@@ -3,6 +3,8 @@ import { image } from '@kit.ImageKit';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import util from '@ohos.util';
 import { CloudApiConfig } from '../services/CloudApiConfig';
+import { SchedulerService, deviceResourceProfile } from 'scheduler';
+import { RemoteTaskAdmission, MacroTaskContext } from '../services/RemoteTaskAdmission';
 
 interface Reply<T> { success: boolean; data?: T; }
 interface Pairing { code: string; expiresAt: string; }
@@ -12,6 +14,7 @@ interface Revoked { deviceId: string; status: string; }
 interface Job { jobId: string; state: string; fence: number; computedMs: number | null; resultHash: string | null; }
 interface CropRegion { left: number; top: number; width: number; height: number; }
 interface CropInput {
+  macroContext?: MacroTaskContext;
   imageUrl: string;
   inputHash: string;
   region: CropRegion;
@@ -33,6 +36,7 @@ struct CloudPhoneDispatchPage {
   @State slowMode: boolean = false;
   private timer: number = -1;
   private busy: boolean = false;
+  private admission: RemoteTaskAdmission | null = null;
 
   aboutToDisappear(): void { this.stop(); }
   onPageHide(): void { this.stop(); }
@@ -167,6 +171,11 @@ struct CloudPhoneDispatchPage {
     this.busy = true;
     try {
       const root = '/devices/' + encodeURIComponent(this.deviceId);
+      const scheduler = SchedulerService.getInstance();
+      if (!scheduler.isInitialized()) { throw new Error('SCHEDULER_NOT_READY'); }
+      if (this.admission === null) { this.admission = new RemoteTaskAdmission(scheduler); }
+      await this.call<Object>(http.RequestMethod.POST,root+'/profile',JSON.stringify(deviceResourceProfile(
+        scheduler.getDeviceState(),['image.crop.v1'],Math.max(0,1-scheduler.getMetricsSnapshot().runningCount))));
       const lease = await this.call<Lease>(http.RequestMethod.POST, root + '/lease');
       if (lease.stopJobId !== null) {
         await this.call<Job>(http.RequestMethod.POST, root + '/jobs/' + encodeURIComponent(lease.stopJobId) + '/stop-ack',
@@ -180,7 +189,11 @@ struct CloudPhoneDispatchPage {
           this.status = 'B 正在处理购物图片：' + job.jobId;
           try {
             const started = Date.now();
-            const imageBase64 = await this.cropImage(job.crop);
+            const crop = job.crop;
+            const handle = this.admission.submit(():Promise<string> => this.cropImage(crop),crop.macroContext);
+            const scheduled = await handle.result;
+            if (scheduled.output === null) { throw new Error(scheduled.reasonCode ?? 'PHONE_ADMISSION_REJECTED'); }
+            const imageBase64 = scheduled.output;
             const check = await this.call<Lease>(http.RequestMethod.POST, root + '/lease');
             if (check.stopJobId === job.jobId) {
               await this.call<Job>(http.RequestMethod.POST,

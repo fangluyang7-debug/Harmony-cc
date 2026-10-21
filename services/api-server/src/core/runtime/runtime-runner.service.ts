@@ -1,10 +1,12 @@
 import { performance } from 'node:perf_hooks';
 import { RuntimeWorkScope, RuntimeWorkMeasurements } from './runtime-work-scope';
 import { ConflictException, Injectable, ServiceUnavailableException } from '@nestjs/common';
-import { ExecutorRegistryService } from './executor-registry.service';
+import { ExecutorRegistryService, RuntimeExecutionContext } from './executor-registry.service';
 import { RuntimeRunService } from './runtime-run.service';
 import { TelemetryService } from './telemetry.service';
 import { TelemetryRecord } from './runtime.contracts';
+
+export type RuntimeStageDispatcher = (context: RuntimeExecutionContext, execute: () => Promise<unknown>) => Promise<unknown>;
 
 @Injectable()
 export class RuntimeRunnerService {
@@ -20,7 +22,7 @@ export class RuntimeRunnerService {
     return true;
   }
 
-  async execute<T>(runId: string, input: unknown, externalSignal?: AbortSignal): Promise<T> {
+  async execute<T>(runId: string, input: unknown, externalSignal?: AbortSignal, dispatchStage?: RuntimeStageDispatcher): Promise<T> {
     const run = this.runs.get(runId);
     if (!run || !run.taskGraph || !run.executionPlan) throw new Error('RUNTIME_RUN_NOT_PLANNED');
     if (run.status === 'blocked') throw new ServiceUnavailableException({ code: 'RUNTIME_BLOCKED', runId,
@@ -95,9 +97,13 @@ export class RuntimeRunnerService {
             timer = setTimeout(() => controller.abort(new Error('RUNTIME_TIMEOUT')), timeoutMs);
           });
           settled = false;
-          const work = RuntimeWorkScope.run(controller.signal, measurements, () => this.registry.require(assignment.executorId, assignment.toolId).execute({
-            runId, task, assignment, input, outputs, signal: controller.signal,
-          }), run.ownerUserId, timeoutMs);
+          const executionContext = { runId, task, assignment, input, outputs, signal: controller.signal };
+          const execute = () => this.registry.require(assignment.executorId, assignment.toolId).execute(executionContext);
+          const requestContext = (input as {taskProfile?: {context?: {userWaiting?: boolean; businessImportance?: number}}})?.taskProfile?.context;
+          const work = RuntimeWorkScope.run(controller.signal, measurements,
+            () => dispatchStage ? dispatchStage(executionContext, execute) : execute(), run.ownerUserId, timeoutMs,
+            {userWaiting: typeof requestContext?.userWaiting === 'boolean' ? requestContext.userWaiting : task.taskType !== 'background_batch',
+              importance: Number.isFinite(requestContext?.businessImportance) ? requestContext!.businessImportance! : 0});
           settlement = work.then(() => { settled = true; }, () => { settled = true; });
           active.pending = settlement;
           const result = await Promise.race([work, deadline]);

@@ -1,3 +1,5 @@
+import { DeviceDispatchService } from '../../src/core/runtime/device-dispatch.service';
+import { MacroSchedulerService } from '../../src/core/runtime/macro-scheduler.service';
 import { ConfigService } from '@nestjs/config';
 import { CloudPlatformAdapterService } from '../../src/core/runtime/cloud-platform-adapter.service';
 import { CloudReadinessService } from '../../src/core/runtime/cloud-readiness.service';
@@ -49,9 +51,13 @@ function fixture(healthy = true, readOnly = false) {
   const assets = { createImageAsset: jest.fn().mockResolvedValue({ assetId: 'asset_test' }) };
   const stages = new ShoppingImageStagesService(prisma as any, assets as any, sessions as any, candidates as any,
     storage as any, content as any, profiles as any, embeddings as any, search as any);
-  const runtime = new ShoppingRuntimeService(registry, runner, runs, sessions as any, {} as any, stages, prisma as any);
+  const macro = new MacroSchedulerService();
+  const dispatch = new DeviceDispatchService(performance, macro);
+  const macroSpy = jest.spyOn(macro,'schedule');
+  const runtime = new ShoppingRuntimeService(registry, runner, runs, sessions as any, {} as any, stages, prisma as any,
+    undefined,undefined,undefined,undefined,undefined,dispatch);
   runtime.onModuleInit();
-  return { runtime, runs, performance, content, profiles, search, sessions, assets, prisma, seed };
+  return { runtime, runs, macroSpy, performance, content, profiles, search, sessions, assets, prisma, seed };
 }
 
 const measuredRoute = () => ({ source: 'measured', transferAuthorized: true, observedAt: new Date().toISOString(),
@@ -67,6 +73,9 @@ describe('Shopping Runtime integration', () => {
     expect(run.executionPlan?.executionOrder).toEqual([...IMAGE_SEARCH_STAGES]);
     expect(run.executionPlan?.assignments.every(item => item.status === 'succeeded')).toBe(true);
     expect(run.telemetry).toHaveLength(12);
+    expect(test.macroSpy).toHaveBeenCalledTimes(12);
+    expect(test.macroSpy.mock.calls.map(([graph])=>graph.capability)).toEqual(IMAGE_SEARCH_STAGES.map(stage=>'shopping.stage.'+stage));
+    expect(run.telemetry.every(record=>(record.metadata?.placementDecisions as unknown[])?.length===1)).toBe(true);
     expect(run.taskGraph?.nodes.filter(node => node.cloudRoutes?.[0].inputResidence === 'device')).toHaveLength(1);
     expect(run.executionPlan?.assignments[0].cloudOverheadMs).toBeGreaterThan(20);
     expect(test.performance.list()).toHaveLength(12);

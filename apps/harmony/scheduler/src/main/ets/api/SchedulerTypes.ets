@@ -13,7 +13,8 @@ export enum TaskType {
 
 export enum InferenceLocation {
   LOCAL_DEVICE = 'LOCAL_DEVICE',
-  REMOTE_CLOUD = 'REMOTE_CLOUD'
+  REMOTE_CLOUD = 'REMOTE_CLOUD',
+  ADAPTIVE = 'ADAPTIVE'
 }
 
 export enum AccuracyPreference {

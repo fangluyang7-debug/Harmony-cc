@@ -85,3 +85,4 @@ export { ArtifactRef, ArtifactManifest, ArtifactLocation, TaskContractV1, TaskIn
   from './src/main/ets/api/SchedulingProtocol';
 
 export { ClockPort, WallClock } from './src/main/ets/api/ClockPort';
+export { DeviceResourceProfile, deviceResourceProfile } from './src/main/ets/state/DeviceResourceProfile';

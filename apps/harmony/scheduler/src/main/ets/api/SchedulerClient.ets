@@ -103,7 +103,8 @@ export class SchedulerClient {
   public registerExecutor<TInput, TOutput>(executor: WorkloadExecutor<TInput, TOutput>): void {
     this.assertOpen();
     const template: TaskTemplate = this.requireTemplate(executor.capability);
-    if (template.workflow !== undefined || template.inferenceLocation !== executor.inferenceLocation) {
+    if (template.workflow !== undefined || (template.inferenceLocation === InferenceLocation.ADAPTIVE ?
+      executor.inferenceLocation !== InferenceLocation.REMOTE_CLOUD : template.inferenceLocation !== executor.inferenceLocation)) {
       this.invalid('Executor must match a leaf template and its execution location.');
     }
     this.preparers.set(executor.capability, executor as WorkloadExecutor<Object, Object>);
@@ -262,6 +263,7 @@ export class SchedulerClient {
       const workflowInput: WorkflowInput<TInput> = { input: input, outputs: dependencyOutputs };
       const request: TaskRequest<Object> = {
         taskId: taskId, capability: this.scope + leaf.capability, taskType: leaf.taskType,
+        // ADAPTIVE: preserve as-is, let cloud scheduling gateway decide actual placement
         inferenceLocation: leaf.inferenceLocation,
         input: template.workflow === undefined ? input as Object : workflowInput,
         accuracyPreference: nodeContext.highQuality ? AccuracyPreference.QUALITY_FIRST : AccuracyPreference.BALANCED,
@@ -378,7 +380,7 @@ export class SchedulerClient {
     this.positive(template.resourceHints.baselineInputElements, 'baselineInputElements');
     this.positive(template.resourceHints.expectedMemoryMb, 'expectedMemoryMb');
     this.positive(template.resourceHints.modelSizeMb, 'modelSizeMb');
-    if (template.inferenceLocation === InferenceLocation.REMOTE_CLOUD &&
+    if ((template.inferenceLocation === InferenceLocation.REMOTE_CLOUD || template.inferenceLocation === InferenceLocation.ADAPTIVE) &&
       (template.remoteOptions === undefined || template.remoteOptions.provider.length === 0)) {
       this.invalid('Remote template requires an explicit provider.');
     }

@@ -7,6 +7,16 @@ function fixture():PlacementRequest{return {nodes:[{id:'a',capability:'crop',dep
   artifacts:[{id:'input',bytes:100,replicas:[{deviceId:'cloud',readMs:0}]}],links:[{from:'cloud',to:'pc',bytesPerSecond:1000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000},
     {from:'pc',to:'cloud',bytesPerSecond:100,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000}],remainingBudgetMs:1000,networkAllowed:true,privacy:'AUTHORIZED_REMOTE',localDeviceId:'cloud',now,committedNodeIds:[],committedArtifacts:[],finalDestination:'cloud'};}
 describe('bounded data-location planner',()=>{
+  it('charges intermediate downloads and reuploads for coordinator-relayed execution',()=>{
+    const request=fixture();request.links[1].bytesPerSecond=1000;
+    const planner=new WorkflowPlacementPlanner();
+    expect(planner.plan(request).suggestion?.map(a=>a.deviceId)).toEqual(['pc','pc']);
+    request.materializeOutputsAt='cloud';
+    expect(planner.plan(request).suggestion?.map(a=>a.deviceId)).toEqual(['cloud','cloud']);
+    // Force a remote baseline so the exact relay charge can be inspected.
+    request.nodes.forEach(n=>n.baselineDeviceId='pc');request.remainingBudgetMs=5000;
+    expect(planner.plan(request).baselineMs).toBe(2112); // 100 + 1 + 1000 + 1000 + 1 + 10.
+  });
   it('compares downstream transfer and uses separate return direction',()=>{
     const request=fixture(),result=new WorkflowPlacementPlanner().plan(request);
     // pc a+b: 100 upload +2 compute +100 final download =202; baseline=200.

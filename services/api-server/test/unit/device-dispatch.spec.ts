@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+import { TaskGraph, MacroSchedulerService } from '../../src/core/runtime/macro-scheduler.service';
 import { DeviceDispatchService } from '../../src/core/runtime/device-dispatch.service';
 import { RuntimeWorkScope } from '../../src/core/runtime/runtime-work-scope';
 
@@ -21,5 +23,103 @@ describe('device dispatch baseline calibration', () => {
       fetchSpy.mockRestore();
       if(previous === undefined) delete process.env.RUNTIME_DEVICES_JSON; else process.env.RUNTIME_DEVICES_JSON = previous;
     }
+  });
+});
+
+describe('macro Worker dispatch', () => {
+  const macroContext = {baselineDevice:'cloud-runtime',selectedReason:'TEST',urgency:true,budgetMs:1000};
+  const context = {budgetMs:1000,networkAllowed:true,privacyLevel:'AUTHORIZED_REMOTE' as const,userWaiting:true,importance:1};
+  const bytes = Buffer.from('input');
+  const hash = (data: Buffer) => createHash('sha256').update(data).digest('hex');
+  const input = {artifactId:'input',contentVersion:1,contentHash:hash(bytes),schemaId:'shopping.image',schemaVersion:1};
+  const outputBytes = Buffer.from('output');
+  const output = {artifact:{...input,artifactId:'output',contentHash:hash(outputBytes)},inputHash:input.contentHash,metadata:{width:1,height:1}};
+  const graph: TaskGraph = {capability:'image.crop.v1',inputs:[{...input,data:bytes}],tasks:[{
+    id:'crop',capability:'image.crop.v1',dependencies:[],inputs:['input'],outputBytes:10,memoryMB:128,minQuality:1,
+    parameters:{targetSize:48}
+  }]};
+  let service: DeviceDispatchService, call: jest.SpyInstance, previous: string | undefined, previousPolicy: string | undefined;
+  beforeEach(() => {
+    previous = process.env.RUNTIME_DEVICES_JSON;
+    previousPolicy = process.env.PLACEMENT_POLICY_JSON;
+    process.env.PLACEMENT_POLICY_JSON = JSON.stringify({mode:'ACTIVE',policyVersion:'test',expiresAt:Date.now()+60000,killSwitch:false,
+      allowedDevices:['pc','cloud-runtime'],allowedCapabilities:['image.crop.v1'],sampleCount:30,minimumSamples:30,
+      qualityPassed:true,nonInferiorityPassed:true,failureRate:0,maximumFailureRate:0.05,cohortAllowed:true});
+    process.env.RUNTIME_DEVICES_JSON = JSON.stringify([{deviceId:'pc',endpoint:'http://127.0.0.1:1',tokenEnv:'TEST_TOKEN',enabled:true,qualityVerified:true,cropPriorMs:1}]);
+    service = new DeviceDispatchService(undefined, {schedule:jest.fn().mockResolvedValue({deviceId:'pc',macroContext,mode:'OPTIMIZED',reason:'TEST',estimatedMs:10,baseline:{estimatedMs:100},assignments:[{nodeId:'crop',deviceId:'pc',executorId:'cpu-worker'}],baselineAssignments:[{nodeId:'crop',deviceId:'cloud-runtime',executorId:'cloud'}]})} as unknown as MacroSchedulerService);
+    jest.spyOn(service as any,'queryCandidates').mockResolvedValue([]);
+    call = jest.spyOn(service as any,'call').mockImplementation(async (...args: any[]) => {
+      switch(args[2]) {
+        case 'artifacts': return input;
+        case 'leases': return {leaseId:'lease',fencingToken:7};
+        case 'query': return {settled:true,output};
+        case 'artifacts/resolve': return outputBytes;
+        default: return {};
+      }
+    });
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    if(previousPolicy===undefined)delete process.env.PLACEMENT_POLICY_JSON;else process.env.PLACEMENT_POLICY_JSON=previousPolicy;
+    if(previous === undefined) delete process.env.RUNTIME_DEVICES_JSON; else process.env.RUNTIME_DEVICES_JSON=previous;
+  });
+  const run = (service: DeviceDispatchService, signal = new AbortController().signal, request = graph, options = context) =>
+    RuntimeWorkScope.run(signal,{storageReadMs:0,storageWriteMs:0,modelMs:0},()=>service.dispatch(request,options,{cloudExecutors:{'image.crop.v1':async()=>({...output,buffer:outputBytes})}}),'owner',options.budgetMs);
+  it('uploads data, forwards task parameters and macroContext, verifies output and releases lease',async()=>{
+    const result = await run(service);
+    expect(result.buffer).toEqual(outputBytes);
+    expect(call.mock.calls.find(args=>args[2]==='execute')?.[3]).toEqual(expect.objectContaining({
+      macroContext:expect.objectContaining({urgency:true,baselineDevice:'cloud-runtime',selectedReason:'TEST'}),parameters:{targetSize:48},input,leaseId:'lease',fencingToken:7
+    }));
+    expect(call.mock.calls.find(args=>args[2]==='leases')?.[3]).toEqual(expect.objectContaining({memoryBytes:128*1024*1024}));
+    expect(call.mock.calls.at(-1)?.[2]).toBe('release');
+  });
+  it('dispatches through the real macro scheduler using verified cold-start candidates',async()=>{
+    (service as any).queryCandidates.mockRestore();
+    (service as any).macroScheduler = new MacroSchedulerService();
+    const original = call.getMockImplementation()!;
+    call.mockImplementation(async (...args:any[])=>args[2]==='descriptor'?{
+      protocolVersion:1,deviceId:'pc',adapterVersion:'1',capabilities:['image.crop.v1'],capacity:{slots:1,memoryBytes:256*1024*1024}
+    }:original(...args));
+    const actual = await run(service,undefined,graph,{...context,budgetMs:5000,links:[{from:'cloud-runtime',to:'pc',bytesPerSecond:1e8,fixedMs:0,effective:true,source:'REAL',observedAt:Date.now(),ttlMs:10000},{from:'pc',to:'cloud-runtime',bytesPerSecond:1e8,fixedMs:0,effective:true,source:'REAL',observedAt:Date.now(),ttlMs:10000}]} as any);
+    expect(actual.buffer).toEqual(outputBytes);
+    const sent = call.mock.calls.find(args=>args[2]==='execute')?.[3] as any;
+    expect(sent.macroContext).toMatchObject({baselineDevice:'cloud-runtime',urgency:true});
+    expect(sent.macroContext.budgetMs).toBeGreaterThan(0);
+  });
+  it('propagates Worker errors and releases settled leases',async()=>{
+    const original = call.getMockImplementation()!;
+    call.mockImplementation(async (...args:any[])=>args[2]==='query'?{settled:true,errorCode:'CROP_INVALID'}:original(...args));
+    await expect(run(service)).rejects.toThrow('CROP_INVALID');
+    expect(call.mock.calls.at(-1)?.[2]).toBe('release');
+  });
+  it('cancels an unconfirmed lease when execute is rejected',async()=>{
+    const original = call.getMockImplementation()!;
+    call.mockImplementation(async (...args:any[])=>{if(args[2]==='execute')throw new Error('CAPACITY_FULL');return original(...args);});
+    await expect(run(service)).rejects.toThrow('CAPACITY_FULL');
+    expect(call.mock.calls.at(-1)?.[2]).toBe('cancel');
+  });
+  it('rejects corrupted outputs',async()=>{
+    const original = call.getMockImplementation()!;
+    call.mockImplementation(async (...args:any[])=>args[2]==='artifacts/resolve'?Buffer.from('corrupt'):original(...args));
+    await expect(run(service)).rejects.toThrow('OUTPUT_HASH_MISMATCH');
+  });
+  it('honors cancellation while polling and cancels the lease',async()=>{
+    const controller = new AbortController();
+    const original = call.getMockImplementation()!;
+    call.mockImplementation(async (...args:any[])=>{
+      if(args[2]==='query'){controller.abort(new Error('CANCELLED'));return {settled:false};}
+      return original(...args);
+    });
+    await expect(run(service,controller.signal)).rejects.toThrow('CANCELLED');
+    expect(call.mock.calls.at(-1)?.[2]).toBe('cancel');
+  });
+  it('enforces network authorization before upload',async()=>{
+    await expect(run(service,undefined,graph,{...context,networkAllowed:false})).rejects.toThrow('TRANSFER_NOT_AUTHORIZED');
+    expect(call).not.toHaveBeenCalled();
+  });
+  it('rejects missing dependencies before execution',async()=>{
+    await expect(run(service,undefined,{...graph,tasks:[...graph.tasks,{...graph.tasks[0],id:'next',dependencies:['missing']}]})).rejects.toThrow('TASK_GRAPH_DEPENDENCY_INVALID');
+    expect(call).not.toHaveBeenCalled();
   });
 });

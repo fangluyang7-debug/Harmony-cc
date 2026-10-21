@@ -7,6 +7,22 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model RuntimeDevice {
+  id             String @id
+  kind           String
+  ownerUserId    String
+  status         String @default("active")
+  connectionJson String?
+  profileJson    String?
+  observedAt     DateTime?
+}
+
+model RuntimeCostSample {
+  id           String @id
+  sampleJson   String
+  observedAt   DateTime
+}
+
 model ImageAsset {
   ownerUserId               String?
   id                        String         @id

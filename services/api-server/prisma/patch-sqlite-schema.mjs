@@ -4,6 +4,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 try {
+  const directoryMigration = await readFile(new URL('./migrations/000007_device_directory/migration.sql', import.meta.url), 'utf8');
+  for (const statement of directoryMigration.split(';').map(value => value.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(statement);
   const artifactMigration = await readFile(new URL('./migrations/000002_artifacts/migration.sql', import.meta.url), 'utf8');
   for (const statement of artifactMigration.split(';').map(value => value.trim()).filter(Boolean)) { await prisma.$executeRawUnsafe(statement); }
   const workflowMigration = await readFile(new URL('./migrations/000003_workflows/migration.sql', import.meta.url), 'utf8');
