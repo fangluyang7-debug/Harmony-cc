@@ -1,0 +1,730 @@
+import { common } from '@kit.AbilityKit';
+import { photoAccessHelper } from '@kit.MediaLibraryKit';
+import { http } from '@kit.NetworkKit';
+import { FeedbackOption, FeedbackRequest, SchedulerService, TaskSignalType, TaskStatus, WorkflowHandle } from 'scheduler';
+import { SchedulerMonitorPublisher } from '../services/SchedulerMonitorPublisher';
+import { CloudApiConfig } from '../services/CloudApiConfig';
+import { ShoppingTaskService } from '../services/ShoppingTaskService';
+import { Product } from '../models/Product';
+import { ShoppingResult } from '../models/ShoppingResult';
+import { AssistantHome } from '../components/AssistantHome';
+import { SearchResults } from '../components/SearchResults';
+import { ProductDetail } from '../components/ProductDetail';
+import { ExperienceFeedback } from '../components/ExperienceFeedback';
+import { CommerceIconButton, ProductTile } from '../components/CommerceControls';
+import { feedbackAvailabilityText } from '../services/FeedbackPresentation';
+import { cloudFailureText, feedbackReceiptText, numericPrice, platformLabel, productKey, safeProductUrl } from '../services/CommercePresentation';
+
+interface SubjectBoxInput { x: number; y: number; width: number; height: number; }
+interface SubjectSelectionInput { box: SubjectBoxInput; selectionSource: string; }
+interface ModelCallAudit { purpose: string; modelId: string; }
+interface RunTelemetryMetadataAudit { modelCalls?: ModelCallAudit[]; }
+interface RunTelemetryAudit { metadata?: RunTelemetryMetadataAudit; }
+interface RunAuditData { runId: string; status: string; executionState: string; telemetry?: RunTelemetryAudit[]; }
+interface RunAuditEnvelope { success: boolean; data?: RunAuditData; }
+
+enum CommerceTab { HOME, CATALOG, RADAR, SAVED, PROFILE }
+
+@Entry
+@Component
+struct Index {
+  private readonly scheduler: SchedulerService = SchedulerService.getInstance();
+  private readonly tasks: ShoppingTaskService = ShoppingTaskService.getInstance();
+  private readonly monitor: SchedulerMonitorPublisher = SchedulerMonitorPublisher.getInstance();
+  private activeSearch: WorkflowHandle<ShoppingResult> | null = null;
+  private latestShoppingResult: ShoppingResult | null = null;
+  private generation: number = 0;
+  private expiryTimer: number = -1;
+  private readyTimer: number = -1;
+  private photoGeneration: number = 0;
+  private feedbackWorkflowId: string = '';
+  private pendingWorkflowId: string = '';
+  @State saving: boolean = false;
+  @State editProfile: boolean = false;
+  @State editSubject: boolean = false;
+  @State profileBrand: string = '';
+  @State profileColor: string = '';
+  @State boxX: number = 0;
+  @State boxY: number = 0;
+  @State boxWidth: number = 100;
+  @State boxHeight: number = 100;
+  @State cloudEndpoint: string = '';
+  @State cloudStatus: string = '请配置 Zeabur HTTPS API 地址';
+  private contentScroller: Scroller = new Scroller();
+  @State feedbackStatus: string = '等待本次任务完成';
+  @State tab: CommerceTab = CommerceTab.HOME;
+  @State ready: boolean = false;
+  @State query: string = '';
+  @State lastQuery: string = '';
+  @State products: Product[] = [];
+  @State catalog: Product[] = [];
+  @State saved: Product[] = [];
+  @State histories: string[] = [];
+  @State showHistory: boolean = false;
+  @State selected: Product | null = null;
+  @State loading: boolean = false;
+  @State initialStatus: string = '正在准备云端检索';
+  @State summary: string = '输入商品名称开始搜索';
+  @State plan: string = '';
+  @State highQuality: boolean = false;
+  @State priceSorted: boolean = false;
+  @State photoUri: string = '';
+  @State feedback: FeedbackRequest | null = null;
+  @State feedbackHidden: boolean = false;
+  @State answering: boolean = false;
+  @State feedbackEnabled: boolean = false;
+  @State receiptText: string = '';
+  @State contentHeight: number = 500;
+  @State monitorEndpoint: string = '';
+  @State monitorPairingCode: string = '';
+  @State monitorEnabled: boolean = false;
+  @State monitorSettingsLoaded: boolean = false;
+  @State monitorStatus: string = '正在读取监控设置';
+  @State runAudit: string = '暂无云端运行记录';
+  private currentTaskId: string = '';
+
+  aboutToAppear(): void { this.loadCatalog(); this.loadMonitorSettings(); this.watchReady(); }
+  onPageShow(): void { this.watchReady(); }
+  onPageHide(): void { this.invalidate(TaskSignalType.PAGE_LEFT); clearInterval(this.readyTimer); }
+  aboutToDisappear(): void { this.invalidate(TaskSignalType.PAGE_LEFT); clearInterval(this.readyTimer); this.photoGeneration++; }
+  onBackPress(): boolean {
+    if (this.selected !== null) { this.selected = null; return true; }
+    if (this.showHistory) { this.showHistory = false; return true; }
+    if (this.tab !== CommerceTab.HOME) { this.navigate(CommerceTab.HOME); return true; }
+    return false;
+  }
+  private watchReady(): void {
+    clearInterval(this.readyTimer); this.refreshReady();
+    this.readyTimer = setInterval(() => this.refreshReady(), 500);
+  }
+  private refreshReady(): void {
+    this.ready = this.scheduler.isInitialized();
+    if (!this.ready) { return; }
+    if (this.cloudEndpoint.length === 0) {
+      try { this.cloudEndpoint = CloudApiConfig.getBaseUrl(); this.cloudStatus = '云端 API 已配置'; } catch (_) {}
+    }
+    this.feedbackEnabled = this.scheduler.isFeedbackEnabled();
+    if (this.monitorEnabled && this.monitorSettingsLoaded) {
+      this.monitor.start(this.monitorEndpoint, this.monitorPairingCode);
+    }
+    if (!this.feedbackEnabled && this.feedback !== null) { this.clearFeedback(); }
+    this.refreshFeedbackStatus();
+    this.maybeAskPendingFeedback();
+  }
+  private async loadCatalog(): Promise<void> {
+    this.catalog = [];
+    this.initialStatus = '商品由 Zeabur 云端检索';
+    try { this.cloudEndpoint = CloudApiConfig.getBaseUrl(); this.cloudStatus = '云端 API 已配置'; } catch (_) {}
+  }
+
+  private async saveCloudEndpoint(): Promise<void> {
+    try {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      await CloudApiConfig.save(context, this.cloudEndpoint);
+      this.cloudStatus = '云端 API 已保存';
+    } catch (_) { this.cloudStatus = '请填写有效的 HTTPS API 域名'; }
+  }
+  private async loadMonitorSettings(): Promise<void> {
+    this.monitor.setStatusListener((status: string) => { this.monitorStatus = status; });
+    try {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      const settings = await SchedulerMonitorPublisher.loadSettings(context);
+      this.monitorEndpoint = settings.endpoint;
+      this.monitorPairingCode = settings.pairingCode;
+      this.monitorEnabled = settings.enabled;
+    } catch (_) { this.monitorStatus = '监控设置读取失败'; }
+    finally { this.monitorSettingsLoaded = true; }
+    if (this.monitorEnabled && this.ready) { this.monitor.start(this.monitorEndpoint, this.monitorPairingCode); }
+  }
+  private async saveMonitorSettings(enabled: boolean): Promise<void> {
+    const endpoint = this.monitorEndpoint.trim().replace(/\/$/, '');
+    const pairingCode = this.monitorPairingCode.trim();
+    if (enabled && (!SchedulerMonitorPublisher.isValidEndpoint(endpoint) ||
+      !SchedulerMonitorPublisher.isValidPairingCode(pairingCode))) {
+      this.monitorEnabled = false;
+      this.monitorStatus = '请填写有效的电脑地址和配对码';
+      this.notify('电脑地址或配对码格式不正确');
+      return;
+    }
+    try {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      await SchedulerMonitorPublisher.saveSettings(context, { endpoint: endpoint, pairingCode: pairingCode, enabled: enabled });
+      this.monitorEndpoint = endpoint;
+      this.monitorPairingCode = pairingCode;
+      this.monitorEnabled = enabled;
+      if (enabled) { this.monitor.start(endpoint, pairingCode); }
+      else { this.monitor.stop(); }
+    } catch (_) {
+      this.monitorEnabled = false;
+      this.monitorStatus = '监控设置保存失败';
+      this.notify('无法保存电脑监控设置');
+    }
+  }
+  private clearFeedback(): void {
+    clearTimeout(this.expiryTimer); this.feedback = null; this.feedbackHidden = false;
+  }
+  private invalidate(type: TaskSignalType = TaskSignalType.INPUT_REPLACED): void {
+    this.generation++; this.photoGeneration++; this.clearFeedback();
+    if (this.activeSearch !== null) {
+      // Leaving or cancelling can be the strongest "too slow" signal; remember it for a deferred question.
+      if (type === TaskSignalType.PAGE_LEFT || type === TaskSignalType.CANCEL) {
+        this.pendingWorkflowId = this.activeSearch.workflowId;
+      }
+      this.activeSearch.signal({ type: type }).catch(() => {});
+      if (this.currentTaskId !== '') {
+        const taskId = this.currentTaskId;
+        this.requestCloudCancel(taskId).catch(() => {});
+        setTimeout(() => { this.auditRun(taskId).catch(() => {}); }, 3000);
+        setTimeout(() => { this.auditRun(taskId).catch(() => {}); }, 8000);
+      }
+      this.activeSearch = null;
+    }
+    if (this.loading) { this.summary = '搜索已停止'; }
+    this.loading = false;
+  }
+  private async requestCloudCancel(taskId: string): Promise<void> {
+    if (!CloudApiConfig.isAuthenticated()) { return; }
+    for (let attempt: number = 0; attempt < 3; attempt++) {
+      const client = http.createHttp();
+      try {
+        const response = await client.request(CloudApiConfig.getBaseUrl() + '/api/v1/runtime/runs/by-client-task/' + encodeURIComponent(taskId), {
+          method: http.RequestMethod.GET, header: CloudApiConfig.requestHeaders(), connectTimeout: 5000, readTimeout: 5000
+        });
+        if (response.responseCode === 200 && typeof response.result === 'string') {
+          const body = JSON.parse(response.result) as RunAuditEnvelope;
+          if (body.success && body.data && body.data.executionState !== 'settled') {
+            const cancelClient = http.createHttp();
+            try {
+              await cancelClient.request(CloudApiConfig.getBaseUrl() + '/api/v1/runtime/runs/' + encodeURIComponent(body.data.runId) + '/cancel', {
+                method: http.RequestMethod.POST, header: CloudApiConfig.requestHeaders(), extraData: '{}',
+                connectTimeout: 5000, readTimeout: 5000
+              });
+            } finally { cancelClient.destroy(); }
+          }
+          return;
+        }
+        if (response.responseCode !== 404) { return; }
+      } catch (_) { return; }
+      finally { client.destroy(); }
+      await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+    }
+  }
+  private async auditRun(taskId: string): Promise<void> {
+    if (!CloudApiConfig.isAuthenticated()) { return; }
+    const client = http.createHttp();
+    try {
+      const response = await client.request(CloudApiConfig.getBaseUrl() + '/api/v1/runtime/runs/by-client-task/' + encodeURIComponent(taskId), {
+        method: http.RequestMethod.GET, header: CloudApiConfig.requestHeaders(), connectTimeout: 10000, readTimeout: 15000
+      });
+      if (response.responseCode === 404) {
+        if (taskId === this.currentTaskId) { this.runAudit = taskId + ' · 云端未创建运行'; }
+        return;
+      }
+      if (response.responseCode !== 200 || typeof response.result !== 'string') { return; }
+      const body = JSON.parse(response.result) as RunAuditEnvelope;
+      if (body.success && body.data) {
+        const detail = await client.request(CloudApiConfig.getBaseUrl() + '/api/v1/runtime/runs/' + encodeURIComponent(body.data.runId), {
+          method: http.RequestMethod.GET, header: CloudApiConfig.requestHeaders(), connectTimeout: 10000, readTimeout: 15000
+        });
+        let models = '';
+        if (detail.responseCode === 200 && typeof detail.result === 'string') {
+          const run = JSON.parse(detail.result) as RunAuditEnvelope;
+          const calls = run.data?.telemetry?.flatMap((item: RunTelemetryAudit) => item.metadata?.modelCalls ?? []) ?? [];
+          models = calls.map((item: ModelCallAudit) => item.purpose + ':' + item.modelId).join(', ');
+        }
+        if (taskId === this.currentTaskId) {
+          this.runAudit = taskId + ' → ' + body.data.runId + ' · ' + body.data.status + ' / ' + body.data.executionState +
+            (models === '' ? '' : ' · ' + models);
+        }
+      }
+    } finally { client.destroy(); }
+  }
+  private navigate(tab: CommerceTab): void {
+    this.photoGeneration++;
+    if (tab !== this.tab) { this.invalidate(TaskSignalType.PAGE_LEFT); }
+    this.selected = null; this.showHistory = false; this.tab = tab;
+  }
+  private async search(value: string): Promise<void> {
+    const query = value.trim();
+    if (query === '') { return; }
+    if (!this.ready) { this.notify('调度器仍在初始化，请稍后搜索'); return; }
+    this.getUIContext().getFocusController().clearFocus();
+    this.photoGeneration++;
+    this.invalidate();
+    const generation = this.generation;
+    this.tab = CommerceTab.RADAR; this.selected = null; this.showHistory = false;
+    this.query = ''; this.lastQuery = query; this.products = []; this.plan = ''; this.receiptText = '';
+    this.summary = '正在请求云端商品检索'; this.loading = true;
+    this.contentScroller.scrollTo({ xOffset: 0, yOffset: 0 });
+    const started = Date.now();
+    try {
+      const handle = this.tasks.searchResult(query, this.highQuality);
+      this.currentTaskId = this.tasks.lastSubmittedTaskId;
+      this.runAudit = this.currentTaskId + ' · 等待云端运行';
+      this.activeSearch = handle;
+      const result = await handle.result;
+      if (generation !== this.generation) { await handle.signal({ type: TaskSignalType.RESULT_IGNORED }); return; }
+      if (result.nodes.length > 0) {
+        const audit = result.nodes[result.nodes.length - 1].executionPlan.policyAudit;
+        this.plan = audit === undefined ? 'Zeabur 云端执行' : `${audit.mode} · ${audit.actualProfileId}`;
+      }
+      if (result.status !== TaskStatus.SUCCEEDED || result.output === null) {
+        this.summary = result.status === TaskStatus.CANCELLED ? '搜索已取消或过期' : cloudFailureText(result.reasonCode);
+        await handle.signal({ type: TaskSignalType.RESULT_IGNORED });
+        this.pendingWorkflowId = '';
+        // A timeout or failure is still a perceivable wait; ask if the user is still here and opted in.
+        if (generation === this.generation && this.feedbackEnabled) { this.requestFeedback(handle.workflowId); }
+        return;
+      }
+      this.latestShoppingResult = result.output;
+      this.runAudit = result.output.taskId + ' → ' + result.output.runtimeRunId + ' · 成功';
+      this.auditRun(result.output.taskId).catch(() => {});
+      this.tasks.remember(result.output);
+      this.products = result.output.products ?? [];
+      this.catalog = this.products.slice();
+      this.summary = `找到 ${this.products.length} 件云端商品 · ${Date.now() - started} ms`;
+      this.histories = [query].concat(this.histories.filter((item: string) => item !== query)).slice(0, 20);
+      await handle.signal({ type: TaskSignalType.RESULT_DISPLAYED,
+        experience: { responseReadyMs: Date.now() - started } });
+      this.pendingWorkflowId = '';
+      if (generation === this.generation) { this.requestFeedback(handle.workflowId); }
+    } catch (_) {
+      if (generation === this.generation) { this.summary = '搜索暂不可用，请稍后重试'; }
+    } finally { if (generation === this.generation) { this.loading = false; } }
+  }
+  private requestFeedback(workflowId: string = ''): void {
+    const id = workflowId !== '' ? workflowId : (this.activeSearch !== null ? this.activeSearch.workflowId : this.pendingWorkflowId);
+    if (id === '') { return; }
+    clearTimeout(this.expiryTimer);
+    this.feedbackWorkflowId = id;
+    this.feedback = this.tasks.feedbackRequest(id);
+    this.refreshFeedbackStatus();
+    if (this.feedback !== null) {
+      this.expiryTimer = setTimeout(() => { this.clearFeedback(); this.refreshFeedbackStatus(); }, Math.max(1, this.feedback.expiresAtMs - Date.now()));
+    }
+  }
+  private maybeAskPendingFeedback(): void {
+    if (!this.ready || !this.feedbackEnabled || this.loading || this.feedback !== null || this.pendingWorkflowId === '') { return; }
+    try {
+      const availability = this.tasks.feedbackAvailability(this.pendingWorkflowId);
+      if (availability.eligible) { this.requestFeedback(this.pendingWorkflowId); }
+      else if (availability.reason !== 'WORKFLOW_NOT_READY' && availability.reason !== 'APP_BACKGROUND') {
+        this.pendingWorkflowId = '';
+      }
+    } catch (_) { this.pendingWorkflowId = ''; }
+  }
+  private refreshFeedbackStatus(): void {
+    if (!this.ready) { this.feedbackStatus = '调度器尚未就绪'; return; }
+    const id = this.activeSearch !== null ? this.activeSearch.workflowId : this.pendingWorkflowId;
+    if (id === '') { this.feedbackStatus = this.feedbackEnabled ? '等待本次任务完成' : '体验题未开启：需要你的授权'; return; }
+    try { this.feedbackStatus = feedbackAvailabilityText(this.tasks.feedbackAvailability(id)); }
+    catch (_) { this.feedbackStatus = '无法读取反馈状态'; }
+  }
+  private answer(option: FeedbackOption): void {
+    if (this.answering || this.feedback === null || this.feedbackWorkflowId === '') { return; }
+    this.answering = true;
+    try {
+      const request = this.feedback;
+      const receipt = this.tasks.submitFeedback(this.feedbackWorkflowId,
+        { taskRunId: request.taskRunId, kind: request.kind, option: option });
+      this.receiptText = feedbackReceiptText(receipt); this.clearFeedback();
+      this.pendingWorkflowId = '';
+      this.refreshFeedbackStatus();
+    } catch (_) { this.receiptText = '反馈提交失败，请稍后重试'; }
+    finally { this.answering = false; }
+  }
+  private setConsent(enabled: boolean): void {
+    if (!this.ready) { return; }
+    this.scheduler.setFeedbackEnabled(enabled); this.feedbackEnabled = enabled;
+    if (!enabled) { this.clearFeedback(); }
+    this.refreshFeedbackStatus();
+    if (enabled && !this.loading) {
+      if (this.activeSearch !== null) { this.requestFeedback(this.activeSearch.workflowId); }
+      else { this.maybeAskPendingFeedback(); }
+    }
+  }
+  private openProduct(product: Product): void {
+    this.selected = product;
+    if (this.tab === CommerceTab.RADAR && this.activeSearch !== null) {
+      this.activeSearch.signal({ type: TaskSignalType.RESULT_CONSUMED }).catch(() => {});
+    }
+  }
+  private async toggleSaved(product: Product): Promise<void> {
+    if (this.saving || this.loading) { return; }
+    const key = productKey(product);
+    const exists = this.saved.some((item: Product) => productKey(item) === key);
+    this.saving = true;
+    try {
+      if (product.sessionId && product.candidateItemId) { await this.tasks.setShortlist(product.sessionId, product.candidateItemId, !exists); }
+      this.saved = exists ? this.saved.filter((item: Product) => productKey(item) !== key) : this.saved.concat([product]);
+    } catch (_) { this.notify('云端清单更新失败，请读取最新会话后重试'); }
+    finally { this.saving = false; }
+  }
+  private savedKeys(): string[] { return this.saved.map(productKey); }
+  private visibleResults(): Product[] {
+    return this.priceSorted ? this.products.slice().sort((a: Product, b: Product) => numericPrice(a) - numericPrice(b)) : this.products;
+  }
+  private async choosePhoto(): Promise<void> {
+    try { CloudApiConfig.getBaseUrl(); }
+    catch (error) {
+      this.notify(cloudFailureText(error instanceof Error ? error.message : undefined));
+      return;
+    }
+    this.invalidate(TaskSignalType.PAGE_LEFT);
+    const generation = ++this.photoGeneration;
+    try {
+      const picker = new photoAccessHelper.PhotoViewPicker();
+      const result = await picker.select({ MIMEType: photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE, maxSelectNumber: 1 });
+      if (generation !== this.photoGeneration || result.photoUris.length === 0) { return; }
+      this.photoUri = result.photoUris[0]; this.tab = CommerceTab.RADAR; this.selected = null;
+      this.products = []; this.lastQuery = ''; this.plan = ''; this.receiptText = '';
+      this.summary = '正在上传图片并执行云端检索'; this.loading = true;
+      const handle = this.tasks.searchImageResult(this.photoUri); this.activeSearch = handle;
+      this.currentTaskId = this.tasks.lastSubmittedTaskId;
+      this.runAudit = this.currentTaskId + ' · 等待云端运行';
+      const searchResult = await handle.result;
+      if (generation !== this.photoGeneration) { return; }
+      this.loading = false;
+      if (searchResult.status === TaskStatus.SUCCEEDED && searchResult.output !== null) {
+        this.latestShoppingResult = searchResult.output;
+        this.runAudit = searchResult.output.taskId + ' → ' + searchResult.output.runtimeRunId + ' · 成功';
+        this.auditRun(searchResult.output.taskId).catch(() => {});
+        this.tasks.remember(searchResult.output);
+        this.products = searchResult.output.products ?? []; this.catalog = this.products.slice();
+        this.summary = '图片检索完成，共 ' + this.products.length + ' 件商品';
+      } else {
+        this.summary = searchResult.status === TaskStatus.CANCELLED ? '搜索已取消或过期' : cloudFailureText(searchResult.reasonCode);
+        this.auditRun(this.currentTaskId).catch(() => {});
+      }
+    } catch (_) {
+      this.loading = false; this.summary = '图片选择或云端检索失败，请检查配置与网络';
+      if (this.currentTaskId !== '') { this.auditRun(this.currentTaskId).catch(() => {}); }
+    }
+  }
+  private async openSource(): Promise<void> {
+    if (this.selected === null || !safeProductUrl(this.selected.productUrl)) {
+      this.notify('暂无有效的 HTTPS 商品链接'); return;
+    }
+    try {
+      const context = this.getUIContext().getHostContext() as common.UIAbilityContext;
+      await context.startAbility({ action: 'ohos.want.action.viewData', uri: this.selected.productUrl });
+    } catch (_) { this.notify('无法打开商品来源页面'); }
+  }
+  private notify(message: string): void {
+    try { this.getUIContext().getPromptAction().showToast({ message: message }); }
+    catch (_) { this.receiptText = message; }
+  }
+  private openSchedulerSettings(): void {
+    this.getUIContext().getRouter().pushUrl({ url: 'pages/SchedulerPanelPage' }).catch(() => this.notify('控制台打开失败'));
+  }
+
+  @Builder
+  private Header() {
+    Row({ space: 8 }) {
+      CommerceIconButton({ icon: this.selected !== null ? $r('sys.media.ohos_ic_public_arrow_left') :
+        $r('sys.media.ohos_ic_public_drawer_open'), label: this.selected !== null ? '返回商品列表' : '历史对话',
+        action: () => {
+          if (this.selected !== null) { this.selected = null; }
+          else { this.invalidate(TaskSignalType.PAGE_LEFT); this.showHistory = !this.showHistory; }
+        } })
+      Text('S').fontSize(18).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').textAlign(TextAlign.Center)
+        .width(30).height(30).backgroundColor('#111111').borderRadius(15)
+      Column({ space: 2 }) {
+        Text(this.selected !== null ? '商品详情' : 'SoleAI').fontSize(19).fontWeight(FontWeight.Bold).maxLines(1)
+        Text(this.ready ? '云端商品助手' : '正在初始化').fontSize(10).fontColor('#747878')
+      }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+    }.width('100%').padding(8).backgroundColor('#FFFFFF').borderRadius(32)
+  }
+  @Builder
+  private Composer() {
+    Row({ space: 8 }) {
+      CommerceIconButton({ icon: $r('sys.media.ohos_ic_public_camera'), label: '选择商品图片', action: () => this.choosePhoto() })
+      TextInput({ text: this.query, placeholder: '商品、品牌或预算...' }).layoutWeight(1).height(44).fontSize(14)
+        .backgroundColor('#FFFFFF').enterKeyType(EnterKeyType.Search)
+        .onChange((value: string) => {
+          // ArkUI also reports changes caused by clearing the submitted draft.
+          if (value === this.query) { return; }
+          this.query = value;
+          if (this.activeSearch !== null) { this.invalidate(); this.products = []; this.summary = '需求已更新，等待发送'; }
+        }).onSubmit(() => this.search(this.query))
+      Button({ type: ButtonType.Circle }) {
+        Image($r('sys.media.ohos_ic_public_arrow_up')).width(22).height(22).fillColor('#FFFFFF')
+      }.width(42).height(42).backgroundColor('#111111').accessibilityText('发送需求')
+        .enabled(this.ready && this.query.trim() !== '').onClick(() => this.search(this.query))
+    }.width('100%').padding(8).backgroundColor('#FFFFFF').borderRadius(30)
+  }
+  @Builder
+  private TabItem(label: string, icon: Resource, tab: CommerceTab) {
+    Button({ type: ButtonType.Normal }) {
+      Column({ space: 4 }) {
+        Image(icon).width(21).height(21).fillColor(this.tab === tab ? '#00513F' : '#747878')
+        Text(label).fontSize(10).fontColor(this.tab === tab ? '#00513F' : '#747878')
+      }
+    }.layoutWeight(1).height(56).backgroundColor('#FFFFFF').onClick(() => this.navigate(tab))
+  }
+  @Builder
+  private Tabs() {
+    Row() {
+      this.TabItem('助手', $r('sys.media.ohos_ic_public_text'), CommerceTab.HOME)
+      this.TabItem('商品', $r('sys.media.ohos_ic_public_albums'), CommerceTab.CATALOG)
+      this.TabItem('比价雷达', $r('sys.media.ohos_ic_public_search_filled'), CommerceTab.RADAR)
+      this.TabItem('清单', $r('sys.media.ohos_ic_public_ok'), CommerceTab.SAVED)
+      this.TabItem('我的', $r('sys.media.ohos_ic_public_more'), CommerceTab.PROFILE)
+    }.width('100%').backgroundColor('#FFFFFF')
+  }
+  @Builder
+  private Collection(items: Product[], title: string) {
+    Column({ space: 16 }) {
+      Text(title).fontSize(22).fontWeight(FontWeight.Bold).width('100%')
+      if (items.length === 0) { Text(title === '最近搜索商品' ? '完成一次搜索后，结果会显示在这里' : '暂无商品')
+        .fontSize(14).fontColor('#747878').padding(32) }
+      Flex({ wrap: FlexWrap.Wrap, justifyContent: FlexAlign.SpaceBetween }) {
+        ForEach(items, (product: Product) => {
+          Column() {
+            ProductTile({ product: product, saved: this.savedKeys().indexOf(productKey(product)) >= 0,
+              onOpen: (item: Product) => this.openProduct(item), onSave: (item: Product) => this.toggleSaved(item) })
+          }.width('48%').margin({ bottom: 12 })
+        }, productKey)
+      }.width('100%')
+    }.width('100%')
+  }
+  @Builder
+  private Profile() {
+    Column({ space: 20 }) {
+      Text('本机偏好').fontSize(24).fontWeight(FontWeight.Bold).width('100%')
+      Row() {
+        Text('参与本地体验反馈').fontSize(16).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: this.feedbackEnabled }).selectedColor('#009576')
+          .enabled(this.ready).onChange((value: boolean) => this.setConsent(value))
+      }.width('100%')
+      Text('仅记录结构化答案和调度指标，不记录搜索原文或图片，不自动上传。可随时关闭。')
+        .fontSize(13).fontColor('#747878').width('100%')
+      Divider().color('#E2E2E2')
+      Text('Zeabur 云端 API').fontSize(18).width('100%')
+      TextInput({ text: this.cloudEndpoint, placeholder: 'https://你的服务域名' })
+        .onChange((value: string) => { this.cloudEndpoint = value; })
+      Button('保存云端地址').onClick(() => this.saveCloudEndpoint())
+      Text(this.cloudStatus).fontSize(12)
+      Text('最近一次云端运行').fontSize(16).fontWeight(FontWeight.Medium).width('100%')
+      Text(this.runAudit).fontSize(12).fontColor('#444748').width('100%')
+      Button('刷新云端运行状态').fontSize(12).enabled(this.currentTaskId !== '')
+        .onClick(() => { this.auditRun(this.currentTaskId).catch(() => {}); })
+      Text('电脑实时监控').fontSize(18).fontWeight(FontWeight.Medium).width('100%')
+      Text('电脑和手机连接同一可信 Wi-Fi 后，运行电脑端监控服务，再填写电脑局域网地址与配对码。只推送调度状态、资源指标和任务事件，不包含搜索内容、图片或商品列表。')
+        .fontSize(12).fontColor('#747878').width('100%')
+      TextInput({ text: this.monitorEndpoint, placeholder: 'http://192.168.1.10:8765' }).width('100%').height(44)
+        .fontSize(13).backgroundColor('#FFFFFF').onChange((value: string) => { this.monitorEndpoint = value; })
+      TextInput({ text: this.monitorPairingCode, placeholder: '电脑终端显示的配对码' }).width('100%').height(44)
+        .fontSize(13).backgroundColor('#FFFFFF').type(InputType.Password)
+        .onChange((value: string) => { this.monitorPairingCode = value; })
+      Row() {
+        Text('向电脑推送实时遥测').fontSize(14).layoutWeight(1)
+        Toggle({ type: ToggleType.Switch, isOn: this.monitorEnabled }).selectedColor('#009576')
+          .enabled(this.ready && this.monitorSettingsLoaded).onChange((value: boolean) => this.saveMonitorSettings(value))
+      }.width('100%')
+      Text(this.monitorStatus).fontSize(12).fontColor('#00513F').width('100%')
+      Button('保存电脑连接信息').width('100%').backgroundColor('#E6F1EE').fontColor('#134E42')
+        .onClick(() => this.saveMonitorSettings(this.monitorEnabled))
+      Button('策略与实验控制台').width('100%').backgroundColor('#111111').fontColor('#FFFFFF')
+        .onClick(() => this.openSchedulerSettings())
+      Button('双机派发联调').width('100%').backgroundColor('#E6F1EE').fontColor('#134E42')
+        .onClick(() => this.getUIContext().getRouter().pushUrl({ url: 'pages/DualPhoneLabPage' })
+          .catch(() => this.notify('联调页面打开失败')))
+      Button('云端双机派发验收').width('100%').backgroundColor('#E6F1EE').fontColor('#134E42')
+        .onClick(() => this.getUIContext().getRouter().pushUrl({ url: 'pages/CloudPhoneDispatchPage' })
+          .catch(() => this.notify('云端验收页面打开失败')))
+      Text(this.receiptText || '暂无反馈回执').fontSize(13).fontColor('#444748').width('100%')
+      Text('清单与对话历史仅保留在本次运行中').fontSize(12).fontColor('#747878').width('100%')
+      Button('清空本次清单与历史').fontSize(13).backgroundColor('#EEEEEE').fontColor('#1A1C1C')
+        .onClick(() => { this.saved = []; this.histories = []; })
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+  @Builder
+  private History() {
+    Column({ space: 14 }) {
+      Row() {
+        Text('本次对话').fontSize(20).fontWeight(FontWeight.Bold).layoutWeight(1)
+        CommerceIconButton({ icon: $r('sys.media.ohos_ic_public_close'), label: '关闭历史', action: () => { this.showHistory = false; } })
+      }.width('100%')
+      Button('开始新对话').backgroundColor('#111111').onClick(() => {
+        this.navigate(CommerceTab.HOME); this.query = ''; this.photoUri = ''; this.receiptText = '';
+      })
+      if (this.histories.length === 0) { Text('暂无搜索记录').fontSize(14).fontColor('#747878') }
+      ForEach(this.histories, (query: string) => {
+        Button({ type: ButtonType.Normal }) {
+          Text(query).fontSize(14).fontColor('#1A1C1C').maxLines(2).width('100%').textAlign(TextAlign.Start)
+        }.width('100%').padding(14).backgroundColor('#FFFFFF').borderRadius(8).onClick(() => this.search(query))
+      })
+    }.width('100%').alignItems(HorizontalAlign.Start)
+  }
+  private subjectSelectionBody(): string {
+    const box: SubjectBoxInput = { x: this.boxX / 100, y: this.boxY / 100, width: this.boxWidth / 100, height: this.boxHeight / 100 };
+    const input: SubjectSelectionInput = { box: box, selectionSource: 'user_adjusted' };
+    return JSON.stringify(input);
+  }
+  private async sessionAction(operation: string, body: string = '{}'): Promise<void> {
+    const sessionId = this.latestShoppingResult?.sessionId;
+    if (!sessionId || this.loading) { return; }
+    const generation = ++this.generation;
+    this.loading = true;
+    try {
+      const handle = this.tasks.sessionResult(operation, sessionId, body);
+      this.activeSearch = handle;
+      const result = await handle.result;
+      if (generation !== this.generation) { return; }
+      if (result.status !== TaskStatus.SUCCEEDED || result.output === null) { this.summary = cloudFailureText(result.reasonCode); return; }
+      const output = result.output;
+      if (output.stateVersion !== null && this.latestShoppingResult?.stateVersion !== null &&
+        output.stateVersion < (this.latestShoppingResult?.stateVersion ?? 0)) { return; }
+      this.tasks.remember(output);
+      this.latestShoppingResult = output;
+      if (output.products !== null) {
+        if (operation === 'more') {
+          const previous = this.products;
+          this.products = previous.concat(output.products.filter((item: Product) => !previous.some((old: Product) => old.candidateItemId === item.candidateItemId)));
+        } else { this.products = output.products; }
+        this.catalog = this.products.slice();
+      }
+      if (typeof output.answer === 'string') { this.summary = output.answer; }
+      else if (output.answer !== null) { this.summary = output.answer.text; }
+      else if (output.prices !== null) { this.summary = output.prices.length === 0 ?
+        '暂无历史价格；当前商品价格可在候选卡片查看' : '已读取 ' + output.prices.length + ' 条商品库价格'; }
+      else { this.summary = '会话已更新，共 ' + this.products.length + ' 件商品'; }
+    } catch (_) { if (generation === this.generation) { this.summary = '会话更新失败，请读取最新会话后重试'; } }
+    finally { if (generation === this.generation) { this.loading = false; } }
+  }
+  @Builder
+  private SessionChip(label: string, active: boolean, action: () => void) {
+    Button(label).height(32).fontSize(12).fontWeight(FontWeight.Medium)
+      .fontColor(active ? '#00513F' : '#424848')
+      .backgroundColor(active ? '#DDF4EB' : '#F2F4F3')
+      .borderRadius(10).padding({ left: 12, right: 12 })
+      .margin({ right: 7, bottom: 7 }).onClick(action)
+  }
+  @Builder
+  private SessionTools() {
+    Column({ space: 8 }) {
+      Row() {
+        Text('会话工具').fontSize(13).fontWeight(FontWeight.Medium).fontColor('#1A1C1C').layoutWeight(1)
+        Text('按需调整结果').fontSize(11).fontColor('#747878')
+      }.width('100%')
+      Flex({ wrap: FlexWrap.Wrap }) {
+        this.SessionChip('修改画像', this.editProfile, () => { this.editProfile = !this.editProfile; })
+        if (this.photoUri !== '') {
+          this.SessionChip('调整主体', this.editSubject, () => { this.editSubject = !this.editSubject; })
+        }
+        this.SessionChip('读取会话', false, () => this.sessionAction('read'))
+        this.SessionChip('刷新匹配', false, () => this.sessionAction('refine'))
+        this.SessionChip('更多商品', false, () => this.sessionAction('more'))
+        this.SessionChip('商品库价格', false, () => this.sessionAction('prices'))
+        if (this.query.trim().length > 0) {
+          this.SessionChip('继续提问', false,
+            () => this.sessionAction('turn', JSON.stringify({ message: this.query })))
+        }
+      }.width('100%')
+    }.width('100%').alignItems(HorizontalAlign.Start)
+      .padding({ left: 12, right: 5, top: 12, bottom: 5 })
+      .backgroundColor('#FFFFFF').borderRadius(16)
+  }
+  @Builder
+  private Body() {
+    if (this.showHistory) { this.History() }
+    else if (this.selected !== null) { ProductDetail({ product: this.selected }) }
+    else if (this.tab === CommerceTab.HOME) {
+      AssistantHome({ products: this.catalog, savedKeys: this.savedKeys(), status: this.initialStatus,
+        onSearch: (value: string) => this.search(value), onFill: (value: string) => { this.query = value; },
+        onPhoto: () => this.choosePhoto(), onOpen: (item: Product) => this.openProduct(item), onSave: (item: Product) => this.toggleSaved(item) })
+    } else if (this.tab === CommerceTab.RADAR) {
+      if (this.latestShoppingResult?.sessionId && !this.loading) {
+        this.SessionTools()
+        if (this.editProfile) {
+          TextInput({ text: this.profileBrand, placeholder: '品牌（留空清除）' }).onChange((value: string) => { this.profileBrand = value; })
+          TextInput({ text: this.profileColor, placeholder: '颜色（留空清除）' }).onChange((value: string) => { this.profileColor = value; })
+          Button('应用画像').enabled(!this.loading).onClick(() => this.sessionAction('profile', JSON.stringify({ brand: this.profileBrand || null, color: this.profileColor || null })))
+        }
+        if (this.editSubject) {
+          Text('主体范围：调整左侧、顶部、宽度和高度（百分比）').fontSize(13)
+          Slider({ value: this.boxX, min: 0, max: 99 }).onChange((value: number) => { this.boxX = value; this.boxWidth = Math.min(this.boxWidth, 100 - value); })
+          Slider({ value: this.boxY, min: 0, max: 99 }).onChange((value: number) => { this.boxY = value; this.boxHeight = Math.min(this.boxHeight, 100 - value); })
+          Slider({ value: this.boxWidth, min: 1, max: 100 - this.boxX }).onChange((value: number) => { this.boxWidth = value; })
+          Slider({ value: this.boxHeight, min: 1, max: 100 - this.boxY }).onChange((value: number) => { this.boxHeight = value; })
+          Button('应用主体范围').enabled(!this.loading).onClick(() => this.sessionAction('subject', this.subjectSelectionBody()))
+        }
+      }
+      SearchResults({ products: this.visibleResults(), savedKeys: this.savedKeys(), query: this.lastQuery,
+        summary: this.summary, plan: this.plan, busy: this.loading, photoUri: this.photoUri,
+        highQuality: this.highQuality, priceSorted: this.priceSorted,
+        onSort: () => { this.priceSorted = !this.priceSorted; },
+        onQuality: (value: boolean) => {
+          this.highQuality = value;
+          if (this.lastQuery !== '') { this.search(this.lastQuery); }
+        },
+        onOpen: (item: Product) => this.openProduct(item), onSave: (item: Product) => this.toggleSaved(item),
+        onRetry: () => this.search(this.lastQuery), onCancel: () => this.invalidate(TaskSignalType.CANCEL), onPhoto: () => this.choosePhoto() })
+    } else if (this.tab === CommerceTab.CATALOG) { this.Collection(this.catalog, '最近搜索商品') }
+    else if (this.tab === CommerceTab.SAVED) { this.Collection(this.saved, `本次清单 · ${this.saved.length}`) }
+    else { this.Profile() }
+  }
+  build() {
+    Column({ space: 8 }) {
+      this.Header()
+      Stack({ alignContent: Alignment.Bottom }) {
+        Scroll(this.contentScroller) {
+          Column({ space: 16 }) {
+            if (this.contentHeight < 300 && this.feedback !== null && !this.loading && !this.showHistory &&
+              this.selected === null && this.tab === CommerceTab.RADAR) {
+              if (this.feedbackHidden) {
+                Button('体验反馈').height(36).fontSize(12).backgroundColor('#D7F8ED').fontColor('#00513F')
+                  .onClick(() => { this.feedbackHidden = false; })
+              } else {
+                ExperienceFeedback({ request: this.feedback, submitting: this.answering, maxRise: 0,
+                  onAnswer: (option: FeedbackOption) => this.answer(option), onDismiss: () => { this.feedbackHidden = true; } })
+              }
+            }
+            if (this.tab === CommerceTab.RADAR) {
+              if (!this.feedbackEnabled && this.ready) {
+                Column({ space: 4 }) {
+                  Row() {
+                    Text('偶尔回答使用感受（可选）').fontSize(12).layoutWeight(1)
+                    Toggle({ type: ToggleType.Switch, isOn: this.feedbackEnabled }).selectedColor('#009576')
+                      .onChange((value: boolean) => this.setConsent(value))
+                  }.width('100%')
+                  Text('仅保存在本机，不记录搜索内容或图片。').fontSize(11).fontColor('#747878').width('100%')
+                }.width('100%').padding(12).backgroundColor('#F4F7F6').borderRadius(14)
+              } else if (this.feedback === null && this.feedbackStatus === '可以回答本次体验题') {
+                Button('回答本次体验题').height(36).fontSize(12).onClick(() => this.requestFeedback())
+              }
+            }
+            if (this.receiptText !== '' && this.tab !== CommerceTab.PROFILE) {
+              Text(this.receiptText).fontSize(12).fontColor('#00513F').width('100%').padding(12).backgroundColor('#D7F8ED')
+            }
+            this.Body()
+          }.width('100%').padding({ top: 12, bottom: this.contentHeight >= 300 && this.feedback !== null &&
+            !this.feedbackHidden ? 270 : 20 })
+        }.width('100%').height('100%').scrollBar(BarState.Off)
+        if (this.contentHeight >= 300 && this.feedback !== null && !this.loading && !this.showHistory &&
+          this.selected === null && this.tab === CommerceTab.RADAR) {
+          if (this.feedbackHidden) {
+            Button('体验反馈').height(36).fontSize(12).backgroundColor('#D7F8ED').fontColor('#00513F')
+              .onClick(() => { this.feedbackHidden = false; }).margin({ bottom: 8 })
+          } else {
+            ExperienceFeedback({ request: this.feedback, submitting: this.answering, maxRise: Math.max(0, this.contentHeight - 270),
+              onAnswer: (option: FeedbackOption) => this.answer(option), onDismiss: () => { this.feedbackHidden = true; } })
+          }
+        }
+      }.layoutWeight(1).width('100%').clip(true).onAreaChange((_old: Area, area: Area) => { this.contentHeight = Number(area.height); })
+      if (this.selected !== null) {
+        Row({ space: 10 }) {
+          CommerceIconButton({ icon: this.savedKeys().indexOf(productKey(this.selected)) >= 0 ?
+            $r('sys.media.ohos_ic_public_ok') : $r('sys.media.ohos_ic_public_add'), label: '切换清单收藏',
+            action: () => { if (this.selected !== null) { this.toggleSaved(this.selected); } } })
+          Button(`前往${platformLabel(this.selected.platform)}查看`).layoutWeight(1).height(48).fontSize(15)
+            .backgroundColor('#111111').onClick(() => this.openSource())
+        }.width('100%').padding({ bottom: 8 })
+      } else {
+        if (this.tab === CommerceTab.HOME || this.tab === CommerceTab.RADAR) { this.Composer() }
+        this.Tabs()
+      }
+    }.width('100%').height('100%').padding({ left: 12, right: 12, top: 8 }).backgroundColor('#F9F9F9')
+  }
+}

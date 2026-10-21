@@ -1,0 +1,72 @@
+import { DeviceCalibrationController } from './controllers/device-calibration.controller';
+import { PhoneDispatchController } from './controllers/phone-dispatch.controller';
+import { PhoneDispatchService } from './phone-dispatch.service';
+import { DeviceDispatchService } from '../../core/runtime/device-dispatch.service';
+import { AuthModule } from '../auth/auth.module';
+import { RuntimeMaintenanceGuard } from './runtime-maintenance.guard';
+import { RuntimeProbeController } from './controllers/runtime-probe.controller';
+import { Injectable, Module, OnModuleInit } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { AgentRuntimeService } from "../../core/runtime/agent-runtime.service";
+import { CloudPlatformAdapterService } from "../../core/runtime/cloud-platform-adapter.service";
+import { CixP1PlatformAdapterService, HarmonyPlatformAdapterService } from "../../core/runtime/unavailable-platform-adapters.service";
+import { HostPlatformAdapterService } from "../../core/runtime/host-platform-adapter.service";
+import { PerformanceRegistryService } from "../../core/runtime/performance-registry.service";
+import { PlatformDiscoveryService } from "../../core/runtime/platform-discovery.service";
+import { ResourceAwareSchedulerService } from "../../core/runtime/scheduler.service";
+import { RuntimeSnapshotService } from "../../core/runtime/runtime-snapshot.service";
+import { TelemetryService } from "../../core/runtime/telemetry.service";
+import { ToolRegistryService } from "../../core/runtime/tool-registry.service";
+import { RuntimeRunService } from "../../core/runtime/runtime-run.service";
+import { RuntimeEventBusService } from "../../core/runtime/runtime-event-bus.service";
+import { createShoppingPlugin } from "../../core/runtime/shopping-plugin";
+import { RuntimeController } from "./controllers/runtime.controller";
+import { ExecutorRegistryService } from '../../core/runtime/executor-registry.service';
+import { RuntimeRunnerService } from '../../core/runtime/runtime-runner.service';
+import { CloudReadinessService } from '../../core/runtime/cloud-readiness.service';
+import { TencentCosStorageAdapterService } from '../../adapters/storage/tencent-cos-storage-adapter.service';
+
+@Injectable()
+class ShoppingPluginRegistration implements OnModuleInit {
+  constructor(
+    private readonly config: ConfigService,
+    private readonly registry: ToolRegistryService,
+  ) {}
+
+  onModuleInit() {
+    this.registry.registerPlugin(createShoppingPlugin(this.config));
+  }
+}
+
+@Module({
+  imports: [AuthModule],
+  controllers: [DeviceCalibrationController, PhoneDispatchController, RuntimeController, RuntimeProbeController],
+  providers: [DeviceDispatchService, PhoneDispatchService, RuntimeMaintenanceGuard,
+    ExecutorRegistryService, RuntimeRunnerService, CloudReadinessService, TencentCosStorageAdapterService,
+    ToolRegistryService,
+    PerformanceRegistryService,
+    TelemetryService,
+    HostPlatformAdapterService,
+    HarmonyPlatformAdapterService,
+    CixP1PlatformAdapterService,
+    CloudPlatformAdapterService,
+    PlatformDiscoveryService,
+    ResourceAwareSchedulerService,
+    RuntimeSnapshotService,
+    RuntimeRunService,
+    RuntimeEventBusService,
+    AgentRuntimeService,
+    ShoppingPluginRegistration,
+  ],
+  exports: [DeviceDispatchService, PhoneDispatchService,
+    ExecutorRegistryService, RuntimeRunnerService, CloudReadinessService,
+    ToolRegistryService,
+    PerformanceRegistryService,
+    TelemetryService,
+    ResourceAwareSchedulerService,
+    AgentRuntimeService,
+    RuntimeRunService,
+    RuntimeEventBusService,
+  ],
+})
+export class RuntimeModule {}

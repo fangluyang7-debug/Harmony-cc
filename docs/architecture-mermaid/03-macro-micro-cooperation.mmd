@@ -1,0 +1,48 @@
+%%{init: {"theme":"base","themeVariables":{"fontFamily":"Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Arial, sans-serif","fontSize":"17px","actorBkg":"#EAF2FF","actorBorder":"#3B73B9","actorTextColor":"#17324D","signalColor":"#506680","signalTextColor":"#17324D","noteBkgColor":"#FFF4DC","noteBorderColor":"#C8A365","noteTextColor":"#604A22"},"sequence":{"useMaxWidth":false,"actorMargin":38,"messageMargin":28,"noteMargin":14,"wrap":true}}}%%
+sequenceDiagram
+  autonumber
+  participant A as 应用与任务入口
+  participant G as 宏观调度 / 唯一协调者
+  participant L as 目标设备本地 Runtime
+  participant E as 执行器 / 计算进程
+  participant D as Artifact 与提交存储
+
+  A->>G: Task 契约、工作流依赖、输入引用、总预算
+  Note over G,L: 下发约束：能力、质量、隐私、剩余预算<br/>目标设备保留本地资源准入权
+  G->>G: 候选合法性过滤、数据位置成本、有界前瞻
+  G->>G: 比较合法基线，检查全局发布门禁
+  G->>L: 请求准入：attempt 身份、资源需求、剩余预算
+  L->>L: 检查当前容量与资源约束
+  alt 目标拒绝准入
+    L-->>G: 拒绝原因与最新资源信息
+    G->>G: 在剩余预算内重规划、回退或终止
+  else 目标准入成功
+    L-->>G: 接受回执、leaseId 与 fencingToken
+    G->>L: 派发能力、输入引用、租约与取消上下文
+    Note over L,E: 手机 HAR 选择合法 profile 并排队准入<br/>Worker 校验固定能力与容量；云 Runtime 管理服务执行
+    L->>D: 授权解析输入，校验版本、依赖和哈希
+    D-->>L: 合法输入或可访问的数据位置
+    L->>E: 以本地可执行配置启动任务
+    alt 正常完成
+      E-->>L: 结果、实际配置、物理结算与耗时
+      L-->>G: 输出与执行回执
+      G->>D: 发布输出 Artifact；校验当前 epoch 后提交阶段
+      D-->>G: StageCommit / 已提交结果引用
+      G->>G: 更新成本与数据位置，推进后续阶段
+      G-->>A: 工作流完成后返回结果信封
+    else 取消、超时或执行失败
+      G->>L: 请求停止或核对尝试状态
+      L->>E: 传播取消信号 / STOP_REQUESTED
+      Note over L,E: 停止请求或租约到期不等于资源已经释放<br/>停止未确认时保留占用并隔离风险
+      E-->>L: 物理停止或执行已结算
+      L-->>G: 停止确认、失败原因与结算回执
+      G->>D: 查询已提交阶段与兼容检查点
+      D-->>G: 已提交结果、依赖与检查点版本
+      alt 未取消、未到期且恢复合法
+        G->>G: 比较恢复 / 重算 / 等待成本<br/>保持原截止时间；新尝试与屏障隔离旧提交
+      else 取消、到期或不可恢复
+        G-->>A: 返回明确终态与原因
+      end
+    end
+  end
+

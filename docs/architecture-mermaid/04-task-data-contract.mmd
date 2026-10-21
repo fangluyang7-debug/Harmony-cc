@@ -1,0 +1,84 @@
+---
+config:
+  htmlLabels: false
+  theme: base
+  themeVariables:
+    background: "#F8FBFF"
+    primaryTextColor: "#1E293B"
+    fontFamily: "Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Arial, sans-serif"
+    fontSize: "18px"
+    lineColor: "#64748B"
+  flowchart:
+    htmlLabels: false
+    curve: linear
+    nodeSpacing: 34
+    rankSpacing: 50
+    padding: 18
+    wrappingWidth: 360
+---
+flowchart TB
+    title["任务与数据契约：调度核心与业务解耦的统一语义层"]
+    subtitle["Task 表达计算意图，Artifact 表达数据身份；调度器只消费契约，不绑定具体业务实现"]
+
+    request["业务请求入口<br/>购物任务 / 图像处理 / 模型推理 / 跨端工作流"]
+
+    subgraph contract["统一契约层"]
+        direction LR
+        task["Task 计算契约<br/>统一任务身份 taskId<br/>能力与模型兼容条件<br/>输入 / 输出 schema<br/>质量底线、预算与 deadline<br/>隐私等级与合法执行配置<br/>副作用策略与重试边界"]
+        instance["动态实例契约<br/>workflow / node / attempt 身份<br/>编排器与目标 Runtime 身份<br/>剩余预算与请求修订<br/>队列状态、尝试隔离与停止意图<br/>调度版本、epoch 与 fencing"]
+        artifact["Artifact 数据契约<br/>输入、阶段输出与逻辑检查点<br/>artifactId、版本与内容哈希<br/>依赖引用与状态描述<br/>STAGING 到 COMMITTED 提交屏障<br/>按需授权解析与签名 URL"]
+    end
+
+    validate["契约校验与生成<br/>同一来源生成 TS / ArkTS 类型与校验器<br/>schema 校验、模型兼容、质量底线、依赖哈希、隐私预算与合法配置统一验证"]
+
+    subgraph reference["调度与执行只引用契约"]
+        direction LR
+        placement["宏观放置引用<br/>能力目录 / 数据位置 / 链路成本<br/>质量预算 / 前瞻成本 / 全局回滚门"]
+        admission["设备准入引用<br/>合法配置 / 队列压力 / 资源保护<br/>并发上限 / 热状态 / 本地执行器"]
+        resolver["数据解析引用<br/>Artifact 授权解析 / 按需读取<br/>依赖哈希 / 版本屏障 / 签名 URL"]
+        commit["提交一致性引用<br/>TaskAttempt / StageCommit<br/>STAGING 校验后发布 COMMITTED"]
+    end
+
+    execution["多设备执行层<br/>鸿蒙手机 HAR / 可信 CPU Worker / 云 Runtime<br/>按契约准入、执行、回执与提交"]
+
+    title --> subtitle --> request
+    request --> task
+    request --> instance
+    request --> artifact
+    task --> validate
+    instance --> validate
+    artifact --> validate
+    validate --> placement
+    validate --> admission
+    validate --> resolver
+    validate --> commit
+    placement --> execution
+    admission --> execution
+    resolver --> execution
+    commit --> execution
+
+    classDef title fill:#FFFFFF,stroke:#FFFFFF,color:#1E293B,font-size:24px,font-weight:bold
+    classDef subtitle fill:#FFFFFF,stroke:#FFFFFF,color:#52647A,font-size:16px
+    classDef request fill:#2563AD,stroke:#2563AD,color:#FFFFFF,font-weight:bold
+    classDef task fill:#EAF2FF,stroke:#2563AD,color:#1E293B
+    classDef instance fill:#FFF4DA,stroke:#B76A00,color:#1E293B
+    classDef artifact fill:#F0ECFF,stroke:#6D55B8,color:#1E293B
+    classDef validate fill:#FFFFFF,stroke:#A9B7C8,color:#1E293B
+    classDef placement fill:#E7F7F2,stroke:#168A75,color:#1E293B
+    classDef admission fill:#E8F7EE,stroke:#16885E,color:#1E293B
+    classDef resolver fill:#F0ECFF,stroke:#6D55B8,color:#1E293B
+    classDef commit fill:#FFF4DA,stroke:#B76A00,color:#1E293B
+    classDef execution fill:#168A75,stroke:#168A75,color:#FFFFFF,font-weight:bold
+
+    class title title
+    class subtitle subtitle
+    class request request
+    class task task
+    class instance instance
+    class artifact artifact
+    class validate validate
+    class placement placement
+    class admission admission
+    class resolver resolver
+    class commit commit
+    class execution execution

@@ -1,0 +1,72 @@
+%%{init: {"theme":"base","htmlLabels":false,"themeVariables":{"fontFamily":"Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Arial, sans-serif","fontSize":"18px","primaryTextColor":"#17324D","lineColor":"#64748B","clusterBkg":"#F8FAFC","clusterBorder":"#CBD5E1"},"flowchart":{"wrappingWidth":420,"curve":"linear","nodeSpacing":28,"rankSpacing":45,"padding":16,"htmlLabels":false}}}%%
+flowchart TB
+  IN["设备内任务入口<br/>本地应用提交 / 跨设备契约适配<br/>SchedulerClient → SchedulerService"]
+
+  subgraph INPUT["① 调度要素 · 形成当前任务与设备的联合视图"]
+    direction LR
+    T["任务与用户语义<br/>能力 · 模型兼容 · 输入规模<br/>等待 / 可见性 / 重要度<br/>质量 · 隐私 · 时限与新鲜度"]
+    R["设备资源状态<br/>CPU · 可用内存 · 热等级<br/>电量 / 充电 · 可用后端<br/>观测来源与 TTL"]
+    H["工作流与历史观测<br/>依赖 · 剩余工作量 · 紧迫度<br/>成本分桶 · 执行样本<br/>并发干扰与体验反馈"]
+  end
+
+  subgraph POLICY["② 微观决策 · 决定何时执行、采用哪种合法配置"]
+    BASE["SemanticPolicy<br/>任务语义与保守基线<br/>时限 / 隐私 / 热与内存保护"]
+    PROFILES["合法 ExecutionProfile 集合<br/>模型档位 + 后端 + worker 数<br/>检索维度 + batch + 合法转移"]
+    COST["AdaptiveCostModel<br/>冷启动先验 + EWMA 均值与偏差<br/>按能力 / 配置 / 输入 / 状态分桶"]
+    SCORE["ConstrainedPolicy<br/>硬约束过滤后进行效用比较<br/>等待与重要度收益、时延与质量损失<br/>能耗 / 热 / 内存风险、边际加速收益"]
+    STABLE["稳定性与本地策略门禁<br/>承压回退 · 恢复滞回 · 冷却 · 配置熔断<br/>本地 OBSERVE / SHADOW / CANARY / ACTIVE"]
+    PLAN["ExecutionPlan<br/>执行器 / profile / worker / batch<br/>优先级 / 预测 / 决策原因"]
+    BASE --> PROFILES --> SCORE
+    COST --> SCORE
+    SCORE --> STABLE --> PLAN
+  end
+
+  subgraph QUEUE["③ 排队与资源准入 · SchedulerService + TaskQueue"]
+    Q["优先级队列<br/>CRITICAL / HIGH / NORMAL / LOW<br/>工作流紧迫度 · 30 秒老化与公平插队"]
+    RECHECK["出队前重评估<br/>最新设备状态 · 请求有效性<br/>剩余预算 · 更新执行计划"]
+    ADMIT["本地并发准入<br/>默认单任务，允许声明安全的受限双任务<br/>总 worker / 内存预算 / InterferenceModel"]
+    Q --> RECHECK --> ADMIT
+  end
+
+  subgraph EXEC["④ 执行层 · 从调度计划落实到实际计算"]
+    REG["ExecutorRegistry / WorkloadExecutor<br/>supports → warmup → execute<br/>输入引用、取消信号与检查点"]
+    LOCAL["已验证的本地执行路径<br/>MindSpore Lite CPU / TaskPool<br/>实际后端与配置回执"]
+    REMOTE["远端调用适配器<br/>管理调用生命周期与传输预算<br/>云工作流的阶段由其唯一协调者管理"]
+    SYS["平台资源与执行基础<br/>HarmonyOS 公开 API / 线程池<br/>文件、网络与模型运行库"]
+    REG --> LOCAL --> SYS
+    REG --> REMOTE
+  end
+
+  subgraph CLOSE["⑤ 生命周期与反馈 · 执行事实返回两级调度"]
+    LIFE["完成 / 批次让出 / 停止请求<br/>检查点恢复游标<br/>STOP_REQUESTED 后等待物理停止"]
+    RECEIPT["执行结果与资源结算<br/>实际配置 · 分段耗时 · 结果引用<br/>停止未确认时保留占用并隔离风险"]
+    LEARN["成本与体验校准<br/>更新成本、干扰与反馈惩罚<br/>实际配置确认后纳入可信样本"]
+    UP["向工作流协调者反馈<br/>完成结果 / 拒绝原因 / 资源变化<br/>跨设备重新放置由协调者决定"]
+    LIFE --> RECEIPT --> LEARN
+    RECEIPT --> UP
+  end
+
+  IN --> T
+  T --> BASE
+  R --> BASE
+  H --> COST
+  PLAN --> Q
+  R -.->|状态刷新| RECHECK
+  ADMIT -->|可执行| REG
+  ADMIT -.->|暂缓等待| Q
+  SYS --> LIFE
+  REMOTE --> LIFE
+  LIFE -.->|合法批次让出后重新入队| Q
+  LEARN -.->|后续预测与策略校准| COST
+
+  classDef input fill:#EAF2FF,stroke:#3B73B9,color:#163B65,stroke-width:1.5px;
+  classDef policy fill:#DCEAFF,stroke:#376AB0,color:#12365D,stroke-width:1.5px;
+  classDef guard fill:#FFF1D6,stroke:#BD8B32,color:#71501D,stroke-width:1.5px;
+  classDef exec fill:#E2F3EC,stroke:#38876E,color:#194F40,stroke-width:1.5px;
+  classDef feedback fill:#EFE8FA,stroke:#8866AD,color:#4D326B,stroke-width:1.5px;
+  class IN,T,R,H input;
+  class BASE,PROFILES,COST,SCORE,PLAN policy;
+  class STABLE,Q,RECHECK,ADMIT guard;
+  class REG,LOCAL,REMOTE,SYS exec;
+  class LIFE,RECEIPT,LEARN,UP feedback;
+

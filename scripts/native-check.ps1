@@ -1,0 +1,57 @@
+param(
+  [Parameter(Mandatory=$true)][string]$StudioHome,
+  [ValidateSet('build','test','all')][string]$Task = 'all'
+)
+$ErrorActionPreference = 'Stop'
+& (Join-Path $PSScriptRoot 'prepare-harmony.ps1')
+$projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../apps/harmony'))
+$node = Join-Path $StudioHome 'tools/node/node.exe'
+$hvigor = Join-Path $StudioHome 'tools/hvigor/bin/hvigorw.js'
+$ohpm = Join-Path $StudioHome 'tools/ohpm/bin/ohpm.bat'
+foreach ($tool in @($node,$hvigor,$ohpm)) {
+  if (-not (Test-Path -LiteralPath $tool)) { throw "Missing DevEco tool: $tool" }
+}
+$previousSdk = $env:DEVECO_SDK_HOME
+$previousJava = $env:JAVA_HOME
+$previousPath = $env:Path
+Push-Location $projectRoot
+try {
+  $env:DEVECO_SDK_HOME = Join-Path $StudioHome 'sdk'
+  $env:JAVA_HOME = Join-Path $StudioHome 'jbr'
+  $env:Path = (Join-Path $StudioHome 'jbr/bin') + ';' + $env:Path
+  & $ohpm install
+  if ($LASTEXITCODE -ne 0) { throw 'ohpm install failed' }
+  if ($Task -ne 'test') {
+    & $node $hvigor --mode module -p module=entry@default -p product=default -p requiredDeviceType=phone assembleHap --no-daemon
+    if ($LASTEXITCODE -ne 0) { throw 'HAP build failed' }
+    & $node $hvigor --mode module -p module=scheduler@default -p product=default assembleHar --no-daemon
+    if ($LASTEXITCODE -ne 0) { throw 'HAR build failed' }
+  }
+  if ($Task -ne 'build') {
+    foreach ($module in @('scheduler', 'entry')) {
+      $testStarted = Get-Date
+      & $node $hvigor --mode module -p "module=$module@default" -p product=default test --no-daemon
+      if ($LASTEXITCODE -ne 0) { throw 'Native unit tests failed' }
+      $report = Join-Path $projectRoot "$module/.test/default/intermediates/test/coverage_data/test_result.txt"
+      if (-not (Test-Path -LiteralPath $report)) { throw "$module test report missing" }
+      if ((Get-Item -LiteralPath $report).LastWriteTime -lt $testStarted) { throw "$module test report is stale" }
+      $results = Get-Content -LiteralPath $report -Raw
+      $declaredCases = 0
+      Get-ChildItem -LiteralPath (Join-Path $projectRoot "$module/src/test") -Filter '*.ets' | ForEach-Object {
+        $declaredCases += [regex]::Matches((Get-Content -LiteralPath $_.FullName -Raw), '(?m)^\s*it\(').Count
+      }
+      $summary = [regex]::Match($results, 'Tests run: (\d+), Failure: (\d+), Error: (\d+), Pass: (\d+), Ignore: (\d+)')
+      if (-not $summary.Success -or $declaredCases -lt $(if ($module -eq 'scheduler') { 87 } else { 10 }) -or [int]$summary.Groups[1].Value -ne $declaredCases -or
+          [int]$summary.Groups[2].Value -ne 0 -or [int]$summary.Groups[3].Value -ne 0 -or
+          [int]$summary.Groups[4].Value -ne [int]$summary.Groups[1].Value -or [int]$summary.Groups[5].Value -ne 0) {
+        throw "$module cases did not all pass: $results"
+      }
+      Write-Output "$module $($summary.Value)"
+    }
+  }
+} finally {
+  Pop-Location
+  $env:DEVECO_SDK_HOME = $previousSdk
+  $env:JAVA_HOME = $previousJava
+  $env:Path = $previousPath
+}

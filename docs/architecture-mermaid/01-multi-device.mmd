@@ -1,0 +1,87 @@
+%%{init: {"theme":"base","htmlLabels":false,"themeVariables":{"fontFamily":"Microsoft YaHei, PingFang SC, Noto Sans CJK SC, Arial, sans-serif","fontSize":"18px","primaryTextColor":"#17324D","lineColor":"#64748B","clusterBkg":"#F8FAFC","clusterBorder":"#CBD5E1"},"flowchart":{"wrappingWidth":420,"curve":"linear","nodeSpacing":32,"rankSpacing":48,"padding":18,"htmlLabels":false}}}%%
+flowchart TB
+  subgraph L1["① 应用与任务契约层"]
+    APP["应用 / Agent<br/>统一任务入口"]
+    TASK["Task 契约与工作流<br/>能力 · 依赖 · 质量 · 隐私 · 原始预算"]
+    APP --> TASK
+  end
+
+  subgraph L2["② 宏观调度层 · 决定任务在哪台设备执行"]
+    OWNER["工作流唯一协调者<br/>云工作流：API Runtime；本地工作流：手机"]
+    FACT["多设备与数据画像<br/>执行能力 · 容量 · 观测时效<br/>数据副本 · 方向带宽 · 排队与冷启动"]
+    FILTER["可行候选过滤<br/>可信身份 · 能力与模型兼容<br/>质量底线 · 隐私范围 · 资源与预算"]
+    PLAN["WorkflowPlacementPlanner<br/>数据位置感知 + 剩余工作流有界束搜索<br/>传输 / 排队 / 加载 / 计算 / 发布 / 回传"]
+    GATE["独立全局策略门禁<br/>OBSERVE → SHADOW → CANARY → ACTIVE<br/>收益覆盖切换成本与滞回；保留合法基线"]
+    DISPATCH["放置决策与派发<br/>node → device / executor<br/>任务身份 · 输入引用 · 剩余预算"]
+    OWNER --> FILTER
+    FACT --> FILTER
+    FILTER --> PLAN --> GATE --> DISPATCH
+  end
+
+  subgraph L3["③ 多设备协同资源池 · 统一能力视图，各设备保留本地资源管理权"]
+    direction LR
+    subgraph PHONE["鸿蒙手机"]
+      P1["本地任务接入<br/>SchedulerClient / SchedulerService"]
+      P2["HAR 微观调度<br/>合法配置 · 优先队列<br/>并发预算 · 热与内存保护"]
+      P3["已注册执行器<br/>MindSpore Lite CPU<br/>TaskPool 向量计算"]
+      P1 --> P2 --> P3
+    end
+    subgraph WORKER["可信计算节点 · PC / 边缘主机接入形态"]
+      W1["Worker 控制接口<br/>身份与能力校验"]
+      W2["本地原子容量准入<br/>LeaseManager<br/>槽位 · 内存 · fencing"]
+      W3["CPU Worker 执行单元<br/>image.crop.v1<br/>vector.normalize.v1"]
+      W1 --> W2 --> W3
+    end
+    subgraph CLOUD["云服务节点"]
+      C1["Runtime 与执行器注册<br/>依赖就绪 · 服务能力"]
+      C2["服务侧执行管理<br/>工作流阶段 · 超时与取消<br/>服务容量与依赖健康"]
+      C3["业务执行器与模型适配器<br/>图像处理 / 检索 / 模型 API"]
+      C1 --> C2 --> C3
+    end
+  end
+
+  subgraph L4["④ 数据、结果与一致性层"]
+    DATA["Artifact 数据面<br/>输入 / 阶段结果 / 逻辑检查点<br/>授权解析 · 版本与哈希 · 按需传输"]
+    COMMIT["执行结算与结果提交<br/>TaskAttempt / StageCommit<br/>停止确认 · 幂等提交 · epoch 屏障"]
+    STORE["存储适配<br/>设备文件与缓存 / 上传通道 / COS / 数据库"]
+    RESULT["已提交结果<br/>后续阶段输入 / 应用结果信封"]
+    DATA --> STORE
+    COMMIT --> RESULT
+  end
+
+  subgraph L5["⑤ 观测与协同反馈层"]
+    AUDIT["实际执行证据<br/>准入拒绝 · 分段耗时 · 执行配置 · 停止回执<br/>统一 trace；实际执行与影子预测分开记录"]
+    UPDATE["更新成本与设备画像<br/>后续阶段重规划 / 合法恢复<br/>保持原始截止时间"]
+    AUDIT --> UPDATE
+  end
+
+  TASK --> OWNER
+  TASK -->|本地工作流| P1
+  DISPATCH -->|门禁授权的远端派发| W1
+  DISPATCH -->|合法云基线或候选| C1
+  DISPATCH -.->|统一契约中的手机目标接入抽象| P1
+  P3 --> COMMIT
+  W3 --> COMMIT
+  C3 --> COMMIT
+  DATA -.->|本地输入与结果引用| P3
+  DATA -.->|授权读写| W3
+  DATA -.->|授权读写| C3
+  COMMIT --> AUDIT
+  P2 -.->|资源状态与本地决策| AUDIT
+  W2 -.->|准入与租约回执| AUDIT
+  C2 -.->|服务就绪与执行回执| AUDIT
+  UPDATE -.->|下一轮决策依据| FACT
+
+  classDef contract fill:#EAF2FF,stroke:#3B73B9,color:#163B65,stroke-width:1.5px;
+  classDef macro fill:#DCEAFF,stroke:#376AB0,color:#12365D,stroke-width:1.8px;
+  classDef gate fill:#FFF1D6,stroke:#BD8B32,color:#71501D,stroke-width:1.5px;
+  classDef local fill:#E2F3EC,stroke:#38876E,color:#194F40,stroke-width:1.5px;
+  classDef data fill:#EFE8FA,stroke:#8866AD,color:#4D326B,stroke-width:1.5px;
+  classDef feedback fill:#F0F4F8,stroke:#7A8FA6,color:#334B63,stroke-width:1.3px;
+  class APP,TASK contract;
+  class OWNER,FACT,PLAN,DISPATCH macro;
+  class FILTER,GATE gate;
+  class P1,P2,P3,W1,W2,W3,C1,C2,C3 local;
+  class DATA,COMMIT,STORE,RESULT data;
+  class AUDIT,UPDATE feedback;
+
