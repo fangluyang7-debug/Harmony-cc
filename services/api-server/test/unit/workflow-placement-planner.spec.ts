@@ -50,3 +50,25 @@ describe('bounded data-location planner',()=>{
     config.killSwitch=true;expect(authorizePlacement(decision,config,'crop',now)).toEqual(decision.baseline);
   });
 });
+
+describe('application-independent placement requirements',()=>{
+  it('uses executor memory and enforces the application ceiling',()=>{
+    const r=fixture();
+    r.nodes.forEach(n=>{n.memoryBytes=1000;n.maxMemoryBytes=50;n.candidates.forEach(c=>c.requiredMemoryBytes=20);});
+    expect(new WorkflowPlacementPlanner().plan(r).status).toBe('ready');
+    r.nodes.forEach(n=>n.candidates.forEach(c=>c.requiredMemoryBytes=60));
+    expect(new WorkflowPlacementPlanner().plan(r).status).toBe('blocked');
+  });
+  it('compares lower-is-better metrics only with matching evaluation evidence',()=>{
+    const r=fixture();
+    r.nodes.forEach(n=>{
+      n.qualityRequirements=[{metric:'wer',evaluationId:'speech.zh.v1',direction:'lower',value:0.1}];
+      n.candidates.forEach(c=>{c.quality=null;c.qualityEvidence=[{metric:'wer',evaluationId:'speech.zh.v1',direction:'lower',value:0.08}];});
+    });
+    expect(new WorkflowPlacementPlanner().plan(r).status).toBe('ready');
+    r.nodes.forEach(n=>n.candidates.forEach(c=>c.qualityEvidence![0].evaluationId='other'));
+    expect(new WorkflowPlacementPlanner().plan(r).status).toBe('blocked');
+    r.nodes.forEach(n=>n.candidates.forEach(c=>{c.qualityEvidence![0].evaluationId='speech.zh.v1';c.qualityEvidence![0].value=0.2;}));
+    expect(new WorkflowPlacementPlanner().plan(r).rejections.some(x=>x.code==='QUALITY_REQUIREMENT_UNMET')).toBe(true);
+  });
+});

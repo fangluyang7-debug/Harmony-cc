@@ -12,3 +12,5 @@ Authoritative paired implementations are `apps/harmony/scheduler/src/main/ets/ap
 - Artifact metadata only becomes available when `ARTIFACT_PROTOCOL_ENABLED=true` after the additive migration. Binary image upload also works with legacy asset IDs when disabled.
 
 `ShoppingResult.payloadJson` is a private transitional API snapshot. It is not a validated generic shopping Artifact payload and must not be included in telemetry. Full business schemas, lifecycle, persistent stage commits and recovery are tracked in `docs/architecture-change-acceptance.md`.
+
+Design follow-up: [跨终端调度建议整合](../../../docs/29-通用跨终端调度建议整合-20261022.md) defines field ownership and migration boundaries. Structured quality evidence and per-executor memory checks currently apply only to the server placement planner; they do not change wire v1.

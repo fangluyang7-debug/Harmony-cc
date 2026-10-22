@@ -1,10 +1,16 @@
 import { performance } from 'node:perf_hooks';
 import { ModelCompatibility, compatibleModel } from './scheduling-protocol';
 
+// Metrics are comparable only within the same versioned evaluation context.
+export interface QualityEvidence {
+  metric: string; evaluationId: string; direction: 'higher' | 'lower'; value: number;
+}
 export interface PlacementReplica { deviceId: string; readMs: number | null; }
 export interface PlacementArtifact { id: string; bytes: number; replicas: PlacementReplica[]; }
 export interface PlacementLink { from: string; to: string; bytesPerSecond: number; fixedMs: number; effective: boolean; observedAt: number; ttlMs: number; source: 'REAL' | 'MOCK'; }
 export interface PlacementCandidate {
+  requiredMemoryBytes?: number;
+  qualityEvidence?: QualityEvidence[];
   costScope?: 'execution' | 'coordinator-roundtrip';
   deviceId: string; executorId: string; capability: string; trusted: boolean; source: 'REAL' | 'MOCK';
   observedAt: number; ttlMs: number; availableSlots: number; availableMemoryBytes: number;
@@ -12,6 +18,8 @@ export interface PlacementCandidate {
   uncertaintyMs: number; publishMs: number; model?: ModelCompatibility;
 }
 export interface PlacementNode {
+  qualityRequirements?: QualityEvidence[];
+  maxMemoryBytes?: number;
   id: string; capability: string; dependencies: string[]; inputs: string[]; output: { id: string; bytes: number };
   baselineDeviceId: string; memoryBytes: number; minimumQuality: number; model?: ModelCompatibility;
   candidates: PlacementCandidate[];
@@ -80,8 +88,18 @@ export class WorkflowPlacementPlanner {
     if(node.model&&(!c.model||!compatibleModel(node.model,c.model)))return 'MODEL_INDEX_MISMATCH';
     if(!Number.isFinite(c.ttlMs)||!Number.isFinite(c.observedAt)||c.observedAt>r.now||r.now-c.observedAt>c.ttlMs||c.ttlMs<=0)return 'OBSERVATION_EXPIRED';
     if(c.deviceId!==r.localDeviceId&&(!r.networkAllowed||r.privacy==='LOCAL_ONLY'))return 'TRANSFER_FORBIDDEN';
-    if(!Number.isFinite(node.memoryBytes)||node.memoryBytes<0||!Number.isFinite(c.availableSlots)||!Number.isFinite(c.availableMemoryBytes)||c.availableSlots<1||c.availableMemoryBytes<node.memoryBytes)return 'CAPACITY_UNAVAILABLE';
-    if(!Number.isFinite(node.minimumQuality)||c.quality===null||!Number.isFinite(c.quality)||c.quality<node.minimumQuality)return 'QUALITY_UNKNOWN_OR_LOW';
+    const requiredMemory = c.requiredMemoryBytes ?? node.memoryBytes;
+    if(!Number.isSafeInteger(requiredMemory)||requiredMemory<0||
+      (node.maxMemoryBytes!==undefined&&(!Number.isSafeInteger(node.maxMemoryBytes)||node.maxMemoryBytes<0||requiredMemory>node.maxMemoryBytes)))return 'EXECUTOR_MEMORY_LIMIT';
+    if(!Number.isFinite(node.memoryBytes)||node.memoryBytes<0||!Number.isFinite(c.availableSlots)||!Number.isFinite(c.availableMemoryBytes)||c.availableSlots<1||c.availableMemoryBytes<requiredMemory)return 'CAPACITY_UNAVAILABLE';
+    if(node.qualityRequirements?.length) {
+      for(const required of node.qualityRequirements) {
+        if(!required.metric||!required.evaluationId||!['higher','lower'].includes(required.direction)||!Number.isFinite(required.value))return 'QUALITY_REQUIREMENT_INVALID';
+        const evidence=c.qualityEvidence?.find(e=>e.metric===required.metric&&e.evaluationId===required.evaluationId&&e.direction===required.direction);
+        if(!evidence||!Number.isFinite(evidence.value))return 'QUALITY_EVIDENCE_MISSING';
+        if(required.direction==='higher'?evidence.value<required.value:evidence.value>required.value)return 'QUALITY_REQUIREMENT_UNMET';
+      }
+    } else if(!Number.isFinite(node.minimumQuality)||c.quality===null||!Number.isFinite(c.quality)||c.quality<node.minimumQuality)return 'QUALITY_UNKNOWN_OR_LOW';
     if([c.computeMs,c.queueMs,c.coldMs,c.uncertaintyMs,c.publishMs].some(n=>n===null||!Number.isFinite(n)||n<0))return 'COST_UNKNOWN';
     return null;
   }
