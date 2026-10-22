@@ -99,11 +99,14 @@ export class RuntimeRunnerService {
           settled = false;
           const executionContext = { runId, task, assignment, input, outputs, signal: controller.signal };
           const execute = () => this.registry.require(assignment.executorId, assignment.toolId).execute(executionContext);
-          const requestContext = (input as {taskProfile?: {context?: {userWaiting?: boolean; businessImportance?: number}}})?.taskProfile?.context;
+          const requestProfile = (input as {taskProfile?: {template?:{privacyPolicy?:string};context?: {userWaiting?: boolean; businessImportance?: number;networkAllowed?:boolean}}})?.taskProfile;
+          const requestContext = requestProfile?.context;
           const work = RuntimeWorkScope.run(controller.signal, measurements,
             () => dispatchStage ? dispatchStage(executionContext, execute) : execute(), run.ownerUserId, timeoutMs,
             {userWaiting: typeof requestContext?.userWaiting === 'boolean' ? requestContext.userWaiting : task.taskType !== 'background_batch',
-              importance: Number.isFinite(requestContext?.businessImportance) ? requestContext!.businessImportance! : 0});
+              importance: Number.isFinite(requestContext?.businessImportance) ? requestContext!.businessImportance! : 0,
+              networkAllowed:requestContext?.networkAllowed===true,
+              privacyLevel:requestProfile?.template?.privacyPolicy==='REMOTE_ALLOWED'?'AUTHORIZED_REMOTE':'LOCAL_ONLY'});
           settlement = work.then(() => { settled = true; }, () => { settled = true; });
           active.pending = settlement;
           const result = await Promise.race([work, deadline]);

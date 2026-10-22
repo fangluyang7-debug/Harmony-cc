@@ -57,6 +57,9 @@ describe('persistent device directory',()=>{
     await directory.reportPhone('worker','phone_test',profile);
     expect(await directory.phones('intruder')).toEqual([]);
     expect((await directory.phones('owner'))[0].profile.availableMemoryMB).toBe(256);
+    await db.runtimeDevice.update({where:{id:'phone_test'},data:{observedAt:new Date(Date.now()-3100)}});
+    expect(await directory.phones('owner')).toEqual([]); // Heartbeat lease is still live; resource fields have expired.
+    await directory.reportPhone('worker','phone_test',profile);
     await db.phoneDispatchDevice.update({where:{id:'phone_test'},data:{status:'revoked'}});
     expect(await directory.phones('owner')).toEqual([]);
   });
@@ -108,9 +111,10 @@ describe('persistent device directory',()=>{
         {cloudExecutors:{'image.crop.v1':cloud},remoteExecutors:adapters}),'owner',5000);
       let lease:Awaited<ReturnType<PhoneDispatchService['lease']>>|undefined;
       for(let i=0;i<100;i++){lease=await phone.lease('worker','phone_test');if(lease.job)break;await new Promise(r=>setTimeout(r,5));}
-      expect(lease?.job?.crop?.macroContext).toMatchObject({urgency:true,taskId:'crop'});
-      expect(lease!.job!.crop!.macroContext!.budgetMs).toBeLessThan(5000);
       const job=lease!.job!;
+      if(!job || !('crop' in job))throw new Error('EXPECTED_CROP_LEASE');
+      expect(job.crop?.macroContext).toMatchObject({urgency:true,taskId:'crop'});
+      expect(job.crop!.macroContext!.budgetMs).toBeLessThan(5000);
       await expect(phone.cropResult('worker','phone_test',job.jobId,job.fence+1,bytes.toString('base64'),input.contentHash,1)).rejects.toThrow('STALE_OR_REVOKED_LEASE');
       await phone.cropResult('worker','phone_test',job.jobId,job.fence,bytes.toString('base64'),input.contentHash,1);
       expect((await work).buffer.equals(bytes)).toBe(true);expect(cloud).not.toHaveBeenCalled();

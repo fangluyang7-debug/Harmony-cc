@@ -1,5 +1,8 @@
 import { spawn, ChildProcess } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, readFile } from 'node:fs/promises';
+import { PrismaClient } from '@prisma/client';
+import { PrismaService } from '../../src/persistence/prisma/prisma.service';
+import { DeviceDirectoryService } from '../../src/core/runtime/device-directory.service';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
@@ -14,6 +17,7 @@ it('runs a calibrated HTTP Worker DAG and returns its artifacts to a cloud capab
   const names=['RUNTIME_DEVICES_JSON','DISPATCH_TEST_TOKEN','PLACEMENT_POLICY_JSON'] as const;
   const previous=names.map(name=>process.env[name]);
   let child:ChildProcess|undefined;
+  let database:PrismaClient|undefined;
   try {
     child=spawn(process.execPath,[path.resolve(__dirname,'../../../device-worker/server.mjs')],{
       env:{...process.env,WORKER_TOKEN:token,WORKER_DEVICE_ID:'worker-test',WORKER_PORT:'0',WORKER_DATA_DIR:directory},
@@ -30,12 +34,19 @@ it('runs a calibrated HTTP Worker DAG and returns its artifacts to a cloud capab
       });
     });
     process.env.DISPATCH_TEST_TOKEN=token;
-    process.env.RUNTIME_DEVICES_JSON=JSON.stringify([{deviceId:'worker-test',endpoint:`http://127.0.0.1:${port}`,
-      tokenEnv:'DISPATCH_TEST_TOKEN',enabled:true,qualityVerified:true,cropPriorMs:1}]);
+    process.env.RUNTIME_DEVICES_JSON='[]';
+    database=new PrismaClient({datasources:{db:{url:'file:'+path.join(directory,'directory.db').replace(/\\/g,'/')}}});
+    const migration=await readFile(path.resolve(__dirname,'../../prisma/migrations/000007_device_directory/migration.sql'),'utf8');
+    for(const statement of migration.split(';').map(s=>s.trim()).filter(Boolean))await database.$executeRawUnsafe(statement);
+    const registry=new DeviceDirectoryService(database as unknown as PrismaService);
+    await registry.registerWorker({deviceId:'worker-test',endpoint:`http://127.0.0.1:${port}`,
+      tokenEnv:'DISPATCH_TEST_TOKEN',enabled:true,qualityVerified:true,cropPriorMs:1});
+    const description=await fetch(`http://127.0.0.1:${port}/v1/descriptor`,{headers:{Authorization:'Bearer '+token,'x-owner-id':'owner'}}).then(r=>r.json()) as any;
+    await registry.heartbeatWorker('worker-test','Bearer '+token,description.profile);
     process.env.PLACEMENT_POLICY_JSON=JSON.stringify({mode:'ACTIVE',policyVersion:'http-test',expiresAt:Date.now()+60000,killSwitch:false,
       allowedDevices:['worker-test','cloud-runtime'],allowedCapabilities:['image.crop.v1','inspect'],sampleCount:30,minimumSamples:30,
       qualityPassed:true,nonInferiorityPassed:true,failureRate:0,maximumFailureRate:0.05,cohortAllowed:true});
-    const service=new DeviceDispatchService(undefined,new MacroSchedulerService());
+    const service=new DeviceDispatchService(undefined,new MacroSchedulerService(),registry,database as unknown as PrismaService);
     const call=jest.spyOn(service as any,'call');
     const bytes=await sharp({create:{width:64,height:64,channels:3,background:{r:90,g:120,b:30}}}).png().toBuffer();
     const parameters={box:{x:0,y:0,width:1,height:1},paddingRatio:0,targetSize:48,jpegQuality:90};
@@ -69,11 +80,13 @@ it('runs a calibrated HTTP Worker DAG and returns its artifacts to a cloud capab
     expect(executions[4].input.contentHash).toBe(result.outputs.crop.artifact.contentHash);
     const descriptor=await fetch(`http://127.0.0.1:${port}/v1/descriptor`,{headers:{Authorization:'Bearer '+token,'x-owner-id':'owner'}}).then(r=>r.json());
     expect((descriptor as any).capacity.slots).toBe(1);
+    expect(await database.runtimeCostSample.count()).toBeGreaterThan(0);
   } finally {
     names.forEach((name,i)=>{if(previous[i]===undefined)delete process.env[name];else process.env[name]=previous[i];});
     if(child && child.exitCode===null && child.signalCode===null){
       const exited=new Promise<void>(resolve=>child!.once('exit',()=>resolve()));child.kill();await exited;
     }
+    await database?.$disconnect();
     if(path.dirname(path.resolve(directory))===path.resolve(tmpdir())&&path.basename(directory).startsWith('harmony-dispatch-test-')) {
       await rm(directory,{recursive:true,force:true});
     }

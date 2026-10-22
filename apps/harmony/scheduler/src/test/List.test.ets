@@ -1,4 +1,5 @@
 import resourceGapTests from './ResourceGapUnit.test';
+import deviceResourceProfileTests from './DeviceResourceProfile.test';
 import schedulerUnitTest from './SchedulerUnit.test';
 import taskExecutionUnitTest from './TaskExecutionUnit.test';
 import semanticSchedulerTest from './SemanticScheduler.test';
@@ -9,6 +10,7 @@ import placementPolicyTests from './PlacementPolicy.test';
 import localAlgorithmTests from './LocalAlgorithm.test';
 
 export default function testsuite(): void {
+  deviceResourceProfileTests();
   resourceGapTests();
   schedulerUnitTest();
   taskExecutionUnitTest();

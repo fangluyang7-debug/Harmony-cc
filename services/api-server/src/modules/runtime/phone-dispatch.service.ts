@@ -51,12 +51,14 @@ export class PhoneDispatchService {
       const key=this.phoneSampleKey(device.deviceId,imageBytes.length,parameters);
       const sample=await this.prisma.runtimeCostSample.findUnique({where:{id:key}});
       const measured=sample&&Date.now()-sample.observedAt.getTime()<300000?JSON.parse(sample.sampleJson):null;
+      const rollout=JSON.parse(process.env.PLACEMENT_POLICY_JSON??'{}');
+      const qualityApproved=rollout.qualityPassed===true&&Array.isArray(rollout.allowedDevices)&&rollout.allowedDevices.includes(device.deviceId);
       // Unknown devices remain on a conservative declared roundtrip prior, never on fabricated links.
       // Rollout quality/allowlist gates still have the final authority to activate them.
       result.push({candidate:{deviceId:device.deviceId,deviceType:'PHONE',executorId:'harmony-har',
-        capabilities:['image.crop.v1'],trusted:true,observedAt:device.observedAt,ttlMs:15000,costScope:'coordinator-roundtrip',
+        capabilities:['image.crop.v1'],trusted:true,observedAt:device.observedAt,ttlMs:p.resourceValidForMs??3000,costScope:'coordinator-roundtrip',
         resourceSnapshot:{availableSlots:p.availableSlots,availableMemoryMB:p.availableMemoryMB,queueLength:p.queueLength},
-        history:{quality:1,meanMs:measured?.mean??25000,stddevMs:measured?.deviation??5000,sampleCount:measured?.count??0}},
+        history:qualityApproved?{quality:1,meanMs:measured?.mean??25000,stddevMs:measured?.deviation??5000,sampleCount:measured?.count??0}:undefined},
         execute:async request=>{
           const start=performance.now();
           const value=await this.cropForShopping(ownerUserId,imageUrl,imageBytes,parameters,request.signal,device.deviceId,request.macroContext);
@@ -168,6 +170,7 @@ export class PhoneDispatchService {
     if ((!selectedDeviceId && process.env.PHONE_DISPATCH_SHOPPING_DEMO_ENABLED !== 'true') ||
         process.env.PHONE_DISPATCH_EXPERIMENT_ENABLED !== 'true') return null;
     this.enabled();
+    if(selectedDeviceId&&this.directory&&!(await this.directory.phones(ownerUserId)).some(d=>d.deviceId===selectedDeviceId))return null;
     if (!/^https:\/\//.test(imageUrl) || imageUrl.length > 4096 || imageBytes.length > 8 * 1024 * 1024 ||
         !Number.isInteger(parameters.targetSize) || parameters.targetSize < 64 || parameters.targetSize > 1024) return null;
     const device = await this.prisma.phoneDispatchDevice.findFirst({

@@ -34,15 +34,18 @@ export class StandardQueryImageContentAdapterService implements QueryImageConten
     const imageBuffer = await this.fetchImageBuffer(input.signedUrl, input.expectedHash);
     const ownerId = RuntimeWorkScope.ownerId();
     if (this.dispatch && RuntimeWorkScope.ownerId()) {
+      const scheduling=RuntimeWorkScope.scheduling();
       const capability = 'image.crop.v1';
       const parameters = {box:input.box,paddingRatio:input.paddingRatio,targetSize:input.targetSize,jpegQuality:input.jpegQuality};
       const artifact = {artifactId:'crop-input',contentVersion:1,schemaVersion:1,schemaId:'shopping.image',
         contentHash:createHash('sha256').update(imageBuffer).digest('hex'),data:imageBuffer,sizeBytes:imageBuffer.length};
       return this.dispatch.dispatch({capability,inputs:[artifact],tasks:[{id:'crop',capability,dependencies:[],inputs:[artifact.artifactId],
         outputBytes:input.targetSize*input.targetSize*4+65536,memoryMB:128,minQuality:1,parameters}]},
-        {budgetMs:RuntimeWorkScope.remainingBudget(60000),networkAllowed:true,privacyLevel:'AUTHORIZED_REMOTE',...RuntimeWorkScope.scheduling()},
+        {budgetMs:RuntimeWorkScope.remainingBudget(60000),userWaiting:scheduling.userWaiting,importance:scheduling.importance,
+          networkAllowed:scheduling.networkAllowed===true,privacyLevel:scheduling.privacyLevel??'LOCAL_ONLY'},
         {cloudExecutors:{[capability]:async()=>this.cropBuffer(imageBuffer,input)},
-          remoteExecutors:this.phoneDispatch&&ownerId?await this.phoneDispatch.cropAdapters(ownerId,input.signedUrl,imageBuffer,parameters):[]});
+          remoteExecutors:this.phoneDispatch&&ownerId&&scheduling.networkAllowed===true&&scheduling.privacyLevel==='AUTHORIZED_REMOTE'?
+            await this.phoneDispatch.cropAdapters(ownerId,input.signedUrl,imageBuffer,parameters):[]});
     }
     if (this.dispatch) return this.dispatch.crop(imageBuffer, input, () => this.cropBuffer(imageBuffer, input));
     return this.cropBuffer(imageBuffer, input);

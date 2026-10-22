@@ -2,7 +2,9 @@ import os from 'node:os';
 
 // CPU deltas work on Windows as well as Unix; loadavg is not CPU utilization.
 let previous = os.cpus();
-export function deviceProfile(manager) {
+let sampledAt=performance.now(),lastUsage=null;
+export function cpuUtilization() {
+  if(performance.now()-sampledAt<250)return lastUsage;
   const current = os.cpus();
   let idle = 0, total = 0;
   current.forEach((cpu,i)=>{
@@ -11,11 +13,16 @@ export function deviceProfile(manager) {
     total+=Object.keys(cpu.times).reduce((sum,key)=>sum+cpu.times[key]-old.times[key],0);
   });
   previous=current;
+  sampledAt=performance.now();
+  lastUsage=total>0?Math.max(0,Math.min(100,100*(1-idle/total))):null;
+  return lastUsage;
+}
+export function deviceProfile(manager) {
   const leases=[...manager.leases.values()].filter(l=>!l.settled);
   return {version:1,source:'REAL',capabilities:['image.crop.v1','vector.normalize.v1'],availableBackends:['CPU'],
     availableSlots:Math.max(0,manager.slots-leases.length),
     availableMemoryMB:Math.max(0,Math.min(os.freemem(),manager.memoryBytes-leases.reduce((sum,l)=>sum+l.memoryBytes,0)))/(1024*1024),
-    cpuUsage:total>0?Math.max(0,Math.min(100,100*(1-idle/total))):null,cpuCores:current.length||null,
+    cpuUsage:cpuUtilization(),cpuCores:os.cpus().length||null,
     thermalLevel:'UNKNOWN',queueLength:0};
 }
 

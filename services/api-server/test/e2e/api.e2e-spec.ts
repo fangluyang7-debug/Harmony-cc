@@ -91,6 +91,27 @@ describe('API HTTP contract', () => {
       .set('x-maintenance-token', 'test-maintenance-token').expect(400);
   });
 
+  it('provisions devices through maintenance auth and accepts only device-scoped heartbeats',async()=>{
+    const root='/api/v1/runtime/device-directory';
+    const previous=process.env.DIRECTORY_HTTP_TOKEN;
+    process.env.DIRECTORY_HTTP_TOKEN='http-device-credential-at-least-32-characters';
+    const configuration={deviceId:'http-worker',endpoint:'http://127.0.0.1:3020',tokenEnv:'DIRECTORY_HTTP_TOKEN',enabled:true,qualityVerified:false,cropPriorMs:1000};
+    try {
+      await request(app.getHttpServer()).post(root+'/workers').send(configuration).expect(401);
+      await request(app.getHttpServer()).post(root+'/workers').set('Authorization',authorization).send(configuration).expect(403);
+      await request(app.getHttpServer()).post(root+'/workers').set('Authorization',authorization)
+        .set('x-maintenance-token','test-maintenance-token').send(configuration).expect(201);
+      const profile={version:1,source:'REAL',capabilities:['image.crop.v1'],availableBackends:['CPU'],availableSlots:1,availableMemoryMB:256,cpuUsage:10,cpuCores:4,thermalLevel:'UNKNOWN',queueLength:0};
+      await request(app.getHttpServer()).post(root+'/http-worker/heartbeat').set('Authorization',authorization).send(profile).expect(403);
+      await request(app.getHttpServer()).post(root+'/http-worker/heartbeat').set('Authorization','Bearer '+process.env.DIRECTORY_HTTP_TOKEN).send(profile).expect(201);
+      const response=await request(app.getHttpServer()).get(root).set('Authorization',authorization).set('x-maintenance-token','test-maintenance-token').expect(200);
+      expect(response.body.data).toEqual(expect.arrayContaining([expect.objectContaining({deviceId:'http-worker',online:true})]));
+      expect(JSON.stringify(response.body)).not.toContain('DIRECTORY_HTTP_TOKEN');
+      await request(app.getHttpServer()).post(root+'/http-worker/revoke').set('Authorization',authorization).set('x-maintenance-token','test-maintenance-token').expect(201);
+      await request(app.getHttpServer()).post(root+'/http-worker/heartbeat').set('Authorization','Bearer '+process.env.DIRECTORY_HTTP_TOKEN).send(profile).expect(403);
+    }finally{if(previous===undefined)delete process.env.DIRECTORY_HTTP_TOKEN;else process.env.DIRECTORY_HTTP_TOKEN=previous;}
+  });
+
   it('returns a stable candidate response contract from persisted snapshots', async () => {
     await prisma.imageAsset.create({
       data: {

@@ -9,7 +9,7 @@ export interface RuntimeWorkMeasurements {
   storageWriteMs: number;
   modelMs: number;
 }
-export interface WorkSchedulingContext { userWaiting: boolean; importance: number; }
+export interface WorkSchedulingContext { userWaiting: boolean; importance: number; networkAllowed?:boolean; privacyLevel?:'LOCAL_ONLY'|'AUTHORIZED_REMOTE'; }
 interface WorkScope { scheduling?: WorkSchedulingContext; deadline?: number; ownerId?: string; pending: Set<Promise<unknown>>; signal: AbortSignal; measurements: RuntimeWorkMeasurements; }
 const scopes = new AsyncLocalStorage<WorkScope>();
 

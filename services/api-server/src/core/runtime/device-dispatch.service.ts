@@ -44,6 +44,7 @@ export class DeviceDispatchService {
   private readonly planner=new WorkflowPlacementPlanner();
   private readonly circuits=new Map<string,{failures:number;retryAt:number}>();
   private readonly decisions:unknown[]=[];
+  private feedbackWrites:Promise<void>=Promise.resolve();
   async onModuleInit():Promise<void> {
     if (!this.prisma) return;
     const rows = await this.prisma.runtimeCostSample.findMany({where:{observedAt:{gt:new Date(Date.now()-300000)}},take:256,orderBy:{observedAt:'desc'}});
@@ -81,10 +82,11 @@ export class DeviceDispatchService {
     if (this.prisma) {
       const sampleJson=JSON.stringify(old),observedAt=new Date(old.observedAt);
       // Cancellation must not prevent settlement telemetry. Track persistence before leaving the scope.
-      RuntimeWorkScope.track(RuntimeWorkScope.settlement(async()=> {
+      this.feedbackWrites=this.feedbackWrites.then(()=>RuntimeWorkScope.settlement(async()=> {
         await this.prisma!.runtimeCostSample.upsert({where:{id:key},create:{id:key,sampleJson,observedAt},update:{sampleJson,observedAt}});
         await this.prisma!.runtimeCostSample.deleteMany({where:{observedAt:{lt:new Date(Date.now()-86400000)}}});
-      }).catch(()=> { this.logger.warn('DISPATCH_FEEDBACK_PERSISTENCE_FAILED'); }));
+      })).catch(()=> { this.logger.warn('DISPATCH_FEEDBACK_PERSISTENCE_FAILED'); });
+      RuntimeWorkScope.track(this.feedbackWrites);
     }
   }
   async crop<T extends QueryImageCropResult>(bytes:Buffer,parameters:{box:{x:number;y:number;width:number;height:number};paddingRatio:number;targetSize:number;jpegQuality:number},
@@ -286,9 +288,11 @@ export class DeviceDispatchService {
       const inputs = inputIds.map(id => {
         const ref = artifacts.get(id);
         if (!ref) throw new Error('TASK_INPUT_UNAVAILABLE');
+        if(ref.data!==undefined&&createHash('sha256').update(ref.data).digest('hex')!==ref.contentHash)throw new Error('INPUT_HASH_MISMATCH');
         return ref;
       });
       const budgetMs = remaining();
+      if(task.contract && inputs.some(input=>!task.contract!.inputSchemas.includes(input.schemaId)))throw new Error('TASK_CONTRACT_MISMATCH');
       const macroContext = {...decision.macroContext, selectedReason:actualReason, budgetMs,
         workflowId:graph.workflowId,taskId:task.id,attemptId:'attempt_'+randomUUID(),
         baselineDevice: decision.baselineAssignments?.find(a => a.nodeId === task.id)?.deviceId ?? decision.macroContext.baselineDevice};
@@ -331,7 +335,7 @@ export class DeviceDispatchService {
         const pending=new Set(suffix.map(node=>node.id));
         const rest=await this.dispatch({...graph,inputs:[...artifacts.values()],
           tasks:suffix.map(node=>({...node,dependencies:node.dependencies.filter(id=>pending.has(id))}))},
-          {...context,budgetMs:remaining()},options);
+          {...context,links,budgetMs:remaining()},options);
         if(suffix.length===1) {outputs[suffix[0].id]=rest;return {output:rest,outputs};}
         return {output:rest.output,outputs:{...outputs,...rest.outputs}};
       }
@@ -346,9 +350,9 @@ export class DeviceDispatchService {
     const capability = context.task.toolId;
     const budgetMs = RuntimeWorkScope.remainingBudget(context.task.constraints?.maxLatencyMs ?? 60000);
     const semantic = RuntimeWorkScope.scheduling();
-    return this.dispatch({capability,inputs:[],tasks:[{id:context.task.taskId,capability,dependencies:[],inputs:[],
+    return this.dispatch({workflowId:context.runId,capability,inputs:[],tasks:[{id:context.task.taskId,capability,dependencies:[],inputs:[],
       outputBytes:0,memoryMB:0,minQuality:context.task.constraints?.minimumQuality ?? 0}]},
-      {budgetMs,networkAllowed:false,privacyLevel:'LOCAL_ONLY',...semantic},
+      {budgetMs,...semantic,networkAllowed:false,privacyLevel:'LOCAL_ONLY'},
       {remoteAllowed:false,cloudExecutors:{[capability]:async()=>execute()}});
   }
 
@@ -476,7 +480,7 @@ export class DeviceDispatchService {
           ttlMs: 30000,
           resourceSnapshot: {
             availableSlots: descriptor.capacity.slots,
-            availableMemoryMB: descriptor.capacity.memoryBytes / (1024 * 1024),
+            availableMemoryMB: Math.min(descriptor.capacity.memoryBytes / (1024 * 1024),descriptor.profile?.availableMemoryMB??Infinity),
             queueLength: descriptor.profile?.queueLength ?? 0
           },
           history: sample ? {

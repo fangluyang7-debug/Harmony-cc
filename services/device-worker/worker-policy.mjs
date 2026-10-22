@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { cpuUtilization } from './device-profile.mjs';
 
 /**
  * Worker微观调度策略
@@ -35,7 +36,7 @@ export class WorkerPolicy {
     
     // 硬约束2: 内存不足
     const requiredMemoryMB = task.memoryMB || 512;
-    const availableMemoryMB = this.maxMemoryMB - state.usedMemoryMB;
+    const availableMemoryMB = Math.min(this.maxMemoryMB - state.usedMemoryMB,state.availableMemoryMB??Infinity);
     
     if (requiredMemoryMB > availableMemoryMB * 0.9) {
       return { allowed: false, reason: 'MEMORY_INSUFFICIENT' };
@@ -161,15 +162,16 @@ export class WorkerPolicy {
     const freeMemoryMB = os.freemem() / (1024 * 1024);
     const usedMemoryMB = totalMemoryMB - freeMemoryMB;
     
-    // 简化的CPU使用率 (实际应该用更精确的方法)
-    const loadAverage = os.loadavg()[0];
-    const cpuCount = os.cpus().length;
-    const cpuUsage = Math.min(1, loadAverage / cpuCount);
+    const measuredCpu = cpuUtilization();
+    // Unknown samples use a conservative admission prior, never Windows' always-zero loadavg.
+    const cpuUsage = measuredCpu === null ? 0.8 : measuredCpu / 100;
     
     return {
       activeSlots: global.activeTaskCount || 0,
       usedMemoryMB,
+      availableMemoryMB:freeMemoryMB,
       cpuUsage,
+      cpuUsageKnown:measuredCpu!==null,
       queueLength: global.taskQueueLength || 0,
       timestamp: Date.now()
     };

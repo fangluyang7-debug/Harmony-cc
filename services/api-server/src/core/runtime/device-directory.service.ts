@@ -7,6 +7,9 @@ export interface WorkerConnection {
   qualityVerified: boolean; cropPriorMs: number;
 }
 export interface ResourceProfile {
+  resourceValidForMs?:number;
+  batteryPercent?:number|null;
+  isCharging?:boolean|null;
   version: 1;
   source: 'REAL';
   capabilities: string[];
@@ -23,6 +26,9 @@ export function validateResourceProfile(value: unknown): ResourceProfile {
   const p = value as ResourceProfile;
   const nonnegative = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
   if (!p || p.version !== 1 || p.source !== 'REAL' ||
+      (p.resourceValidForMs!==undefined&&(!Number.isSafeInteger(p.resourceValidForMs)||p.resourceValidForMs<0||p.resourceValidForMs>3000)) ||
+      (p.batteryPercent!==undefined&&p.batteryPercent!==null&&(!nonnegative(p.batteryPercent)||p.batteryPercent>100)) ||
+      (p.isCharging!==undefined&&p.isCharging!==null&&typeof p.isCharging!=='boolean') ||
       !Array.isArray(p.capabilities) || p.capabilities.length > 64 ||
       p.capabilities.some(c => typeof c !== 'string' || !/^[\w.-]{1,128}$/.test(c)) ||
       !Array.isArray(p.availableBackends) || p.availableBackends.length > 8 ||
@@ -36,6 +42,7 @@ export function validateResourceProfile(value: unknown): ResourceProfile {
     throw new BadRequestException('DEVICE_PROFILE_INVALID');
   }
   return {version:1,source:'REAL',capabilities:[...new Set(p.capabilities)],availableBackends:[...new Set(p.availableBackends)],
+    resourceValidForMs:p.resourceValidForMs??3000,batteryPercent:p.batteryPercent??null,isCharging:p.isCharging??null,
     availableSlots:p.availableSlots,availableMemoryMB:p.availableMemoryMB,cpuUsage:p.cpuUsage,
     cpuCores:p.cpuCores,thermalLevel:p.thermalLevel,queueLength:p.queueLength};
 }
@@ -44,7 +51,7 @@ export function validateWorkerConnection(value: unknown): WorkerConnection {
   const c = value as WorkerConnection;
   let url: URL;
   try { url = new URL(c.endpoint); } catch { throw new BadRequestException('DEVICE_ENDPOINT_INVALID'); }
-  if (!/^[\w.-]{1,128}$/.test(c.deviceId) || c.deviceId === 'cloud-runtime' || c.deviceId.startsWith('phone_') ||
+  if (typeof c.deviceId!=='string' || !/^[\w.-]{1,128}$/.test(c.deviceId) || c.deviceId === 'cloud-runtime' || c.deviceId.startsWith('phone_') ||
       !/^\w{1,128}$/.test(c.tokenEnv) || typeof c.enabled !== 'boolean' || typeof c.qualityVerified !== 'boolean' ||
       !Number.isFinite(c.cropPriorMs) || c.cropPriorMs <= 0 ||
       (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname))) ||
@@ -93,11 +100,14 @@ export class DeviceDirectoryService {
   async revoke(deviceId: string) {
     const result = await this.prisma.runtimeDevice.updateMany({where:{id:deviceId},data:{status:'revoked'}});
     if (!result.count) throw new ConflictException('DEVICE_NOT_REGISTERED');
+    await this.prisma.phoneDispatchDevice.updateMany({where:{id:deviceId},data:{status:'revoked'}});
+    await this.prisma.phoneDispatchJob.updateMany({where:{deviceId,state:'LEASED'},data:{state:'STOP_REQUESTED'}});
+    await this.prisma.phoneDispatchJob.updateMany({where:{deviceId,state:'PENDING'},data:{state:'CANCELLED_SETTLED',finishedAt:new Date()}});
     return {deviceId,status:'revoked'};
   }
 
   async workers(legacy: WorkerConnection[]): Promise<WorkerConnection[]> {
-    const rows = await this.prisma.runtimeDevice.findMany({where:{kind:'WORKER'},take:256});
+    const rows = await this.prisma.runtimeDevice.findMany({where:{kind:'WORKER'}});
     const merged = new Map(legacy.map(c=>[c.deviceId,c]));
     for (const row of rows) {
       merged.delete(row.id); // Revocation or stale heartbeat also overrides the legacy configuration.
@@ -111,7 +121,8 @@ export class DeviceDirectoryService {
   async phones(ownerUserId: string) {
     const rows = await this.prisma.runtimeDevice.findMany({where:{kind:'PHONE',ownerUserId,status:'active',observedAt:{gt:new Date(Date.now()-15000)}},take:32});
     const paired = await this.prisma.phoneDispatchDevice.findMany({where:{ownerUserId,status:'active',id:{in:rows.map(r=>r.id)}}});
-    return rows.filter(r=>paired.some(p=>p.id===r.id)).map(r=>({deviceId:r.id,observedAt:r.observedAt!.getTime(),profile:validateResourceProfile(JSON.parse(r.profileJson!))}));
+    return rows.filter(r=>paired.some(p=>p.id===r.id)).map(r=>({deviceId:r.id,observedAt:r.observedAt!.getTime(),profile:validateResourceProfile(JSON.parse(r.profileJson!))}))
+      .filter(r=>Date.now()-r.observedAt<(r.profile.resourceValidForMs??3000));
   }
 
   async list() {
