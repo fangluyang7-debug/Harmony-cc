@@ -2,7 +2,7 @@ import { PlacementRequest, WorkflowPlacementDecision, WorkflowPlacementPlanner }
 
 export type SelectionPolicy = 'CLOUD_BASELINE' | 'PEER_FASTEST' | 'BACKGROUND_CALIBRATION';
 // Each comparison branch changes only this default; overrides make regression tests reproducible.
-export const DEFAULT_SELECTION_POLICY: SelectionPolicy = 'CLOUD_BASELINE';
+export const DEFAULT_SELECTION_POLICY: SelectionPolicy = 'BACKGROUND_CALIBRATION';
 
 export function selectionPolicy(): SelectionPolicy {
   const value = process.env.SCHEDULING_SELECTION_POLICY ?? DEFAULT_SELECTION_POLICY;
