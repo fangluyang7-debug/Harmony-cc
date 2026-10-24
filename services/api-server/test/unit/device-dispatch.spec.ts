@@ -74,6 +74,47 @@ describe('macro Worker dispatch', () => {
     expect(call.mock.calls.find(args=>args[2]==='leases')?.[3]).toEqual(expect.objectContaining({memoryBytes:128*1024*1024}));
     expect(call.mock.calls.at(-1)?.[2]).toBe('release');
   });
+  it('feeds verified upload and download samples back to the generic link planner',async()=>{
+    for(let i=0;i<3;i++)await run(service);
+    const links=(service as any).measuredLinks(graph,['cloud-runtime','pc']);
+    expect(links).toHaveLength(2);
+    expect(links.map((link:any)=>[link.from,link.to])).toEqual([['cloud-runtime','pc'],['pc','cloud-runtime']]);
+    expect(links.every((link:any)=>Number.isFinite(link.bytesPerSecond)&&link.bytesPerSecond>0)).toBe(true);
+  });
+  it('calibration admits initial speed samples, caps attempts, and respects kill switch',async()=>{
+    const previousSelection=process.env.SCHEDULING_SELECTION_POLICY;
+    process.env.SCHEDULING_SELECTION_POLICY='BACKGROUND_CALIBRATION';
+    const scheduler=(service as any).macroScheduler.schedule;
+    const decision=await scheduler();
+    scheduler.mockResolvedValue({...decision,reason:'BACKGROUND_CALIBRATION'});
+    const policy=JSON.parse(process.env.PLACEMENT_POLICY_JSON!);
+    process.env.PLACEMENT_POLICY_JSON=JSON.stringify({...policy,sampleCount:0,nonInferiorityPassed:false});
+    try {
+      const calibration={...context,userWaiting:false,calibrationDeviceId:'pc'};
+      for(let i=0;i<5;i++)await run(service,undefined,graph,calibration);
+      await expect(run(service,undefined,graph,calibration)).rejects.toThrow('CALIBRATION_QUOTA_EXHAUSTED');
+      expect(call.mock.calls.filter(args=>args[2]==='execute')).toHaveLength(5);
+      process.env.PLACEMENT_POLICY_JSON=JSON.stringify({...policy,killSwitch:true});
+      await expect(run(service,undefined,graph,calibration)).rejects.toThrow('CALIBRATION_NOT_AUTHORIZED');
+    } finally {
+      if(previousSelection===undefined)delete process.env.SCHEDULING_SELECTION_POLICY;else process.env.SCHEDULING_SELECTION_POLICY=previousSelection;
+    }
+  });
+  it('does not silently execute an unauthorized peer when no baseline exists',async()=>{
+    const scheduler=(service as any).macroScheduler.schedule;
+    scheduler.mockResolvedValue({...await scheduler(),baselineAssignments:[],baseline:{deviceId:null,estimatedMs:null}});
+    process.env.PLACEMENT_POLICY_JSON='{}';
+    await expect(run(service)).rejects.toThrow('NO_AUTHORIZED_PLAN');
+    expect(call).not.toHaveBeenCalled();
+  });
+  it('does not mistake the same remote baseline array for rollout approval',async()=>{
+    const scheduler=(service as any).macroScheduler.schedule;
+    const decision=await scheduler();
+    scheduler.mockResolvedValue({...decision,baselineAssignments:decision.assignments});
+    process.env.PLACEMENT_POLICY_JSON='{}';
+    await expect(run(service)).rejects.toThrow('NO_AUTHORIZED_PLAN');
+    expect(call).not.toHaveBeenCalled();
+  });
   it('dispatches through the real macro scheduler using verified cold-start candidates',async()=>{
     (service as any).queryCandidates.mockRestore();
     (service as any).macroScheduler = new MacroSchedulerService();

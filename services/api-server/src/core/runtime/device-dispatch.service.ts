@@ -1,3 +1,4 @@
+import { selectionPolicy } from './scheduling-selection-policy';
 import { RuntimeExecutionContext } from './executor-registry.service';
 import { DeviceDirectoryService, ResourceProfile } from './device-directory.service';
 import { PrismaService } from '../../persistence/prisma/prisma.service';
@@ -41,6 +42,7 @@ export class DeviceDispatchService {
     @Optional() private readonly prisma?: PrismaService
   ) {}
   private readonly samples=new Map<string,Sample>();
+  private readonly calibrationAttempts=new Map<string,number>();
   private readonly planner=new WorkflowPlacementPlanner();
   private readonly circuits=new Map<string,{failures:number;retryAt:number}>();
   private readonly decisions:unknown[]=[];
@@ -257,6 +259,13 @@ export class DeviceDispatchService {
         }
       }
     }
+    if (context.calibrationDeviceId) {
+      if (selectionPolicy() !== 'BACKGROUND_CALIBRATION' || context.userWaiting ||
+          graph.tasks.length !== 1 || graph.tasks[0].capability !== 'image.crop.v1' ||
+          !context.networkAllowed || context.privacyLevel !== 'AUTHORIZED_REMOTE' || options.remoteAllowed === false) {
+        throw new Error('CALIBRATION_SCOPE_INVALID');
+      }
+    }
     const links = context.links ?? this.measuredLinks(graph, [...candidates.keys()]);
     const decision = await this.macroScheduler.schedule({...graph, tasks:ordered}, [...candidates.values()],
       {...context,links,budgetMs:remaining(),materializeOutputsAt:'cloud-runtime'});
@@ -264,9 +273,18 @@ export class DeviceDispatchService {
     let actualMode = decision.mode, actualReason = decision.reason;
     if (assignments?.some(a=>a.deviceId !== 'cloud-runtime')) {
       const rollout: PlacementRollout = JSON.parse(process.env.PLACEMENT_POLICY_JSON ?? '{}');
-      const plan = {status:'ready' as const,baseline:decision.baselineAssignments,suggestion:assignments,
+      // Check remote permission independently of fallback: baseline and suggestion may be the same array.
+      const plan = {status:'ready' as const,baseline:null,suggestion:assignments,
         baselineMs:decision.baseline.estimatedMs,suggestionMs:decision.estimatedMs,rejections:[],truncated:0,planningMs:decision.planningMs,reason:decision.reason};
-      if (ordered.some(task=>authorizePlacement(plan,rollout,task.capability,Date.now()) !== assignments)) {
+      const calibrating = decision.reason === 'BACKGROUND_CALIBRATION' && !!context.calibrationDeviceId;
+      // Calibration establishes speed evidence; it must not require an existing speed advantage.
+      // All quality, allowlist, expiry, failure-rate and kill-switch checks remain authoritative.
+      const admission = calibrating ? {...rollout, sampleCount:rollout.minimumSamples, nonInferiorityPassed:true} : rollout;
+      if (ordered.some(task=>authorizePlacement(plan,admission,task.capability,Date.now()) !== assignments)) {
+        if (calibrating) throw new Error('CALIBRATION_NOT_AUTHORIZED');
+        if (!decision.baselineAssignments.length || decision.baselineAssignments.some(a=>a.deviceId!=='cloud-runtime')) {
+          throw new Error('NO_AUTHORIZED_PLAN');
+        }
         assignments = decision.baselineAssignments;
         actualMode = 'BASELINE';actualReason = 'PLACEMENT_ROLLOUT_BASELINE';
       }
@@ -279,6 +297,12 @@ export class DeviceDispatchService {
       if (assignment.deviceId !== 'cloud-runtime' && (!context.networkAllowed || context.privacyLevel !== 'AUTHORIZED_REMOTE' || options.remoteAllowed === false)) {
         throw new Error('TRANSFER_NOT_AUTHORIZED');
       }
+    }
+    if (context.calibrationDeviceId) {
+      const key = RuntimeWorkScope.ownerId() + ':' + context.calibrationDeviceId;
+      const attempts = this.calibrationAttempts.get(key) ?? 0;
+      if (attempts >= 5) throw new Error('CALIBRATION_QUOTA_EXHAUSTED');
+      this.calibrationAttempts.set(key, attempts + 1);
     }
     const artifacts = new Map(graph.inputs.map(input => [input.artifactId, input]));
     const outputs: Record<string, any> = Object.create(null);
@@ -533,8 +557,10 @@ export class DeviceDispatchService {
       if (source.data !== undefined) {
         const bytes = Buffer.from(source.data);
         if (createHash('sha256').update(bytes).digest('hex') !== source.contentHash) throw new Error('INPUT_HASH_MISMATCH');
+        const uploadAt = performance.now();
         input = await this.call<ArtifactRef>(device, ownerId, 'artifacts', bytes, signal, true, source.schemaId);
         if (input.contentHash !== source.contentHash) throw new Error('INPUT_HASH_MISMATCH');
+        this.observe(this.key(deviceId+':transfer',bytes.length,task.parameters ?? {}),performance.now()-uploadAt,true,bytes.length);
       } else {
         // References without bytes must already belong to this Worker and owner.
         await this.call<Buffer>(device, ownerId, 'artifacts/resolve', input, signal);
@@ -558,8 +584,11 @@ export class DeviceDispatchService {
           if (receipt.errorCode || receipt.stopRequested || !receipt.output) throw new Error(receipt.errorCode ?? 'WORKER_STOPPED');
           if (receipt.output.inputHash !== input.contentHash) throw new Error('OUTPUT_HASH_MISMATCH');
           if (!receipt.output.artifact) return receipt.output;
+          const downloadAt = performance.now();
           const buffer = await this.call<Buffer>(device, ownerId, 'artifacts/resolve', receipt.output.artifact, signal);
           if (createHash('sha256').update(buffer).digest('hex') !== receipt.output.artifact.contentHash) throw new Error('OUTPUT_HASH_MISMATCH');
+          const sourceBytes = source.data?.byteLength ?? source.sizeBytes ?? 0;
+          this.observe(this.key(deviceId+':download',sourceBytes,task.parameters ?? {}),performance.now()-downloadAt,true,buffer.length);
           // Network costs are modeled separately; do not train compute with end-to-end latency.
           if (receipt.executionMs !== null) this.observe(this.taskSampleKey(task.capability,deviceId,graph.inputs,task.parameters),receipt.executionMs,true);
           return { ...receipt.output, buffer };

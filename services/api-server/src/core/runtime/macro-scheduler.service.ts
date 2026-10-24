@@ -1,5 +1,6 @@
+import { selectionPolicy, selectPlan, SelectionPolicy } from './scheduling-selection-policy';
 import { Injectable, Logger } from '@nestjs/common';
-import { WorkflowPlacementPlanner, PlacementRequest, PlacementNode, PlacementCandidate, PlacementArtifact, PlacementLink, PlannerAssignment, WorkflowPlacementDecision } from './workflow-placement-planner';
+import { PlacementRequest, PlacementNode, PlacementCandidate, PlacementArtifact, PlacementLink, PlannerAssignment, WorkflowPlacementDecision } from './workflow-placement-planner';
 import { ArtifactRef, TaskContractV1, ModelCompatibility } from './scheduling-protocol';
 
 /**
@@ -58,6 +59,8 @@ export interface DeviceCandidate {
 }
 
 export interface SchedulingContext {
+  // Explicit test call only; never inferred from an ordinary user request.
+  calibrationDeviceId?: string;
   materializeOutputsAt?: string;
   links?: PlacementLink[];
   budgetMs: number;
@@ -75,7 +78,7 @@ export interface SchedulingDecision {
   deviceId: string;
   executorId: string;
   estimatedMs: number;
-  baseline: { deviceId: string; estimatedMs: number };
+  baseline: { deviceId: string | null; estimatedMs: number | null };
   suggestion: { deviceId: string; estimatedMs: number };
   reason: string;
   mode: 'BASELINE' | 'OPTIMIZED' | 'FALLBACK';
@@ -110,7 +113,6 @@ export interface SchedulingDecision {
 @Injectable()
 export class MacroSchedulerService {
   private readonly logger = new Logger(MacroSchedulerService.name);
-  private readonly planner = new WorkflowPlacementPlanner();
   
   /**
    * 核心调度方法 - 通用化
@@ -154,10 +156,14 @@ export class MacroSchedulerService {
     };
     
     // 3. 调用束搜索算法
-    const decision = this.planner.plan(request);
+    const policy = selectionPolicy();
+    if (context.calibrationDeviceId && (policy !== 'BACKGROUND_CALIBRATION' || context.userWaiting)) {
+      throw new Error('CALIBRATION_REQUIRES_BACKGROUND_POLICY');
+    }
+    const decision = selectPlan(request, policy, context.calibrationDeviceId);
     
     // 4. 应用门禁策略
-    const authorized = this.applyGates(decision, context);
+    const authorized = this.applyGates(decision, context, policy);
     
     const planningMs = Date.now() - startedAt;
     
@@ -317,9 +323,24 @@ export class MacroSchedulerService {
    */
   private applyGates(
     decision: WorkflowPlacementDecision,
-    context: SchedulingContext
+    context: SchedulingContext,
+    policy: SelectionPolicy = 'CLOUD_BASELINE'
   ): Omit<SchedulingDecision, 'planningMs' | 'macroContext'> {
     const baseline = decision.baseline;
+    if (policy === 'PEER_FASTEST' || decision.reason === 'BACKGROUND_CALIBRATION') {
+      const selected = decision.suggestion;
+      if (!selected?.length || decision.suggestionMs === null || !Number.isFinite(decision.suggestionMs) ||
+          decision.suggestionMs > context.budgetMs) throw new Error('NO_LEGAL_PLAN');
+      return {
+        assignments: selected, baselineAssignments: baseline ?? [],
+        deviceId: selected[0].deviceId, executorId: selected[0].executorId,
+        estimatedMs: decision.suggestionMs,
+        baseline: {deviceId: baseline?.[0]?.deviceId ?? null, estimatedMs: decision.baselineMs},
+        suggestion: {deviceId: selected[0].deviceId, estimatedMs: decision.suggestionMs},
+        mode: selected.some(a => a.deviceId !== 'cloud-runtime') ? 'OPTIMIZED' : 'BASELINE',
+        reason: decision.reason === 'BACKGROUND_CALIBRATION' ? decision.reason : 'PEER_FASTEST_LEGAL_PLAN'
+      };
+    }
     if (!baseline?.length || decision.baselineMs === null || !Number.isFinite(decision.baselineMs)) {
       throw new Error('NO_BASELINE_PLAN');
     }
