@@ -1,4 +1,5 @@
 import os from 'node:os';
+import { createHash } from 'node:crypto';
 
 // CPU deltas work on Windows as well as Unix; loadavg is not CPU utilization.
 let previous = os.cpus();
@@ -19,7 +20,11 @@ export function cpuUtilization() {
 }
 export function deviceProfile(manager) {
   const leases=[...manager.leases.values()].filter(l=>!l.settled);
+  const interfaces=Object.entries(os.networkInterfaces()).flatMap(([name,addresses])=>
+    (addresses??[]).filter(a=>!a.internal).map(a=>[name,a.family,a.cidr])).sort((a,b)=>JSON.stringify(a).localeCompare(JSON.stringify(b)));
   return {version:1,source:'REAL',capabilities:['image.crop.v1','vector.normalize.v1'],availableBackends:['CPU'],
+    executorVersion:process.env.WORKER_EXECUTOR_VERSION??'1',
+    networkId:interfaces.length?createHash('sha256').update(JSON.stringify([interfaces,process.env.WORKER_NETWORK_ID??''])).digest('hex'):undefined,
     availableSlots:Math.max(0,manager.slots-leases.length),
     availableMemoryMB:Math.max(0,Math.min(os.freemem(),manager.memoryBytes-leases.reduce((sum,l)=>sum+l.memoryBytes,0)))/(1024*1024),
     cpuUsage:cpuUtilization(),cpuCores:os.cpus().length||null,

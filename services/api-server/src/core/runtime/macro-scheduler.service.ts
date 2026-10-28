@@ -31,6 +31,9 @@ export interface TaskSpec {
  * 设备候选 - 动态查询结果
  */
 export interface DeviceCandidate {
+  contractQuality?: number | null;
+  executorVersion?: string;
+  networkId?: string;
   models?: Record<string,ModelCompatibility>;
   costScope?: 'execution' | 'coordinator-roundtrip';
   deviceId: string;
@@ -51,7 +54,7 @@ export interface DeviceCandidate {
   
   taskHistory?: Record<string, NonNullable<DeviceCandidate['history']>>;
   history?: {
-    quality: number;
+    quality: number | null;
     meanMs: number;
     stddevMs: number;
     sampleCount: number;
@@ -250,7 +253,7 @@ export class MacroSchedulerService {
       availableMemoryBytes: device.resourceSnapshot.availableMemoryMB * 1024 * 1024,
       
       // 性能预估 (来自历史样本)
-      quality: history?.quality ?? null,
+      quality: device.contractQuality !== undefined ? device.contractQuality : history?.quality ?? null,
       computeMs: history?.meanMs ?? this.coldStartEstimate(device, task),
       queueMs: device.resourceSnapshot.queueLength * 100, // 简化估算: 每个排队任务100ms
       coldMs: history ? 0 : 50,

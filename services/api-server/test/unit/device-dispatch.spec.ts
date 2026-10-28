@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { RuntimeCostStore } from '../../src/core/runtime/runtime-cost-store';
 import { TaskGraph, MacroSchedulerService } from '../../src/core/runtime/macro-scheduler.service';
 import { DeviceDispatchService } from '../../src/core/runtime/device-dispatch.service';
 import { RuntimeWorkScope } from '../../src/core/runtime/runtime-work-scope';
@@ -47,12 +48,13 @@ describe('macro Worker dispatch', () => {
       qualityPassed:true,nonInferiorityPassed:true,failureRate:0,maximumFailureRate:0.05,cohortAllowed:true});
     process.env.RUNTIME_DEVICES_JSON = JSON.stringify([{deviceId:'pc',endpoint:'http://127.0.0.1:1',tokenEnv:'TEST_TOKEN',enabled:true,qualityVerified:true,cropPriorMs:1}]);
     service = new DeviceDispatchService(undefined, {schedule:jest.fn().mockResolvedValue({deviceId:'pc',macroContext,mode:'OPTIMIZED',reason:'TEST',estimatedMs:10,baseline:{estimatedMs:100},assignments:[{nodeId:'crop',deviceId:'pc',executorId:'cpu-worker'}],baselineAssignments:[{nodeId:'crop',deviceId:'cloud-runtime',executorId:'cloud'}]})} as unknown as MacroSchedulerService);
+    for(let i=0;i<30;i++) (service as any).observe((service as any).taskSampleKey('image.crop.v1','pc',graph.inputs,graph.tasks[0].parameters),1,true);
     jest.spyOn(service as any,'queryCandidates').mockResolvedValue([]);
     call = jest.spyOn(service as any,'call').mockImplementation(async (...args: any[]) => {
       switch(args[2]) {
         case 'artifacts': return input;
         case 'leases': return {leaseId:'lease',fencingToken:7};
-        case 'query': return {settled:true,output};
+        case 'query': return {settled:true,output,executionMs:1};
         case 'artifacts/resolve': return outputBytes;
         default: return {};
       }
@@ -74,12 +76,42 @@ describe('macro Worker dispatch', () => {
     expect(call.mock.calls.find(args=>args[2]==='leases')?.[3]).toEqual(expect.objectContaining({memoryBytes:128*1024*1024}));
     expect(call.mock.calls.at(-1)?.[2]).toBe('release');
   });
+  it('ignores hand-written admission counts when no observations exist',async()=>{
+    (service as any).costStore=new RuntimeCostStore();
+    await run(service);
+    expect(call).not.toHaveBeenCalled();
+  });
+  it('uses observed failures even when the configured failure rate is zero',async()=>{
+    for(let i=0;i<3;i++)(service as any).observe((service as any).taskSampleKey('image.crop.v1','pc',graph.inputs,graph.tasks[0].parameters),25000,false);
+    await run(service);
+    expect(call).not.toHaveBeenCalled();
+  });
+  it('fills task timing without manufacturing quality approval',async()=>{
+    const candidate={deviceId:'pc',capabilities:['image.crop.v1'],contractQuality:null};
+    (service as any).queryCandidates.mockResolvedValue([candidate]);
+    await run(service);
+    expect((candidate as any).taskHistory.crop).toMatchObject({meanMs:1,sampleCount:30,quality:null});
+  });
   it('feeds verified upload and download samples back to the generic link planner',async()=>{
     for(let i=0;i<3;i++)await run(service);
-    const links=(service as any).measuredLinks(graph,['cloud-runtime','pc']);
+    const links=await (service as any).measuredLinks(graph,['cloud-runtime','pc']);
     expect(links).toHaveLength(2);
     expect(links.map((link:any)=>[link.from,link.to])).toEqual([['cloud-runtime','pc'],['pc','cloud-runtime']]);
     expect(links.every((link:any)=>Number.isFinite(link.bytesPerSecond)&&link.bytesPerSecond>0)).toBe(true);
+  });
+  it('keeps in-flight measurements on their captured network when another request updates the profile',async()=>{
+    const original=call.getMockImplementation()!;
+    call.mockImplementation(async(...args:any[])=>{
+      if(args[2]==='artifacts')(service as any).profiles.set('pc',{networkId:'new-network',executorVersion:'1'});
+      return original(...args);
+    });
+    for(let i=0;i<3;i++){
+      (service as any).profiles.set('pc',{networkId:'old-network',executorVersion:'1'});
+      await run(service);
+    }
+    expect((service as any).costStore.link('pc','upload','old-network')).toBeDefined();
+    expect((service as any).costStore.link('pc','download','old-network')).toBeDefined();
+    expect((service as any).costStore.link('pc','upload','new-network')).toBeUndefined();
   });
   it('calibration admits initial speed samples, caps attempts, and respects kill switch',async()=>{
     const previousSelection=process.env.SCHEDULING_SELECTION_POLICY;

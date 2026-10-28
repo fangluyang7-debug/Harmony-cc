@@ -1,10 +1,15 @@
+import { IMAGE_CROP_CONTRACT } from '../../modules/sessions/domain/image-crop-contract';
+import { CapabilityCostModel } from './capability-cost-model';
+import { admissionEvidence } from './placement-admission-evidence';
+import { RuntimeCostStore, costKey, networkIdentity, SampleSource } from './runtime-cost-store';
+import { CropQualityEvaluator } from './crop-quality-evaluator';
 import { selectionPolicy } from './scheduling-selection-policy';
 import { RuntimeExecutionContext } from './executor-registry.service';
 import { DeviceDirectoryService, ResourceProfile } from './device-directory.service';
 import { PrismaService } from '../../persistence/prisma/prisma.service';
 import { chooseRecovery } from './recovery-policy';
 import { PerformanceRegistryService } from './performance-registry.service';
-import { Injectable, Optional, Logger } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { RuntimeWorkScope } from './runtime-work-scope';
 import { WorkflowPlacementPlanner, PlacementCandidate, PlacementRollout, PlacementLink, authorizePlacement } from './workflow-placement-planner';
@@ -30,28 +35,23 @@ interface DeviceConfiguration { deviceId:string;endpoint:string;tokenEnv:string;
 interface Descriptor {protocolVersion:number;deviceId:string;instanceId:string;adapterVersion:string;capabilities:string[];capacity:{slots:number;memoryBytes:number};profile?:ResourceProfile;}
 interface Receipt {leaseId:string;fencingToken:number;state:string;settled:boolean;stopRequested:boolean;executionMs:number|null;errorCode:string|null;
   output:null|{artifact:ArtifactRef;metadata:QueryImageCropResult['metadata'];cropRegionPx:QueryImageCropResult['cropRegionPx'];strategy:string;inputHash:string;};}
-interface Sample {bytes?:number;count:number;mean:number;deviation:number;failures:number;observedAt:number;}
 
 @Injectable()
 export class DeviceDispatchService {
-  private readonly logger=new Logger(DeviceDispatchService.name);
   constructor(
     @Optional() private readonly performanceRegistry?: PerformanceRegistryService,
     @Optional() private readonly macroScheduler?: MacroSchedulerService,
     @Optional() private readonly directory?: DeviceDirectoryService,
-    @Optional() private readonly prisma?: PrismaService
-  ) {}
-  private readonly samples=new Map<string,Sample>();
-  private readonly calibrationAttempts=new Map<string,number>();
+    @Optional() private readonly prisma?: PrismaService,
+    @Optional() sharedCostStore?:RuntimeCostStore
+  ) { this.costStore=sharedCostStore??RuntimeCostStore.shared(this.prisma); }
+  private readonly costStore:RuntimeCostStore;
+  private readonly qualityEvaluator = new CropQualityEvaluator(this.prisma);
+  private readonly profiles = new Map<string,{networkId:string;executorVersion:string}>();
   private readonly planner=new WorkflowPlacementPlanner();
   private readonly circuits=new Map<string,{failures:number;retryAt:number}>();
   private readonly decisions:unknown[]=[];
-  private feedbackWrites:Promise<void>=Promise.resolve();
-  async onModuleInit():Promise<void> {
-    if (!this.prisma) return;
-    const rows = await this.prisma.runtimeCostSample.findMany({where:{observedAt:{gt:new Date(Date.now()-300000)}},take:256,orderBy:{observedAt:'desc'}});
-    for (const row of rows) this.samples.set(row.id,JSON.parse(row.sampleJson));
-  }
+  async onModuleInit():Promise<void> { await this.costStore.load(); }
   recentDecisions():unknown[]{return this.decisions.slice();}
   private async devices():Promise<DeviceConfiguration[]> {
     const values=JSON.parse(process.env.RUNTIME_DEVICES_JSON??'[]') as DeviceConfiguration[];
@@ -74,22 +74,22 @@ export class DeviceDispatchService {
     if(!response.ok){const failure=await response.json() as {error?:string};throw new Error(failure.error&&/^[A-Z0-9_]{1,100}$/.test(failure.error)?failure.error:'DEVICE_HTTP_FAILED');}
     return (path==='artifacts/resolve'?Buffer.from(await response.arrayBuffer()):await response.json()) as T;
   }
-  private key(deviceId:string,bytes:number,parameters:unknown):string{return `crop:v1:${deviceId}:${Math.floor(Math.log2(Math.max(1,bytes)))}:${createHash('sha256').update(JSON.stringify(parameters)).digest('hex').slice(0,16)}`;}
-  private observe(key:string,ms:number,success:boolean,bytes?:number):void {
-    if(!Number.isFinite(ms)||ms<0)return;
-    const old=this.samples.get(key)??{count:0,mean:ms,deviation:0,failures:0,observedAt:Date.now()};
-    if(success){old.deviation=.75*old.deviation+.25*Math.abs(ms-old.mean);old.mean=.75*old.mean+.25*ms;old.count++;}else old.failures++;
-    if(bytes!==undefined) old.bytes=bytes;
-    old.observedAt=Date.now();this.samples.set(key,old);if(this.samples.size>256)this.samples.delete(this.samples.keys().next().value!);
-    if (this.prisma) {
-      const sampleJson=JSON.stringify(old),observedAt=new Date(old.observedAt);
-      // Cancellation must not prevent settlement telemetry. Track persistence before leaving the scope.
-      this.feedbackWrites=this.feedbackWrites.then(()=>RuntimeWorkScope.settlement(async()=> {
-        await this.prisma!.runtimeCostSample.upsert({where:{id:key},create:{id:key,sampleJson,observedAt},update:{sampleJson,observedAt}});
-        await this.prisma!.runtimeCostSample.deleteMany({where:{observedAt:{lt:new Date(Date.now()-86400000)}}});
-      })).catch(()=> { this.logger.warn('DISPATCH_FEEDBACK_PERSISTENCE_FAILED'); });
-      RuntimeWorkScope.track(this.feedbackWrites);
-    }
+  private key(deviceId:string,bytes:number,parameters:unknown,capability='image.crop.v1'):string {
+    const match=deviceId.match(/:(transfer|download)$/);
+    const id=match?deviceId.slice(0,-match[0].length):deviceId;
+    const profile=this.profiles.get(id);
+    return costKey(capability,id,bytes,parameters,match?(match[1]==='transfer'?'upload':'download'):'execution',
+      profile?.executorVersion??'1',profile?.networkId??'unknown',IMAGE_CROP_CONTRACT.costModel);
+  }
+  private observe(key:string,ms:number,success:boolean,bytes?:number,source:SampleSource='BUSINESS',errorClass?:string):void {
+    this.costStore.record(key,ms,success,bytes,source,errorClass);
+  }
+  private async rolloutEvidence(rollout:PlacementRollout,capability:string,deviceId:string,candidate?:DeviceCandidate,trialKey='',calibrating=false,canaryEligible=false):Promise<PlacementRollout> {
+    const evidence=await this.costStore.evidence(capability,deviceId,
+      candidate?.costScope==='coordinator-roundtrip'?'roundtrip':'execution',candidate?.executorVersion??this.profiles.get(deviceId)?.executorVersion??'1',
+      candidate?.networkId??'unknown');
+    const quality=capability==='image.crop.v1'&&await this.qualityEvaluator.approved(deviceId,candidate?.executorVersion??this.profiles.get(deviceId)?.executorVersion??'1');
+    return {...admissionEvidence(rollout,evidence,trialKey,calibrating,canaryEligible),qualityPassed:capability==='image.crop.v1'&&process.env.CROP_QUALITY_POLICY_JSON?quality:rollout.qualityPassed===true};
   }
   async crop<T extends QueryImageCropResult>(bytes:Buffer,parameters:{box:{x:number;y:number;width:number;height:number};paddingRatio:number;targetSize:number;jpegQuality:number},
     local:()=>Promise<T>):Promise<QueryImageCropResult> {
@@ -103,7 +103,7 @@ export class DeviceDispatchService {
     const signal=RuntimeWorkScope.signal(Math.max(1,Math.ceil(budget))),now=Date.now();
     const config:PlacementRollout=JSON.parse(process.env.PLACEMENT_POLICY_JSON??JSON.stringify({mode:'OBSERVE',policyVersion:'placement-v1',expiresAt:0,killSwitch:true,
       allowedDevices:[],allowedCapabilities:[],sampleCount:0,minimumSamples:30,qualityPassed:false,nonInferiorityPassed:false,failureRate:0,maximumFailureRate:0.05,cohortAllowed:false}));
-    const localSample=this.samples.get(this.key('cloud-runtime',bytes.length,parameters));
+    const localSample=await this.costStore.get(this.key('cloud-runtime',bytes.length,parameters));
     if(!localSample||localSample.count<3) { RuntimeWorkScope.recordPlacement({actualDeviceId:'cloud-runtime',reason:'BASELINE_COST_CALIBRATION',mode:config.mode}); return baseline(); }
     const candidates:PlacementCandidate[]=[{deviceId:'cloud-runtime',executorId:'zeabur-shopping-workflow',capability:'image.crop.v1',trusted:true,source:'REAL',observedAt:now,ttlMs:3000,
       availableSlots:1,availableMemoryBytes:256*1024*1024,quality:1,computeMs:localSample?.mean??60000,queueMs:0,coldMs:0,uncertaintyMs:localSample?2*localSample.deviation:0,publishMs:0}];
@@ -112,21 +112,15 @@ export class DeviceDispatchService {
       const circuit=this.circuits.get(device.deviceId);
       if(circuit&&circuit.failures>=3&&now<circuit.retryAt)continue;
       try {
-        const before=performance.now(),descriptor=await this.call<Descriptor>(device,ownerId,'descriptor',null,AbortSignal.any([signal,AbortSignal.timeout(1500)]));
-        const rtt=performance.now()-before;
+        const descriptor=await this.call<Descriptor>(device,ownerId,'descriptor',null,AbortSignal.any([signal,AbortSignal.timeout(1500)]));
         this.circuits.delete(device.deviceId);
         if(descriptor.protocolVersion!==1||descriptor.deviceId!==device.deviceId||descriptor.adapterVersion!=='1'||!descriptor.capabilities.includes('image.crop.v1'))continue;
-        const sample=this.samples.get(this.key(device.deviceId,bytes.length,parameters));
+        this.profiles.set(device.deviceId,{networkId:networkIdentity(descriptor.profile?.networkId),executorVersion:descriptor.profile?.executorVersion??descriptor.adapterVersion});
+        const sample=await this.costStore.get(this.key(device.deviceId,bytes.length,parameters));
         candidates.push({deviceId:device.deviceId,executorId:'cpu-worker',capability:'image.crop.v1',trusted:true,source:'REAL',observedAt:now,ttlMs:3000,
-          availableSlots:descriptor.capacity.slots,availableMemoryBytes:descriptor.capacity.memoryBytes,quality:device.qualityVerified?1:null,
+          availableSlots:descriptor.capacity.slots,availableMemoryBytes:descriptor.capacity.memoryBytes,quality:(process.env.CROP_QUALITY_POLICY_JSON?await this.qualityEvaluator.approved(device.deviceId,this.profiles.get(device.deviceId)!.executorVersion):device.qualityVerified)?1:null,
           computeMs:sample?.mean??device.cropPriorMs,queueMs:0,coldMs:0,uncertaintyMs:sample?sample.deviation*2:device.cropPriorMs,publishMs:0});
-        // No bandwidth is inferred from a small handshake. Only confirmed transfer samples authorize a route.
-        const transfer=this.samples.get(this.key(device.deviceId+':transfer',bytes.length,parameters));
-        if(transfer&&transfer.count>=3&&now-transfer.observedAt<30000){
-          links.push({from:'cloud-runtime',to:device.deviceId,bytesPerSecond:bytes.length/Math.max(1,transfer.mean)*1000,fixedMs:rtt,effective:true,source:'REAL',observedAt:transfer.observedAt,ttlMs:30000});
-          const download=this.samples.get(this.key(device.deviceId+':download',bytes.length,parameters));
-          if(download&&download.count>=3)links.push({from:device.deviceId,to:'cloud-runtime',bytesPerSecond:(download.bytes??bytes.length)/Math.max(1,download.mean)*1000,fixedMs:rtt,effective:true,source:'REAL',observedAt:download.observedAt,ttlMs:30000});
-        }
+        links.push(...await this.measuredLinks({capability:'image.crop.v1',tasks:[],inputs:[]},[device.deviceId]));
       }catch{this.circuits.set(device.deviceId,{failures:(this.circuits.get(device.deviceId)?.failures??0)+1,retryAt:now+30000});}
     }
     const nodes: Parameters<WorkflowPlacementPlanner['plan']>[0]['nodes']=[{id:'crop',capability:'image.crop.v1',dependencies:[],inputs:['image'],
@@ -145,7 +139,9 @@ export class DeviceDispatchService {
       links,remainingBudgetMs:RuntimeWorkScope.remainingBudget(60000),networkAllowed:true,privacy:'AUTHORIZED_REMOTE',localDeviceId:'cloud-runtime',now,
       committedNodeIds:[],committedArtifacts:[],finalDestination:'cloud-runtime'});
     const gated=downstreamKnown?config:{...config,mode:'SHADOW' as const};
-    const actual=authorizePlacement(decision,gated,'image.crop.v1',now)?.[0];
+    const remote=decision.suggestion?.find(a=>a.deviceId!=='cloud-runtime');
+    const admission=remote?await this.rolloutEvidence(gated,'image.crop.v1',remote.deviceId,undefined,randomUUID(),false,true):gated;
+    const actual=authorizePlacement(decision,admission,'image.crop.v1',now)?.[0];
     RuntimeWorkScope.recordPlacement({decision,actualDeviceId:actual?.deviceId??null,policyVersion:config.policyVersion,mode:config.mode,
       dispatchBlockedReason:downstreamKnown?null:'SUFFIX_COST_SAMPLES_MISSING',outputSizeSource:'schema-and-crop-upper-bound'});
     this.decisions.push({decision,actualDeviceId:actual?.deviceId??null,policyVersion:config.policyVersion,mode:config.mode});if(this.decisions.length>64)this.decisions.shift();
@@ -170,16 +166,25 @@ export class DeviceDispatchService {
     }
   }
   // Explicit calibration uses real work but cannot update business state. Called by an operator/test harness.
-  async calibrate(deviceId:string,ownerId:string,bytes:Buffer,parameters:Parameters<DeviceDispatchService['crop']>[1],signal:AbortSignal):Promise<QueryImageCropResult>{
+  async calibrate(deviceId:string,ownerId:string,bytes:Buffer,parameters:Parameters<DeviceDispatchService['crop']>[1],signal:AbortSignal,expectedExecutorVersion?:string):Promise<QueryImageCropResult>{
     const device=(await this.devices()).find(d=>d.deviceId===deviceId);if(!device)throw new Error('DEVICE_NOT_REGISTERED');
+    await this.costStore.consumeCalibration(ownerId,deviceId);
+    const descriptor=await this.call<Descriptor>(device,ownerId,'descriptor',null,signal);
+    if(descriptor.deviceId!==deviceId||descriptor.protocolVersion!==1||!descriptor.capabilities.includes('image.crop.v1'))throw new Error('DEVICE_DESCRIPTOR_INVALID');
+    this.profiles.set(deviceId,{networkId:networkIdentity(descriptor.profile?.networkId),executorVersion:descriptor.profile?.executorVersion??descriptor.adapterVersion});
+    if(expectedExecutorVersion&&this.profiles.get(deviceId)!.executorVersion!==expectedExecutorVersion)throw new Error('CALIBRATION_EXECUTOR_VERSION_MISMATCH');
     return this.executeCrop(device,ownerId,bytes,parameters,signal);
   }
   private async executeCrop(device:DeviceConfiguration,ownerId:string,bytes:Buffer,parameters:Parameters<DeviceDispatchService['crop']>[1],signal:AbortSignal,macroContext:SchedulingDecision['macroContext']={baselineDevice:'cloud-runtime',selectedReason:'EXPLICIT_CALIBRATION',urgency:false,budgetMs:RuntimeWorkScope.remainingBudget(60000)}):Promise<QueryImageCropResult>{
+    const source:SampleSource=macroContext.selectedReason==='EXPLICIT_CALIBRATION'?'CALIBRATION':'BUSINESS';
+    const uploadKey=this.key(device.deviceId+':transfer',bytes.length,parameters);
+    const downloadKey=this.key(device.deviceId+':download',bytes.length,parameters);
+    const executionKey=this.key(device.deviceId,bytes.length,parameters);
     const budget=RuntimeWorkScope.remainingBudget(60000),began=performance.now();let lease:Receipt|undefined,settled=false;
     try {
       const start=performance.now(),input=await this.call<ArtifactRef>(device,ownerId,'artifacts',bytes,signal,true);
       if(input.contentHash!==createHash('sha256').update(bytes).digest('hex'))throw new Error('INPUT_HASH_MISMATCH');
-      this.observe(this.key(device.deviceId+':transfer',bytes.length,parameters),performance.now()-start,true);
+      this.observe(uploadKey,performance.now()-start,true,bytes.length,source);
       lease=await this.call<Receipt>(device,ownerId,'leases',{attemptId:'attempt_'+randomUUID(),memoryBytes:128*1024*1024,remainingBudgetMs:Math.max(0,budget-(performance.now()-began))},signal);
       await this.call(device,ownerId,'execute',{leaseId:lease.leaseId,fencingToken:lease.fencingToken,capability:'image.crop.v1',input,parameters,privacy:'AUTHORIZED_REMOTE',networkAllowed:true,macroContext:{...macroContext,budgetMs:Math.max(0,Math.min(macroContext.budgetMs,budget)-(performance.now()-began))}},signal);
       while(performance.now()-began<budget){
@@ -189,15 +194,16 @@ export class DeviceDispatchService {
           const downloadAt=performance.now(),output=await this.call<Buffer>(device,ownerId,'artifacts/resolve',receipt.output.artifact,signal);
           if(createHash('sha256').update(output).digest('hex')!==receipt.output.artifact.contentHash||receipt.output.inputHash!==input.contentHash)throw new Error('OUTPUT_HASH_MISMATCH');
           // Size-specific sample, never a simulated latency label.
-          this.observe(this.key(device.deviceId+':download',bytes.length,parameters),performance.now()-downloadAt,true,output.length);
-          this.observe(this.key(device.deviceId,bytes.length,parameters),receipt.executionMs??performance.now()-began,true);
+          this.observe(downloadKey,performance.now()-downloadAt,true,output.length,source);
+          if(Number.isFinite(receipt.executionMs))this.observe(executionKey,receipt.executionMs!,true,undefined,source);
           return {buffer:output,metadata:receipt.output.metadata,cropRegionPx:receipt.output.cropRegionPx,strategy:receipt.output.strategy};}
         await new Promise(resolve=>setTimeout(resolve,20));signal.throwIfAborted();
       }throw new Error('WORKER_STOP_UNCONFIRMED');
-    }catch(error){this.observe(this.key(device.deviceId,bytes.length,parameters),performance.now()-began,false);throw error;}
+    }catch(error){this.observe(executionKey,performance.now()-began,false,undefined,source,(error as Error).message);throw error;}
     finally {
       if(lease){const cleanup=AbortSignal.timeout(3000);try{if(!settled)await this.call(device,ownerId,'cancel',{leaseId:lease.leaseId},cleanup);
         else await this.call(device,ownerId,'release',{leaseId:lease.leaseId},cleanup);}catch{/* Keep unconfirmed reservations at the target; never claim they were released. */}}
+      await this.costStore.flush();
     }
   }
 
@@ -252,9 +258,9 @@ export class DeviceDispatchService {
       for (const task of ordered) {
         const inputs = graph.inputs.filter(input=>task.inputs.includes(input.artifactId));
         if (inputs.length !== task.inputs.length) continue; // Actual dependent-output size is not known yet.
-        const sample = this.samples.get(this.taskSampleKey(task.capability,candidate.deviceId,inputs,task.parameters));
-        if (sample?.count && Date.now()-sample.observedAt < 300000 && candidate.history) {
-          candidate.taskHistory[task.id] = {quality:candidate.history.quality,meanMs:sample.mean,
+        const sample = await this.costStore.get(this.taskSampleKey(task.capability,candidate.deviceId,inputs,task.parameters,candidate,task.contract?.costModel));
+        if (sample?.count) {
+          candidate.taskHistory[task.id] = {quality:candidate.contractQuality??candidate.history?.quality??null,meanMs:sample.mean,
             stddevMs:Math.max(2*sample.deviation,sample.mean*0.15),sampleCount:sample.count};
         }
       }
@@ -266,7 +272,7 @@ export class DeviceDispatchService {
         throw new Error('CALIBRATION_SCOPE_INVALID');
       }
     }
-    const links = context.links ?? this.measuredLinks(graph, [...candidates.keys()]);
+    const links = context.links ?? await this.measuredLinks(graph, [...candidates.keys()]);
     const decision = await this.macroScheduler.schedule({...graph, tasks:ordered}, [...candidates.values()],
       {...context,links,budgetMs:remaining(),materializeOutputsAt:'cloud-runtime'});
     let assignments = decision.assignments;
@@ -279,8 +285,16 @@ export class DeviceDispatchService {
       const calibrating = decision.reason === 'BACKGROUND_CALIBRATION' && !!context.calibrationDeviceId;
       // Calibration establishes speed evidence; it must not require an existing speed advantage.
       // All quality, allowlist, expiry, failure-rate and kill-switch checks remain authoritative.
-      const admission = calibrating ? {...rollout, sampleCount:rollout.minimumSamples, nonInferiorityPassed:true} : rollout;
-      if (ordered.some(task=>authorizePlacement(plan,admission,task.capability,Date.now()) !== assignments)) {
+      let authorized=true;
+      for (const assignment of assignments.filter(a=>a.deviceId!=='cloud-runtime')) {
+        const task=ordered.find(t=>t.id===assignment.nodeId)!;
+        let admission=await this.rolloutEvidence(rollout,task.capability,assignment.deviceId,candidates.get(assignment.deviceId),graph.workflowId+':'+assignment.deviceId,calibrating,task.contract?.sideEffectPolicy==='PURE');
+        if(calibrating)admission={...admission,sampleCount:rollout.minimumSamples,nonInferiorityPassed:true};
+        // Check each assigned device's own capability/scope evidence, never a global count.
+        const single={...plan,suggestion:[assignment]};
+        if(authorizePlacement(single,admission,task.capability,Date.now())!==single.suggestion)authorized=false;
+      }
+      if (!authorized) {
         if (calibrating) throw new Error('CALIBRATION_NOT_AUTHORIZED');
         if (!decision.baselineAssignments.length || decision.baselineAssignments.some(a=>a.deviceId!=='cloud-runtime')) {
           throw new Error('NO_AUTHORIZED_PLAN');
@@ -299,10 +313,7 @@ export class DeviceDispatchService {
       }
     }
     if (context.calibrationDeviceId) {
-      const key = RuntimeWorkScope.ownerId() + ':' + context.calibrationDeviceId;
-      const attempts = this.calibrationAttempts.get(key) ?? 0;
-      if (attempts >= 5) throw new Error('CALIBRATION_QUOTA_EXHAUSTED');
-      this.calibrationAttempts.set(key, attempts + 1);
+      await this.costStore.consumeCalibration(RuntimeWorkScope.ownerId()??'',context.calibrationDeviceId);
     }
     const artifacts = new Map(graph.inputs.map(input => [input.artifactId, input]));
     const outputs: Record<string, any> = Object.create(null);
@@ -334,10 +345,10 @@ export class DeviceDispatchService {
           await this.executeOnWorker(assignment.deviceId, nodeGraph, macroContext, {...context,budgetMs});
         signal.throwIfAborted();
         if (assignment.deviceId === 'cloud-runtime') {
-          this.observe(this.taskSampleKey(task.capability,assignment.deviceId,inputs,task.parameters),performance.now()-began,true);
+          this.observe(this.taskSampleKey(task.capability,assignment.deviceId,inputs,task.parameters,undefined,task.contract?.costModel),performance.now()-began,true);
         }
       } catch (error) {
-        this.observe(this.taskSampleKey(task.capability,assignment.deviceId,inputs,task.parameters),performance.now()-began,false);
+        if(!options.remoteExecutors?.some(a=>a.candidate.deviceId===assignment.deviceId)) this.observe(this.taskSampleKey(task.capability,assignment.deviceId,inputs,task.parameters,candidates.get(assignment.deviceId),task.contract?.costModel),performance.now()-began,false,undefined,context.calibrationDeviceId?'CALIBRATION':'BUSINESS',(error as Error).message);
         throw error;
       }
       outputs[task.id] = result;
@@ -380,28 +391,20 @@ export class DeviceDispatchService {
       {remoteAllowed:false,cloudExecutors:{[capability]:async()=>execute()}});
   }
 
-  private measuredLinks(graph:TaskGraph,deviceIds:string[]):PlacementLink[] {
-    // Calibration measures full transfer time; do not add the handshake a second time.
-    // Until samples exist, the planner cannot authorize a remote data transfer.
-    const links:PlacementLink[] = [];
-    if (graph.tasks.length !== 1 || graph.inputs.length !== 1) return links;
-    const bytes = graph.inputs[0].data?.byteLength ?? graph.inputs[0].sizeBytes ?? 0;
-    for (const deviceId of deviceIds.filter(id=>id!=='cloud-runtime')) {
-      for (const direction of ['transfer','download']) {
-        const sample = this.samples.get(this.key(deviceId+':'+direction,bytes,graph.tasks[0].parameters ?? {}));
-        if (!sample || sample.count < 3 || Date.now()-sample.observedAt >= 30000) continue;
-        const size = direction === 'transfer' ? bytes : sample.bytes;
-        if (!size) continue;
-        links.push({from:direction==='transfer'?'cloud-runtime':deviceId,to:direction==='transfer'?deviceId:'cloud-runtime',
-          bytesPerSecond:size/Math.max(1,sample.mean)*1000,fixedMs:0,effective:true,source:'REAL',observedAt:sample.observedAt,ttlMs:30000});
-      }
+  private async measuredLinks(_graph:TaskGraph,deviceIds:string[]):Promise<PlacementLink[]> {
+    const links:PlacementLink[]=[];
+    for(const deviceId of deviceIds.filter(id=>id!=='cloud-runtime'))for(const scope of ['upload','download'] as const){
+      const model=this.costStore.link(deviceId,scope,this.profiles.get(deviceId)?.networkId??'unknown');
+      if(model)links.push({from:scope==='upload'?'cloud-runtime':deviceId,to:scope==='upload'?deviceId:'cloud-runtime',
+        ...model,effective:false,source:'REAL'});
     }
     return links;
   }
 
-  private taskSampleKey(capability:string,deviceId:string,inputs:TaskGraph['inputs'],parameters:unknown):string {
+  private taskSampleKey(capability:string,deviceId:string,inputs:TaskGraph['inputs'],parameters:unknown,candidate?:DeviceCandidate,model?:CapabilityCostModel):string {
     const bytes = inputs.reduce((sum,input)=>sum+(input.data?.byteLength ?? input.sizeBytes ?? 0),0);
-    return `task:${capability}:${this.key(deviceId,bytes,parameters ?? {})}`;
+    return costKey(capability,deviceId,bytes,parameters,candidate?.costScope==='coordinator-roundtrip'?'roundtrip':'execution',
+      candidate?.executorVersion??this.profiles.get(deviceId)?.executorVersion??'1',candidate?.networkId??'unknown',model);
   }
 
   private orderTasks(graph:TaskGraph):TaskSpec[] {
@@ -440,7 +443,6 @@ export class DeviceDispatchService {
     const ownerId = RuntimeWorkScope.ownerId() ?? 'system';
 
     // 1. Cloud总是可用(兜底)
-    const cloudSample = this.samples.get(`crop:v1:cloud-runtime:*:*`);
     candidates.push({
       deviceId: 'cloud-runtime',
       deviceType: 'CLOUD',
@@ -454,12 +456,8 @@ export class DeviceDispatchService {
         availableMemoryMB: 2048,
         queueLength: 0
       },
-      history: cloudSample ? {
-        quality: 1,
-        meanMs: cloudSample.mean,
-        stddevMs: cloudSample.deviation,
-        sampleCount: cloudSample.count
-      } : { quality: 1, meanMs: 1000, stddevMs: 200, sampleCount: 0 }
+      contractQuality:1,
+      history: { quality: 1, meanMs: 1000, stddevMs: 200, sampleCount: 0 }
     });
 
     // 2. 查询Worker设备
@@ -492,7 +490,10 @@ export class DeviceDispatchService {
           continue;
         }
 
-        const sample = this.samples.get(this.key(device.deviceId, 0, {}));
+        const executorVersion=descriptor.profile?.executorVersion??descriptor.adapterVersion;
+        const networkId=networkIdentity(descriptor.profile?.networkId);
+        this.profiles.set(device.deviceId,{executorVersion,networkId});
+        const quality=(capability==='image.crop.v1'&&process.env.CROP_QUALITY_POLICY_JSON?await this.qualityEvaluator.approved(device.deviceId,executorVersion):device.qualityVerified)?1:null;
 
         candidates.push({
           deviceId: device.deviceId,
@@ -507,12 +508,8 @@ export class DeviceDispatchService {
             availableMemoryMB: Math.min(descriptor.capacity.memoryBytes / (1024 * 1024),descriptor.profile?.availableMemoryMB??Infinity),
             queueLength: descriptor.profile?.queueLength ?? 0
           },
-          history: sample ? {
-            quality: device.qualityVerified ? 1 : 0.95,
-            meanMs: sample.mean,
-            stddevMs: sample.deviation,
-            sampleCount: sample.count
-          } : device.qualityVerified ? { quality: 1, meanMs: device.cropPriorMs, stddevMs: device.cropPriorMs, sampleCount: 0 } : undefined
+          executorVersion,networkId,contractQuality:quality,
+          history:{quality,meanMs:device.cropPriorMs,stddevMs:device.cropPriorMs,sampleCount:0}
         });
       } catch (error) {
         this.circuits.set(device.deviceId, {
@@ -548,6 +545,11 @@ export class DeviceDispatchService {
     const budget = Math.min(context.budgetMs, macroContext.budgetMs, RuntimeWorkScope.remainingBudget(context.budgetMs));
     if (!Number.isFinite(budget) || budget <= 0) throw new Error('DEADLINE_EXCEEDED');
     const signal = RuntimeWorkScope.signal(Math.ceil(budget));
+    const sourceBytes=source.data?.byteLength??source.sizeBytes??0;
+    const uploadKey=this.key(deviceId+':transfer',sourceBytes,task.parameters??{},task.capability);
+    const downloadKey=this.key(deviceId+':download',sourceBytes,task.parameters??{},task.capability);
+    const executionKey=this.taskSampleKey(task.capability,deviceId,graph.inputs,task.parameters,undefined,task.contract?.costModel);
+    const sourceKind:SampleSource=macroContext.selectedReason==='BACKGROUND_CALIBRATION'?'CALIBRATION':'BUSINESS';
     const began = performance.now();
     let lease: Receipt | undefined;
     let settled = false;
@@ -560,7 +562,7 @@ export class DeviceDispatchService {
         const uploadAt = performance.now();
         input = await this.call<ArtifactRef>(device, ownerId, 'artifacts', bytes, signal, true, source.schemaId);
         if (input.contentHash !== source.contentHash) throw new Error('INPUT_HASH_MISMATCH');
-        this.observe(this.key(deviceId+':transfer',bytes.length,task.parameters ?? {}),performance.now()-uploadAt,true,bytes.length);
+        this.observe(uploadKey,performance.now()-uploadAt,true,bytes.length,sourceKind);
       } else {
         // References without bytes must already belong to this Worker and owner.
         await this.call<Buffer>(device, ownerId, 'artifacts/resolve', input, signal);
@@ -583,14 +585,16 @@ export class DeviceDispatchService {
           settled = true;
           if (receipt.errorCode || receipt.stopRequested || !receipt.output) throw new Error(receipt.errorCode ?? 'WORKER_STOPPED');
           if (receipt.output.inputHash !== input.contentHash) throw new Error('OUTPUT_HASH_MISMATCH');
-          if (!receipt.output.artifact) return receipt.output;
+          if (!receipt.output.artifact) {
+            if(Number.isFinite(receipt.executionMs))this.observe(executionKey,receipt.executionMs!,true,undefined,sourceKind);
+            return receipt.output;
+          }
           const downloadAt = performance.now();
           const buffer = await this.call<Buffer>(device, ownerId, 'artifacts/resolve', receipt.output.artifact, signal);
           if (createHash('sha256').update(buffer).digest('hex') !== receipt.output.artifact.contentHash) throw new Error('OUTPUT_HASH_MISMATCH');
-          const sourceBytes = source.data?.byteLength ?? source.sizeBytes ?? 0;
-          this.observe(this.key(deviceId+':download',sourceBytes,task.parameters ?? {}),performance.now()-downloadAt,true,buffer.length);
+          this.observe(downloadKey,performance.now()-downloadAt,true,buffer.length,sourceKind);
           // Network costs are modeled separately; do not train compute with end-to-end latency.
-          if (receipt.executionMs !== null) this.observe(this.taskSampleKey(task.capability,deviceId,graph.inputs,task.parameters),receipt.executionMs,true);
+          if (Number.isFinite(receipt.executionMs)) this.observe(executionKey,receipt.executionMs!,true,undefined,sourceKind);
           return { ...receipt.output, buffer };
         }
         await new Promise(resolve => setTimeout(resolve, 20));

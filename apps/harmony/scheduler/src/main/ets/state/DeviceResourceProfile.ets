@@ -1,6 +1,8 @@
 import { DeviceState, DeviceStateSource, ThermalLevel } from '../api/SchedulerTypes';
 
 export interface DeviceResourceProfile {
+  networkId?: string;
+  executorVersion?: string;
   resourceValidForMs: number;
   batteryPercent: number | null;
   isCharging: boolean | null;

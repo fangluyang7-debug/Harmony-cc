@@ -1,3 +1,4 @@
+import { RuntimeCostStore, costKey } from '../../src/core/runtime/runtime-cost-store';
 import { PrismaClient } from '@prisma/client';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -22,7 +23,7 @@ describe('persistent device directory',()=>{
     prior=process.env.DIRECTORY_TEST_TOKEN;process.env.DIRECTORY_TEST_TOKEN=token;
     folder=await mkdtemp(path.join(tmpdir(),'harmony-directory-'));
     db=new PrismaClient({datasources:{db:{url:'file:'+path.join(folder,'test.db').replace(/\\/g,'/')}}});
-    for(const name of ['000005_phone_dispatch','000006_phone_dispatch_fence','000007_device_directory']) {
+    for(const name of ['000005_phone_dispatch','000006_phone_dispatch_fence','000007_device_directory','000012_runtime_cost_observations']) {
       const sql=await readFile(path.resolve(__dirname,'../../prisma/migrations',name,'migration.sql'),'utf8');
       for(const statement of sql.split(';').map(s=>s.trim()).filter(Boolean))await db.$executeRawUnsafe(statement);
     }
@@ -30,7 +31,7 @@ describe('persistent device directory',()=>{
     await db.$executeRawUnsafe('ALTER TABLE PhoneDispatchJob ADD COLUMN resultJson TEXT');
     directory=new DeviceDirectoryService(db as unknown as PrismaService);
   });
-  beforeEach(async()=>{await db.runtimeDevice.deleteMany();await db.phoneDispatchJob.deleteMany();await db.phoneDispatchDevice.deleteMany();await db.runtimeCostSample.deleteMany();});
+  beforeEach(async()=>{await db.runtimeDevice.deleteMany();await db.phoneDispatchJob.deleteMany();await db.phoneDispatchDevice.deleteMany();await db.runtimeCostSample.deleteMany();await db.runtimeCostObservation.deleteMany();await db.runtimeCalibrationQuota.deleteMany();});
   afterAll(async()=>{
     await db.$disconnect();
     if(prior===undefined)delete process.env.DIRECTORY_TEST_TOKEN;else process.env.DIRECTORY_TEST_TOKEN=prior;
@@ -70,10 +71,12 @@ describe('persistent device directory',()=>{
     expect(()=>validateResourceProfile({...profile,cpuUsage:NaN})).toThrow('DEVICE_PROFILE_INVALID');
   });
   it('restores measured costs after coordinator restart',async()=>{
-    await db.runtimeCostSample.create({data:{id:'sample',observedAt:new Date(),sampleJson:JSON.stringify({count:3,mean:50,deviation:2,failures:0,observedAt:Date.now()})}});
-    const service=new DeviceDispatchService(undefined,new MacroSchedulerService(),directory,db as unknown as PrismaService);
-    await service.onModuleInit();
-    expect((service as any).samples.get('sample').mean).toBe(50);
+    const store=new RuntimeCostStore(db as unknown as PrismaService);
+    const key=costKey('image.crop.v1','cloud-runtime',10,{});
+    store.record(key,50,true);await store.flush();
+    const restarted=new RuntimeCostStore(db as unknown as PrismaService);
+    await restarted.load();
+    expect((await restarted.get(key))!.mean).toBe(50);
   });
   it('makes phone profiles available to the same macro candidate interface',async()=>{
     await db.phoneDispatchDevice.create({data:{id:'phone_test',ownerUserId:'owner',workerUserId:'worker'}});
@@ -91,7 +94,7 @@ describe('persistent device directory',()=>{
     const previous=names.map(n=>process.env[n]);
     process.env.PHONE_DISPATCH_EXPERIMENT_ENABLED='true';process.env.RUNTIME_DEVICES_JSON='[]';
     process.env.PLACEMENT_POLICY_JSON=JSON.stringify({mode:'ACTIVE',policyVersion:'phone-test',expiresAt:Date.now()+60000,killSwitch:false,
-      allowedDevices:['cloud-runtime','phone_test'],allowedCapabilities:['image.crop.v1'],sampleCount:30,minimumSamples:30,
+      allowedDevices:['cloud-runtime','phone_test'],allowedCapabilities:['image.crop.v1'],sampleCount:30,minimumSamples:3,
       qualityPassed:true,nonInferiorityPassed:true,failureRate:0,maximumFailureRate:0.05,cohortAllowed:true});
     try {
       await db.phoneDispatchDevice.create({data:{id:'phone_test',ownerUserId:'owner',workerUserId:'worker'}});
@@ -100,9 +103,11 @@ describe('persistent device directory',()=>{
       const bytes=await sharp({create:{width:64,height:64,channels:3,background:'red'}}).jpeg().toBuffer();
       const parameters={box:{x:0,y:0,width:1,height:1},paddingRatio:0,targetSize:64,jpegQuality:80};
       const key=(phone as any).phoneSampleKey('phone_test',bytes.length,parameters);
-      await db.runtimeCostSample.create({data:{id:key,sampleJson:JSON.stringify({mean:10,deviation:2,count:3}),observedAt:new Date()}});
+      const costs=new RuntimeCostStore(db as unknown as PrismaService);
+      for(let i=0;i<3;i++)costs.record(key,10,true);await costs.flush();
+      await (phone as any).costStore.load();
       const adapters=await phone.cropAdapters('owner','https://example.test/image',bytes,parameters);
-      const dispatch=new DeviceDispatchService(undefined,new MacroSchedulerService(),directory);
+      const dispatch=new DeviceDispatchService(undefined,new MacroSchedulerService(),directory,db as unknown as PrismaService);
       const cloud=jest.fn(async()=>{throw new Error('EXPECTED_PHONE');});
       const input={artifactId:'input',contentVersion:1,schemaVersion:1,schemaId:'shopping.image',contentHash:createHash('sha256').update(bytes).digest('hex'),data:bytes};
       const work=RuntimeWorkScope.run(new AbortController().signal,{storageReadMs:0,storageWriteMs:0,modelMs:0},()=>dispatch.dispatch(
@@ -118,7 +123,8 @@ describe('persistent device directory',()=>{
       await expect(phone.cropResult('worker','phone_test',job.jobId,job.fence+1,bytes.toString('base64'),input.contentHash,1)).rejects.toThrow('STALE_OR_REVOKED_LEASE');
       await phone.cropResult('worker','phone_test',job.jobId,job.fence,bytes.toString('base64'),input.contentHash,1);
       expect((await work).buffer.equals(bytes)).toBe(true);expect(cloud).not.toHaveBeenCalled();
-      expect(JSON.parse((await db.runtimeCostSample.findUniqueOrThrow({where:{id:key}})).sampleJson).count).toBe(4);
+      await costs.refresh();
+      expect((await costs.get(key))!.count).toBe(4);
       expect((await db.phoneDispatchJob.findUniqueOrThrow({where:{id:job.jobId}})).resultJson).toBeNull();
     }finally{names.forEach((name,i)=>{if(previous[i]===undefined)delete process.env[name];else process.env[name]=previous[i];});}
   });

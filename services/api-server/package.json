@@ -9,6 +9,7 @@
     "start:dev": "node ../../scripts/with-root-env.mjs nest start --watch",
     "db:init": "node ../../scripts/with-root-env.mjs prisma db execute --file prisma/migrations/000001_init/migration.sql --schema prisma/schema.prisma && node ../../scripts/with-root-env.mjs node prisma/patch-sqlite-schema.mjs",
     "prisma:generate": "prisma generate",
+    "calibration:quality": "node ../../scripts/with-root-env.mjs ts-node scripts/calibrate-crop-quality.ts",
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "test": "npm run test:unit",

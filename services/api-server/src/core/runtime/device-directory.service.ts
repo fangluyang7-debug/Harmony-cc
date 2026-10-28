@@ -7,6 +7,9 @@ export interface WorkerConnection {
   qualityVerified: boolean; cropPriorMs: number;
 }
 export interface ResourceProfile {
+  // Opaque bearer/subnet epoch digest; no SSID, address or raw subnet is stored.
+  networkId?: string;
+  executorVersion?: string;
   resourceValidForMs?:number;
   batteryPercent?:number|null;
   isCharging?:boolean|null;
@@ -26,6 +29,8 @@ export function validateResourceProfile(value: unknown): ResourceProfile {
   const p = value as ResourceProfile;
   const nonnegative = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
   if (!p || p.version !== 1 || p.source !== 'REAL' ||
+      (p.networkId!==undefined&&(typeof p.networkId!=='string'||!/^[a-zA-Z0-9_.:-]{1,128}$/.test(p.networkId))) ||
+      (p.executorVersion!==undefined&&(typeof p.executorVersion!=='string'||!/^[a-zA-Z0-9_.:-]{1,128}$/.test(p.executorVersion))) ||
       (p.resourceValidForMs!==undefined&&(!Number.isSafeInteger(p.resourceValidForMs)||p.resourceValidForMs<0||p.resourceValidForMs>3000)) ||
       (p.batteryPercent!==undefined&&p.batteryPercent!==null&&(!nonnegative(p.batteryPercent)||p.batteryPercent>100)) ||
       (p.isCharging!==undefined&&p.isCharging!==null&&typeof p.isCharging!=='boolean') ||
@@ -42,6 +47,7 @@ export function validateResourceProfile(value: unknown): ResourceProfile {
     throw new BadRequestException('DEVICE_PROFILE_INVALID');
   }
   return {version:1,source:'REAL',capabilities:[...new Set(p.capabilities)],availableBackends:[...new Set(p.availableBackends)],
+    networkId:p.networkId,executorVersion:p.executorVersion,
     resourceValidForMs:p.resourceValidForMs??3000,batteryPercent:p.batteryPercent??null,isCharging:p.isCharging??null,
     availableSlots:p.availableSlots,availableMemoryMB:p.availableMemoryMB,cpuUsage:p.cpuUsage,
     cpuCores:p.cpuCores,thermalLevel:p.thermalLevel,queueLength:p.queueLength};

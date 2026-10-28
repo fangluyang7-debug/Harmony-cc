@@ -23,6 +23,46 @@ model RuntimeCostSample {
   observedAt   DateTime
 }
 
+model RuntimeCostObservation {
+  id              String @id
+  sampleKey       String
+  capability      String
+  deviceId        String
+  scope           String
+  sizeBucket      Int
+  configuration   String
+  executorVersion String
+  networkId       String
+  durationMs      Float
+  success         Boolean
+  source          String
+  errorClass      String?
+  bytes           Int?
+  observedAt      DateTime
+  @@index([sampleKey, observedAt])
+  @@index([capability, deviceId, scope, executorVersion, observedAt])
+  @@index([observedAt])
+}
+
+model RuntimeCalibrationQuota {
+  id       String @id
+  ownerId  String
+  deviceId String
+  day      String
+  attempts Int @default(0)
+}
+
+model RuntimeQualityEvidence {
+  id              String @id
+  deviceId        String
+  executorVersion String
+  policyHash      String
+  passed          Boolean
+  resultsJson     String
+  observedAt      DateTime
+  @@index([deviceId, executorVersion, policyHash, observedAt])
+}
+
 model ImageAsset {
   ownerUserId               String?
   id                        String         @id

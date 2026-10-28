@@ -137,7 +137,7 @@ export class WorkflowPlacementPlanner {
   }
 }
 
-export interface PlacementRollout { maximumRecoveryAttempts?:number; mode:'OBSERVE'|'SHADOW'|'CANARY'|'ACTIVE';policyVersion:string;expiresAt:number;killSwitch:boolean;
+export interface PlacementRollout { canaryRate?:number;canaryMinimumSamples?:number;canaryMaximumFailureRate?:number; maximumRecoveryAttempts?:number; mode:'OBSERVE'|'SHADOW'|'CANARY'|'ACTIVE';policyVersion:string;expiresAt:number;killSwitch:boolean;
   allowedDevices:string[];allowedCapabilities:string[];sampleCount:number;minimumSamples:number;qualityPassed:boolean;nonInferiorityPassed:boolean;failureRate:number;maximumFailureRate:number;cohortAllowed:boolean; }
 export function authorizePlacement(decision:WorkflowPlacementDecision,config:PlacementRollout,capability:string,now:number):PlannerAssignment[]|null {
   const baseline=decision.baseline;

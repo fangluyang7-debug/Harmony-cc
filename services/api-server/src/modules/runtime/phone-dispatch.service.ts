@@ -1,3 +1,6 @@
+import { IMAGE_CROP_CONTRACT } from '../sessions/domain/image-crop-contract';
+import { RuntimeCostStore, costKey, networkIdentity } from '../../core/runtime/runtime-cost-store';
+import { CropQualityEvaluator } from '../../core/runtime/crop-quality-evaluator';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException, Optional } from '@nestjs/common';
 import { DeviceDirectoryService } from '../../core/runtime/device-directory.service';
 import { DispatchOptions } from '../../core/runtime/device-dispatch.service';
@@ -29,7 +32,11 @@ function fixture(): number[][] {
 
 @Injectable()
 export class PhoneDispatchService {
-  constructor(private readonly prisma: PrismaService,@Optional() private readonly directory?:DeviceDirectoryService) {}
+  constructor(private readonly prisma: PrismaService,@Optional() private readonly directory?:DeviceDirectoryService,
+    @Optional() sharedCostStore?:RuntimeCostStore) {this.costStore=sharedCostStore??RuntimeCostStore.shared(this.prisma);}
+
+  private readonly costStore:RuntimeCostStore;
+  private readonly qualityEvaluator = new CropQualityEvaluator(this.prisma);
 
   async reportProfile(workerUserId:string,deviceId:string,profile:unknown) {
     this.enabled();
@@ -48,31 +55,59 @@ export class PhoneDispatchService {
           ['HOT','CRITICAL','UNKNOWN'].includes(p.thermalLevel) || p.cpuUsage===null || p.cpuUsage>90) continue;
       const active=await this.prisma.phoneDispatchJob.count({where:{deviceId:device.deviceId,state:{in:['PENDING','LEASED','STOP_REQUESTED']}}});
       if(active)continue;
-      const key=this.phoneSampleKey(device.deviceId,imageBytes.length,parameters);
-      const sample=await this.prisma.runtimeCostSample.findUnique({where:{id:key}});
-      const measured=sample&&Date.now()-sample.observedAt.getTime()<300000?JSON.parse(sample.sampleJson):null;
+      const executorVersion=p.executorVersion??'1',networkId=networkIdentity(p.networkId);
+      const key=this.phoneSampleKey(device.deviceId,imageBytes.length,parameters,executorVersion,networkId);
+      const measured=await this.costStore.get(key);
       const rollout=JSON.parse(process.env.PLACEMENT_POLICY_JSON??'{}');
-      const qualityApproved=rollout.qualityPassed===true&&Array.isArray(rollout.allowedDevices)&&rollout.allowedDevices.includes(device.deviceId);
+      const qualityApproved=process.env.CROP_QUALITY_POLICY_JSON?await this.qualityEvaluator.approved(device.deviceId,executorVersion):
+        (rollout.qualityPassed===true&&Array.isArray(rollout.allowedDevices)&&rollout.allowedDevices.includes(device.deviceId));
       // Unknown devices remain on a conservative declared roundtrip prior, never on fabricated links.
       // Rollout quality/allowlist gates still have the final authority to activate them.
       result.push({candidate:{deviceId:device.deviceId,deviceType:'PHONE',executorId:'harmony-har',
-        capabilities:['image.crop.v1'],trusted:true,observedAt:device.observedAt,ttlMs:p.resourceValidForMs??3000,costScope:'coordinator-roundtrip',
+        executorVersion,networkId,contractQuality:qualityApproved?1:null,capabilities:['image.crop.v1'],trusted:true,observedAt:device.observedAt,ttlMs:p.resourceValidForMs??3000,costScope:'coordinator-roundtrip',
         resourceSnapshot:{availableSlots:p.availableSlots,availableMemoryMB:p.availableMemoryMB,queueLength:p.queueLength},
-        history:qualityApproved?{quality:1,meanMs:measured?.mean??25000,stddevMs:measured?.deviation??5000,sampleCount:measured?.count??0}:undefined},
+        history:{quality:qualityApproved?1:null,meanMs:measured?.count?measured.mean:25000,stddevMs:measured?.count?Math.max(2*measured.deviation,measured.mean*.15):5000,sampleCount:measured?.count??0}},
         execute:async request=>{
           const start=performance.now();
-          const value=await this.cropForShopping(ownerUserId,imageUrl,imageBytes,parameters,request.signal,device.deviceId,request.macroContext);
-          if(!value)throw new Error('PHONE_ADMISSION_REJECTED');
-          const elapsed=performance.now()-start;
-          const next={mean:measured?measured.mean*.75+elapsed*.25:elapsed,deviation:measured?Math.abs(elapsed-measured.mean):elapsed*.2,count:(measured?.count??0)+1};
-          await this.prisma.runtimeCostSample.upsert({where:{id:key},create:{id:key,sampleJson:JSON.stringify(next),observedAt:new Date()},update:{sampleJson:JSON.stringify(next),observedAt:new Date()}});
-          return value.result;
+          const source=request.macroContext.selectedReason==='BACKGROUND_CALIBRATION'?'CALIBRATION':'BUSINESS';
+          try {
+            const value=await this.cropForShopping(ownerUserId,imageUrl,imageBytes,parameters,request.signal,device.deviceId,request.macroContext);
+            if(!value)throw new Error('PHONE_ADMISSION_REJECTED');
+            this.costStore.record(key,performance.now()-start,true,undefined,source);
+            return value.result;
+          } catch(error) {
+            this.costStore.record(key,performance.now()-start,false,undefined,source,(error as Error).message);
+            throw error;
+          } finally { await this.costStore.flush(); }
+
         }});
     }
     return result;
   }
-  private phoneSampleKey(deviceId:string,bytes:number,parameters:unknown):string {
-    return 'phone:'+deviceId+':'+Math.floor(Math.log2(Math.max(1,bytes)))+':'+hash(JSON.stringify(parameters));
+  private phoneSampleKey(deviceId:string,bytes:number,parameters:unknown,executorVersion='1',networkId='unknown'):string {
+    return costKey('image.crop.v1',deviceId,bytes,parameters,'roundtrip',executorVersion,networkId,IMAGE_CROP_CONTRACT.costModel);
+  }
+
+  // Maintenance-only fixed-fixture calibration; it does not require prior quality evidence.
+  // Pairing, ownership, resource admission and result verification still apply.
+  async calibrateCrop(ownerUserId:string,deviceId:string,imageUrl:string,imageBytes:Buffer,
+    parameters:Parameters<PhoneDispatchService['cropForShopping']>[3],signal:AbortSignal,expectedExecutorVersion:string):Promise<Buffer> {
+    const device=(await this.directory?.phones(ownerUserId))?.find(d=>d.deviceId===deviceId);
+    if(!device)throw new Error('DEVICE_NOT_REGISTERED');
+    if((device.profile.executorVersion??'1')!==expectedExecutorVersion)throw new Error('CALIBRATION_EXECUTOR_VERSION_MISMATCH');
+    await this.costStore.consumeCalibration(ownerUserId,deviceId);
+    const key=this.phoneSampleKey(deviceId,imageBytes.length,parameters,expectedExecutorVersion,networkIdentity(device.profile.networkId));
+    const began=performance.now();
+    try {
+      const value=await this.cropForShopping(ownerUserId,imageUrl,imageBytes,parameters,signal,deviceId,
+        {baselineDevice:'cloud-runtime',selectedReason:'EXPLICIT_CALIBRATION',urgency:false,budgetMs:CROP_WAIT_MS});
+      if(!value)throw new Error('PHONE_ADMISSION_REJECTED');
+      this.costStore.record(key,performance.now()-began,true,undefined,'CALIBRATION');
+      return value.result.buffer;
+    }catch(error){
+      this.costStore.record(key,performance.now()-began,false,undefined,'CALIBRATION',(error as Error).message);
+      throw error;
+    }finally{await this.costStore.flush();}
   }
 
   private enabled(): void {

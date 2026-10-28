@@ -31,6 +31,8 @@ describe('full workflow placement and dispatch',()=>{
       deviceId:'worker-a',mode:'OPTIMIZED',reason:'TEST',estimatedMs:30,baseline:{estimatedMs:300},
       macroContext:{baselineDevice:'cloud-runtime',selectedReason:'TEST',urgency:false,budgetMs:5000}}))};
     const service=new DeviceDispatchService(undefined,macro as unknown as MacroSchedulerService);
+    for(const [cap,id] of [['prepare','worker-a'],['transform','worker-b']]) for(let i=0;i<30;i++)
+      (service as any).observe((service as any).taskSampleKey(cap,id,[],{}),10,true);
     const query=jest.spyOn(service as any,'queryCandidates').mockResolvedValue([]);
     const cloud=jest.fn(async (request:any)=>({buffer:Buffer.from(request.inputs[0].data.toString()+'C')}));
     const remote=jest.spyOn(service as any,'executeOnWorker').mockImplementation(async (...args:any[])=>{

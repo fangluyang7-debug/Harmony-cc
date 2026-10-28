@@ -43,7 +43,10 @@ export interface ModelCompatibility {
   preprocessVersion: string;
   indexSpaceId: string;
 }
+export interface CostParameterRule { name: string; bucketWidth?: number; }
+export interface CapabilityCostModel { version: string; parameters: CostParameterRule[]; }
 export interface TaskContractV1 {
+  costModel?: CapabilityCostModel;
   protocolVersion: 1;
   contractId: string;
   version: number;

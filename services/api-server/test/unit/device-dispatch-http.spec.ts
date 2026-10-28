@@ -1,3 +1,4 @@
+import { IMAGE_CROP_CONTRACT } from '../../src/modules/sessions/domain/image-crop-contract';
 import { spawn, ChildProcess } from 'node:child_process';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { PrismaClient } from '@prisma/client';
@@ -10,15 +11,25 @@ import sharp = require('sharp');
 import { DeviceDispatchService } from '../../src/core/runtime/device-dispatch.service';
 import { MacroSchedulerService, TaskGraph } from '../../src/core/runtime/macro-scheduler.service';
 import { RuntimeWorkScope } from '../../src/core/runtime/runtime-work-scope';
+import { WorkflowPlacementPlanner, PlacementRequest } from '../../src/core/runtime/workflow-placement-planner';
+import { CropQualityEvaluator, cropFixtureHash } from '../../src/core/runtime/crop-quality-evaluator';
+import { StandardQueryImageContentAdapterService } from '../../src/modules/sessions/application/standard-query-image-content-adapter.service';
 
 it('runs a calibrated HTTP Worker DAG and returns its artifacts to a cloud capability',async()=>{
   const directory=await mkdtemp(path.join(tmpdir(),'harmony-dispatch-test-'));
   const token=randomBytes(32).toString('hex');
-  const names=['RUNTIME_DEVICES_JSON','DISPATCH_TEST_TOKEN','PLACEMENT_POLICY_JSON'] as const;
+  const names=['RUNTIME_DEVICES_JSON','DISPATCH_TEST_TOKEN','PLACEMENT_POLICY_JSON','CROP_QUALITY_POLICY_JSON'] as const;
   const previous=names.map(name=>process.env[name]);
   let child:ChildProcess|undefined;
   let database:PrismaClient|undefined;
   try {
+    // Exercise HTTP placement and artifact flow without depending on host CPU scheduling.
+    // Planner deadline fallback is covered separately by the planner's controlled-clock tests.
+    const plan=WorkflowPlacementPlanner.prototype.plan;
+    jest.spyOn(WorkflowPlacementPlanner.prototype,'plan').mockImplementation(function(this:WorkflowPlacementPlanner, request:PlacementRequest) {
+      const planner=new WorkflowPlacementPlanner({...((this as any).limits),planningBudgetMs:1000});
+      return plan.call(planner,request);
+    });
     child=spawn(process.execPath,[path.resolve(__dirname,'../../../device-worker/server.mjs')],{
       env:{...process.env,WORKER_TOKEN:token,WORKER_DEVICE_ID:'worker-test',WORKER_PORT:'0',WORKER_DATA_DIR:directory},
       stdio:['ignore','pipe','pipe'],windowsHide:true});
@@ -38,27 +49,40 @@ it('runs a calibrated HTTP Worker DAG and returns its artifacts to a cloud capab
     database=new PrismaClient({datasources:{db:{url:'file:'+path.join(directory,'directory.db').replace(/\\/g,'/')}}});
     const migration=await readFile(path.resolve(__dirname,'../../prisma/migrations/000007_device_directory/migration.sql'),'utf8');
     for(const statement of migration.split(';').map(s=>s.trim()).filter(Boolean))await database.$executeRawUnsafe(statement);
+    const costMigration=await readFile(path.resolve(__dirname,'../../prisma/migrations/000012_runtime_cost_observations/migration.sql'),'utf8');
+    for(const statement of costMigration.split(';').map(s=>s.trim()).filter(Boolean))await database.$executeRawUnsafe(statement);
     const registry=new DeviceDirectoryService(database as unknown as PrismaService);
     await registry.registerWorker({deviceId:'worker-test',endpoint:`http://127.0.0.1:${port}`,
-      tokenEnv:'DISPATCH_TEST_TOKEN',enabled:true,qualityVerified:true,cropPriorMs:1});
+      tokenEnv:'DISPATCH_TEST_TOKEN',enabled:true,qualityVerified:false,cropPriorMs:1});
     const description=await fetch(`http://127.0.0.1:${port}/v1/descriptor`,{headers:{Authorization:'Bearer '+token,'x-owner-id':'owner'}}).then(r=>r.json()) as any;
     await registry.heartbeatWorker('worker-test','Bearer '+token,description.profile);
     process.env.PLACEMENT_POLICY_JSON=JSON.stringify({mode:'ACTIVE',policyVersion:'http-test',expiresAt:Date.now()+60000,killSwitch:false,
-      allowedDevices:['worker-test','cloud-runtime'],allowedCapabilities:['image.crop.v1','inspect'],sampleCount:30,minimumSamples:30,
-      qualityPassed:true,nonInferiorityPassed:true,failureRate:0,maximumFailureRate:0.05,cohortAllowed:true});
+      allowedDevices:['worker-test','cloud-runtime'],allowedCapabilities:['image.crop.v1','inspect'],sampleCount:30,minimumSamples:3,
+      qualityPassed:false,nonInferiorityPassed:true,failureRate:0,maximumFailureRate:0.05,cohortAllowed:true});
     const service=new DeviceDispatchService(undefined,new MacroSchedulerService(),registry,database as unknown as PrismaService);
     const call=jest.spyOn(service as any,'call');
     const bytes=await sharp({create:{width:64,height:64,channels:3,background:{r:90,g:120,b:30}}}).png().toBuffer();
     const parameters={box:{x:0,y:0,width:1,height:1},paddingRatio:0,targetSize:48,jpegQuality:90};
-    for(let i=0;i<3;i++)await service.calibrate('worker-test','owner',bytes,parameters,AbortSignal.timeout(5000));
+    const fixtures=Array.from({length:3},(_,i)=>({id:'crop-'+i,input:bytes,parameters:{...parameters,
+      box:{x:i*.1,y:0,width:1-i*.1,height:1}}}));
+    process.env.CROP_QUALITY_POLICY_JSON=JSON.stringify({evaluationId:'worker-http-test',fixtureSetHash:cropFixtureHash(fixtures),
+      minimumPsnrDb:30,minimumCases:3,validForMs:86400000});
+    const evaluator=new CropQualityEvaluator(database as unknown as PrismaService);
+    expect(await evaluator.approved('worker-test','1')).toBe(false);
+    const reference=new StandardQueryImageContentAdapterService();
+    const quality=await evaluator.evaluate('worker-test','1',fixtures,
+      async fixture=>(await reference.cropBuffer(fixture.input,{signedUrl:'',...fixture.parameters as typeof parameters})).buffer,
+      async fixture=>(await service.calibrate('worker-test','owner',fixture.input,fixture.parameters as typeof parameters,AbortSignal.timeout(5000),'1')).buffer,'owner');
+    expect(quality.passed).toBe(true);
+    expect(await evaluator.approved('worker-test','1')).toBe(true);
     const input={artifactId:'image',contentHash:createHash('sha256').update(bytes).digest('hex'),contentVersion:1,
       schemaId:'shopping.image',schemaVersion:1,data:bytes,sizeBytes:bytes.length};
-    const crop={id:'crop',capability:'image.crop.v1',dependencies:[],inputs:['image'],memoryMB:128,outputBytes:10000,minQuality:1,parameters};
+    const crop={contract:IMAGE_CROP_CONTRACT,id:'crop',capability:'image.crop.v1',dependencies:[],inputs:['image'],memoryMB:128,outputBytes:10000,minQuality:1,parameters};
     const graph:TaskGraph={capability:'image.processing.pipeline',inputs:[input],tasks:[crop,
       {...crop,id:'recrop',dependencies:['crop'],inputs:['crop-output']},
       {id:'inspect',capability:'inspect',dependencies:['recrop'],inputs:['recrop-output'],memoryMB:32,outputBytes:0,minQuality:1}]};
     // Only use measured calibration observations. Never invent network throughput for this test.
-    const links=(service as any).measuredLinks({...graph,tasks:[crop]},['worker-test']);
+    const links=await (service as any).measuredLinks({...graph,tasks:[crop]},['worker-test']);
     expect(links).toHaveLength(2);
     const cloudCrop=jest.fn(async()=>{throw new Error('EXPECTED_WORKER_PLACEMENT');});
     const inspect=jest.fn(async(request:any)=>{
@@ -80,7 +104,7 @@ it('runs a calibrated HTTP Worker DAG and returns its artifacts to a cloud capab
     expect(executions[4].input.contentHash).toBe(result.outputs.crop.artifact.contentHash);
     const descriptor=await fetch(`http://127.0.0.1:${port}/v1/descriptor`,{headers:{Authorization:'Bearer '+token,'x-owner-id':'owner'}}).then(r=>r.json());
     expect((descriptor as any).capacity.slots).toBe(1);
-    expect(await database.runtimeCostSample.count()).toBeGreaterThan(0);
+    expect(await database.runtimeCostObservation.count()).toBeGreaterThan(0);
   } finally {
     names.forEach((name,i)=>{if(previous[i]===undefined)delete process.env[name];else process.env[name]=previous[i];});
     if(child && child.exitCode===null && child.signalCode===null){

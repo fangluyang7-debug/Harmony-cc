@@ -86,3 +86,4 @@ export { ArtifactRef, ArtifactManifest, ArtifactLocation, TaskContractV1, TaskIn
 
 export { ClockPort, WallClock } from './src/main/ets/api/ClockPort';
 export { DeviceResourceProfile, deviceResourceProfile } from './src/main/ets/state/DeviceResourceProfile';
+export { sampleNetworkIdentity } from './src/main/ets/network/NetworkIdentity';

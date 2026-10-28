@@ -3,7 +3,7 @@ import { image } from '@kit.ImageKit';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import util from '@ohos.util';
 import { CloudApiConfig } from '../services/CloudApiConfig';
-import { SchedulerService, deviceResourceProfile } from 'scheduler';
+import { SchedulerService, deviceResourceProfile, sampleNetworkIdentity } from 'scheduler';
 import { RemoteTaskAdmission, MacroTaskContext } from '../services/RemoteTaskAdmission';
 
 interface Reply<T> { success: boolean; data?: T; }
@@ -174,8 +174,12 @@ struct CloudPhoneDispatchPage {
       const scheduler = SchedulerService.getInstance();
       if (!scheduler.isInitialized()) { throw new Error('SCHEDULER_NOT_READY'); }
       if (this.admission === null) { this.admission = new RemoteTaskAdmission(scheduler); }
-      await this.call<Object>(http.RequestMethod.POST,root+'/profile',JSON.stringify(deviceResourceProfile(
-        scheduler.getDeviceState(),['image.crop.v1'],Math.max(0,1-scheduler.getMetricsSnapshot().runningCount))));
+      const networkId = await sampleNetworkIdentity();
+      const profile = deviceResourceProfile(scheduler.getDeviceState(),['image.crop.v1'],
+        Math.max(0,1-scheduler.getMetricsSnapshot().runningCount));
+      profile.networkId = networkId;
+      profile.executorVersion = '1';
+      await this.call<Object>(http.RequestMethod.POST,root+'/profile',JSON.stringify(profile));
       const lease = await this.call<Lease>(http.RequestMethod.POST, root + '/lease');
       if (lease.stopJobId !== null) {
         await this.call<Job>(http.RequestMethod.POST, root + '/jobs/' + encodeURIComponent(lease.stopJobId) + '/stop-ack',
