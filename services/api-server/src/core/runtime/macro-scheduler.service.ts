@@ -9,7 +9,7 @@ import { ArtifactRef, TaskContractV1, ModelCompatibility } from './scheduling-pr
 export interface TaskGraph {
   workflowId?: string;
   capability: string; // 主capability (用于日志)
-  inputs: Array<ArtifactRef & { data?: Uint8Array; sizeBytes?: number }>;
+  inputs: Array<ArtifactRef & { data?: Uint8Array; sizeBytes?: number; replicas?:Array<{deviceId:string;readMs:number|null}> }>;
   tasks: TaskSpec[];
 }
 
@@ -31,6 +31,9 @@ export interface TaskSpec {
  * 设备候选 - 动态查询结果
  */
 export interface DeviceCandidate {
+  capabilityQuality?: Record<string,number|null>;
+  connectionMode?: 'LOCAL'|'HTTP_LEASE'|'POLL_RELAY';
+  coordinationMs?: number;
   contractQuality?: number | null;
   executorVersion?: string;
   networkId?: string;
@@ -253,12 +256,12 @@ export class MacroSchedulerService {
       availableMemoryBytes: device.resourceSnapshot.availableMemoryMB * 1024 * 1024,
       
       // 性能预估 (来自历史样本)
-      quality: device.contractQuality !== undefined ? device.contractQuality : history?.quality ?? null,
+      quality: device.capabilityQuality ? device.capabilityQuality[task.capability]??null : device.contractQuality !== undefined ? device.contractQuality : history?.quality ?? null,
       computeMs: history?.meanMs ?? this.coldStartEstimate(device, task),
       queueMs: device.resourceSnapshot.queueLength * 100, // 简化估算: 每个排队任务100ms
       coldMs: history ? 0 : 50,
       uncertaintyMs: history?.stddevMs ?? (history?.meanMs ?? task.estimatedMs ?? 1000) * 0.2,
-      publishMs: 0
+      publishMs: device.coordinationMs??0
     };
   }
   
@@ -307,15 +310,11 @@ export class MacroSchedulerService {
    * 定位数据副本
    */
   private locateArtifacts(artifacts: TaskGraph['inputs']): PlacementArtifact[] {
-    // TODO: 实际应查询ArtifactStore
-    // 这里简化: 假设所有数据都在云端
+    // Trusted adapters supply actual replicas; legacy callers default to coordinator storage.
     return artifacts.map(a => ({
       id: a.artifactId,
       bytes: a.data?.byteLength ?? a.sizeBytes ?? 0,
-      replicas: [{
-        deviceId: 'cloud-runtime',
-        readMs: 0
-      }]
+      replicas: a.replicas??[{deviceId:'cloud-runtime',readMs:0}]
     }));
   }
   

@@ -1,3 +1,4 @@
+import { ImageCropResult } from '../../../core/capabilities/image-crop-result';
 import { NormalizedSubjectBox } from './query-image-preprocess-adapter.interface';
 
 export const QUERY_IMAGE_CONTENT_ADAPTER = Symbol('QUERY_IMAGE_CONTENT_ADAPTER');
@@ -8,21 +9,7 @@ export interface QueryImageMetadata {
   format?: string | null;
 }
 
-export interface QueryImageCropResult {
-  buffer: Buffer;
-  metadata: {
-    width: number;
-    height: number;
-    format: string | null;
-  };
-  cropRegionPx: {
-    left: number;
-    top: number;
-    width: number;
-    height: number;
-  };
-  strategy: string;
-}
+export type QueryImageCropResult = ImageCropResult;
 
 export interface QueryImageContentAdapter {
   readMetadata(signedUrl: string, expectedHash?: string): Promise<QueryImageMetadata>;

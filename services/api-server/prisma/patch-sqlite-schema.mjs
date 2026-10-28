@@ -4,6 +4,8 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 try {
+  const approvalMigration = await readFile(new URL('./migrations/000013_capability_approval/migration.sql', import.meta.url), 'utf8');
+  for (const statement of approvalMigration.split(';').map(value => value.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(statement);
   const costMigration = await readFile(new URL('./migrations/000012_runtime_cost_observations/migration.sql', import.meta.url), 'utf8');
   for (const statement of costMigration.split(';').map(value => value.trim()).filter(Boolean)) await prisma.$executeRawUnsafe(statement);
   const directoryMigration = await readFile(new URL('./migrations/000007_device_directory/migration.sql', import.meta.url), 'utf8');

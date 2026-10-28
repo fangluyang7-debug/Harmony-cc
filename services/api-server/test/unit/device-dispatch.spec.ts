@@ -48,6 +48,7 @@ describe('macro Worker dispatch', () => {
       qualityPassed:true,nonInferiorityPassed:true,failureRate:0,maximumFailureRate:0.05,cohortAllowed:true});
     process.env.RUNTIME_DEVICES_JSON = JSON.stringify([{deviceId:'pc',endpoint:'http://127.0.0.1:1',tokenEnv:'TEST_TOKEN',enabled:true,qualityVerified:true,cropPriorMs:1}]);
     service = new DeviceDispatchService(undefined, {schedule:jest.fn().mockResolvedValue({deviceId:'pc',macroContext,mode:'OPTIMIZED',reason:'TEST',estimatedMs:10,baseline:{estimatedMs:100},assignments:[{nodeId:'crop',deviceId:'pc',executorId:'cpu-worker'}],baselineAssignments:[{nodeId:'crop',deviceId:'cloud-runtime',executorId:'cloud'}]})} as unknown as MacroSchedulerService);
+    jest.spyOn((service as any).qualityRegistry,'approved').mockImplementation(async (...args:any[])=>args[0]==='image.crop.v1'&&args[1]==='pc'&&args[2]==='1');
     for(let i=0;i<30;i++) (service as any).observe((service as any).taskSampleKey('image.crop.v1','pc',graph.inputs,graph.tasks[0].parameters),1,true);
     jest.spyOn(service as any,'queryCandidates').mockResolvedValue([]);
     call = jest.spyOn(service as any,'call').mockImplementation(async (...args: any[]) => {

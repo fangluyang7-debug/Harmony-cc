@@ -3,6 +3,8 @@ import { Backend, CancellationSignal, DuplicatePolicy, ExecutionPlan, ExecutorRe
   WorkloadExecutor, WorkflowHandle } from 'scheduler';
 
 export interface MacroTaskContext { baselineDevice: string; selectedReason: string; urgency: boolean; budgetMs: number; }
+export const REMOTE_CROP_EXECUTOR_VERSION: string = 'imagekit-crop-v2';
+
 interface Operation { run: () => Promise<string>; }
 
 class RemoteOperationExecutor implements WorkloadExecutor<Operation, string> {
@@ -22,13 +24,14 @@ class RemoteOperationExecutor implements WorkloadExecutor<Operation, string> {
 }
 
 export class RemoteTaskAdmission {
+  readonly executorVersion: string = REMOTE_CROP_EXECUTOR_VERSION;
   private readonly client: SchedulerClient;
   constructor(runtime: SchedulerRuntime) {
     this.client = new SchedulerClient(runtime);
     const template: TaskTemplate = {capability:'image.crop.v1',taskType:TaskType.USER_INITIATED,
       inferenceLocation:InferenceLocation.LOCAL_DEVICE,privacyPolicy:PrivacyPolicy.REMOTE_ALLOWED,
       interruptibility:Interruptibility.NON_INTERRUPTIBLE,duplicatePolicy:DuplicatePolicy.KEEP_ALL,timeoutMs:25000,
-      resourceHints:{modelVersion:'imagekit-crop-v1',expectedMemoryMb:128},
+      resourceHints:{modelVersion:REMOTE_CROP_EXECUTOR_VERSION,expectedMemoryMb:128},
       qualityLevels:[{id:'imagekit',modelTier:ModelTier.HIGH_ACCURACY,estimatedLatencyMs:1000,estimatedMemoryMb:128,
         relativeEnergyCost:1,supportedBackends:[Backend.CPU],supportedThreadCounts:[1]}]};
     this.client.registerTemplate(template);

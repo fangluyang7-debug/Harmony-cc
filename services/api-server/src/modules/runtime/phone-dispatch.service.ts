@@ -1,6 +1,7 @@
-import { IMAGE_CROP_CONTRACT } from '../sessions/domain/image-crop-contract';
-import { RuntimeCostStore, costKey, networkIdentity } from '../../core/runtime/runtime-cost-store';
-import { CropQualityEvaluator } from '../../core/runtime/crop-quality-evaluator';
+import { IMAGE_CROP_CONTRACT } from '../../core/capabilities/image-crop-contract';
+import { RuntimeCostStore, costKey, networkIdentity, canonical } from '../../core/runtime/runtime-cost-store';
+import { CapabilityQualityRegistry } from '../../core/runtime/capability-quality-registry';
+import { createCapabilityQualityRegistry } from '../../core/capabilities/quality-registry';
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException, ServiceUnavailableException, Optional } from '@nestjs/common';
 import { DeviceDirectoryService } from '../../core/runtime/device-directory.service';
 import { DispatchOptions } from '../../core/runtime/device-dispatch.service';
@@ -15,7 +16,10 @@ const hash = (value: string): string => createHash('sha256').update(value).diges
 const LEASE_MS = 60_000;
 const CROP_WAIT_MS = 25_000;
 
+export interface TerminalTiming {version:1;executorVersion:string;executionMs:number;inputTransferMs:number;networkId?:string;}
+
 export interface CropInput {
+  executorVersion?:string;
   macroContext?: SchedulingDecision['macroContext'];
   imageUrl: string;
   inputHash: string;
@@ -33,10 +37,10 @@ function fixture(): number[][] {
 @Injectable()
 export class PhoneDispatchService {
   constructor(private readonly prisma: PrismaService,@Optional() private readonly directory?:DeviceDirectoryService,
-    @Optional() sharedCostStore?:RuntimeCostStore) {this.costStore=sharedCostStore??RuntimeCostStore.shared(this.prisma);}
+    @Optional() sharedCostStore?:RuntimeCostStore,@Optional() qualityRegistry?:CapabilityQualityRegistry) {this.costStore=sharedCostStore??RuntimeCostStore.shared(this.prisma);this.qualityRegistry=qualityRegistry??createCapabilityQualityRegistry(this.prisma);}
 
   private readonly costStore:RuntimeCostStore;
-  private readonly qualityEvaluator = new CropQualityEvaluator(this.prisma);
+  private readonly qualityRegistry:CapabilityQualityRegistry;
 
   async reportProfile(workerUserId:string,deviceId:string,profile:unknown) {
     this.enabled();
@@ -58,34 +62,60 @@ export class PhoneDispatchService {
       const executorVersion=p.executorVersion??'1',networkId=networkIdentity(p.networkId);
       const key=this.phoneSampleKey(device.deviceId,imageBytes.length,parameters,executorVersion,networkId);
       const measured=await this.costStore.get(key);
-      const rollout=JSON.parse(process.env.PLACEMENT_POLICY_JSON??'{}');
-      const qualityApproved=process.env.CROP_QUALITY_POLICY_JSON?await this.qualityEvaluator.approved(device.deviceId,executorVersion):
-        (rollout.qualityPassed===true&&Array.isArray(rollout.allowedDevices)&&rollout.allowedDevices.includes(device.deviceId));
-      // Unknown devices remain on a conservative declared roundtrip prior, never on fabricated links.
-      // Rollout quality/allowlist gates still have the final authority to activate them.
-      result.push({candidate:{deviceId:device.deviceId,deviceType:'PHONE',executorId:'harmony-har',
-        executorVersion,networkId,contractQuality:qualityApproved?1:null,capabilities:['image.crop.v1'],trusted:true,observedAt:device.observedAt,ttlMs:p.resourceValidForMs??3000,costScope:'coordinator-roundtrip',
+      const qualityApproved=await this.qualityRegistry.approved('image.crop.v1',device.deviceId,executorVersion);
+      const route=this.transportRoute(imageUrl,networkId);
+      const upload=this.costStore.link(device.deviceId,'upload',route.networkId);
+      const relay=this.costStore.link(device.deviceId,'relay-return',route.networkId);
+      const links=[];
+      if(upload)links.push({from:route.sourceId,to:device.deviceId,...upload,effective:false,source:'REAL' as const});
+      if(relay)links.push({from:device.deviceId,to:'cloud-runtime',...relay,effective:false,source:'REAL' as const});
+      result.push({links,inputLocations:[{contentHash:createHash('sha256').update(imageBytes).digest('hex'),deviceId:route.sourceId}],candidate:{deviceId:device.deviceId,deviceType:'PHONE',connectionMode:'POLL_RELAY',executorId:'harmony-har',
+        executorVersion,networkId,contractQuality:qualityApproved?1:null,capabilities:['image.crop.v1'],trusted:true,observedAt:device.observedAt,ttlMs:p.resourceValidForMs??3000,costScope:'execution',
         resourceSnapshot:{availableSlots:p.availableSlots,availableMemoryMB:p.availableMemoryMB,queueLength:p.queueLength},
-        history:{quality:qualityApproved?1:null,meanMs:measured?.count?measured.mean:25000,stddevMs:measured?.count?Math.max(2*measured.deviation,measured.mean*.15):5000,sampleCount:measured?.count??0}},
+        history:{quality:qualityApproved?1:null,meanMs:measured?.count?measured.mean:1000,stddevMs:measured?.count?Math.max(2*measured.deviation,measured.mean*.15):5000,sampleCount:measured?.count??0}},
         execute:async request=>{
+          if(request.inputs.length!==1||request.inputs[0].contentHash!==createHash('sha256').update(imageBytes).digest('hex')||canonical(request.task.parameters)!==canonical(parameters))throw new Error('TERMINAL_ADAPTER_INPUT_MISMATCH');
           const start=performance.now();
           const source=request.macroContext.selectedReason==='BACKGROUND_CALIBRATION'?'CALIBRATION':'BUSINESS';
           try {
-            const value=await this.cropForShopping(ownerUserId,imageUrl,imageBytes,parameters,request.signal,device.deviceId,request.macroContext);
+            const value=await this.cropForShopping(ownerUserId,imageUrl,imageBytes,parameters,request.signal,device.deviceId,request.macroContext,executorVersion);
             if(!value)throw new Error('PHONE_ADMISSION_REJECTED');
-            this.costStore.record(key,performance.now()-start,true,undefined,source);
+            this.recordMeasured(device.deviceId,imageBytes,parameters,executorVersion,networkId,imageUrl,performance.now()-start,value,source);
             return value.result;
           } catch(error) {
             this.costStore.record(key,performance.now()-start,false,undefined,source,(error as Error).message);
             throw error;
-          } finally { await this.costStore.flush(); }
+          }
 
         }});
     }
     return result;
   }
   private phoneSampleKey(deviceId:string,bytes:number,parameters:unknown,executorVersion='1',networkId='unknown'):string {
-    return costKey('image.crop.v1',deviceId,bytes,parameters,'roundtrip',executorVersion,networkId,IMAGE_CROP_CONTRACT.costModel);
+    return costKey('image.crop.v1',deviceId,bytes,parameters,'execution',executorVersion,networkId,IMAGE_CROP_CONTRACT.costModel);
+  }
+
+  private transportRoute(imageUrl:string,networkId:string) {
+    const sourceId='object-store:'+hash(new URL(imageUrl).origin);
+    return {sourceId,networkId:networkId==='unknown'?'unknown:'+sourceId:hash(networkId+':'+sourceId+':poll-relay-v1')};
+  }
+  private validTiming(value:TerminalTiming):boolean {
+    return value.version===1&&typeof value.executorVersion==='string'&&value.executorVersion.length>0&&
+      [value.executionMs,value.inputTransferMs].every(n=>Number.isFinite(n)&&n>=0&&n<=LEASE_MS);
+  }
+  private recordMeasured(deviceId:string,input:Buffer,parameters:unknown,executorVersion:string,networkId:string,imageUrl:string,total:number,
+    value:{result:QueryImageCropResult;timing?:TerminalTiming},source:'BUSINESS'|'CALIBRATION'):void {
+    this.costStore.record(costKey('image.crop.v1',deviceId,input.length,parameters,'roundtrip',executorVersion,networkId,IMAGE_CROP_CONTRACT.costModel),total,true,undefined,source);
+    const timing=value.timing;
+    // Old clients report a combined computedMs, so never reinterpret it as pure computation.
+    if(!timing||!this.validTiming(timing)||timing.executorVersion!==executorVersion||timing.executionMs+timing.inputTransferMs>total)return;
+    this.costStore.record(this.phoneSampleKey(deviceId,input.length,parameters,executorVersion),timing.executionMs,true,undefined,source);
+    if(networkIdentity(timing.networkId)!==networkId)return;
+    const route=this.transportRoute(imageUrl,networkId);
+    this.costStore.record(costKey('',deviceId,0,{},'upload','',route.networkId),timing.inputTransferMs,true,input.length,source);
+    // The remainder includes polling, queueing, encoding, result upload, DB settlement
+    // and result consumption. It is not a pure bandwidth measurement; price it once.
+    this.costStore.record(costKey('',deviceId,0,{},'relay-return','',route.networkId),total-timing.executionMs-timing.inputTransferMs,true,value.result.buffer.length,source);
   }
 
   // Maintenance-only fixed-fixture calibration; it does not require prior quality evidence.
@@ -100,9 +130,10 @@ export class PhoneDispatchService {
     const began=performance.now();
     try {
       const value=await this.cropForShopping(ownerUserId,imageUrl,imageBytes,parameters,signal,deviceId,
-        {baselineDevice:'cloud-runtime',selectedReason:'EXPLICIT_CALIBRATION',urgency:false,budgetMs:CROP_WAIT_MS});
+        {baselineDevice:'cloud-runtime',selectedReason:'EXPLICIT_CALIBRATION',urgency:false,budgetMs:CROP_WAIT_MS},expectedExecutorVersion);
       if(!value)throw new Error('PHONE_ADMISSION_REJECTED');
-      this.costStore.record(key,performance.now()-began,true,undefined,'CALIBRATION');
+      if(value.timing?.executorVersion!==expectedExecutorVersion)throw new Error('CALIBRATION_EXECUTOR_VERSION_MISMATCH');
+      this.recordMeasured(deviceId,imageBytes,parameters,expectedExecutorVersion,networkIdentity(device.profile.networkId),imageUrl,performance.now()-began,value,'CALIBRATION');
       return value.result.buffer;
     }catch(error){
       this.costStore.record(key,performance.now()-began,false,undefined,'CALIBRATION',(error as Error).message);
@@ -200,8 +231,8 @@ export class PhoneDispatchService {
   async cropForShopping(ownerUserId: string, imageUrl: string, imageBytes: Buffer,
     parameters: { box: { x: number; y: number; width: number; height: number };
       paddingRatio: number; targetSize: number; jpegQuality: number }, signal: AbortSignal,
-    selectedDeviceId?:string,macroContext?:SchedulingDecision['macroContext']):
-    Promise<{ jobId: string; result: QueryImageCropResult } | null> {
+    selectedDeviceId?:string,macroContext?:SchedulingDecision['macroContext'],executorVersion?:string):
+    Promise<{ jobId: string; result: QueryImageCropResult; timing?:TerminalTiming } | null> {
     if ((!selectedDeviceId && process.env.PHONE_DISPATCH_SHOPPING_DEMO_ENABLED !== 'true') ||
         process.env.PHONE_DISPATCH_EXPERIMENT_ENABLED !== 'true') return null;
     this.enabled();
@@ -228,7 +259,7 @@ export class PhoneDispatchService {
     const right = Math.max(left + 1, Math.min(width, Math.round(cx + side / 2)));
     const bottom = Math.max(top + 1, Math.min(height, Math.round(cy + side / 2)));
     const input: CropInput = {
-      macroContext,
+      macroContext,executorVersion,
       imageUrl, inputHash: '',
       region: { left, top, width: right - left, height: bottom - top },
       targetSize: parameters.targetSize, jpegQuality: parameters.jpegQuality,
@@ -247,14 +278,14 @@ export class PhoneDispatchService {
         signal.throwIfAborted();
         const current = await this.prisma.phoneDispatchJob.findUniqueOrThrow({ where: { id: job.id } });
         if (current.state === 'COMPLETED' && current.resultJson) {
-          const stored = JSON.parse(current.resultJson) as { imageBase64: string };
+          const stored = JSON.parse(current.resultJson) as { imageBase64: string; timing?:TerminalTiming };
           const bytes = Buffer.from(stored.imageBase64, 'base64');
           if (createHash('sha256').update(bytes).digest('hex') !== current.resultHash) {
             throw new Error('PHONE_CROP_RESULT_HASH_MISMATCH');
           }
           await this.prisma.phoneDispatchJob.update({ where: { id: job.id },
             data: { inputJson: '{}', resultJson: null } });
-          return { jobId: job.id, result: {
+          return { jobId: job.id, timing:stored.timing, result: {
             buffer: bytes, metadata: input.original, cropRegionPx: input.region,
             strategy: 'phone_crop_demo_' + device.id,
           } };
@@ -386,7 +417,7 @@ export class PhoneDispatchService {
   }
 
   async cropResult(workerUserId: string, deviceId: string, jobId: string, fence: number,
-    imageBase64: string, inputHash: string, computedMs: number) {
+    imageBase64: string, inputHash: string, computedMs: number, timing?:TerminalTiming) {
     this.enabled();
     if (!Number.isSafeInteger(fence) || fence < 1 || !Number.isSafeInteger(computedMs) ||
         computedMs < 0 || computedMs > LEASE_MS || typeof imageBase64 !== 'string' ||
@@ -405,7 +436,9 @@ export class PhoneDispatchService {
       return this.publicJob(await this.prisma.phoneDispatchJob.findUniqueOrThrow({ where: { id: jobId } }));
     }
     if (inputHash !== job.inputHash) throw new BadRequestException('CROP_INPUT_HASH_MISMATCH');
+    if(timing && (!this.validTiming(timing)||timing.executionMs+timing.inputTransferMs>Date.now()-job.createdAt.getTime()+50))throw new BadRequestException('TERMINAL_TIMING_INVALID');
     const input = JSON.parse(job.inputJson) as CropInput;
+    if(input.executorVersion&&timing?.executorVersion!==input.executorVersion)throw new BadRequestException('TERMINAL_EXECUTOR_VERSION_MISMATCH');
     const bytes = Buffer.from(imageBase64, 'base64');
     if (bytes.length > 1_000_000 || bytes[0] !== 0xff || bytes[1] !== 0xd8) {
       throw new BadRequestException('CROP_IMAGE_INVALID');
@@ -416,7 +449,7 @@ export class PhoneDispatchService {
     const updated = await this.prisma.phoneDispatchJob.updateMany({
       where: { id: jobId, fence, state: 'LEASED' },
       data: { state: 'COMPLETED', resultHash: createHash('sha256').update(bytes).digest('hex'),
-        resultJson: JSON.stringify({ imageBase64 }), computedMs, finishedAt: new Date() },
+        resultJson: JSON.stringify({ imageBase64,timing }), computedMs, finishedAt: new Date() },
     });
     if (updated.count !== 1) throw new ConflictException('STALE_OR_REVOKED_LEASE');
     return this.publicJob(await this.prisma.phoneDispatchJob.findUniqueOrThrow({ where: { id: jobId } }));

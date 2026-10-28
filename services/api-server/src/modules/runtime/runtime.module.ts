@@ -1,3 +1,6 @@
+import { CapabilityQualityRegistry } from '../../core/runtime/capability-quality-registry';
+import { createCapabilityQualityRegistry } from '../../core/capabilities/quality-registry';
+import { PrismaService } from '../../persistence/prisma/prisma.service';
 import { RuntimeCostStore } from '../../core/runtime/runtime-cost-store';
 import { DeviceCalibrationController } from './controllers/device-calibration.controller';
 import { DeviceDirectoryController } from './controllers/device-directory.controller';
@@ -45,7 +48,7 @@ class ShoppingPluginRegistration implements OnModuleInit {
 @Module({
   imports: [AuthModule],
   controllers: [DeviceDirectoryController, DeviceCalibrationController, PhoneDispatchController, RuntimeController, RuntimeProbeController],
-  providers: [RuntimeCostStore, DeviceDirectoryService, DeviceDispatchService, PhoneDispatchService, RuntimeMaintenanceGuard,
+  providers: [{provide:CapabilityQualityRegistry,useFactory:createCapabilityQualityRegistry,inject:[PrismaService]}, RuntimeCostStore, DeviceDirectoryService, DeviceDispatchService, PhoneDispatchService, RuntimeMaintenanceGuard,
     MacroSchedulerService,
     ExecutorRegistryService, RuntimeRunnerService, CloudReadinessService, TencentCosStorageAdapterService,
     ToolRegistryService,
@@ -63,7 +66,7 @@ class ShoppingPluginRegistration implements OnModuleInit {
     AgentRuntimeService,
     ShoppingPluginRegistration,
   ],
-  exports: [RuntimeCostStore, DeviceDirectoryService, DeviceDispatchService, PhoneDispatchService,
+  exports: [CapabilityQualityRegistry, RuntimeCostStore, DeviceDirectoryService, DeviceDispatchService, PhoneDispatchService,
     MacroSchedulerService,
     ExecutorRegistryService, RuntimeRunnerService, CloudReadinessService,
     ToolRegistryService,

@@ -5,10 +5,11 @@ const graph: TaskGraph = {capability:'image.crop.v1', inputs:[], tasks:[{
   id:'crop', capability:'image.crop.v1', dependencies:[], inputs:[], outputBytes:10, memoryMB:1, minQuality:1
 }]};
 const context = {budgetMs:5000, networkAllowed:true, privacyLevel:'AUTHORIZED_REMOTE' as const,
-  userWaiting:false, importance:0, materializeOutputsAt:'cloud-runtime'};
+  userWaiting:false, importance:0, materializeOutputsAt:'cloud-runtime',
+  links:[{from:'phone',to:'cloud-runtime',bytesPerSecond:1000000,fixedMs:0,effective:false,source:'REAL' as const,observedAt:Date.now(),ttlMs:60000}]};
 function device(deviceId:string, meanMs:number):DeviceCandidate {
   return {deviceId, deviceType:deviceId === 'cloud-runtime' ? 'CLOUD' : 'PHONE', executorId:deviceId,
-    costScope:'coordinator-roundtrip', capabilities:['image.crop.v1'], trusted:true, observedAt:Date.now(), ttlMs:60000,
+    costScope:'execution', capabilities:['image.crop.v1'], trusted:true, observedAt:Date.now(), ttlMs:60000,
     resourceSnapshot:{availableSlots:1,availableMemoryMB:100,queueLength:0},
     history:{quality:1,meanMs,stddevMs:0,sampleCount:5}};
 }

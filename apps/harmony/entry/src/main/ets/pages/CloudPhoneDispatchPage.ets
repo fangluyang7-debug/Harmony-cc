@@ -2,9 +2,12 @@ import { http } from '@kit.NetworkKit';
 import { image } from '@kit.ImageKit';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import util from '@ohos.util';
+import systemDateTime from '@ohos.systemDateTime';
 import { CloudApiConfig } from '../services/CloudApiConfig';
 import { SchedulerService, deviceResourceProfile, sampleNetworkIdentity } from 'scheduler';
 import { RemoteTaskAdmission, MacroTaskContext } from '../services/RemoteTaskAdmission';
+
+interface TerminalTiming { version: number; executorVersion: string; executionMs: number; inputTransferMs: number; networkId?: string; }
 
 interface Reply<T> { success: boolean; data?: T; }
 interface Pairing { code: string; expiresAt: string; }
@@ -14,6 +17,7 @@ interface Revoked { deviceId: string; status: string; }
 interface Job { jobId: string; state: string; fence: number; computedMs: number | null; resultHash: string | null; }
 interface CropRegion { left: number; top: number; width: number; height: number; }
 interface CropInput {
+  executorVersion?: string;
   macroContext?: MacroTaskContext;
   imageUrl: string;
   inputHash: string;
@@ -123,7 +127,7 @@ struct CloudPhoneDispatchPage {
     this.timer = setInterval(() => { this.workOnce().catch(() => {}); }, 1200);
   }
 
-  private async cropImage(input: CropInput): Promise<string> {
+  private async cropImage(input: CropInput, timing: TerminalTiming): Promise<string> {
     if (!input.imageUrl.startsWith('https://') || input.targetSize < 64 || input.targetSize > 1024 ||
         input.region.width < 1 || input.region.height < 1) { throw new Error('CROP_INPUT_INVALID'); }
     const client = http.createHttp();
@@ -131,6 +135,7 @@ struct CloudPhoneDispatchPage {
     let pixel: image.PixelMap | undefined = undefined;
     let packer: image.ImagePacker | undefined = undefined;
     try {
+      const transferStarted = systemDateTime.getUptime(systemDateTime.TimeType.STARTUP);
       const response = await client.request(input.imageUrl, {
         method: http.RequestMethod.GET, expectDataType: http.HttpDataType.ARRAY_BUFFER,
         connectTimeout: 10000, readTimeout: 15000
@@ -138,6 +143,7 @@ struct CloudPhoneDispatchPage {
       if (response.responseCode !== 200 || !(response.result instanceof ArrayBuffer)) {
         throw new Error('CROP_IMAGE_FETCH_FAILED');
       }
+      timing.inputTransferMs = systemDateTime.getUptime(systemDateTime.TimeType.STARTUP) - transferStarted;
       const bytes = new Uint8Array(response.result);
       if (bytes.length === 0 || bytes.length > 8 * 1024 * 1024) { throw new Error('CROP_IMAGE_SIZE_INVALID'); }
       const md = cryptoFramework.createMd('SHA256');
@@ -146,6 +152,7 @@ struct CloudPhoneDispatchPage {
       const actualHash = Array.from(digest.data).map((value: number): string =>
         value.toString(16).padStart(2, '0')).join('');
       if (actualHash !== input.inputHash) { throw new Error('CROP_IMAGE_HASH_MISMATCH'); }
+      const executionStarted = systemDateTime.getUptime(systemDateTime.TimeType.STARTUP);
       source = image.createImageSource(response.result);
       pixel = await source.createPixelMap({
         desiredRegion: { x: input.region.left, y: input.region.top,
@@ -156,6 +163,7 @@ struct CloudPhoneDispatchPage {
       const packed = await packer.packing(pixel, {
         format: 'image/jpeg', quality: Math.max(40, Math.min(95, input.jpegQuality))
       });
+      timing.executionMs = systemDateTime.getUptime(systemDateTime.TimeType.STARTUP) - executionStarted;
       if (packed.byteLength === 0 || packed.byteLength > 1_000_000) { throw new Error('CROP_OUTPUT_SIZE_INVALID'); }
       return new util.Base64Helper().encodeToStringSync(new Uint8Array(packed));
     } finally {
@@ -178,7 +186,7 @@ struct CloudPhoneDispatchPage {
       const profile = deviceResourceProfile(scheduler.getDeviceState(),['image.crop.v1'],
         Math.max(0,1-scheduler.getMetricsSnapshot().runningCount));
       profile.networkId = networkId;
-      profile.executorVersion = '1';
+      profile.executorVersion = this.admission.executorVersion;
       await this.call<Object>(http.RequestMethod.POST,root+'/profile',JSON.stringify(profile));
       const lease = await this.call<Lease>(http.RequestMethod.POST, root + '/lease');
       if (lease.stopJobId !== null) {
@@ -194,7 +202,10 @@ struct CloudPhoneDispatchPage {
           try {
             const started = Date.now();
             const crop = job.crop;
-            const handle = this.admission.submit(():Promise<string> => this.cropImage(crop),crop.macroContext);
+            if (crop.executorVersion && crop.executorVersion !== this.admission.executorVersion) { throw new Error('TERMINAL_EXECUTOR_VERSION_MISMATCH'); }
+            const timing: TerminalTiming = { version: 1, executorVersion: this.admission.executorVersion,
+              executionMs: 0, inputTransferMs: 0, networkId: networkId };
+            const handle = this.admission.submit(():Promise<string> => this.cropImage(crop, timing),crop.macroContext);
             const scheduled = await handle.result;
             if (scheduled.output === null) { throw new Error(scheduled.reasonCode ?? 'PHONE_ADMISSION_REJECTED'); }
             const imageBase64 = scheduled.output;
@@ -206,10 +217,11 @@ struct CloudPhoneDispatchPage {
               this.status = 'B 已停止购物图片任务：' + job.jobId;
               return;
             }
+            if (await sampleNetworkIdentity() !== networkId) { timing.networkId = undefined; }
             const cropped = await this.call<Job>(http.RequestMethod.POST,
               root + '/jobs/' + encodeURIComponent(job.jobId) + '/crop-result',
               JSON.stringify({ fence: job.fence, imageBase64: imageBase64,
-                inputHash: job.crop.inputHash, computedMs: Date.now() - started }));
+                inputHash: job.crop.inputHash, computedMs: Date.now() - started, timing: timing }));
             this.status = 'B 购物图片回执：' + cropped.state + '；' + job.jobId;
           } catch (error) {
             try {

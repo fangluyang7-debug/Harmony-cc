@@ -1,8 +1,9 @@
-import { IMAGE_CROP_CONTRACT } from '../../modules/sessions/domain/image-crop-contract';
+import { IMAGE_CROP_CONTRACT } from '../capabilities/image-crop-contract';
 import { CapabilityCostModel } from './capability-cost-model';
 import { admissionEvidence } from './placement-admission-evidence';
 import { RuntimeCostStore, costKey, networkIdentity, SampleSource } from './runtime-cost-store';
-import { CropQualityEvaluator } from './crop-quality-evaluator';
+import { CapabilityQualityRegistry } from './capability-quality-registry';
+import { createCapabilityQualityRegistry } from '../capabilities/quality-registry';
 import { selectionPolicy } from './scheduling-selection-policy';
 import { RuntimeExecutionContext } from './executor-registry.service';
 import { DeviceDirectoryService, ResourceProfile } from './device-directory.service';
@@ -14,7 +15,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { RuntimeWorkScope } from './runtime-work-scope';
 import { WorkflowPlacementPlanner, PlacementCandidate, PlacementRollout, PlacementLink, authorizePlacement } from './workflow-placement-planner';
 import { ArtifactRef } from './scheduling-protocol';
-import { QueryImageCropResult } from '../../modules/sessions/application/query-image-content-adapter.interface';
+import { ImageCropResult as QueryImageCropResult } from '../capabilities/image-crop-result';
 import { MacroSchedulerService, DeviceCandidate, TaskGraph, SchedulingContext, SchedulingDecision, TaskSpec } from './macro-scheduler.service';
 
 export interface CloudTaskExecution {
@@ -24,7 +25,7 @@ export interface CloudTaskExecution {
   signal: AbortSignal;
 }
 export interface DispatchOptions {
-  remoteExecutors?: Array<{candidate:DeviceCandidate; execute:(request:CloudTaskExecution)=>Promise<any>}>;
+  remoteExecutors?: Array<{candidate:DeviceCandidate; links?:PlacementLink[]; inputLocations?:Array<{contentHash:string;deviceId:string}>; execute:(request:CloudTaskExecution)=>Promise<any>}>;
   // Call-scoped implementations: business state and credentials stay out of task graphs.
   cloudExecutors?: Record<string, (request: CloudTaskExecution) => Promise<any>>;
   // Business orchestration stages are not portable compute payloads.
@@ -43,10 +44,11 @@ export class DeviceDispatchService {
     @Optional() private readonly macroScheduler?: MacroSchedulerService,
     @Optional() private readonly directory?: DeviceDirectoryService,
     @Optional() private readonly prisma?: PrismaService,
-    @Optional() sharedCostStore?:RuntimeCostStore
-  ) { this.costStore=sharedCostStore??RuntimeCostStore.shared(this.prisma); }
+    @Optional() sharedCostStore?:RuntimeCostStore,
+    @Optional() qualityRegistry?:CapabilityQualityRegistry
+  ) { this.costStore=sharedCostStore??RuntimeCostStore.shared(this.prisma); this.qualityRegistry=qualityRegistry??createCapabilityQualityRegistry(this.prisma); }
   private readonly costStore:RuntimeCostStore;
-  private readonly qualityEvaluator = new CropQualityEvaluator(this.prisma);
+  private readonly qualityRegistry:CapabilityQualityRegistry;
   private readonly profiles = new Map<string,{networkId:string;executorVersion:string}>();
   private readonly planner=new WorkflowPlacementPlanner();
   private readonly circuits=new Map<string,{failures:number;retryAt:number}>();
@@ -66,7 +68,7 @@ export class DeviceDispatchService {
     });
     return this.directory ? this.directory.workers(legacy) : legacy;
   }
-  private async call<T>(device:DeviceConfiguration,ownerId:string,path:string,body:unknown,signal:AbortSignal,binary=false,schemaId='shopping.image'):Promise<T> {
+  private async call<T>(device:DeviceConfiguration,ownerId:string,path:string,body:unknown,signal:AbortSignal,binary=false,schemaId='image.raster.v1'):Promise<T> {
     const token=process.env[device.tokenEnv];if(!token||token.length<32)throw new Error('DEVICE_CREDENTIAL_MISSING');
     const response=await fetch(device.endpoint+'/v1/'+path,{method:path==='descriptor'?'GET':'POST',redirect:'error',signal,
       headers:{Authorization:'Bearer '+token,'x-owner-id':ownerId,'Content-Type':binary?'application/octet-stream':'application/json','x-schema-id':schemaId},
@@ -88,8 +90,8 @@ export class DeviceDispatchService {
     const evidence=await this.costStore.evidence(capability,deviceId,
       candidate?.costScope==='coordinator-roundtrip'?'roundtrip':'execution',candidate?.executorVersion??this.profiles.get(deviceId)?.executorVersion??'1',
       candidate?.networkId??'unknown');
-    const quality=capability==='image.crop.v1'&&await this.qualityEvaluator.approved(deviceId,candidate?.executorVersion??this.profiles.get(deviceId)?.executorVersion??'1');
-    return {...admissionEvidence(rollout,evidence,trialKey,calibrating,canaryEligible),qualityPassed:capability==='image.crop.v1'&&process.env.CROP_QUALITY_POLICY_JSON?quality:rollout.qualityPassed===true};
+    const quality=await this.qualityRegistry.approved(capability,deviceId,candidate?.executorVersion??this.profiles.get(deviceId)?.executorVersion??'1');
+    return {...admissionEvidence(rollout,evidence,trialKey,calibrating,canaryEligible),qualityPassed:quality};
   }
   async crop<T extends QueryImageCropResult>(bytes:Buffer,parameters:{box:{x:number;y:number;width:number;height:number};paddingRatio:number;targetSize:number;jpegQuality:number},
     local:()=>Promise<T>):Promise<QueryImageCropResult> {
@@ -118,7 +120,7 @@ export class DeviceDispatchService {
         this.profiles.set(device.deviceId,{networkId:networkIdentity(descriptor.profile?.networkId),executorVersion:descriptor.profile?.executorVersion??descriptor.adapterVersion});
         const sample=await this.costStore.get(this.key(device.deviceId,bytes.length,parameters));
         candidates.push({deviceId:device.deviceId,executorId:'cpu-worker',capability:'image.crop.v1',trusted:true,source:'REAL',observedAt:now,ttlMs:3000,
-          availableSlots:descriptor.capacity.slots,availableMemoryBytes:descriptor.capacity.memoryBytes,quality:(process.env.CROP_QUALITY_POLICY_JSON?await this.qualityEvaluator.approved(device.deviceId,this.profiles.get(device.deviceId)!.executorVersion):device.qualityVerified)?1:null,
+          availableSlots:descriptor.capacity.slots,availableMemoryBytes:descriptor.capacity.memoryBytes,quality:(await this.qualityRegistry.approved('image.crop.v1',device.deviceId,this.profiles.get(device.deviceId)!.executorVersion))?1:null,
           computeMs:sample?.mean??device.cropPriorMs,queueMs:0,coldMs:0,uncertaintyMs:sample?sample.deviation*2:device.cropPriorMs,publishMs:0});
         links.push(...await this.measuredLinks({capability:'image.crop.v1',tasks:[],inputs:[]},[device.deviceId]));
       }catch{this.circuits.set(device.deviceId,{failures:(this.circuits.get(device.deviceId)?.failures??0)+1,retryAt:now+30000});}
@@ -140,7 +142,7 @@ export class DeviceDispatchService {
       committedNodeIds:[],committedArtifacts:[],finalDestination:'cloud-runtime'});
     const gated=downstreamKnown?config:{...config,mode:'SHADOW' as const};
     const remote=decision.suggestion?.find(a=>a.deviceId!=='cloud-runtime');
-    const admission=remote?await this.rolloutEvidence(gated,'image.crop.v1',remote.deviceId,undefined,randomUUID(),false,true):gated;
+    const admission=remote?await this.rolloutEvidence(gated,'image.crop.v1',remote.deviceId,undefined,createHash('sha256').update(ownerId).update(bytes).update(JSON.stringify(parameters)).digest('hex'),false,true):gated;
     const actual=authorizePlacement(decision,admission,'image.crop.v1',now)?.[0];
     RuntimeWorkScope.recordPlacement({decision,actualDeviceId:actual?.deviceId??null,policyVersion:config.policyVersion,mode:config.mode,
       dispatchBlockedReason:downstreamKnown?null:'SUFFIX_COST_SAMPLES_MISSING',outputSizeSource:'schema-and-crop-upper-bound'});
@@ -173,18 +175,22 @@ export class DeviceDispatchService {
     if(descriptor.deviceId!==deviceId||descriptor.protocolVersion!==1||!descriptor.capabilities.includes('image.crop.v1'))throw new Error('DEVICE_DESCRIPTOR_INVALID');
     this.profiles.set(deviceId,{networkId:networkIdentity(descriptor.profile?.networkId),executorVersion:descriptor.profile?.executorVersion??descriptor.adapterVersion});
     if(expectedExecutorVersion&&this.profiles.get(deviceId)!.executorVersion!==expectedExecutorVersion)throw new Error('CALIBRATION_EXECUTOR_VERSION_MISMATCH');
-    return this.executeCrop(device,ownerId,bytes,parameters,signal);
+    try{return await this.executeCrop(device,ownerId,bytes,parameters,signal);}
+    finally{await this.costStore.flush();} // Maintenance callers need committed evidence before validation/disconnect.
   }
   private async executeCrop(device:DeviceConfiguration,ownerId:string,bytes:Buffer,parameters:Parameters<DeviceDispatchService['crop']>[1],signal:AbortSignal,macroContext:SchedulingDecision['macroContext']={baselineDevice:'cloud-runtime',selectedReason:'EXPLICIT_CALIBRATION',urgency:false,budgetMs:RuntimeWorkScope.remainingBudget(60000)}):Promise<QueryImageCropResult>{
     const source:SampleSource=macroContext.selectedReason==='EXPLICIT_CALIBRATION'?'CALIBRATION':'BUSINESS';
     const uploadKey=this.key(device.deviceId+':transfer',bytes.length,parameters);
     const downloadKey=this.key(device.deviceId+':download',bytes.length,parameters);
     const executionKey=this.key(device.deviceId,bytes.length,parameters);
+    const roundtripKey=costKey('image.crop.v1',device.deviceId,bytes.length,parameters,'roundtrip',this.profiles.get(device.deviceId)?.executorVersion??'1',this.profiles.get(device.deviceId)?.networkId??'unknown',IMAGE_CROP_CONTRACT.costModel);
+    const coordinationKey=costKey('',device.deviceId,0,{},'coordination','',this.profiles.get(device.deviceId)?.networkId??'unknown');
+    let uploadMs=0,downloadMs=0,executionMs:number|undefined,completed=false;
     const budget=RuntimeWorkScope.remainingBudget(60000),began=performance.now();let lease:Receipt|undefined,settled=false;
     try {
       const start=performance.now(),input=await this.call<ArtifactRef>(device,ownerId,'artifacts',bytes,signal,true);
       if(input.contentHash!==createHash('sha256').update(bytes).digest('hex'))throw new Error('INPUT_HASH_MISMATCH');
-      this.observe(uploadKey,performance.now()-start,true,bytes.length,source);
+      uploadMs=performance.now()-start;this.observe(uploadKey,uploadMs,true,bytes.length,source);
       lease=await this.call<Receipt>(device,ownerId,'leases',{attemptId:'attempt_'+randomUUID(),memoryBytes:128*1024*1024,remainingBudgetMs:Math.max(0,budget-(performance.now()-began))},signal);
       await this.call(device,ownerId,'execute',{leaseId:lease.leaseId,fencingToken:lease.fencingToken,capability:'image.crop.v1',input,parameters,privacy:'AUTHORIZED_REMOTE',networkAllowed:true,macroContext:{...macroContext,budgetMs:Math.max(0,Math.min(macroContext.budgetMs,budget)-(performance.now()-began))}},signal);
       while(performance.now()-began<budget){
@@ -194,16 +200,17 @@ export class DeviceDispatchService {
           const downloadAt=performance.now(),output=await this.call<Buffer>(device,ownerId,'artifacts/resolve',receipt.output.artifact,signal);
           if(createHash('sha256').update(output).digest('hex')!==receipt.output.artifact.contentHash||receipt.output.inputHash!==input.contentHash)throw new Error('OUTPUT_HASH_MISMATCH');
           // Size-specific sample, never a simulated latency label.
-          this.observe(downloadKey,performance.now()-downloadAt,true,output.length,source);
+          downloadMs=performance.now()-downloadAt;this.observe(downloadKey,downloadMs,true,output.length,source);
+          executionMs=receipt.executionMs??undefined;
           if(Number.isFinite(receipt.executionMs))this.observe(executionKey,receipt.executionMs!,true,undefined,source);
-          return {buffer:output,metadata:receipt.output.metadata,cropRegionPx:receipt.output.cropRegionPx,strategy:receipt.output.strategy};}
+          completed=true;return {buffer:output,metadata:receipt.output.metadata,cropRegionPx:receipt.output.cropRegionPx,strategy:receipt.output.strategy};}
         await new Promise(resolve=>setTimeout(resolve,20));signal.throwIfAborted();
       }throw new Error('WORKER_STOP_UNCONFIRMED');
     }catch(error){this.observe(executionKey,performance.now()-began,false,undefined,source,(error as Error).message);throw error;}
     finally {
       if(lease){const cleanup=AbortSignal.timeout(3000);try{if(!settled)await this.call(device,ownerId,'cancel',{leaseId:lease.leaseId},cleanup);
         else await this.call(device,ownerId,'release',{leaseId:lease.leaseId},cleanup);}catch{/* Keep unconfirmed reservations at the target; never claim they were released. */}}
-      await this.costStore.flush();
+      if(completed&&executionMs!==undefined){const total=performance.now()-began;this.observe(roundtripKey,total,true,undefined,source);this.observe(coordinationKey,Math.max(0,total-uploadMs-downloadMs-executionMs),true,undefined,source);}
     }
   }
 
@@ -254,6 +261,15 @@ export class DeviceDispatchService {
       return budget;
     };
     for (const candidate of candidates.values()) {
+      if(candidate.deviceId!=='cloud-runtime') {
+        candidate.capabilityQuality={};
+        for(const capability of new Set(ordered.map(t=>t.capability)))
+          candidate.capabilityQuality[capability]=candidate.capabilities.includes(capability)&&await this.qualityRegistry.approved(capability,candidate.deviceId,candidate.executorVersion??'1')?1:null;
+      }
+      if(candidate.connectionMode==='HTTP_LEASE'){
+        const overhead=await this.costStore.get(costKey('',candidate.deviceId,0,{},'coordination','',candidate.networkId??'unknown'));
+        candidate.coordinationMs=overhead?.count?overhead.mean+2*overhead.deviation:100;
+      }
       candidate.taskHistory = {};
       for (const task of ordered) {
         const inputs = graph.inputs.filter(input=>task.inputs.includes(input.artifactId));
@@ -272,7 +288,9 @@ export class DeviceDispatchService {
         throw new Error('CALIBRATION_SCOPE_INVALID');
       }
     }
-    const links = context.links ?? await this.measuredLinks(graph, [...candidates.keys()]);
+    const links = [...(context.links ?? await this.measuredLinks(graph, [...candidates.keys()])),...(options.remoteExecutors??[]).flatMap(a=>a.links??[])];
+    graph={...graph,inputs:graph.inputs.map(input=>({...input,replicas:[...(input.replicas??[{deviceId:'cloud-runtime',readMs:0}]),
+      ...(options.remoteExecutors??[]).flatMap(a=>a.inputLocations??[]).filter(l=>l.contentHash===input.contentHash).map(l=>({deviceId:l.deviceId,readMs:0}))]}))};
     const decision = await this.macroScheduler.schedule({...graph, tasks:ordered}, [...candidates.values()],
       {...context,links,budgetMs:remaining(),materializeOutputsAt:'cloud-runtime'});
     let assignments = decision.assignments;
@@ -493,11 +511,11 @@ export class DeviceDispatchService {
         const executorVersion=descriptor.profile?.executorVersion??descriptor.adapterVersion;
         const networkId=networkIdentity(descriptor.profile?.networkId);
         this.profiles.set(device.deviceId,{executorVersion,networkId});
-        const quality=(capability==='image.crop.v1'&&process.env.CROP_QUALITY_POLICY_JSON?await this.qualityEvaluator.approved(device.deviceId,executorVersion):device.qualityVerified)?1:null;
+        const quality=(await this.qualityRegistry.approved(capability,device.deviceId,executorVersion))?1:null;
 
         candidates.push({
           deviceId: device.deviceId,
-          deviceType: 'WORKER',
+          deviceType: 'WORKER',connectionMode:'HTTP_LEASE',
           executorId: 'cpu-worker',
           capabilities: descriptor.capabilities,
           trusted: true,
@@ -549,6 +567,9 @@ export class DeviceDispatchService {
     const uploadKey=this.key(deviceId+':transfer',sourceBytes,task.parameters??{},task.capability);
     const downloadKey=this.key(deviceId+':download',sourceBytes,task.parameters??{},task.capability);
     const executionKey=this.taskSampleKey(task.capability,deviceId,graph.inputs,task.parameters,undefined,task.contract?.costModel);
+    const roundtripKey=costKey(task.capability,deviceId,sourceBytes,task.parameters,'roundtrip',this.profiles.get(deviceId)?.executorVersion??'1',this.profiles.get(deviceId)?.networkId??'unknown',task.contract?.costModel);
+    const coordinationKey=costKey('',deviceId,0,{},'coordination','',this.profiles.get(deviceId)?.networkId??'unknown');
+    let uploadMs=0,downloadMs=0,executionMs:number|undefined,completed=false;
     const sourceKind:SampleSource=macroContext.selectedReason==='BACKGROUND_CALIBRATION'?'CALIBRATION':'BUSINESS';
     const began = performance.now();
     let lease: Receipt | undefined;
@@ -562,7 +583,7 @@ export class DeviceDispatchService {
         const uploadAt = performance.now();
         input = await this.call<ArtifactRef>(device, ownerId, 'artifacts', bytes, signal, true, source.schemaId);
         if (input.contentHash !== source.contentHash) throw new Error('INPUT_HASH_MISMATCH');
-        this.observe(uploadKey,performance.now()-uploadAt,true,bytes.length,sourceKind);
+        uploadMs=performance.now()-uploadAt;this.observe(uploadKey,uploadMs,true,bytes.length,sourceKind);
       } else {
         // References without bytes must already belong to this Worker and owner.
         await this.call<Buffer>(device, ownerId, 'artifacts/resolve', input, signal);
@@ -585,17 +606,18 @@ export class DeviceDispatchService {
           settled = true;
           if (receipt.errorCode || receipt.stopRequested || !receipt.output) throw new Error(receipt.errorCode ?? 'WORKER_STOPPED');
           if (receipt.output.inputHash !== input.contentHash) throw new Error('OUTPUT_HASH_MISMATCH');
+          executionMs=receipt.executionMs??undefined;
           if (!receipt.output.artifact) {
             if(Number.isFinite(receipt.executionMs))this.observe(executionKey,receipt.executionMs!,true,undefined,sourceKind);
-            return receipt.output;
+            completed=true;return receipt.output;
           }
           const downloadAt = performance.now();
           const buffer = await this.call<Buffer>(device, ownerId, 'artifacts/resolve', receipt.output.artifact, signal);
           if (createHash('sha256').update(buffer).digest('hex') !== receipt.output.artifact.contentHash) throw new Error('OUTPUT_HASH_MISMATCH');
-          this.observe(downloadKey,performance.now()-downloadAt,true,buffer.length,sourceKind);
+          downloadMs=performance.now()-downloadAt;this.observe(downloadKey,downloadMs,true,buffer.length,sourceKind);
           // Network costs are modeled separately; do not train compute with end-to-end latency.
           if (Number.isFinite(receipt.executionMs)) this.observe(executionKey,receipt.executionMs!,true,undefined,sourceKind);
-          return { ...receipt.output, buffer };
+          completed=true;return { ...receipt.output, buffer };
         }
         await new Promise(resolve => setTimeout(resolve, 20));
       }
@@ -606,6 +628,7 @@ export class DeviceDispatchService {
           await this.call(device, ownerId, settled ? 'release' : 'cancel', { leaseId: lease.leaseId }, AbortSignal.timeout(3000));
         } catch { /* The target retains reservations until physical settlement. */ }
       }
+      if(completed&&executionMs!==undefined){const total=performance.now()-began;this.observe(roundtripKey,total,true,undefined,sourceKind);this.observe(coordinationKey,Math.max(0,total-uploadMs-downloadMs-executionMs),true,undefined,sourceKind);}
     }
   }
 

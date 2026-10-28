@@ -23,7 +23,7 @@ describe('persistent device directory',()=>{
     prior=process.env.DIRECTORY_TEST_TOKEN;process.env.DIRECTORY_TEST_TOKEN=token;
     folder=await mkdtemp(path.join(tmpdir(),'harmony-directory-'));
     db=new PrismaClient({datasources:{db:{url:'file:'+path.join(folder,'test.db').replace(/\\/g,'/')}}});
-    for(const name of ['000005_phone_dispatch','000006_phone_dispatch_fence','000007_device_directory','000012_runtime_cost_observations']) {
+    for(const name of ['000005_phone_dispatch','000006_phone_dispatch_fence','000007_device_directory','000012_runtime_cost_observations','000013_capability_approval']) {
       const sql=await readFile(path.resolve(__dirname,'../../prisma/migrations',name,'migration.sql'),'utf8');
       for(const statement of sql.split(';').map(s=>s.trim()).filter(Boolean))await db.$executeRawUnsafe(statement);
     }
@@ -85,7 +85,7 @@ describe('persistent device directory',()=>{
     try {
       const phone=new PhoneDispatchService(db as unknown as PrismaService,directory);
       const candidates=await phone.cropAdapters('owner','https://example.test/image',Buffer.from('image'),{box:{x:0,y:0,width:1,height:1},paddingRatio:0,targetSize:64,jpegQuality:80});
-      expect(candidates[0].candidate).toMatchObject({deviceId:'phone_test',deviceType:'PHONE',costScope:'coordinator-roundtrip'});
+      expect(candidates[0].candidate).toMatchObject({deviceId:'phone_test',deviceType:'PHONE',costScope:'execution'});
       expect(await phone.cropAdapters('other','https://example.test/image',Buffer.from('image'),{box:{x:0,y:0,width:1,height:1},paddingRatio:0,targetSize:64,jpegQuality:80})).toEqual([]);
     }finally{if(previous===undefined)delete process.env.PHONE_DISPATCH_EXPERIMENT_ENABLED;else process.env.PHONE_DISPATCH_EXPERIMENT_ENABLED=previous;}
   });
@@ -103,11 +103,14 @@ describe('persistent device directory',()=>{
       const bytes=await sharp({create:{width:64,height:64,channels:3,background:'red'}}).jpeg().toBuffer();
       const parameters={box:{x:0,y:0,width:1,height:1},paddingRatio:0,targetSize:64,jpegQuality:80};
       const key=(phone as any).phoneSampleKey('phone_test',bytes.length,parameters);
+      jest.spyOn((phone as any).qualityRegistry,'approved').mockResolvedValue(true);
       const costs=new RuntimeCostStore(db as unknown as PrismaService);
-      for(let i=0;i<3;i++)costs.record(key,10,true);await costs.flush();
+      for(let i=0;i<3;i++)(phone as any).recordMeasured('phone_test',bytes,parameters,'1','unknown','https://example.test/image',30,{result:{buffer:bytes},timing:{version:1,executorVersion:'1',executionMs:10,inputTransferMs:10}},'CALIBRATION');
+      await (phone as any).costStore.flush();
       await (phone as any).costStore.load();
       const adapters=await phone.cropAdapters('owner','https://example.test/image',bytes,parameters);
       const dispatch=new DeviceDispatchService(undefined,new MacroSchedulerService(),directory,db as unknown as PrismaService);
+      jest.spyOn((dispatch as any).qualityRegistry,'approved').mockImplementation(async (...args:any[])=>args[0]==='image.crop.v1'&&args[1]==='phone_test'&&args[2]==='1');
       const cloud=jest.fn(async()=>{throw new Error('EXPECTED_PHONE');});
       const input={artifactId:'input',contentVersion:1,schemaVersion:1,schemaId:'shopping.image',contentHash:createHash('sha256').update(bytes).digest('hex'),data:bytes};
       const work=RuntimeWorkScope.run(new AbortController().signal,{storageReadMs:0,storageWriteMs:0,modelMs:0},()=>dispatch.dispatch(
@@ -121,11 +124,11 @@ describe('persistent device directory',()=>{
       expect(job.crop?.macroContext).toMatchObject({urgency:true,taskId:'crop'});
       expect(job.crop!.macroContext!.budgetMs).toBeLessThan(5000);
       await expect(phone.cropResult('worker','phone_test',job.jobId,job.fence+1,bytes.toString('base64'),input.contentHash,1)).rejects.toThrow('STALE_OR_REVOKED_LEASE');
-      await phone.cropResult('worker','phone_test',job.jobId,job.fence,bytes.toString('base64'),input.contentHash,1);
+      await phone.cropResult('worker','phone_test',job.jobId,job.fence,bytes.toString('base64'),input.contentHash,1,{version:1,executorVersion:'1',executionMs:1,inputTransferMs:1});
       expect((await work).buffer.equals(bytes)).toBe(true);expect(cloud).not.toHaveBeenCalled();
       await costs.refresh();
       expect((await costs.get(key))!.count).toBe(4);
       expect((await db.phoneDispatchJob.findUniqueOrThrow({where:{id:job.jobId}})).resultJson).toBeNull();
-    }finally{names.forEach((name,i)=>{if(previous[i]===undefined)delete process.env[name];else process.env[name]=previous[i];});}
+    }finally{jest.restoreAllMocks();names.forEach((name,i)=>{if(previous[i]===undefined)delete process.env[name];else process.env[name]=previous[i];});}
   });
 });

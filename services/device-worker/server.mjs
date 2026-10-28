@@ -87,7 +87,7 @@ async function compute(ownerId,request,signal,config) {
         }
         if(message.result) {
           result=message.result;
-          if(result.bytes) { const artifact=await put(ownerId,Buffer.from(result.bytes),'shopping.image',result.mediaType);delete result.bytes;result.artifact=artifact; }
+          if(result.bytes) { const artifact=await put(ownerId,Buffer.from(result.bytes),'image.raster.v1',result.mediaType);delete result.bytes;result.artifact=artifact; }
           result.checkpointRef=checkpointRef;result.inputHash=request.input.contentHash;result.executionConfig=config;result.executorId='cpu-worker';result.instanceId=instanceId;
         }
       }).catch(failure=>{error=failure;cancel();worker.postMessage({ack:false});});
@@ -111,7 +111,7 @@ const server=http.createServer(async(req,res)=>{
       source:'REAL',resourceDomain:'cpu-worker-process',capacity:{slots:Math.max(0,manager.slots-[...manager.leases.values()].filter(l=>!l.settled).length),memoryBytes:Math.max(0,manager.memoryBytes-[...manager.leases.values()].filter(l=>!l.settled).reduce((sum,l)=>sum+l.memoryBytes,0))},
       capabilities:['image.crop.v1','vector.normalize.v1'],checkpointFormats:['shopping.normalization.v1'],observedAt:Date.now(),ttlMs:3000});
     if(req.method==='POST'&&route==='/v1/artifacts') {
-      const schemaId=req.headers['x-schema-id'];if(!['shopping.image','shopping.normalization-input'].includes(schemaId))throw new Error('SCHEMA_UNSUPPORTED');
+      const schemaId=req.headers['x-schema-id'];if(!['image.raster.v1','shopping.image','shopping.normalization-input'].includes(schemaId))throw new Error('SCHEMA_UNSUPPORTED');
       return send(201,await put(ownerId,await body(req,true),schemaId,String(req.headers['content-type']??'application/octet-stream')));
     }
     if(req.method==='POST'&&route==='/v1/artifacts/resolve') {const value=await resolve(ownerId,await body(req));res.writeHead(200,{'Content-Type':value.manifest.mediaType});return res.end(value.bytes);}

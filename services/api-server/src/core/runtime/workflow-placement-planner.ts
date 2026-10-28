@@ -118,12 +118,12 @@ export class WorkflowPlacementPlanner {
   private extend(state:Beam,node:PlacementNode,c:PlacementCandidate,r:PlacementRequest):Beam|null {
     let transfer=0;
     const artifacts=new Map(state.artifacts);
-    const roundtrip=c.costScope==='coordinator-roundtrip'&&r.materializeOutputsAt===r.localDeviceId;
-    for(const id of new Set(node.inputs)){const artifact=state.artifacts.get(id);if(!artifact)return null;const cost=roundtrip&&artifact.replicas.some(replica=>replica.deviceId===r.localDeviceId)?0:this.transfer(artifact,c.deviceId,r);if(cost===null)return null;transfer+=cost;
+
+    for(const id of new Set(node.inputs)){const artifact=state.artifacts.get(id);if(!artifact)return null;const cost=this.transfer(artifact,c.deviceId,r);if(cost===null)return null;transfer+=cost;
       if(!r.materializeOutputsAt&&!artifact.replicas.some(replica=>replica.deviceId===c.deviceId)) artifacts.set(id,{...artifact,replicas:[...artifact.replicas,{deviceId:c.deviceId,readMs:0}]});
     }
     const output:PlacementArtifact={id:node.output.id,bytes:node.output.bytes,replicas:[{deviceId:c.deviceId,readMs:0}]};
-    const publication=roundtrip?0:r.materializeOutputsAt?this.transfer(output,r.materializeOutputsAt,r):0;
+    const publication=r.materializeOutputsAt?this.transfer(output,r.materializeOutputsAt,r):0;
     if(publication===null)return null;
     const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs+publication;
     const cost=state.cost+transfer+execution+c.uncertaintyMs;if(cost>r.remainingBudgetMs)return null;

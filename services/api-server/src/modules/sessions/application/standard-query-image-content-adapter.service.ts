@@ -1,4 +1,4 @@
-import { IMAGE_CROP_CONTRACT } from '../domain/image-crop-contract';
+import { IMAGE_CROP_CONTRACT } from '../../../core/capabilities/image-crop-contract';
 import { createHash } from 'node:crypto';
 import { DeviceDispatchService } from '../../../core/runtime/device-dispatch.service';
 import { PhoneDispatchService } from '../../runtime/phone-dispatch.service';
@@ -38,7 +38,7 @@ export class StandardQueryImageContentAdapterService implements QueryImageConten
       const scheduling=RuntimeWorkScope.scheduling();
       const capability = 'image.crop.v1';
       const parameters = {box:input.box,paddingRatio:input.paddingRatio,targetSize:input.targetSize,jpegQuality:input.jpegQuality};
-      const artifact = {artifactId:'crop-input',contentVersion:1,schemaVersion:1,schemaId:'shopping.image',
+      const artifact = {artifactId:'crop-input',contentVersion:1,schemaVersion:1,schemaId:'image.raster.v1',
         contentHash:createHash('sha256').update(imageBuffer).digest('hex'),data:imageBuffer,sizeBytes:imageBuffer.length};
       return this.dispatch.dispatch({capability,inputs:[artifact],tasks:[{contract:IMAGE_CROP_CONTRACT,id:'crop',capability,dependencies:[],inputs:[artifact.artifactId],
         outputBytes:input.targetSize*input.targetSize*4+65536,memoryMB:128,minQuality:1,parameters}]},

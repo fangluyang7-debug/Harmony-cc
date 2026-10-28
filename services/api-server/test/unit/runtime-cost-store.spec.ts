@@ -1,4 +1,4 @@
-import { IMAGE_CROP_CONTRACT } from '../../src/modules/sessions/domain/image-crop-contract';
+import { IMAGE_CROP_CONTRACT } from '../../src/core/capabilities/image-crop-contract';
 import { admissionEvidence } from '../../src/core/runtime/placement-admission-evidence';
 import { PrismaClient } from '@prisma/client';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
@@ -13,6 +13,7 @@ import { DeviceDispatchService } from '../../src/core/runtime/device-dispatch.se
 import { PhoneDispatchService } from '../../src/modules/runtime/phone-dispatch.service';
 import { MacroSchedulerService } from '../../src/core/runtime/macro-scheduler.service';
 import { RuntimeWorkScope } from '../../src/core/runtime/runtime-work-scope';
+import { CapabilityQualityRegistry } from '../../src/core/runtime/capability-quality-registry';
 
 describe('cost pipeline persistence and evidence',()=>{
   let folder:string,db:PrismaClient;
@@ -26,9 +27,55 @@ describe('cost pipeline persistence and evidence',()=>{
     const sql=await readFile(path.resolve(__dirname,'../../prisma/migrations/000012_runtime_cost_observations/migration.sql'),'utf8');
     // Migration is safe for both new databases and repeated db:init.
     for(let i=0;i<2;i++)for(const statement of sql.split(';').map(s=>s.trim()).filter(Boolean))await db.$executeRawUnsafe(statement);
+    const approval=await readFile(path.resolve(__dirname,'../../prisma/migrations/000013_capability_approval/migration.sql'),'utf8');
+    for(let i=0;i<2;i++)for(const statement of approval.split(';').map(s=>s.trim()).filter(Boolean))await db.$executeRawUnsafe(statement);
   });
   beforeEach(async()=>{await db.runtimeCostObservation.deleteMany();await db.runtimeCalibrationQuota.deleteMany();await db.runtimeQualityEvidence.deleteMany();});
   afterEach(()=>jest.restoreAllMocks());
+  it('isolates manual quality decisions by capability, device and version, including revocation and expiry',async()=>{
+    const registry=new CapabilityQualityRegistry(db as unknown as PrismaService);
+    expect(await registry.approved('text.count','terminal','v1')).toBe(false);
+    await registry.setManualApproval('text.count','terminal','v1',true,'reviewer','fixed corpus checked',new Date(Date.now()+60000));
+    expect(await registry.approved('text.count','terminal','v1')).toBe(true);
+    expect(await registry.approved('text.other','terminal','v1')).toBe(false);
+    expect(await registry.approved('text.count','other','v1')).toBe(false);
+    expect(await registry.approved('text.count','terminal','v2')).toBe(false);
+    await registry.setManualApproval('text.count','terminal','v1',false,'reviewer','regression found',new Date(Date.now()+60000));
+    expect(await registry.approved('text.count','terminal','v1')).toBe(false);
+    await registry.setManualApproval('text.count','terminal','v1',true,'reviewer','retested',new Date(Date.now()+60000));
+    jest.spyOn(Date,'now').mockReturnValue(Date.now()+61000);
+    expect(await registry.approved('text.count','terminal','v1')).toBe(false);
+  });
+  it('uses registered quality evaluators instead of manual or global approval',async()=>{
+    const registry=new CapabilityQualityRegistry(db as unknown as PrismaService);
+    const evaluator={approved:jest.fn().mockResolvedValue(false)};
+    registry.register('text.validated',evaluator);
+    expect(await registry.approved('text.validated','terminal','v1')).toBe(false);
+    expect(evaluator.approved).toHaveBeenCalledWith('terminal','v1');
+    await expect(registry.setManualApproval('text.validated','terminal','v1',true,'reviewer','bypass',new Date(Date.now()+60000))).rejects.toThrow('MANUAL_QUALITY_APPROVAL_UNAVAILABLE');
+    const dispatch=new DeviceDispatchService(undefined,undefined,undefined,undefined,undefined,registry);
+    const evidence=await (dispatch as any).rolloutEvidence({qualityPassed:true},'unreviewed','terminal');
+    expect(evidence.qualityPassed).toBe(false);
+  });
+  it('does not amplify one sparse recent failure and permits bounded recovery probes after cooldown',async()=>{
+    const costs=store();
+    for(let i=0;i<30;i++)costs.record(key,10,true);
+    await costs.flush();
+    await db.runtimeCostObservation.updateMany({data:{observedAt:new Date(Date.now()-2*COST_WINDOW_MS)}});
+    costs.record(key,100,false);await costs.flush();
+    expect(await costs.evidence('image.crop.v1','worker','execution')).toMatchObject({failureRate:1/31,circuitOpen:false});
+    costs.record(key,100,false);costs.record(key,100,false);await costs.flush();
+    const evidence=await costs.evidence('image.crop.v1','worker','execution');
+    expect(evidence).toMatchObject({circuitOpen:true,probeAllowed:false});
+    const config={mode:'ACTIVE',killSwitch:false,maximumFailureRate:.05} as any;
+    expect(admissionEvidence(config,evidence,'x',true).killSwitch).toBe(true);
+    jest.spyOn(Date,'now').mockReturnValue(Date.now()+61000);
+    const cooled=await costs.evidence('image.crop.v1','worker','execution');
+    expect(admissionEvidence(config,cooled,'x',true)).toMatchObject({killSwitch:false,failureRate:0});
+    expect(admissionEvidence({...config,killSwitch:true},cooled,'x',true).killSwitch).toBe(true);
+    expect(admissionEvidence(config,cooled,'x',false).killSwitch).toBe(true);
+    expect(cooled.failureRate).toBe(3/33);
+  });
   afterAll(async()=>{
     await db.$disconnect();
     if(path.dirname(path.resolve(folder))===path.resolve(tmpdir())&&path.basename(folder).startsWith('harmony-costs-'))await rm(folder,{recursive:true,force:true});

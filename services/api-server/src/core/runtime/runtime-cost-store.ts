@@ -9,7 +9,7 @@ import { RuntimeWorkScope } from './runtime-work-scope';
 export const COST_WINDOW_MS = 24 * 60 * 60 * 1000;
 export const EVIDENCE_WINDOW_MS = 30 * COST_WINDOW_MS;
 export const LINK_WINDOW_MS = 10 * 60 * 1000;
-export type CostScope = 'execution' | 'roundtrip' | 'upload' | 'download';
+export type CostScope = 'execution' | 'roundtrip' | 'upload' | 'download' | 'relay-return' | 'coordination';
 export type SampleSource = 'BUSINESS' | 'CALIBRATION';
 export interface CostIdentity {
   capability: string; deviceId: string; scope: CostScope; sizeBucket: number;
@@ -31,17 +31,17 @@ export function canonical(value: unknown): string {
 }
 export function costKey(capability: string, deviceId: string, bytes: number, parameters: unknown,
   scope: CostScope = 'execution', executorVersion = '1', networkId = 'unknown',model?:CapabilityCostModel): string {
-  const link=scope==='upload'||scope==='download';
+  const link=scope==='upload'||scope==='download'||scope==='relay-return'||scope==='coordination';
   return 'cost:v3:' + canonical({capability:link?'transport.bytes.v1':capability,deviceId,scope,
     sizeBucket:link?0:Math.floor(Math.log2(Math.max(1,bytes))),
     configuration:createHash('sha256').update(canonical(link?{}:costConfiguration(parameters,model))).digest('hex'),
     executorVersion:link?'transport-v1':executorVersion,networkId:scope==='execution'?'none':networkId});
 }
-export function costIdentity(key: string): CostIdentity { return JSON.parse(key.slice('cost:v2:'.length)); }
+export function costIdentity(key: string): CostIdentity { const match=/^cost:v[23]:(.*)$/.exec(key); if(!match)throw new Error('COST_KEY_INVALID'); return JSON.parse(match[1]); }
 export function sampleTtl(identity: CostIdentity): number {
   if (identity.scope === 'execution') return COST_WINDOW_MS;
   // An unknown network cannot safely reuse a ten-minute transfer/roundtrip measurement.
-  return identity.networkId === 'unknown' ? 30_000 : LINK_WINDOW_MS;
+  return identity.networkId.startsWith('unknown') ? 30_000 : LINK_WINDOW_MS;
 }
 export function networkIdentity(target?: string): string {
   const interfaces=Object.entries(networkInterfaces()).flatMap(([name,addresses])=>
@@ -167,7 +167,7 @@ export class RuntimeCostStore {
     for(const row of this.recent(key))sample=accumulate(sample,row.durationMs,row.success,row.observedAt.getTime(),row.bytes??undefined);
     return sample;
   }
-  link(deviceId:string,scope:'upload'|'download',networkId:string){
+  link(deviceId:string,scope:'upload'|'download'|'relay-return',networkId:string){
     const key=costKey('',deviceId,0,{},scope,'',networkId);
     const rows=this.recent(key).filter(r=>r.success&&r.bytes!==null&&r.bytes>0);
     if(rows.length<3)return;
@@ -181,28 +181,34 @@ export class RuntimeCostStore {
   }
   async evidence(capability: string, deviceId: string, scope: CostScope, executorVersion='1', networkId='unknown') {
     const now=Date.now(),since=new Date(now-EVIDENCE_WINDOW_MS);
-    const where={capability,deviceId,scope,executorVersion,...(scope==='roundtrip'?{networkId}:{}),observedAt:{gt:since,lte:new Date(now)}};
+    const where={capability,deviceId,scope,executorVersion,observedAt:{gt:since,lte:new Date(now)}};
     let successes:number,failures:number,lastSuccessAt:number|null,recentFailures:number,recentTotal:number;
+    let consecutiveFailures=0,lastAttemptAt:number|null=null;
     if(this.prisma){
       // Admission uses committed records; pending writes may delay activation, never fabricate evidence.
-      const [groups,last,recent]=await Promise.all([
+      const [groups,last,recent,tail]=await Promise.all([
         this.prisma.runtimeCostObservation.groupBy({by:['success'],where,_count:{_all:true}}),
         this.prisma.runtimeCostObservation.findFirst({where:{...where,success:true},orderBy:{observedAt:'desc'},select:{observedAt:true}}),
-        this.prisma.runtimeCostObservation.groupBy({by:['success'],where:{...where,observedAt:{gt:new Date(now-COST_WINDOW_MS),lte:new Date(now)}},_count:{_all:true}})
+        this.prisma.runtimeCostObservation.groupBy({by:['success'],where:{...where,observedAt:{gt:new Date(now-COST_WINDOW_MS),lte:new Date(now)}},_count:{_all:true}}),
+        this.prisma.runtimeCostObservation.findMany({where:{...where,observedAt:{gt:new Date(now-COST_WINDOW_MS),lte:new Date(now)}},orderBy:[{observedAt:'desc'},{id:'desc'}],take:3,select:{success:true,observedAt:true}})
       ]);
+      lastAttemptAt=tail[0]?.observedAt.getTime()??null;
+      for(const row of tail){if(row.success)break;consecutiveFailures++;}
       successes=groups.find(g=>g.success)?._count._all??0;failures=groups.find(g=>!g.success)?._count._all??0;
       lastSuccessAt=last?.observedAt.getTime()??null;
       recentFailures=recent.find(g=>!g.success)?._count._all??0;recentTotal=recent.reduce((s,g)=>s+g._count._all,0);
     }else{
       const rows=this.observations.filter(r=>r.capability===capability&&r.deviceId===deviceId&&r.scope===scope&&r.executorVersion===executorVersion&&
-        (scope!=='roundtrip'||r.networkId===networkId)&&r.observedAt>since&&r.observedAt.getTime()<=now);
+        r.observedAt>since&&r.observedAt.getTime()<=now);
       successes=rows.filter(r=>r.success).length;failures=rows.length-successes;
       lastSuccessAt=rows.filter(r=>r.success).reduce<number|null>((n,r)=>Math.max(n??0,r.observedAt.getTime()),null);
       const recent=rows.filter(r=>r.observedAt.getTime()>now-COST_WINDOW_MS);
       recentFailures=recent.filter(r=>!r.success).length;recentTotal=recent.length;
+      lastAttemptAt=recent.length?Math.max(...recent.map(r=>r.observedAt.getTime())):null;
+      for(const row of [...recent].reverse()){if(row.success)break;consecutiveFailures++;}
     }
-    const failureRate=Math.max(failures/Math.max(1,successes+failures),recentFailures/Math.max(1,recentTotal));
-    return {sampleCount:successes,failureRate,lastSuccessAt};
+    const failureRate=Math.max(failures/Math.max(1,successes+failures),recentTotal>=5?recentFailures/recentTotal:0);
+    return {sampleCount:successes,failureRate,lastSuccessAt,consecutiveFailures,circuitOpen:consecutiveFailures>=3,probeAllowed:lastAttemptAt===null||now-lastAttemptAt>=60000};
   }
   async withQualityCalibration<T>(ownerId:string,deviceId:string,cases:number,work:()=>Promise<T>):Promise<T>{
     if(!Number.isSafeInteger(cases)||cases<3||cases>5)throw new Error('QUALITY_CALIBRATION_CASE_COUNT_INVALID');

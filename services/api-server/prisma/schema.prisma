@@ -678,3 +678,15 @@ model SessionWriteLock {
   ownerId String
   createdAt DateTime @default(now())
 }
+
+model RuntimeCapabilityApproval {
+  capability String
+  deviceId String
+  executorVersion String
+  approved Boolean
+  reviewer String
+  reason String
+  observedAt DateTime
+  expiresAt DateTime
+  @@id([capability, deviceId, executorVersion])
+}

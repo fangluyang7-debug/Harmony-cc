@@ -1,4 +1,4 @@
-import { IMAGE_CROP_CONTRACT } from '../../src/modules/sessions/domain/image-crop-contract';
+import { IMAGE_CROP_CONTRACT } from '../../src/core/capabilities/image-crop-contract';
 import { spawn, ChildProcess } from 'node:child_process';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import { PrismaClient } from '@prisma/client';
@@ -51,6 +51,8 @@ it('runs a calibrated HTTP Worker DAG and returns its artifacts to a cloud capab
     for(const statement of migration.split(';').map(s=>s.trim()).filter(Boolean))await database.$executeRawUnsafe(statement);
     const costMigration=await readFile(path.resolve(__dirname,'../../prisma/migrations/000012_runtime_cost_observations/migration.sql'),'utf8');
     for(const statement of costMigration.split(';').map(s=>s.trim()).filter(Boolean))await database.$executeRawUnsafe(statement);
+    const approvalMigration=await readFile(path.resolve(__dirname,'../../prisma/migrations/000013_capability_approval/migration.sql'),'utf8');
+    for(const statement of approvalMigration.split(';').map(s=>s.trim()).filter(Boolean))await database.$executeRawUnsafe(statement);
     const registry=new DeviceDirectoryService(database as unknown as PrismaService);
     await registry.registerWorker({deviceId:'worker-test',endpoint:`http://127.0.0.1:${port}`,
       tokenEnv:'DISPATCH_TEST_TOKEN',enabled:true,qualityVerified:false,cropPriorMs:1});
@@ -70,13 +72,15 @@ it('runs a calibrated HTTP Worker DAG and returns its artifacts to a cloud capab
     const evaluator=new CropQualityEvaluator(database as unknown as PrismaService);
     expect(await evaluator.approved('worker-test','1')).toBe(false);
     const reference=new StandardQueryImageContentAdapterService();
+    const calibrationErrors:string[]=[];
     const quality=await evaluator.evaluate('worker-test','1',fixtures,
       async fixture=>(await reference.cropBuffer(fixture.input,{signedUrl:'',...fixture.parameters as typeof parameters})).buffer,
-      async fixture=>(await service.calibrate('worker-test','owner',fixture.input,fixture.parameters as typeof parameters,AbortSignal.timeout(5000),'1')).buffer,'owner');
+      async fixture=>{try{return (await service.calibrate('worker-test','owner',fixture.input,fixture.parameters as typeof parameters,AbortSignal.timeout(10000),'1')).buffer;}catch(error){calibrationErrors.push((error as Error).message);throw error;}},'owner');
+    expect(calibrationErrors).toEqual([]);
     expect(quality.passed).toBe(true);
     expect(await evaluator.approved('worker-test','1')).toBe(true);
     const input={artifactId:'image',contentHash:createHash('sha256').update(bytes).digest('hex'),contentVersion:1,
-      schemaId:'shopping.image',schemaVersion:1,data:bytes,sizeBytes:bytes.length};
+      schemaId:'image.raster.v1',schemaVersion:1,data:bytes,sizeBytes:bytes.length};
     const crop={contract:IMAGE_CROP_CONTRACT,id:'crop',capability:'image.crop.v1',dependencies:[],inputs:['image'],memoryMB:128,outputBytes:10000,minQuality:1,parameters};
     const graph:TaskGraph={capability:'image.processing.pipeline',inputs:[input],tasks:[crop,
       {...crop,id:'recrop',dependencies:['crop'],inputs:['crop-output']},
@@ -116,4 +120,4 @@ it('runs a calibrated HTTP Worker DAG and returns its artifacts to a cloud capab
     }
     jest.restoreAllMocks();
   }
-},30000);
+},60000);

@@ -76,7 +76,7 @@ export class PhoneDispatchController {
     const value = body && typeof body === 'object' ? body as Record<string, unknown> : {};
     return ok(await this.dispatch.cropResult(request.user!.userId, deviceId, jobId,
       value.fence as number, value.imageBase64 as string, value.inputHash as string,
-      value.computedMs as number));
+      value.computedMs as number, value.timing as import('../phone-dispatch.service').TerminalTiming | undefined));
   }
 
   @Post('devices/:deviceId/jobs/:jobId/crop-failure')
