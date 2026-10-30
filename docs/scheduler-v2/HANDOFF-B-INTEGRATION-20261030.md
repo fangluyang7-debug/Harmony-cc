@@ -15,9 +15,11 @@
 **交接基线：**
 
 - 仓库：`C:/Users/17321/Desktop/Harmony-final`。
-- 分支：`codex/scheduler-v2-foundation`。
-- Git HEAD：`5c63ee3a713f50076d6029059476c15e69afb333`。
-- 当前修改包含前几轮累计工作，仍在工作区，很多 v2 文件尚未跟踪；没有 commit/push。仅查看 `git diff --stat` 会漏掉大部分文件。
+- GitHub：[fangluyang7-debug/Harmony-cc](https://github.com/fangluyang7-debug/Harmony-cc)。
+- **接手分支：`origin/codex/scheduler-v2-foundation`**，见 [GitHub 分支](https://github.com/fangluyang7-debug/Harmony-cc/tree/codex/scheduler-v2-foundation)。
+- **固定代码基线：`4a39bba47733e57de4b311bd675e9c8c1a7d0ae8`**，提交标题 `Integrate scheduler v2 CPU execution and durable handoff baseline`，见 [代码基线提交](https://github.com/fangluyang7-debug/Harmony-cc/commit/4a39bba47733e57de4b311bd675e9c8c1a7d0ae8)。该提交包含累计 A/B 代码、测试及两份产品设计/开发计划文档，共 253 个变更文件。
+- 本文件随后由一个单独的文档提交更新基线；**协作者应从上述远端分支最新提交开始**，这样同时获得完整代码和本交接说明。后续文档提交不改变上述代码基线。
+- 历史补丁起点为 `5c63ee3a713f50076d6029059476c15e69afb333`，它是旧基线，不能误当作本次接手版本。
 - 需求以 [团队共享算力空间功能设计](../Harmony团队共享算力空间功能设计方案.md) 为产品方向，以 [specification-r5.md](specification-r5.md) 为技术约束。旧购物业务只做兼容回归，不再作为新功能主线。
 - 早期 `HANDOFF-STAGE-B`、`HANDOFF-B3-PROFILES`、`HANDOFF-B4-RECOVERY` 是历史记录；与本文件冲突的当前状态以本文件及代码为准。
 
@@ -148,16 +150,43 @@ Pop-Location
 
 当前通道 outbox 最多 64 条，trace 在 32 条时主动背压，inbox/dispatch 历史上限 4096；业务宿主最多 8 个在途工作。超限保守拒绝，尚无完成记录归档/压缩策略。长期运行接手时应补安全归档，不能删除仍有 UNKNOWN/未确认回执的记录。
 
-## 7. 给协作者的文件与应用方式
+## 7. 从 GitHub 接手（推荐）
 
-除了本文件，交付目录为 `artifacts/handoff/20261030-b-integration/`：
+本次代码及产品文档已纳入 Git 提交，并通过 `codex/scheduler-v2-foundation` 分支交付；无需应用之前发送的补丁。`main` 和原协作分支没有被本次推送覆盖。
 
-- `scheduler-v2-b-integration-cumulative.patch`：从上述 HEAD 起的累计代码/技术文档补丁，包含前几轮 A/B 修改和本轮整合。
+已有仓库时，先保存自己的未提交工作，再运行：
+
+```powershell
+git fetch origin
+git switch -c codex/harmony-b-followup origin/codex/scheduler-v2-foundation
+git merge-base --is-ancestor 4a39bba47733e57de4b311bd675e9c8c1a7d0ae8 HEAD
+npm ci
+npm run scheduler:v2:test
+```
+
+`merge-base --is-ancestor` 退出码为 0 表示当前分支包含交接代码基线。示例接续分支名已存在时，请使用自己的新分支名，不要强制覆盖现有工作。
+
+尚未克隆时：
+
+```powershell
+git clone --branch codex/scheduler-v2-foundation https://github.com/fangluyang7-debug/Harmony-cc.git
+Set-Location Harmony-cc
+npm ci
+npm run scheduler:v2:test
+```
+
+需求文档 `docs/Harmony团队共享算力空间功能设计方案.md` 和 `docs/Harmony共享算力空间能力盘点与国赛开发计划.md` 已包含在代码基线中，可直接阅读。原开发计划是此前盘点，技术实现的当前状态以本交接和代码为准。
+
+## 8. 历史离线补丁（仅供旧基线接续）
+
+此前生成的本机交付目录为 `artifacts/handoff/20261030-b-integration/`，这些离线文件不纳入本次 GitHub 提交：
+
+- `scheduler-v2-b-integration-cumulative.patch`：从历史起点 `5c63ee3a713f50076d6029059476c15e69afb333` 起的累计代码/技术文档补丁，包含前几轮 A/B 修改和整合，但不包含此次 GitHub 基线说明更新及另行纳入 Git 的两份产品文档。
 - `CHANGED-FILES.txt`：补丁内文件清单。
 - `SHA256SUMS.txt`：补丁和清单校验值。
 - `VERIFICATION.json`：基准提交、补丁可应用检查与树一致性记录。
 
-**此补丁不能再叠加历史 A 或 A/B foundation 补丁。** 若已经拥有当前修改，直接同步工作区/后续正常提交；不要再次 apply。若从干净基准接手，先确认没有要保留的本地修改，再在相同 HEAD 下：
+**已从 GitHub 接手的协作者不要再应用任何历史补丁。此补丁也不能叠加历史 A 或 A/B foundation 补丁。** 仅在无法使用 GitHub、确需从干净的旧基线 `5c63ee3` 接手时使用下面的离线方法：
 
 ```powershell
 git apply --check C:/path/to/scheduler-v2-b-integration-cumulative.patch
@@ -166,4 +195,4 @@ npm ci
 npm run scheduler:v2:test
 ```
 
-补丁排除 `.test`、凭证/证书私钥、数据库、生成代码、node_modules、旧交付包以及两份用户原有产品设计 MD。本产品设计文件在当前工作区仍有未跟踪状态；协作者若没有它，请另附 `docs/Harmony团队共享算力空间功能设计方案.md`。本轮未创建 Git 提交、未推送、未部署 Railway，也未变更其他项目。
+历史补丁排除 `.test`、凭证/证书私钥、数据库、生成代码、node_modules、旧交付包以及两份用户原有产品设计 MD。GitHub 交付则已纳入两份产品文档，仍排除上述本机运行数据与凭证。此次发布只推送交接分支，不部署 Railway、不执行真机验收。
