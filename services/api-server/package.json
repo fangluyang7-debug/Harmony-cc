@@ -18,7 +18,11 @@
     "test:e2e": "jest --config test/jest-e2e.json --runInBand",
     "test:ci": "npm run test:unit -- --ci --runInBand && npm run test:e2e -- --ci && npm run smoke:cache && npm run smoke:conversation",
     "smoke:cache": "ts-node scripts/cache-smoke.ts",
-    "smoke:conversation": "ts-node scripts/conversation-routing-smoke.ts"
+    "smoke:conversation": "ts-node scripts/conversation-routing-smoke.ts",
+    "prebuild": "npm --prefix ../.. run core:build",
+    "pretest:unit": "npm --prefix ../.. run core:build",
+    "pretest:e2e": "npm --prefix ../.. run core:build",
+    "prestart:dev": "npm --prefix ../.. run core:build"
   },
   "dependencies": {
     "@nestjs/cli": "^11.0.10",
@@ -34,7 +38,8 @@
     "rxjs": "^7.8.1",
     "sharp": "^0.34.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.2",
+    "@harmony/scheduler-core": "0.1.0"
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.27",

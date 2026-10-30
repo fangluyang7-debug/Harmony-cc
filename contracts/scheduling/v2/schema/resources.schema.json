@@ -1,0 +1,1170 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:scheduling:v2:resources",
+  "definitions": {
+    "NumericSample": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "enum": [
+            "MEASURED",
+            "PRIOR",
+            "UNKNOWN",
+            "SIMULATED"
+          ]
+        },
+        "sampledAt": {
+          "type": "number",
+          "minimum": 0
+        },
+        "ttlMs": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "unit": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      },
+      "required": [
+        "value",
+        "source",
+        "sampledAt",
+        "ttlMs",
+        "unit"
+      ],
+      "additionalProperties": false
+    },
+    "StateSample": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "enum": [
+            "MEASURED",
+            "PRIOR",
+            "UNKNOWN",
+            "SIMULATED"
+          ]
+        },
+        "sampledAt": {
+          "type": "number",
+          "minimum": 0
+        },
+        "ttlMs": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "unit": {
+          "const": "state"
+        }
+      },
+      "required": [
+        "value",
+        "source",
+        "sampledAt",
+        "ttlMs",
+        "unit"
+      ],
+      "additionalProperties": false
+    },
+    "ResourceAmount": {
+      "type": "object",
+      "properties": {
+        "resourcePoolId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "resourcePoolId",
+        "amount"
+      ],
+      "additionalProperties": false
+    },
+    "Pool": {
+      "type": "object",
+      "properties": {
+        "resourcePoolId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "kind": {
+          "enum": [
+            "CPU_SLOTS",
+            "RAM_BYTES",
+            "GPU_SLOTS",
+            "VRAM_BYTES",
+            "TRANSFER_SLOTS"
+          ]
+        },
+        "exclusive": {
+          "type": "boolean"
+        },
+        "total": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "ownerReserved": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "contributionLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "admissionLimit": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "occupied": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "draining": {
+          "type": "boolean"
+        },
+        "drainMs": {
+          "$ref": "#/definitions/NumericSample"
+        }
+      },
+      "required": [
+        "resourcePoolId",
+        "kind",
+        "exclusive",
+        "total",
+        "ownerReserved",
+        "contributionLimit",
+        "admissionLimit",
+        "occupied",
+        "draining",
+        "drainMs"
+      ],
+      "additionalProperties": false
+    },
+    "ModelManifest": {
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "weightsHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "preprocessVersion": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "embeddingKind": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "dimension": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "dtype": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "normalization": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      },
+      "required": [
+        "modelId",
+        "version",
+        "weightsHash",
+        "preprocessVersion",
+        "embeddingKind",
+        "dimension",
+        "dtype",
+        "normalization"
+      ],
+      "additionalProperties": false
+    },
+    "ExecutionConfig": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "batchSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "quality": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      },
+      "required": [
+        "id",
+        "threads",
+        "batchSize",
+        "quality"
+      ],
+      "additionalProperties": false
+    },
+    "Executor": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "$ref": "urn:scheduling:v2#/definitions/Target"
+        },
+        "contract": {
+          "$ref": "urn:scheduling:v2#/definitions/TaskContract"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelManifest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceAmount"
+          },
+          "maxItems": 32,
+          "minItems": 1
+        },
+        "configurations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExecutionConfig"
+          },
+          "maxItems": 64,
+          "minItems": 1
+        },
+        "compute": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "queue": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "cold": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "publish": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "uncertainty": {
+          "$ref": "#/definitions/NumericSample"
+        }
+      },
+      "required": [
+        "target",
+        "contract",
+        "model",
+        "resources",
+        "configurations",
+        "compute",
+        "queue",
+        "cold",
+        "publish",
+        "uncertainty"
+      ],
+      "additionalProperties": false
+    },
+    "Link": {
+      "type": "object",
+      "properties": {
+        "from": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "to": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "networkEpoch": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "via": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "fixedMs": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "bytesPerSecond": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "metered": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "from",
+        "to",
+        "networkEpoch",
+        "via",
+        "fixedMs",
+        "bytesPerSecond",
+        "metered"
+      ],
+      "additionalProperties": false
+    },
+    "Credit": {
+      "type": "object",
+      "properties": {
+        "priority": {
+          "enum": [
+            "ORIGIN_INTERACTIVE",
+            "REMOTE_INTERACTIVE",
+            "REMOTE_BATCH"
+          ]
+        },
+        "slots": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1024
+        }
+      },
+      "required": [
+        "priority",
+        "slots"
+      ],
+      "additionalProperties": false
+    },
+    "DeviceProfile": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "deviceInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "ledgerEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "domain": {
+          "enum": [
+            "REAL",
+            "SIMULATED"
+          ]
+        },
+        "ownerActivity": {
+          "$ref": "#/definitions/StateSample"
+        },
+        "foreground": {
+          "$ref": "#/definitions/StateSample"
+        },
+        "charging": {
+          "$ref": "#/definitions/StateSample"
+        },
+        "powerSave": {
+          "$ref": "#/definitions/StateSample"
+        },
+        "battery": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "temperature": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "pools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Pool"
+          },
+          "maxItems": 32,
+          "minItems": 1
+        },
+        "executors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Executor"
+          },
+          "maxItems": 64,
+          "minItems": 0
+        },
+        "links": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Link"
+          },
+          "maxItems": 128,
+          "minItems": 0
+        },
+        "credits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Credit"
+          },
+          "maxItems": 3,
+          "minItems": 3
+        }
+      },
+      "required": [
+        "deviceId",
+        "deviceInstanceId",
+        "holderInstanceId",
+        "ledgerEpoch",
+        "sequence",
+        "domain",
+        "ownerActivity",
+        "foreground",
+        "charging",
+        "powerSave",
+        "battery",
+        "temperature",
+        "pools",
+        "executors",
+        "links",
+        "credits"
+      ],
+      "additionalProperties": false
+    },
+    "AllotmentGrant": {
+      "type": "object",
+      "properties": {
+        "allotmentId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "deviceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "appInstanceId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "ledgerEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "coordinatorEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "base": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceAmount"
+          },
+          "maxItems": 32,
+          "minItems": 0
+        },
+        "extra": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceAmount"
+          },
+          "maxItems": 32,
+          "minItems": 0
+        },
+        "leaseRequestId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "leaseMs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 300000
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/=]{32,2048}$"
+        }
+      },
+      "required": [
+        "allotmentId",
+        "groupId",
+        "deviceId",
+        "appInstanceId",
+        "holderInstanceId",
+        "ledgerEpoch",
+        "coordinatorEpoch",
+        "version",
+        "base",
+        "extra",
+        "leaseRequestId",
+        "leaseMs",
+        "signature"
+      ],
+      "additionalProperties": false
+    },
+    "AllotmentAck": {
+      "type": "object",
+      "properties": {
+        "allotmentId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "ledgerEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "coordinatorEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "persisted": {
+          "type": "boolean"
+        },
+        "settlementSeq": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "occupied": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceAmount"
+          },
+          "maxItems": 32,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "allotmentId",
+        "holderInstanceId",
+        "ledgerEpoch",
+        "coordinatorEpoch",
+        "version",
+        "persisted",
+        "settlementSeq",
+        "occupied"
+      ],
+      "additionalProperties": false
+    },
+    "TransferHop": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "$ref": "urn:scheduling:v2#/definitions/ArtifactRef"
+        },
+        "from": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "to": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "via": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "ref",
+        "from",
+        "to",
+        "via"
+      ],
+      "additionalProperties": false
+    },
+    "Dependency": {
+      "type": "object",
+      "properties": {
+        "nodeId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "planRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "committed": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "nodeId",
+        "planRevision",
+        "committed"
+      ],
+      "additionalProperties": false
+    },
+    "DispatchOffer": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "$ref": "urn:scheduling:v2#/definitions/TaskInstance"
+        },
+        "target": {
+          "$ref": "urn:scheduling:v2#/definitions/Target"
+        },
+        "resources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceAmount"
+          },
+          "maxItems": 32,
+          "minItems": 1
+        },
+        "allowedConfigs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExecutionConfig"
+          },
+          "maxItems": 64,
+          "minItems": 1
+        },
+        "allotmentId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "allotmentVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "leaseMs": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "transferPlan": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/TransferHop"
+          },
+          "maxItems": 256,
+          "minItems": 0
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Dependency"
+          },
+          "maxItems": 64,
+          "minItems": 0
+        },
+        "reasonCode": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      },
+      "required": [
+        "task",
+        "target",
+        "resources",
+        "allowedConfigs",
+        "allotmentId",
+        "allotmentVersion",
+        "leaseMs",
+        "transferPlan",
+        "dependencies",
+        "reasonCode"
+      ],
+      "additionalProperties": false
+    },
+    "AdmissionReply": {
+      "type": "object",
+      "properties": {
+        "attemptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "status": {
+          "enum": [
+            "ACCEPTED",
+            "REJECTED"
+          ]
+        },
+        "reasonCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "record": {
+          "anyOf": [
+            {
+              "$ref": "urn:scheduling:v2#/definitions/AttemptRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wait": {
+          "$ref": "#/definitions/NumericSample"
+        }
+      },
+      "required": [
+        "attemptId",
+        "holderInstanceId",
+        "status",
+        "reasonCode",
+        "record",
+        "wait"
+      ],
+      "additionalProperties": false
+    },
+    "ExecutionReport": {
+      "type": "object",
+      "properties": {
+        "receipt": {
+          "$ref": "urn:scheduling:v2#/definitions/ExecutionReceipt"
+        },
+        "allotmentId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "allotmentVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "leaseId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "actualModel": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelManifest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NumericSample"
+          },
+          "maxItems": 32,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "receipt",
+        "allotmentId",
+        "allotmentVersion",
+        "leaseId",
+        "actualModel",
+        "timings"
+      ],
+      "additionalProperties": false
+    },
+    "YieldNotice": {
+      "type": "object",
+      "properties": {
+        "attemptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "kind": {
+          "enum": [
+            "CHECKPOINT",
+            "RESTART",
+            "DRAINING"
+          ]
+        },
+        "releaseMs": {
+          "$ref": "#/definitions/NumericSample"
+        },
+        "checkpoint": {
+          "anyOf": [
+            {
+              "$ref": "urn:scheduling:v2#/definitions/ArtifactRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasonCode": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      },
+      "required": [
+        "attemptId",
+        "kind",
+        "releaseMs",
+        "checkpoint",
+        "reasonCode"
+      ],
+      "additionalProperties": false
+    },
+    "AttemptStatusReply": {
+      "type": "object",
+      "properties": {
+        "attemptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "record": {
+          "anyOf": [
+            {
+              "$ref": "urn:scheduling:v2#/definitions/AttemptRecord"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "attemptId",
+        "record"
+      ],
+      "additionalProperties": false
+    },
+    "CapabilityPack": {
+      "type": "object",
+      "properties": {
+        "packId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "contract": {
+          "$ref": "urn:scheduling:v2#/definitions/TaskContract"
+        },
+        "executorIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          },
+          "maxItems": 64,
+          "minItems": 1
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelManifest"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "suiteId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "qualityThreshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "resourceLimit": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ResourceAmount"
+          },
+          "maxItems": 32,
+          "minItems": 1
+        }
+      },
+      "required": [
+        "packId",
+        "contract",
+        "executorIds",
+        "model",
+        "suiteId",
+        "qualityThreshold",
+        "resourceLimit"
+      ],
+      "additionalProperties": false
+    },
+    "CapabilityAdmission": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "targetId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "identity": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "domain": {
+          "enum": [
+            "REAL",
+            "SIMULATED"
+          ]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "state": {
+          "enum": [
+            "DISCOVERED",
+            "VALIDATING",
+            "CALIBRATING",
+            "CANARY",
+            "ACTIVE",
+            "WAITING_AUTH",
+            "WAITING_MODEL",
+            "WAITING_RESOURCE",
+            "WAITING_WINDOW",
+            "SUSPENDED"
+          ]
+        },
+        "reasonCode": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "quality": {
+          "allOf": [
+            {
+              "$ref": "#/definitions/NumericSample"
+            },
+            {
+              "properties": {
+                "unit": {
+                  "const": "score"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 1
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "type": "object"
+            },
+            {
+              "if": {
+                "properties": {
+                  "source": {
+                    "const": "UNKNOWN"
+                  }
+                },
+                "type": "object"
+              },
+              "then": {
+                "properties": {
+                  "value": {
+                    "type": "null"
+                  }
+                },
+                "type": "object"
+              },
+              "else": {
+                "properties": {
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          ]
+        }
+      },
+      "required": [
+        "groupId",
+        "holderInstanceId",
+        "targetId",
+        "identity",
+        "domain",
+        "revision",
+        "state",
+        "reasonCode",
+        "quality"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "CANARY",
+                  "ACTIVE"
+                ]
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "quality": {
+                "properties": {
+                  "value": {
+                    "type": "number"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "domain": {
+                "const": "REAL"
+              }
+            },
+            "type": "object"
+          },
+          "then": {
+            "properties": {
+              "quality": {
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "MEASURED",
+                      "UNKNOWN"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          },
+          "else": {
+            "properties": {
+              "quality": {
+                "properties": {
+                  "source": {
+                    "enum": [
+                      "SIMULATED",
+                      "UNKNOWN"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "type": "object"
+          }
+        }
+      ]
+    }
+  }
+}

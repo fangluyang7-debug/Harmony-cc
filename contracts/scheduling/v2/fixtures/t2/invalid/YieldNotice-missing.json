@@ -1,0 +1,12 @@
+{
+  "kind": "DRAINING",
+  "releaseMs": {
+    "value": null,
+    "source": "UNKNOWN",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "ms"
+  },
+  "checkpoint": null,
+  "reasonCode": "OWNER_ACTIVE"
+}

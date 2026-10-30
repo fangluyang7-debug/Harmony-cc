@@ -1,3 +1,5 @@
+import { CostSample, canonical, accumulate, fitLink } from '@harmony/scheduler-core';
+export { CostSample, canonical, accumulate } from '@harmony/scheduler-core';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { CapabilityCostModel, costConfiguration } from './capability-cost-model';
 import { createHash, randomUUID } from 'node:crypto';
@@ -15,19 +17,9 @@ export interface CostIdentity {
   capability: string; deviceId: string; scope: CostScope; sizeBucket: number;
   configuration: string; executorVersion: string; networkId: string;
 }
-export interface CostSample {
-  count: number; failures: number; mean: number; deviation: number; observedAt: number;
-  successAt?: number; bytes?: number;
-}
 interface Observation extends CostIdentity {
   id: string; sampleKey: string; durationMs: number; success: boolean;
   source: SampleSource; errorClass: string | null; bytes: number | null; observedAt: Date;
-}
-export function canonical(value: unknown): string {
-  if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
-  if (value && typeof value === 'object') return '{' + Object.entries(value).filter(([,v])=>v!==undefined)
-    .sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>JSON.stringify(k)+':'+canonical(v)).join(',') + '}';
-  return JSON.stringify(value) ?? 'null';
 }
 export function costKey(capability: string, deviceId: string, bytes: number, parameters: unknown,
   scope: CostScope = 'execution', executorVersion = '1', networkId = 'unknown',model?:CapabilityCostModel): string {
@@ -49,19 +41,6 @@ export function networkIdentity(target?: string): string {
   // Interface/subnet changes invalidate the pair. An operator epoch can additionally mark VPN/path changes.
   return target && interfaces.length ? createHash('sha256').update(canonical([interfaces,process.env.RUNTIME_NETWORK_ID??'',target])).digest('hex') : 'unknown';
 }
-export function accumulate(old: CostSample | undefined, ms: number, success: boolean, now: number, bytes?: number): CostSample {
-  const next = {...(old ?? {count:0,failures:0,mean:0,deviation:0,observedAt:now})};
-  if (success) {
-    // A failure never seeds or refreshes the successful latency estimate.
-    if (!next.count) { next.mean=ms; next.deviation=0; }
-    else { next.deviation=.75*next.deviation+.25*Math.abs(ms-next.mean); next.mean=.75*next.mean+.25*ms; }
-    next.count++; next.successAt=now;
-    if (bytes !== undefined) next.bytes=next.bytes===undefined?bytes:.75*next.bytes+.25*bytes;
-  } else next.failures++;
-  next.observedAt=now;
-  return next;
-}
-
 /** The Nest provider is shared; manual service construction shares a store per Prisma client. */
 @Injectable()
 export class RuntimeCostStore {
@@ -170,14 +149,7 @@ export class RuntimeCostStore {
   link(deviceId:string,scope:'upload'|'download'|'relay-return',networkId:string){
     const key=costKey('',deviceId,0,{},scope,'',networkId);
     const rows=this.recent(key).filter(r=>r.success&&r.bytes!==null&&r.bytes>0);
-    if(rows.length<3)return;
-    const n=rows.length,mx=rows.reduce((s,r)=>s+r.bytes!,0)/n,my=rows.reduce((s,r)=>s+r.durationMs,0)/n;
-    const variance=rows.reduce((s,r)=>s+(r.bytes!-mx)**2,0);
-    let slope=variance>0?rows.reduce((s,r)=>s+(r.bytes!-mx)*(r.durationMs-my),0)/variance:0;
-    if(!Number.isFinite(slope)||slope<=0)slope=Math.max(...rows.map(r=>Math.max(1,r.durationMs)/r.bytes!));
-    // Upper envelope of measured residuals, so a noisy fit cannot advertise an optimistic fixed delay.
-    const fixedMs=Math.max(0,...rows.map(r=>r.durationMs-slope*r.bytes!));
-    return {bytesPerSecond:1000/slope,fixedMs,observedAt:Math.max(...rows.map(r=>r.observedAt.getTime())),ttlMs:sampleTtl(costIdentity(key))};
+    return fitLink(rows.map(r=>({bytes:r.bytes!,durationMs:r.durationMs,observedAt:r.observedAt.getTime()})),sampleTtl(costIdentity(key)));
   }
   async evidence(capability: string, deviceId: string, scope: CostScope, executorVersion='1', networkId='unknown') {
     const now=Date.now(),since=new Date(now-EVIDENCE_WINDOW_MS);

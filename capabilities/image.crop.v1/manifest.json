@@ -1,0 +1,21 @@
+{
+  "packId": "image.crop.v1",
+  "contract": {
+    "contractId": "image.crop.contract",
+    "version": 1,
+    "capability": "image.crop.v1",
+    "inputSchemas": ["image.raster"],
+    "outputSchemas": ["image.raster"],
+    "sideEffectPolicy": "PURE",
+    "interruptibility": "CANCEL_RESTART",
+    "maxNonPreemptibleMs": null
+  },
+  "executorIds": ["sharp.crop.v1"],
+  "model": null,
+  "suiteId": "crop.geometry-colour.v1",
+  "qualityThreshold": 0.98,
+  "resourceLimit": [
+    {"resourcePoolId": "cpu1", "amount": 1},
+    {"resourcePoolId": "memory1", "amount": 67108864}
+  ]
+}

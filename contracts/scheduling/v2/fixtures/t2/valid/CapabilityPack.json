@@ -1,0 +1,33 @@
+{
+  "packId": "pack1",
+  "contract": {
+    "contractId": "contract1",
+    "version": 1,
+    "capability": "capability1",
+    "inputSchemas": [
+      "input.schema"
+    ],
+    "outputSchemas": [
+      "output.schema"
+    ],
+    "sideEffectPolicy": "PURE",
+    "interruptibility": "CANCEL_RESTART",
+    "maxNonPreemptibleMs": null
+  },
+  "executorIds": [
+    "executor1"
+  ],
+  "model": null,
+  "suiteId": "suite1",
+  "qualityThreshold": 1,
+  "resourceLimit": [
+    {
+      "resourcePoolId": "memory1",
+      "amount": 100
+    },
+    {
+      "resourcePoolId": "cpu1",
+      "amount": 1
+    }
+  ]
+}

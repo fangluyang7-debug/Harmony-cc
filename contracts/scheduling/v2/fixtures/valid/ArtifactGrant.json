@@ -1,0 +1,19 @@
+{
+  "ref": {
+    "artifactId": "input1",
+    "contentVersion": 1,
+    "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaId": "input.schema",
+    "schemaVersion": 1
+  },
+  "groupId": "g1",
+  "ownerPrincipalId": "p1",
+  "ownerAppId": "app1",
+  "allowedAppInstanceIds": [
+    "app-instance1"
+  ],
+  "operations": [
+    "READ"
+  ],
+  "expiresAt": 1000
+}

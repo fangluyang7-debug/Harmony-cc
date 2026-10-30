@@ -1,0 +1,25 @@
+{
+  "allotmentId": "allotment1",
+  "groupId": "g1",
+  "deviceId": "device1",
+  "appInstanceId": null,
+  "holderInstanceId": "h1",
+  "ledgerEpoch": 1,
+  "coordinatorEpoch": 1,
+  "version": 1,
+  "base": [],
+  "extra": [
+    {
+      "resourcePoolId": "memory1",
+      "amount": 1024
+    },
+    {
+      "resourcePoolId": "cpu1",
+      "amount": 2
+    }
+  ],
+  "leaseRequestId": "request1",
+  "leaseMs": 1000,
+  "signature": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  "unknownRequired": true
+}

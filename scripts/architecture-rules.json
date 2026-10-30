@@ -1,0 +1,42 @@
+{
+  "coreRoots": [
+    "packages/scheduler-core/src"
+  ],
+  "serviceRoots": [
+    "services/coordinator/src",
+    "services/pc-agent/src",
+    "packages/resource-transport/src"
+  ],
+  "forbiddenLiterals": [
+    "cloud-runtime",
+    "phone_",
+    "shopping",
+    "soleai",
+    "image.crop"
+  ],
+  "forbiddenGlobals": [
+    "Date",
+    "performance",
+    "process",
+    "fetch",
+    "WebSocket",
+    "XMLHttpRequest",
+    "setTimeout",
+    "setInterval",
+    "globalThis",
+    "global",
+    "window",
+    "self",
+    "document",
+    "eval",
+    "Function"
+  ],
+  "forbiddenMembers": [
+    "Math.random"
+  ],
+  "forbiddenServicePaths": [
+    "services/api-server",
+    "services/device-worker",
+    "harmony-agent-api-server"
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "id": "default",
+  "threads": 1,
+  "batchSize": 1,
+  "quality": "standard",
+  "unknownRequired": true
+}

@@ -1,0 +1,7 @@
+{
+  "value": "IDLE",
+  "source": "SIMULATED",
+  "sampledAt": 100,
+  "ttlMs": 1000,
+  "unit": "state"
+}

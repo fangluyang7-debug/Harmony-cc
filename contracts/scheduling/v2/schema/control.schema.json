@@ -1,0 +1,263 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:scheduling:v2:control",
+  "definitions": {
+    "Peer": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "deviceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "principalId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "credentialId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      },
+      "required": [
+        "groupId",
+        "holderInstanceId",
+        "deviceId",
+        "principalId",
+        "credentialId"
+      ],
+      "additionalProperties": false
+    },
+    "PairingRequest": {
+      "type": "object",
+      "properties": {
+        "inviteId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{24}$"
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      },
+      "required": [
+        "inviteId",
+        "code",
+        "holderInstanceId"
+      ],
+      "additionalProperties": false
+    },
+    "CredentialResponse": {
+      "type": "object",
+      "properties": {
+        "credential": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "peer": {
+          "$ref": "#/definitions/Peer"
+        }
+      },
+      "required": [
+        "credential",
+        "peer"
+      ],
+      "additionalProperties": false
+    },
+    "PairingResponse": {
+      "type": "object",
+      "properties": {
+        "credential": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{43}$"
+        },
+        "peer": {
+          "$ref": "#/definitions/Peer"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "credential",
+        "peer",
+        "epoch"
+      ],
+      "additionalProperties": false
+    },
+    "Invitation": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 2
+        },
+        "inviteId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_-]{24}$"
+        },
+        "address": {
+          "type": "string",
+          "pattern": "^https://",
+          "maxLength": 2048
+        },
+        "certificate": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expiresAt": {
+          "type": "number",
+          "minimum": 0
+        },
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      },
+      "required": [
+        "version",
+        "inviteId",
+        "code",
+        "address",
+        "certificate",
+        "fingerprint",
+        "expiresAt",
+        "groupId"
+      ],
+      "additionalProperties": false
+    },
+    "Identity": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 2
+        },
+        "coordinatorId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "domain": {
+          "enum": [
+            "REAL",
+            "SIMULATED"
+          ]
+        }
+      },
+      "required": [
+        "version",
+        "coordinatorId",
+        "epoch",
+        "domain"
+      ],
+      "additionalProperties": false
+    },
+    "AllotmentRequest": {
+      "type": "object",
+      "properties": {
+        "ledgerEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "leaseRequestId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "leaseMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 300000
+        },
+        "base": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "urn:scheduling:v2:resources#/definitions/ResourceAmount"
+          }
+        },
+        "extra": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "urn:scheduling:v2:resources#/definitions/ResourceAmount"
+          }
+        }
+      },
+      "required": [
+        "ledgerEpoch",
+        "leaseRequestId",
+        "leaseMs",
+        "base",
+        "extra"
+      ],
+      "additionalProperties": false
+    },
+    "SignedAllotmentAck": {
+      "type": "object",
+      "properties": {
+        "ack": {
+          "$ref": "urn:scheduling:v2:resources#/definitions/AllotmentAck"
+        },
+        "signature": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{43}=$"
+        }
+      },
+      "required": [
+        "ack",
+        "signature"
+      ],
+      "additionalProperties": false
+    },
+    "AllotmentAckResponse": {
+      "type": "object",
+      "properties": {
+        "acknowledged": {
+          "const": true
+        }
+      },
+      "required": [
+        "acknowledged"
+      ],
+      "additionalProperties": false
+    },
+    "RevokeResponse": {
+      "type": "object",
+      "properties": {
+        "revoked": {
+          "const": true
+        }
+      },
+      "required": [
+        "revoked"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

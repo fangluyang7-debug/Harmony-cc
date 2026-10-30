@@ -1,0 +1,7 @@
+{
+  "namespace": "feature",
+  "version": 1,
+  "payload": "{}",
+  "required": false,
+  "unknownRequiredField": true
+}

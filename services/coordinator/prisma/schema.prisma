@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("COORDINATOR_DATABASE_URL")
+}
+
+model CoordinatorState {
+  id    String @id
+  epoch Int
+}
+
+model ChannelInbox {
+  id String @id
+  digest String
+  done Boolean
+}
+
+model ChannelCursor {
+  id String @id
+  sequence Int
+}
+
+model Workflow {
+  id String @id
+  groupId String
+  planRevision Int
+  state String
+}
+
+model Node {
+  id String @id
+  workflowId String
+  currentAttemptId String?
+  state String
+}
+
+model Attempt {
+  id String @id
+  groupId String
+  workflowId String
+  nodeId String
+  executionDigest String
+  state String
+  holderInstanceId String
+  recordJson String?
+  taskJson String
+  offerJson String?
+}
+
+model Outbox {
+  id String @id
+  sequence Int
+  groupId String
+  attemptId String
+  kind String
+  epoch Int
+  messageJson String
+  acked Boolean @default(false)
+  superseded Boolean @default(false)
+  deliveryCount Int @default(0)
+}
+
+model DispatchSequence {
+  id String @id
+  value Int
+}
+
+model Receipt {
+  id String @id
+  attemptId String
+  recordJson String
+  committed Boolean @default(false)
+}
+
+model Group {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model Principal {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model AppInstance {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model Device {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model DeviceInstance {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model Target {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model Allotment {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model Credential {
+  id String @id
+  groupId String
+  holderInstanceId String @default("")
+  tokenHash String? @unique
+  revoked Boolean @default(false)
+  revision Int
+  metadataJson String
+}
+
+model Invite {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model TraceSpan {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model CostObservation {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model CalibrationJob {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}
+
+model CapabilityState {
+  id String @id
+  groupId String
+  revision Int
+  metadataJson String
+}

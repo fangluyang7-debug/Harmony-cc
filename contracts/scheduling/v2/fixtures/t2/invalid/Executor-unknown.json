@@ -1,0 +1,83 @@
+{
+  "target": {
+    "targetId": "target1",
+    "deviceId": "device1",
+    "executorId": "executor1",
+    "executorVersion": "v1",
+    "backend": "CPU",
+    "resourcePoolIds": [
+      "memory1",
+      "cpu1"
+    ],
+    "stableExecutionId": "stable1"
+  },
+  "contract": {
+    "contractId": "contract1",
+    "version": 1,
+    "capability": "capability1",
+    "inputSchemas": [
+      "input.schema"
+    ],
+    "outputSchemas": [
+      "output.schema"
+    ],
+    "sideEffectPolicy": "PURE",
+    "interruptibility": "CANCEL_RESTART",
+    "maxNonPreemptibleMs": null
+  },
+  "model": null,
+  "resources": [
+    {
+      "resourcePoolId": "memory1",
+      "amount": 100
+    },
+    {
+      "resourcePoolId": "cpu1",
+      "amount": 1
+    }
+  ],
+  "configurations": [
+    {
+      "id": "default",
+      "threads": 1,
+      "batchSize": 1,
+      "quality": "standard"
+    }
+  ],
+  "compute": {
+    "value": 10,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "ms"
+  },
+  "queue": {
+    "value": 0,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "ms"
+  },
+  "cold": {
+    "value": 0,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "ms"
+  },
+  "publish": {
+    "value": 0,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "ms"
+  },
+  "uncertainty": {
+    "value": 0,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "ms"
+  },
+  "unknownRequired": true
+}

@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "capability": "capability1",
+  "inputSchemas": [
+    "input.schema"
+  ],
+  "outputSchemas": [
+    "output.schema"
+  ],
+  "sideEffectPolicy": "PURE",
+  "interruptibility": "CANCEL_RESTART",
+  "maxNonPreemptibleMs": null
+}

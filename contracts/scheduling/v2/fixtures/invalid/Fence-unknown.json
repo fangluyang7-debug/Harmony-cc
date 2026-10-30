@@ -1,0 +1,7 @@
+{
+  "deviceId": "device1",
+  "holderInstanceId": "h1",
+  "ledgerEpoch": 1,
+  "counter": 1,
+  "unknownRequiredField": true
+}

@@ -1,0 +1,246 @@
+{
+  "deviceId": "device1",
+  "deviceInstanceId": "instance1",
+  "holderInstanceId": "h1",
+  "ledgerEpoch": 1,
+  "sequence": 1,
+  "domain": "SIMULATED",
+  "ownerActivity": {
+    "value": "IDLE",
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "state"
+  },
+  "foreground": {
+    "value": "FOREGROUND",
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "state"
+  },
+  "charging": {
+    "value": "CHARGING",
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "state"
+  },
+  "powerSave": {
+    "value": "OFF",
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "state"
+  },
+  "battery": {
+    "value": 100,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "percent"
+  },
+  "temperature": {
+    "value": 0,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "level"
+  },
+  "pools": [
+    {
+      "resourcePoolId": "memory1",
+      "kind": "RAM_BYTES",
+      "exclusive": false,
+      "total": {
+        "value": 2048,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "bytes"
+      },
+      "ownerReserved": 1024,
+      "contributionLimit": 1024,
+      "admissionLimit": {
+        "value": 1024,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "bytes"
+      },
+      "occupied": {
+        "value": 0,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "bytes"
+      },
+      "draining": false,
+      "drainMs": {
+        "value": 0,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "ms"
+      }
+    },
+    {
+      "resourcePoolId": "cpu1",
+      "kind": "CPU_SLOTS",
+      "exclusive": false,
+      "total": {
+        "value": 4,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "slots"
+      },
+      "ownerReserved": 2,
+      "contributionLimit": 2,
+      "admissionLimit": {
+        "value": 2,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "slots"
+      },
+      "occupied": {
+        "value": 0,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "slots"
+      },
+      "draining": false,
+      "drainMs": {
+        "value": 0,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "ms"
+      }
+    }
+  ],
+  "executors": [
+    {
+      "target": {
+        "targetId": "target1",
+        "deviceId": "device1",
+        "executorId": "executor1",
+        "executorVersion": "v1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "memory1",
+          "cpu1"
+        ],
+        "stableExecutionId": "stable1"
+      },
+      "contract": {
+        "contractId": "contract1",
+        "version": 1,
+        "capability": "capability1",
+        "inputSchemas": [
+          "input.schema"
+        ],
+        "outputSchemas": [
+          "output.schema"
+        ],
+        "sideEffectPolicy": "PURE",
+        "interruptibility": "CANCEL_RESTART",
+        "maxNonPreemptibleMs": null
+      },
+      "model": null,
+      "resources": [
+        {
+          "resourcePoolId": "memory1",
+          "amount": 100
+        },
+        {
+          "resourcePoolId": "cpu1",
+          "amount": 1
+        }
+      ],
+      "configurations": [
+        {
+          "id": "default",
+          "threads": 1,
+          "batchSize": 1,
+          "quality": "standard"
+        }
+      ],
+      "compute": {
+        "value": 10,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "ms"
+      },
+      "queue": {
+        "value": 0,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "ms"
+      },
+      "cold": {
+        "value": 0,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "ms"
+      },
+      "publish": {
+        "value": 0,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "ms"
+      },
+      "uncertainty": {
+        "value": 0,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "ms"
+      }
+    }
+  ],
+  "links": [
+    {
+      "from": "device1",
+      "to": "device2",
+      "networkEpoch": "network1",
+      "via": null,
+      "fixedMs": {
+        "value": 2,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "ms"
+      },
+      "bytesPerSecond": {
+        "value": 100000,
+        "source": "SIMULATED",
+        "sampledAt": 100,
+        "ttlMs": 1000,
+        "unit": "bytes_per_second"
+      },
+      "metered": false
+    }
+  ],
+  "credits": [
+    {
+      "priority": "ORIGIN_INTERACTIVE",
+      "slots": 1
+    },
+    {
+      "priority": "REMOTE_INTERACTIVE",
+      "slots": 1
+    },
+    {
+      "priority": "REMOTE_BATCH",
+      "slots": 1
+    }
+  ],
+  "unknownRequired": true
+}

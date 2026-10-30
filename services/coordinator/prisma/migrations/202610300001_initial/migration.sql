@@ -1,0 +1,1 @@
+CREATE TABLE "CoordinatorState" ("id" TEXT NOT NULL PRIMARY KEY, "epoch" INTEGER NOT NULL);

@@ -1,0 +1,16 @@
+{
+  "groupId": "g1",
+  "holderInstanceId": "h1",
+  "targetId": "target1",
+  "domain": "SIMULATED",
+  "revision": 1,
+  "state": "ACTIVE",
+  "reasonCode": "QUALITY_VERIFIED",
+  "quality": {
+    "value": 1,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "score"
+  }
+}

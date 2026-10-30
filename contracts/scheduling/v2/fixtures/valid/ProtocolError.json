@@ -1,0 +1,6 @@
+{
+  "version": 2,
+  "code": "ATTEMPT_CONFLICT",
+  "retryable": false,
+  "messageId": "m1"
+}

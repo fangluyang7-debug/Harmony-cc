@@ -1,0 +1,13 @@
+{
+  "protocolVersion": 2,
+  "messageId": "m1",
+  "type": "AttemptStatusQuery",
+  "groupId": "g1",
+  "senderInstanceId": "h1",
+  "coordinatorEpoch": 1,
+  "seq": 1,
+  "ackOf": null,
+  "traceId": "trace1",
+  "payload": "{}",
+  "extensions": []
+}

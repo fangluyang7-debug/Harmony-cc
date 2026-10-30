@@ -1,0 +1,12 @@
+{
+  "ref": {
+    "artifactId": "input1",
+    "contentVersion": 1,
+    "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "schemaId": "input.schema",
+    "schemaVersion": 1
+  },
+  "from": "device1",
+  "to": "device1",
+  "via": null
+}

@@ -1,0 +1,10 @@
+{
+  "groupId": "g1",
+  "principalId": "p1",
+  "appId": "app1",
+  "appInstanceId": "app-instance1",
+  "allowedContracts": [
+    "contract1"
+  ],
+  "unknownRequiredField": true
+}

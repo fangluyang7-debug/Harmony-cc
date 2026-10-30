@@ -1,0 +1,23 @@
+{
+  "traceId": "trace1",
+  "spanId": "span1",
+  "parentSpanId": null,
+  "dependsOn": [],
+  "transferId": null,
+  "workflowId": "wf1",
+  "nodeId": "node1",
+  "attemptId": "attempt1",
+  "targetId": "target1",
+  "deviceInstanceId": "instance1",
+  "phase": "EXECUTE",
+  "durationMs": 10,
+  "snapshotVersion": 1,
+  "predictedMs": null,
+  "reasonCode": null,
+  "startMono": 0,
+  "endMono": 10,
+  "clockDomainId": "clock1",
+  "measurementScope": "LOCAL_INTERVAL",
+  "authoritativeSide": "SELF",
+  "unknownRequiredField": true
+}

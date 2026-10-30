@@ -1,0 +1,29 @@
+{
+  "name": "@harmony/coordinator",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "generate": "prisma generate --schema prisma/schema.prisma",
+    "db:init": "node scripts/migrate.cjs",
+    "build": "npm --prefix ../.. run core:build && npm --prefix ../.. run transport:build && npm run generate && tsc -p tsconfig.json",
+    "dev": "npm run build && npm run db:init && node dist/main.js",
+    "test": "npm run build && npm --workspace @harmony/pc-agent run build && node --test test/*.test.cjs"
+  },
+  "dependencies": {
+    "@harmony/scheduler-core": "0.1.0",
+    "@nestjs/common": "11.1.23",
+    "@nestjs/core": "11.1.23",
+    "@nestjs/platform-express": "11.1.23",
+    "@prisma/client": "6.19.3",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "^7.8.1",
+    "ws": "^8.18.3",
+    "@harmony/resource-transport": "0.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.18.1",
+    "prisma": "6.19.3",
+    "typescript": "^5.7.2"
+  }
+}

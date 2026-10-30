@@ -1,0 +1,21 @@
+{
+  "name": "@harmony/pc-agent",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "npm --prefix ../.. run core:build && npm --prefix ../.. run transport:build && tsc -p tsconfig.json",
+    "test": "npm run build && node --test test/*.test.cjs",
+    "recovery": "node dist/recovery-main.js"
+  },
+  "dependencies": {
+    "@harmony/scheduler-core": "0.1.0",
+    "ws": "^8.18.3",
+    "@harmony/resource-transport": "0.1.0",
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.7.2"
+  }
+}

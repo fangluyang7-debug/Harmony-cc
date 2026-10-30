@@ -1,0 +1,21 @@
+{
+  "from": "device1",
+  "to": "device2",
+  "networkEpoch": "network1",
+  "via": null,
+  "fixedMs": {
+    "value": 2,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "ms"
+  },
+  "bytesPerSecond": {
+    "value": 100000,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "bytes_per_second"
+  },
+  "metered": false
+}

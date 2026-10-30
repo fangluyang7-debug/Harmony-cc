@@ -1,0 +1,11 @@
+{
+  "modelId": "model1",
+  "version": "v1",
+  "weightsHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "preprocessVersion": "v1",
+  "embeddingKind": "visual",
+  "dimension": 8,
+  "dtype": "float32",
+  "normalization": "l2",
+  "unknownRequired": true
+}

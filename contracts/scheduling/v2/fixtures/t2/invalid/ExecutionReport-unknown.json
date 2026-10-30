@@ -1,0 +1,51 @@
+{
+  "receipt": {
+    "attemptId": "attempt1",
+    "coordinatorEpoch": 1,
+    "planRevision": 1,
+    "fence": {
+      "deviceId": "device1",
+      "holderInstanceId": "h1",
+      "ledgerEpoch": 1,
+      "counter": 1
+    },
+    "state": "SUCCEEDED",
+    "resourcesSettled": true,
+    "outputs": [
+      {
+        "artifactId": "input1",
+        "contentVersion": 1,
+        "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "schemaId": "input.schema",
+        "schemaVersion": 1
+      }
+    ],
+    "actualTarget": {
+      "targetId": "target1",
+      "deviceId": "device1",
+      "executorId": "executor1",
+      "executorVersion": "v1",
+      "backend": "CPU",
+      "resourcePoolIds": [
+        "memory1"
+      ],
+      "stableExecutionId": "stable1"
+    },
+    "actualConfiguration": "default",
+    "errorCode": null
+  },
+  "allotmentId": "allotment1",
+  "allotmentVersion": 1,
+  "leaseId": "lease1",
+  "actualModel": null,
+  "timings": [
+    {
+      "value": 10,
+      "source": "SIMULATED",
+      "sampledAt": 100,
+      "ttlMs": 1000,
+      "unit": "ms"
+    }
+  ],
+  "unknownRequired": true
+}

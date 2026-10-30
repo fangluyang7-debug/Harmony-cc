@@ -9,7 +9,11 @@
   },
   "workspaces": [
     "services/api-server",
-    "apps/test-entry-web"
+    "apps/test-entry-web",
+    "packages/scheduler-core",
+    "services/coordinator",
+    "services/pc-agent",
+    "packages/resource-transport"
   ],
   "scripts": {
     "data:prepare": "node scripts/upload-harmony-products.mjs --prepare",
@@ -40,12 +44,26 @@
     "cloud-shopping:test": "node scripts/test-cloud-shopping.mjs",
     "cloud-shopping:typecheck": "node scripts/typecheck-cloud-shopping.mjs",
     "protocol:test": "node scripts/test-scheduling-protocol.mjs",
-    "architecture:test": "npm run worker:test && npm run protocol:test && npm run artifact:migration:test && npm run cloud-shopping:test && npm run placement:test && npm run api:test:unit -- --runInBand",
+    "architecture:test": "npm run architecture:deps && npm run worker:test && npm run protocol:test && npm run artifact:migration:test && npm run cloud-shopping:test && npm run placement:test && npm run api:test:unit -- --runInBand",
     "artifact:migration:test": "npm --workspace services/api-server run prisma:generate && node scripts/test-artifact-migration.mjs",
     "contracts:generate": "node scripts/generate-shopping-contracts.mjs",
     "worker:start": "node services/device-worker/server.mjs",
     "worker:test": "node --test services/device-worker/worker.test.mjs",
     "native:prepare": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/prepare-harmony.ps1",
-    "standalone:verify": "node scripts/verify-standalone.mjs"
+    "standalone:verify": "node scripts/verify-standalone.mjs",
+    "core:test": "npm --workspace @harmony/scheduler-core test",
+    "core:build": "npm --workspace @harmony/scheduler-core run build",
+    "architecture:deps": "node scripts/check-architecture.mjs && node --test scripts/check-architecture.test.mjs",
+    "protocol:v2:test": "node scripts/test-scheduling-protocol-v2.mjs && node scripts/test-resources-protocol-v2.mjs",
+    "coordinator:dev": "npm --workspace @harmony/coordinator run dev",
+    "coordinator:test": "npm --workspace @harmony/coordinator test",
+    "pc-agent:test": "npm --workspace @harmony/pc-agent test",
+    "scheduler:v2:test": "npm run core:test && npm run protocol:v2:test && npm run transport:test && npm run pc-agent:test && npm run coordinator:test && npm run architecture:deps",
+    "transport:build": "npm --workspace @harmony/resource-transport run build",
+    "transport:test": "npm --workspace @harmony/resource-transport test",
+    "lab:test": "npm --workspace @harmony/coordinator run build && npm --workspace @harmony/pc-agent run build && node tests/scheduler-lab/run.cjs"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0"
   }
 }

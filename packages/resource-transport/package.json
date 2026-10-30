@@ -1,0 +1,1 @@
+{"name":"@harmony/resource-transport","version":"0.1.0","private":true,"main":"dist/index.js","types":"dist/index.d.ts","scripts":{"build":"tsc -p tsconfig.json","test":"npm run build && node --test test/*.test.cjs"},"dependencies":{"@harmony/scheduler-core":"0.1.0"},"devDependencies":{"@types/node":"^22.10.2","typescript":"^5.7.2"}}

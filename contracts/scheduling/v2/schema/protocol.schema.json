@@ -1,0 +1,1244 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "urn:scheduling:v2",
+  "definitions": {
+    "Extension": {
+      "type": "object",
+      "properties": {
+        "namespace": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "payload": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "namespace",
+        "version",
+        "payload",
+        "required"
+      ],
+      "additionalProperties": false
+    },
+    "VersionHello": {
+      "type": "object",
+      "properties": {
+        "versions": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991,
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 16,
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "extensions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Extension"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "versions",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "MessageEnvelope": {
+      "type": "object",
+      "properties": {
+        "protocolVersion": {
+          "const": 2,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "messageId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "type": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "senderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "coordinatorEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "seq": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "ackOf": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "traceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "payload": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "extensions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Extension"
+          },
+          "maxItems": 16,
+          "minItems": 0,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "protocolVersion",
+        "messageId",
+        "type",
+        "groupId",
+        "senderInstanceId",
+        "coordinatorEpoch",
+        "seq",
+        "ackOf",
+        "traceId",
+        "payload",
+        "extensions"
+      ],
+      "additionalProperties": false
+    },
+    "AppIdentity": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "principalId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "appId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "appInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "allowedContracts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "groupId",
+        "principalId",
+        "appId",
+        "appInstanceId",
+        "allowedContracts"
+      ],
+      "additionalProperties": false
+    },
+    "ArtifactRef": {
+      "type": "object",
+      "properties": {
+        "artifactId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "contentVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "contentHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "schemaId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "schemaVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "artifactId",
+        "contentVersion",
+        "contentHash",
+        "schemaId",
+        "schemaVersion"
+      ],
+      "additionalProperties": false
+    },
+    "ArtifactGrant": {
+      "type": "object",
+      "properties": {
+        "ref": {
+          "$ref": "#/definitions/ArtifactRef",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "ownerPrincipalId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "ownerAppId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "allowedAppInstanceIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "READ",
+              "WRITE"
+            ]
+          },
+          "maxItems": 2,
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "expiresAt": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+        }
+      },
+      "required": [
+        "ref",
+        "groupId",
+        "ownerPrincipalId",
+        "ownerAppId",
+        "allowedAppInstanceIds",
+        "operations",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "TaskContract": {
+      "type": "object",
+      "properties": {
+        "contractId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "capability": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "inputSchemas": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "outputSchemas": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "sideEffectPolicy": {
+          "enum": [
+            "PURE",
+            "IDEMPOTENT_WRITE",
+            "TRANSACTIONAL",
+            "NO_REPLAY"
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "interruptibility": {
+          "enum": [
+            "CHECKPOINT",
+            "CANCEL_RESTART",
+            "NON_INTERRUPTIBLE"
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "maxNonPreemptibleMs": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+        }
+      },
+      "required": [
+        "contractId",
+        "version",
+        "capability",
+        "inputSchemas",
+        "outputSchemas",
+        "sideEffectPolicy",
+        "interruptibility",
+        "maxNonPreemptibleMs"
+      ],
+      "additionalProperties": false
+    },
+    "Budget": {
+      "type": "object",
+      "properties": {
+        "remainingMs": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+        },
+        "deadlineAt": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+        }
+      },
+      "required": [
+        "remainingMs",
+        "deadlineAt"
+      ],
+      "additionalProperties": false
+    },
+    "Target": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "deviceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "executorId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "executorVersion": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "backend": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "resourcePoolIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "stableExecutionId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "targetId",
+        "deviceId",
+        "executorId",
+        "executorVersion",
+        "backend",
+        "resourcePoolIds",
+        "stableExecutionId"
+      ],
+      "additionalProperties": false
+    },
+    "TaskInstance": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "sessionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "originDeviceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "resultDestination": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "workflowId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "nodeId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "attemptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "coordinatorEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "planRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "app": {
+          "$ref": "#/definitions/AppIdentity",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "contract": {
+          "$ref": "#/definitions/TaskContract",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "budget": {
+          "$ref": "#/definitions/Budget",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ArtifactRef"
+          },
+          "maxItems": 256,
+          "minItems": 0,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "allowedTargetIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "qualityTarget": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "privacy": {
+          "enum": [
+            "LOCAL_ONLY",
+            "AUTHORIZED_REMOTE"
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "priority": {
+          "enum": [
+            "ORIGIN_INTERACTIVE",
+            "REMOTE_INTERACTIVE",
+            "REMOTE_BATCH"
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "parameters": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 65536,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "allowedConfigurations": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "businessIdempotencyKey": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "groupId",
+        "sessionId",
+        "originDeviceId",
+        "resultDestination",
+        "workflowId",
+        "nodeId",
+        "attemptId",
+        "coordinatorEpoch",
+        "planRevision",
+        "app",
+        "contract",
+        "budget",
+        "inputs",
+        "allowedTargetIds",
+        "qualityTarget",
+        "privacy",
+        "priority",
+        "parameters",
+        "allowedConfigurations",
+        "businessIdempotencyKey"
+      ],
+      "additionalProperties": false
+    },
+    "WorkflowNode": {
+      "type": "object",
+      "properties": {
+        "task": {
+          "$ref": "#/definitions/TaskInstance",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "task",
+        "dependsOn"
+      ],
+      "additionalProperties": false
+    },
+    "Workflow": {
+      "type": "object",
+      "properties": {
+        "workflowId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "outputContract": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "qualityTarget": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WorkflowNode"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "workflowId",
+        "outputContract",
+        "qualityTarget",
+        "nodes"
+      ],
+      "additionalProperties": false
+    },
+    "Alternatives": {
+      "type": "object",
+      "properties": {
+        "alternativesId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "outputContract": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "qualityTarget": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Workflow"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "alternativesId",
+        "outputContract",
+        "qualityTarget",
+        "alternatives"
+      ],
+      "additionalProperties": false
+    },
+    "Fence": {
+      "type": "object",
+      "properties": {
+        "deviceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "ledgerEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "counter": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "deviceId",
+        "holderInstanceId",
+        "ledgerEpoch",
+        "counter"
+      ],
+      "additionalProperties": false
+    },
+    "ExecutionReceipt": {
+      "type": "object",
+      "properties": {
+        "attemptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "coordinatorEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "planRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "fence": {
+          "$ref": "#/definitions/Fence",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "state": {
+          "enum": [
+            "SUCCEEDED",
+            "FAILED",
+            "CANCELLED_SETTLED",
+            "YIELDED",
+            "SIDE_EFFECT_UNKNOWN"
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "resourcesSettled": {
+          "type": "boolean",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ArtifactRef"
+          },
+          "maxItems": 256,
+          "minItems": 0,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "actualTarget": {
+          "$ref": "#/definitions/Target",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "actualConfiguration": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "errorCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "attemptId",
+        "coordinatorEpoch",
+        "planRevision",
+        "fence",
+        "state",
+        "resourcesSettled",
+        "outputs",
+        "actualTarget",
+        "actualConfiguration",
+        "errorCode"
+      ],
+      "additionalProperties": false
+    },
+    "AttemptRecord": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "principalId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "appInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "attemptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "ledgerEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "planRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "coordinatorEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "executionDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "allotmentId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "allotmentVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "leaseId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "fence": {
+          "$ref": "#/definitions/Fence",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "businessIdempotencyKey": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "state": {
+          "enum": [
+            "ACCEPTED",
+            "RUNNING",
+            "SUCCEEDED",
+            "FAILED",
+            "CANCELLED_SETTLED",
+            "YIELDED",
+            "SIDE_EFFECT_UNKNOWN"
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "resourcesSettled": {
+          "type": "boolean",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ExecutionReceipt"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "groupId",
+        "principalId",
+        "appInstanceId",
+        "attemptId",
+        "holderInstanceId",
+        "ledgerEpoch",
+        "planRevision",
+        "coordinatorEpoch",
+        "executionDigest",
+        "allotmentId",
+        "allotmentVersion",
+        "leaseId",
+        "fence",
+        "businessIdempotencyKey",
+        "state",
+        "resourcesSettled",
+        "receipt"
+      ],
+      "additionalProperties": false
+    },
+    "AttemptStatusQuery": {
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "attemptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "holderInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "coordinatorEpoch": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "groupId",
+        "attemptId",
+        "holderInstanceId",
+        "coordinatorEpoch"
+      ],
+      "additionalProperties": false
+    },
+    "ProtocolError": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "const": 2,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "retryable": {
+          "type": "boolean",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "messageId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "version",
+        "code",
+        "retryable",
+        "messageId"
+      ],
+      "additionalProperties": false
+    },
+    "TraceSpan": {
+      "type": "object",
+      "properties": {
+        "traceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "spanId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "parentSpanId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+          },
+          "maxItems": 64,
+          "minItems": 0,
+          "uniqueItems": true,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "transferId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "workflowId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "nodeId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "attemptId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "targetId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "deviceInstanceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "phase": {
+          "enum": [
+            "PLAN",
+            "OFFER",
+            "ADMIT",
+            "QUEUE",
+            "TRANSFER_SEND",
+            "TRANSFER_RECV",
+            "LOAD",
+            "EXECUTE",
+            "PUBLISH",
+            "DELIVER",
+            "YIELD",
+            "RETRY"
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+        },
+        "snapshotVersion": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "predictedMs": {
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+        },
+        "reasonCode": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "startMono": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+        },
+        "endMono": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+        },
+        "clockDomainId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "measurementScope": {
+          "enum": [
+            "LOCAL_INTERVAL",
+            "FULL_TRANSFER",
+            "PARTIAL_TRANSFER"
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        },
+        "authoritativeSide": {
+          "enum": [
+            "SELF",
+            "SENDER",
+            "RECEIVER"
+          ],
+          "description": "Required. Missing and unknown fields are rejected. See SEMANTICS.md for scope and cross-field rules."
+        }
+      },
+      "required": [
+        "traceId",
+        "spanId",
+        "parentSpanId",
+        "dependsOn",
+        "transferId",
+        "workflowId",
+        "nodeId",
+        "attemptId",
+        "targetId",
+        "deviceInstanceId",
+        "phase",
+        "durationMs",
+        "snapshotVersion",
+        "predictedMs",
+        "reasonCode",
+        "startMono",
+        "endMono",
+        "clockDomainId",
+        "measurementScope",
+        "authoritativeSide"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

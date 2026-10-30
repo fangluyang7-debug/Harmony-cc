@@ -1,0 +1,5 @@
+{
+  "resourcePoolId": "memory1",
+  "amount": 100,
+  "unknownRequired": true
+}

@@ -1,0 +1,35 @@
+{
+  "kind": "RAM_BYTES",
+  "exclusive": false,
+  "total": {
+    "value": 2048,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "bytes"
+  },
+  "ownerReserved": 1024,
+  "contributionLimit": 1024,
+  "admissionLimit": {
+    "value": 1024,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "bytes"
+  },
+  "occupied": {
+    "value": 0,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "bytes"
+  },
+  "draining": false,
+  "drainMs": {
+    "value": 0,
+    "source": "SIMULATED",
+    "sampledAt": 100,
+    "ttlMs": 1000,
+    "unit": "ms"
+  }
+}

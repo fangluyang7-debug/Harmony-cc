@@ -1,0 +1,10 @@
+{
+  "deviceId": "device1",
+  "executorId": "executor1",
+  "executorVersion": "v1",
+  "backend": "CPU",
+  "resourcePoolIds": [
+    "memory1"
+  ],
+  "stableExecutionId": "stable1"
+}

@@ -1,0 +1,75 @@
+{
+  "alternativesId": "alt1",
+  "outputContract": "output.schema",
+  "qualityTarget": "quality1",
+  "alternatives": [
+    {
+      "workflowId": "wf1",
+      "outputContract": "output.schema",
+      "qualityTarget": "quality1",
+      "nodes": [
+        {
+          "task": {
+            "groupId": "g1",
+            "sessionId": null,
+            "originDeviceId": "device1",
+            "resultDestination": "device1",
+            "workflowId": "wf1",
+            "nodeId": "node1",
+            "attemptId": "attempt1",
+            "coordinatorEpoch": 1,
+            "planRevision": 1,
+            "app": {
+              "groupId": "g1",
+              "principalId": "p1",
+              "appId": "app1",
+              "appInstanceId": "app-instance1",
+              "allowedContracts": [
+                "contract1"
+              ]
+            },
+            "contract": {
+              "contractId": "contract1",
+              "version": 1,
+              "capability": "capability1",
+              "inputSchemas": [
+                "input.schema"
+              ],
+              "outputSchemas": [
+                "output.schema"
+              ],
+              "sideEffectPolicy": "PURE",
+              "interruptibility": "CANCEL_RESTART",
+              "maxNonPreemptibleMs": null
+            },
+            "budget": {
+              "remainingMs": 1000,
+              "deadlineAt": 2000
+            },
+            "inputs": [
+              {
+                "artifactId": "input1",
+                "contentVersion": 1,
+                "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "schemaId": "input.schema",
+                "schemaVersion": 1
+              }
+            ],
+            "allowedTargetIds": [
+              "target1"
+            ],
+            "qualityTarget": "quality1",
+            "privacy": "LOCAL_ONLY",
+            "priority": "ORIGIN_INTERACTIVE",
+            "parameters": "{}",
+            "allowedConfigurations": [
+              "default"
+            ],
+            "businessIdempotencyKey": null
+          },
+          "dependsOn": []
+        }
+      ]
+    }
+  ]
+}

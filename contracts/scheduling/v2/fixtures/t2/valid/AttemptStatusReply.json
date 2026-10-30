@@ -1,0 +1,27 @@
+{
+  "attemptId": "attempt1",
+  "record": {
+    "groupId": "g1",
+    "principalId": "p1",
+    "appInstanceId": "app-instance1",
+    "attemptId": "attempt1",
+    "holderInstanceId": "h1",
+    "ledgerEpoch": 1,
+    "planRevision": 1,
+    "coordinatorEpoch": 1,
+    "executionDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "allotmentId": "allotment1",
+    "allotmentVersion": 1,
+    "leaseId": "lease1",
+    "fence": {
+      "deviceId": "device1",
+      "holderInstanceId": "h1",
+      "ledgerEpoch": 1,
+      "counter": 1
+    },
+    "businessIdempotencyKey": null,
+    "state": "ACCEPTED",
+    "resourcesSettled": false,
+    "receipt": null
+  }
+}

@@ -5,8 +5,9 @@ import ts from 'typescript';
 const root = new URL('../', import.meta.url);
 const fixture = JSON.parse(fs.readFileSync(new URL('contracts/scheduling/v1/fixtures.json', root), 'utf8'));
 const files = ['apps/harmony/scheduler/src/main/ets/api/SchedulingProtocol.ets',
-  'services/api-server/src/core/runtime/scheduling-protocol.ts'];
-assert.equal(fs.readFileSync(new URL(files[0], root),'utf8'), fs.readFileSync(new URL(files[1], root),'utf8'), 'Protocol implementations drifted');
+  'packages/scheduler-core/src/protocol-v1.ts'];
+const normalized = file => fs.readFileSync(new URL(file, root),'utf8').replace(/\r\n/g,'\n');
+assert.equal(normalized(files[0]), normalized(files[1]), 'Protocol implementations drifted');
 for (const file of files) {
   const source=fs.readFileSync(new URL(file,root),'utf8');
   const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;

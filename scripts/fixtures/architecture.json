@@ -1,0 +1,17 @@
+[
+  {"name":"pure local export", "core":true,"source":"export { f } from './leaf';", "valid":true},
+  {"name":"comments are not dependencies", "core":true,"source":"// Date.now(); import 'node:fs';\nexport const f=(n:number)=>n+1;", "valid":true},
+  {"name":"node IO import", "core":true,"source":"import fs from 'node:fs';", "valid":false},
+  {"name":"Nest export", "core":true,"source":"export * from '@nestjs/common';", "valid":false},
+  {"name":"Prisma dynamic import", "core":true,"source":"const p=import('@prisma/client');", "valid":false},
+  {"name":"opaque dynamic import", "core":false,"source":"const p=import(moduleName);", "valid":false},
+  {"name":"require", "core":true,"source":"const p=require('node:net');", "valid":false},
+  {"name":"import equals", "core":true,"source":"import fs = require('node:fs');", "valid":false},
+  {"name":"ambient time", "core":true,"source":"export const now=()=>Date.now();", "valid":false},
+  {"name":"random alias", "core":true,"source":"const {random:r}=Math;", "valid":false},
+  {"name":"random computed", "core":true,"source":"const n=Math['random']();", "valid":false},
+  {"name":"environment", "core":true,"source":"const n=process.env.X;", "valid":false},
+  {"name":"concrete identity", "core":true,"source":"const n='cloud-runtime';", "valid":false},
+  {"name":"v1 service import", "core":false,"source":"import x from '../../api-server/src/core/runtime/device-dispatch.service';", "valid":true},
+  {"name":"v1 package import", "core":false,"source":"import x from 'harmony-agent-api-server';", "valid":false}
+]
