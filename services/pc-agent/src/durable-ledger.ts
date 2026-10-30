@@ -7,6 +7,7 @@ import { canonical, LedgerStateV2, LedgerAdmissionV2, DispatchOfferV2, Allotment
   newLedgerV2, recoverLedgerV2, requestGrantV2, installGrantV2, admitV2, startAttemptV2, cancelAttemptV2, settleAttemptV2,
   occupiedV2, validAttemptRecordV2, validDispatchOfferV2, validAllotmentGrantV2, validResourceVectorV2, MessageEnvelopeV2, validTraceSpanV2, TraceSpanV2 } from '@harmony/scheduler-core';
 import { ChannelJournal, newChannelJournal, validateJournal, bindJournal, journalMessage, answerQuery, receiveDispatch } from './channel-journal';
+import { DeviceProfileV2, validDeviceProfileV2 } from '@harmony/scheduler-core';
 
 type Identity=Pick<LedgerStateV2,'groupId'|'deviceId'|'holderInstanceId'|'appInstanceId'>;
 const clone=<T>(v:T):T=>JSON.parse(JSON.stringify(v));
@@ -134,6 +135,14 @@ export class DurableLedger {
     this.commit(this.state,answerQuery(this.channel,message,this.state.groupId,this.state.holderInstanceId,record));
   }
   pendingMessages(){this.guard();return clone(this.channel.outbox);}
+  queueProfile(input:Omit<DeviceProfileV2,'sequence'>){
+    this.guard();
+    if(this.channel.outbox.some(m=>m.type==='DeviceProfile'))throw Error('PROFILE_PENDING');
+    const next=clone(this.channel),profile={...clone(input),sequence:next.sequence+1};
+    if(!validDeviceProfileV2(profile)||profile.deviceId!==this.state.deviceId||profile.holderInstanceId!==this.state.holderInstanceId||profile.ledgerEpoch!==this.state.ledgerEpoch)throw Error('PROFILE_IDENTITY_INVALID');
+    const message=journalMessage(next,this.state.groupId,this.state.holderInstanceId,'DeviceProfile',profile);
+    next.outbox.push(message);this.commit(this.state,next);return message;
+  }
   acknowledgeMessage(id:string){
     const next=clone(this.channel);next.outbox=next.outbox.filter(m=>m.messageId!==id);this.commit(this.state,next);
   }

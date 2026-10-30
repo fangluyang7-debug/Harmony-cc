@@ -62,3 +62,45 @@ test('missing pack, malformed output, budget exhaustion and unknown settlement n
   assert.ok(job.inFlight);assert.equal((await dir.snapshot('g1','p1',1,contribution)).candidates.length,0);
  }finally{await r.close();}
 });
+
+const {QualificationLoop}=require('../dist/qualification-loop');
+test('calibration loop bounds work, prevents overlap, refreshes failed targets and rotates fairly',async()=>{
+ const calls=[],refreshes=[],errors=[];let release;
+ const gate=new Promise(r=>release=r);
+ const targets=['a','b','c'].map(targetId=>({peer:{groupId:'g',holderInstanceId:'h'},targetId}));
+ const loop=new QualificationLoop({advance:async(_,id)=>{calls.push(id);if(id==='a')await gate;if(id==='b')throw Error('FAILED');}},
+  {targets:async()=>targets,refresh:async g=>refreshes.push(g),onError:e=>errors.push(e.message)},60000,2);
+ loop.start();const first=loop.tick();assert.equal(loop.tick(),first);release();await first;
+ assert.deepEqual(calls,['a','b']);assert.deepEqual(refreshes,['g','g']);assert.deepEqual(errors,['FAILED']);
+ await loop.tick();assert.deepEqual(calls,['a','b','c','a']);await loop.close();await loop.tick();assert.equal(calls.length,4);
+});
+
+test('qualification read is scoped to holder and invalidated when executor is removed',async()=>{
+ const r=await runtime();try{
+  const p=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DeviceProfile.json'));
+  const invite=await r.auth.invite('g1','p1','device1',r.url),pair=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:p.holderInstanceId});
+  await r.directory.ingest(pair.peer,p);
+  const {pinnedRequest}=require('../dist/pinned-client');
+  const result=await pinnedRequest(invite,'/v2/qualification/target1',undefined,pair.credential);
+  assert.equal(result.admission.state,'DISCOVERED');
+  const otherInvite=await r.auth.invite('g1','p1','device1',r.url),other=await r.auth.exchange({inviteId:otherInvite.inviteId,code:otherInvite.code,holderInstanceId:'other'});
+  await assert.rejects(pinnedRequest(invite,'/v2/qualification/target1',undefined,other.credential),/401/);
+  p.sequence++;p.executors=[];await r.directory.ingest(pair.peer,p);
+  await assert.rejects(pinnedRequest(invite,'/v2/qualification/target1',undefined,pair.credential),/401/);
+ }finally{await r.close();}
+});
+
+test('coordinator owns calibration loop lifecycle and enumerates only active credentials',async()=>{
+ const r=await runtime();try{
+  const p=profile(),invite=await r.auth.invite('g1','p1','device1',r.url),paired=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:p.holderInstanceId});
+  await r.directory.ingest(paired.peer,p);
+  let gates=0;const errors=[];
+  r.startCalibration({packs:[packFor(p)],runner:{run:async()=>{throw Error('MUST_NOT_EXECUTE');},reconcile:async()=>null},policy,
+    gate:async()=>{gates++;return 'RESOURCE';},onError:e=>errors.push(e.message),intervalMs:100});
+  const until=async check=>{const deadline=Date.now()+5000;while(!await check()){if(Date.now()>deadline)throw Error('TIMEOUT');await new Promise(r=>setTimeout(r,20));}};
+  await until(async()=>(await r.directory.qualification(paired.peer,'target1')).admission.state==='WAITING_RESOURCE');assert.ok(gates>0);
+  await r.auth.revoke(paired.peer.credentialId);assert.deepEqual(await r.auth.activePeers(),[]);
+  await r.close();const count=gates;await new Promise(resolve=>setTimeout(resolve,150));assert.equal(gates,count);
+  assert.ok(errors.every(e=>e==='GROUP_UNKNOWN'));
+ }finally{await r.close();}
+});

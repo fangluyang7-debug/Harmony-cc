@@ -36,7 +36,7 @@ npm run coordinator:dev
 | GET/PUT `/v2/artifacts/:artifactId/:contentVersion` | 短期操作票据 + 设备凭证；组/用户/持有者、哈希、schema、长度、有效期校验 |
 | POST `/v2/traces`、GET `/v2/traces/:traceId` | Bearer；写入绑定真实 offer 的 holder/target/workflow/trace，查询按组及读者隔离 |
 
-邀请与物理设备预算只能通过受信本地 API `runtime.auth.invite(...)`、`runtime.allotments.confirmDevice(...)` 建立；没有公开管理接口或现成管理 CLI。完整调用实例见 `test/control-schema.test.cjs`、`test/execution-channel.test.cjs`。不要把这些管理方法暴露给任意远端。
+邀请与物理设备预算只能通过受信本地 API `runtime.auth.invite(...)`、`runtime.allotments.confirmDevice(...)` 建立；没有公开管理接口；新设备可用下文的受信本地 provision CLI 初始化预算与邀请。完整调用实例见 `test/control-schema.test.cjs`、`test/execution-channel.test.cjs`。不要把这些管理方法暴露给任意远端。
 
 首次启动把身份、私钥、证书一起原子写入 `identity.json`。数据目录及生成代码已忽略。数据库已有启动记录但身份文件丢失时拒绝启动，不自动生成一个可以冒充旧身份的新身份。不要把数据目录、数据库或私钥加入补丁。
 
@@ -61,3 +61,11 @@ Windows 单写者使用绑定于规范数据目录的命名管道；其他平台
 本轮接续说明及字段缺口见 `docs/scheduler-v2/HANDOFF-B3-PROFILES-20261030.md` 与 `T2-FIELD-CONSUMERS.md`。画像心跳不会释放额度；它不是账本结算凭证。
 
 恢复通信增量见 `docs/scheduler-v2/HANDOFF-B4-RECOVERY-20261030.md`。WS 新增 `RecoveryRequest`（严格空 payload）与 `AttemptStatusReply`（T2，ackOf 为当前状态查询的 messageId）。Hello 不推进业务序号游标，防止重连握手越过旧待发消息；业务消息的有序校验、持久化去重和凭证检查保持生效。新控制接口不授予执行权限。
+
+## P0 接续：设备注册、资格读取与自动校准
+
+新增本地管理命令 `npm --workspace @harmony/coordinator run provision -- <spec.json> <absolute-invitation-output.json>`。先构建并执行 `db:init`，在协调者停止时使用；它使用相同的单写者锁，拒绝修改已存在的设备预算绑定。规格包含 `address`（将启动服务的 HTTPS 地址）、`deviceId`、`groupId`、`holderInstanceId`、`principalId`、`capacity`（所有者确认的资源向量）。输出含一次性配对信息，只写入指定的新文件，不输出凭据到终端。此命令不会自动发现物理容量，也不会改写已有设备绑定。
+
+`GET /v2/qualification/:targetId` 使用设备 Bearer 凭证，只返回该持有者、设备、组当前注册目标的执行器与能力证据；返回 DISCOVERED 并不授权执行。响应禁止缓存，PC 仍校验身份、有效期、模型和允许配置。移除目标、撤销凭证后不可再读取。schema 为 `control.schema.json` 的 `QualificationResponse`。
+
+受信宿主调用 `runtime.startCalibration({packs, runner, policy, gate, onError, intervalMs})` 后，协调者枚举有效凭证对应的画像目标，定期推进可信评测。每轮限量、单次推进不重叠，持续旋转目标；推进后刷新快照，服务关闭时等待当前评测退出。凭证撤销在下一次准入检查生效；runner 仍必须按许可、额度、实际引擎结算实现。健康 ACTIVE 证据不会仅因周期到来而增加修订号。当前默认 main 尚未安装远程评测 runner，不能把这个宿主接口写成自动远程校准已经交付。

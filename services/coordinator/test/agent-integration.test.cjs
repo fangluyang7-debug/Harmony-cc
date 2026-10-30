@@ -25,7 +25,8 @@ test('integrated agent: trusted CPU qualification -> pinned artifacts -> WS disp
   r.artifacts.register(descriptor);await transfer(invite,r.artifacts.issue(descriptor,peer,'WRITE'),pair.credential,input);
   function offerFor(id){const o=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DispatchOffer.json'));
    o.task.attemptId=id;o.task.workflowId='wf-'+id;o.task.nodeId='node-'+id;o.task.priority='REMOTE_INTERACTIVE';o.task.contract=executor.contract;o.task.inputs=[inputRef];o.task.parameters='{}';
-   o.task.budget={remainingMs:5000,deadlineAt:Date.now()+5000};o.target=executor.target;o.resources=executor.resources;o.allowedConfigs=[config];o.allotmentId=grant.allotmentId;o.leaseMs=5000;o.transferPlan=[];return o;}
+   // This suite tests transport/recovery, not a one-second latency target under concurrent RSA/SQLite load.
+   o.leaseMs=15000;o.task.budget={remainingMs:15000,deadlineAt:Date.now()+15000};o.target=executor.target;o.resources=executor.resources;o.allowedConfigs=[config];o.allotmentId=grant.allotmentId;o.leaseMs=5000;o.transferPlan=[];return o;}
   let publishes=0;const outputs=new Map();
   const ports=artifactPorts({read:async(ref,offer)=>{assert.equal(offer.task.app.principalId,'p1');assert.deepEqual(ref,inputRef);return {endpoint:invite,ticket:r.artifacts.issue(descriptor,peer,'READ'),credential:pair.credential};},
    write:async(bytes,schemaId,offer)=>{publishes++;const ref={artifactId:'out-'+offer.task.attemptId,contentVersion:1,contentHash:digest(bytes),schemaId,schemaVersion:1};
@@ -33,9 +34,10 @@ test('integrated agent: trusted CPU qualification -> pinned artifacts -> WS disp
   const context=()=>({coordinatorEpoch:r.epoch,online:true,ownerIdle:true,admissionLimit:grant.extra});
   const options={connection:{address:r.url,certificate:invite.certificate,fingerprint:invite.fingerprint,credential:pair.credential,domain:'SIMULATED'},
    deviceInstanceId:'instance1',queuePolicy:{shares:[.5,.3,.2],agingMs:100,maxConsecutive:2,yieldDeadlineMs:1000},select:o=>o.allowedConfigs[0],snapshotVersion:()=>1,onYield:()=>{},onError:e=>errors.push(e.message),
-   now:()=>100,qualification:async()=>{const row=await r.db.capabilityState.findUniqueOrThrow({where:{id:JSON.stringify(['g1','h1','target1'])}});return {executor,admission:JSON.parse(row.metadataJson)};},
+   now:()=>100,
    ports:{...ports,authorize:async()=>context()}};
   agent=new PcAgent(ledger,options);await agent.updateResources(grant.extra,'IDLE');agent.start();await until(()=>agent.ready);
+  await agent.publishProfile(p);assert.ok((await r.directory.profiles(peer.groupId))[0].sequence>1);
   async function dispatch(id){const offer=offerFor(id),message={...fixture('MessageEnvelope'),messageId:'dispatch-'+id,type:'DispatchOffer',senderInstanceId:r.identity.id,traceId:'trace-'+id,payload:JSON.stringify(offer)};
    await r.store.persistOffer(offer,'h1',message);await r.channel.flush();return offer;}
   await dispatch('unqualified');await until(async()=> (await r.db.attempt.findUnique({where:{id:'unqualified'}}))?.state==='REJECTED');assert.equal(ledger.status('unqualified'),null);
@@ -47,7 +49,7 @@ test('integrated agent: trusted CPU qualification -> pinned artifacts -> WS disp
   assert.equal(await qualification.advance(peer,'target1'),'CANARY');assert.equal(await qualification.advance(peer,'target1'),'ACTIVE');
   let dropped=false,reportId;const send=r.channel.send.bind(r.channel);
   r.channel.send=async(session,m)=>{const pending=ledger.pendingMessages().find(p=>p.messageId===m.ackOf);if(!dropped&&m.type==='Ack'&&pending?.type==='ExecutionReceipt'){dropped=true;reportId=pending.messageId;session.socket.terminate();return;}return send(session,m);};
-  const business=await dispatch('business');await until(async()=> (await r.db.receipt.findUnique({where:{id:'business'}}))?.committed);
+  const business=await dispatch('business');try{await until(async()=> (await r.db.receipt.findUnique({where:{id:'business'}}))?.committed);}catch(error){throw Error(JSON.stringify({cause:error.message,errors,local:ledger.status('business'),pending:ledger.pendingMessages().map(m=>({type:m.type,payload:m.type==='AdmissionReply'?m.payload:undefined}))}));}
   await until(()=>dropped&&agent.ready&&!ledger.pendingMessages().some(m=>m.messageId===reportId));
   assert.equal(publishes,1);assert.equal(ledger.snapshot().entries.filter(e=>e.record.attemptId==='business').length,1);assert.deepEqual(occupiedV2(ledger.snapshot()),[]);
   const d=outputs.get('business'),result=await transfer(invite,r.artifacts.issue(d,peer,'READ'),pair.credential);assert.deepEqual(JSON.parse(result.bytes),{dimension:2,rows:[[.6,.8],[0,0]],norms:[5,0]});

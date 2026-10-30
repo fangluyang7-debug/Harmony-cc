@@ -6,9 +6,10 @@ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 async function setup(){
  const directory=fs.mkdtempSync(path.resolve('../../.test/queue-runtime-')),{privateKey,publicKey}=crypto.generateKeyPairSync('rsa',{modulusLength:2048});
  const ledger=await DurableLedger.open(directory,{groupId:'g1',deviceId:'device1',holderInstanceId:'h1',appInstanceId:null},publicKey.export({type:'spki',format:'pem'}),()=>0);
- const grant=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/AllotmentGrant.json'));grant.signature=crypto.sign('sha256',Buffer.from(grantSigningText(grant)),privateKey).toString('base64');ledger.requestGrant(grant.leaseRequestId);ledger.installGrant(grant);
+ const grant=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/AllotmentGrant.json'));grant.leaseMs=30000;grant.signature=crypto.sign('sha256',Buffer.from(grantSigningText(grant)),privateKey).toString('base64');ledger.requestGrant(grant.leaseRequestId);ledger.installGrant(grant);
  const input=Buffer.from('{"dimension":2,"rows":[[3,4]]}'),offer=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DispatchOffer.json'));
- offer.task.priority='REMOTE_INTERACTIVE';offer.task.contract.capability='vector.normalize.v1';offer.task.contract.outputSchemas=['vector.normalized'];offer.task.inputs[0].contentHash=hash(input);offer.task.parameters='{}';
+ // Real child-process tests exercise lifecycle, not the fixture's one-second performance budget.
+ offer.leaseMs=15000;offer.task.budget={remainingMs:15000,deadlineAt:Date.now()+15000};offer.task.priority='REMOTE_INTERACTIVE';offer.task.contract.capability='vector.normalize.v1';offer.task.contract.outputSchemas=['vector.normalized'];offer.task.inputs[0].contentHash=hash(input);offer.task.parameters='{}';
  const ports={authorize:async()=>({coordinatorEpoch:1,online:true,ownerIdle:true,admissionLimit:grant.extra}),read:async()=>input,publish:async(bytes,schemaId)=>({artifactId:'out',contentVersion:1,contentHash:hash(bytes),schemaId,schemaVersion:1})};
  return {ledger,grant,input,offer,ports};
 }

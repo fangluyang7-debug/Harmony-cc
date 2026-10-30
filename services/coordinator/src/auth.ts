@@ -47,6 +47,11 @@ export class PairingService {
     if(data.domain!==this.domain||data.expiresAt<=this.now())throw Error('CREDENTIAL_EXPIRED');
     return data.peer;
   }
+  async activePeers():Promise<Peer[]>{
+    const rows=await this.db.credential.findMany({where:{revoked:false}});
+    return rows.map(row=>JSON.parse(row.metadataJson) as CredentialData)
+      .filter(data=>data.domain===this.domain&&data.expiresAt>this.now()).map(data=>data.peer);
+  }
   async rotate(token:string){
     const old=await this.authenticate(token),credential=randomBytes(32).toString('base64url'),credentialId=randomUUID(),peer={...old,credentialId};
     await this.db.$transaction(async tx=>{

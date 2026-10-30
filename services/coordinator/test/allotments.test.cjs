@@ -43,3 +43,23 @@ test('offline base always reserves physical capacity; duplicate installation bin
   await assert.rejects(r.allotments.confirmDevice('device1',capacity,[{groupId:'g1',holderInstanceId:'h2',appInstanceId:null}]),/BINDING_HAS_UNSETTLED/);
  }finally{await r.close();}
 });
+
+test('network allotment client installs and acknowledges renewals and rejects revoked credentials',async()=>{
+ const {AllotmentClient,allotmentTransport}=require('../../pc-agent/dist/allotment-client');
+ const {X509Certificate}=require('node:crypto');
+ const r=await runtime();let ledger,client;
+ try{
+  const a=await pair(r,'network-holder'),capacity=[{resourcePoolId:'ram',amount:100}];
+  await r.allotments.confirmDevice('device1',capacity,[{groupId:'g1',holderInstanceId:'network-holder',appInstanceId:null}]);
+  ledger=await DurableLedger.open(path.join(r.config.dataDir,'network-agent'),{groupId:'g1',deviceId:'device1',holderInstanceId:'network-holder',appInstanceId:null},r.identity.cert);
+  const connection={address:r.url+'/',certificate:r.identity.cert,fingerprint:new X509Certificate(r.identity.cert).fingerprint256.replaceAll(':','').toLowerCase(),credential:a.credential,domain:'SIMULATED'};
+  let extra=capacity;
+  client=new AllotmentClient(ledger,a.credential,allotmentTransport(connection),()=>({base:[],extra,leaseMs:30000}),assert.fail);
+  await client.renew();assert.equal(ledger.snapshot().grant.version,1);
+  assert.equal((await r.allotments.reservations('device1'))[0].ack.version,1);
+  extra=[];await client.renew();assert.equal(ledger.snapshot().grant.version,2);
+  assert.ok((await r.allotments.reservations('device1'))[0].reserved.every(r=>r.amount===0));
+  await r.auth.revoke(a.peer.credentialId);await assert.rejects(client.renew(),/REJECTED/);
+  assert.equal(ledger.snapshot().grant.version,2);
+ }finally{await client?.close();await ledger?.close();await r.close();}
+});

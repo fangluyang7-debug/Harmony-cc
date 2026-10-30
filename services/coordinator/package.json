@@ -5,9 +5,10 @@
   "scripts": {
     "generate": "prisma generate --schema prisma/schema.prisma",
     "db:init": "node scripts/migrate.cjs",
+    "provision": "node dist/provision-main.js",
     "build": "npm --prefix ../.. run core:build && npm --prefix ../.. run transport:build && npm run generate && tsc -p tsconfig.json",
     "dev": "npm run build && npm run db:init && node dist/main.js",
-    "test": "npm run build && npm --workspace @harmony/pc-agent run build && node --test test/*.test.cjs"
+    "test": "npm run build && npm --workspace @harmony/pc-agent run build && node --test --test-concurrency=1 test/*.test.cjs"
   },
   "dependencies": {
     "@harmony/scheduler-core": "0.1.0",

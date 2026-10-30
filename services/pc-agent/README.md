@@ -2,7 +2,7 @@
 
 `src/agent.ts` 将认证连接、恢复屏障、设备内队列、能力准入检查、真实 CPU 执行、持久化回执与追踪组装为 `PcAgent`。`src/artifact-client.ts` 将受信路由服务提供的短期票据接到执行输入/输出，`artifact-endpoint.ts` 提供 PC HTTPS 制品端点。CPU 支持裁剪和向量归一化；没有 GPU 执行器。
 
-目前 `PcAgent` 是可嵌入的宿主类，尚无完整业务 agent 安装/启动 CLI。受信配对、物理预算确认、额度续期、OS 画像采集、路由/权限服务及校准证据获取仍由宿主装配。唯一现成独立命令是下文的恢复客户端，默认不执行业务。最新交接见 `docs/scheduler-v2/HANDOFF-B-INTEGRATION-20261030.md`；早期 B3/B4 文档是历史记录。
+目前 `PcAgent` 是可嵌入的宿主类，尚无完整业务 agent 安装/启动 CLI。受信配对、物理预算确认、额度续期、OS 画像采集、路由/权限服务及校准证据获取仍由宿主装配。现有独立命令包括配对初始化和恢复客户端；恢复客户端默认不执行业务。最新交接见 `docs/scheduler-v2/HANDOFF-B-INTEGRATION-20261030.md`；早期 B3/B4 文档是历史记录。
 
 `src/profile-publisher.ts` 接受宿主注入的画像采集源、持久化序号和认证发送通道：启动上报、变化事件立即上报、心跳兜底；同时只允许一次发送，等待 ACK 时合并变化。发送前等待序号持久化，失败不发出；心跳不修改采样时间或伪造新测量。`start/changed/stop` 均应等待完成，停止会取消订阅和定时器。当前用模拟源以及真实 TLS/WS 集成测试验证，尚未装配 OS 采集器、持久化通道 outbox、独立 agent 进程。生产宿主须保证 `publish` 有界失败/超时，否则停止会等待未结束的发送。
 
@@ -66,3 +66,21 @@ npm --workspace @harmony/pc-agent run recovery -- C:/path/to/recovery-config.jso
 `reconcileEngine(ledger, attemptId, localProbe)` 是本地受信引擎适配入口，不含启动或重试方法。UNKNOWN、仍运行和探测失败保留占用；只有匹配 fence/目标/配置且明确结算的回执能调用 settle。结算与新的恢复通知在同一快照写入；在线宿主随后调用 `client.flush()` 触发发送。CLI 未配置任何真实引擎 probe，故不能自行释放未知引擎资源。恢复回报不会代替签名额度 ACK，协调者预留继续保守保留。
 
 outbox 上限 64 条/1 MiB，inbox 上限 4096 条。超限停止新写入，不丢消息或清空账本；历史压缩/长期运行维护尚未实现。本阶段适用于接续集成与受控验收，不能标为完整设备代理已交付。
+
+## P0 接续：自动额度维护
+
+`PcAgent` 现在可配置 `allotments: { policy, renewEveryMs }`。宿主提供经过所有者授权的资源策略；协调者仍须预先确认整机预算与持有者绑定。续期周期必须小于租期，建议预留网络延迟余量。
+
+`AllotmentClient` 使用配对固定证书的 HTTPS 调用额度申请与 ACK 接口，同一实例最多一个续期请求。先持久化单调时钟请求起点，再发请求；收到签名额度后通过 DurableLedger 校验并落盘，随后发送带当前占用与结算序号的签名 ACK。网络失败不延长本地租约，不释放未知占用；下次周期重新申请，协调者继续保留未结算资源。缩额策略在下次续期读取，资源实际停止与结算仍由执行器负责。
+
+`close()` 停止自动续期并等待有界请求结束，再关闭 agent。该接口补齐 P0 的额度维护环节；配对管理、系统画像采集、可信校准证据服务与完整业务 CLI 仍需接续装配，不能标记 P0 全部完成。
+
+## P0 接续：配对、画像与系统资源
+
+构建后运行 `npm --workspace @harmony/pc-agent run pair -- <invitation.json> <absolute-new-installation-directory>`。邀请文件由协调者 provision 命令生成，须通过用户信任的方式传入。命令校验证书固定值、主机名、域和邀请有效期，兑换凭证并初始化账本，写入私有 `agent.json`；已有安装目录拒绝覆盖。若留下 `pairing.pending`，先对账注册状态，不删除目录后盲目重试。Windows 文件访问仍受当前目录 ACL 控制，应使用当前用户的受保护目录。
+
+`PcAgent` 未注入 `qualification` 时默认通过认证 HTTPS 获取当前目标证据。`publishProfile(profileWithoutSequence)` 在同一账本快照内分配单调消息/画像序号并写入 outbox，等待实际 ACK 后完成；断线或超时保留待发记录，同一时间仅允许一份未确认画像。重连恢复期间不能发布新画像。
+
+可选 `resources: { policy, owner }` 启用真实 Node OS CPU/内存采样和周期性本地准入更新。policy 定义 CPU/RAM 池、贡献上限与保留内存；可用 RAM 按“自己的已占用 + 系统空闲 - 保留量”计算并受贡献上限约束，不能把剩余空闲误作包含在途任务的总上限。采集异常、过期或超时按 UNKNOWN 停止新准入。
+
+提供 `windowsOwnerActivity(idleThresholdMs)`，只观测当前 Windows 会话的键盘/鼠标空闲时间；不读取应用名称。服务会话、多用户机器及其他平台需提供适用的活动源，不能把此信号推广为全机无人使用。电池、温度与 GPU 状态仍需平台适配，未用虚构值补齐。资源采样和画像提交接口已可用，完整画像构造与定期上报装配仍待接续。

@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import fs from 'node:fs';
 import path from 'node:path';
-import { Body, Controller, Get, Headers, Param, Module, Post, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { Body, Controller, Get, Header, Headers, Param, Module, Post, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaClient } from '../generated/client';
 import { CoordinatorConfig, databaseUrl } from './config';
@@ -14,6 +14,9 @@ import { DeviceDirectory } from './directory';
 import { ProfileProjection } from './profile-projection';
 import { AllotmentIssuer } from './allotments';
 import { TraceService } from './traces';
+import { QualificationService, TrustedPack, EvaluationRunner, EvaluationPolicy } from './qualification';
+import { QualificationLoop } from './qualification-loop';
+import type { ExecutorV2 } from '@harmony/scheduler-core';
 import { ArtifactChannel, ArtifactSchema } from '@harmony/resource-transport';
 import { validDeviceProfileV2, validResourceVectorV2, validAllotmentAckV2, protocolId } from '@harmony/scheduler-core';
 
@@ -41,6 +44,11 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     }
     @Controller('/v2')
     class Pairing {
+      @Get('qualification/:targetId')@Header('Cache-Control','no-store')async qualification(@Headers('authorization') header:string,@Param('targetId') targetId:string){
+        if(!ready)throw new ServiceUnavailableException();
+        try{if(!protocolId(targetId))throw Error('TARGET_INVALID');return await directory.qualification(await auth.authenticate(bearer(header)),targetId);}
+        catch{throw new UnauthorizedException('QUALIFICATION_REJECTED');}
+      }
       @Post('traces')async traceBatch(@Headers('authorization') header:string,@Body() body:any){
         if(!ready)throw new ServiceUnavailableException();try{if(!body||Object.keys(body).join('|')!=='spans')throw Error('TRACE_INVALID');
           await traces.ingest(await auth.authenticate(bearer(header)),body.spans);return {accepted:body.spans.length};}catch{throw new UnauthorizedException('TRACE_REJECTED');}
@@ -89,7 +97,30 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       await store.recover(epoch);await recover(db,epoch);ready=true;
     })());
     let closed=false;
-    return {app,db,identity,store,snapshots,planning,channel,auth,directory,profiles,allotments,artifacts,traces,get epoch(){return epoch;},get ready(){return ready;},restore,
-      close:async()=>{if(closed)return;closed=true;ready=false;try{await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
+    let calibration:QualificationLoop|undefined;
+    const startCalibration=(input:{packs:TrustedPack[];runner:EvaluationRunner;policy:EvaluationPolicy;
+      gate:(peer:Peer,executor:ExecutorV2)=>Promise<'AUTH'|'MODEL'|'RESOURCE'|'WINDOW'|null>;onError:(error:unknown)=>void;intervalMs?:number})=>{
+      if(!ready||closed||calibration)throw Error('CALIBRATION_START_INVALID');
+      const service=new QualificationService(db,directory,input.packs,input.runner,input.policy,async(peer,executor)=>{
+        if(!(await auth.activePeers()).some(p=>p.credentialId===peer.credentialId&&p.groupId===peer.groupId&&p.holderInstanceId===peer.holderInstanceId))return 'AUTH';
+        return input.gate(peer,executor);
+      });
+      const published=new Map<string,string>();
+      calibration=new QualificationLoop(service,{targets:async()=>{
+        const targets=[];
+        for(const peer of await auth.activePeers()){
+          const profile=(await directory.profiles(peer.groupId)).find(p=>p.holderInstanceId===peer.holderInstanceId&&p.deviceId===peer.deviceId);
+          for(const executor of profile?.executors??[])targets.push({peer,targetId:executor.target.targetId});
+        }
+        return targets;
+      },refresh:async groupId=>{
+        const states=await db.capabilityState.findMany({where:{groupId},orderBy:{id:'asc'},select:{id:true,revision:true}});
+        const revision=JSON.stringify(states);if(published.get(groupId)===revision)return;
+        await profiles.refresh(groupId);published.set(groupId,revision);
+      },onError:input.onError},input.intervalMs);
+      calibration.start();return service;
+    };
+    return {app,db,identity,store,snapshots,planning,channel,auth,directory,profiles,allotments,artifacts,traces,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
+      close:async()=>{if(closed)return;closed=true;ready=false;try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
   }catch(error){await db.$disconnect();await unlock();throw error;}
 }

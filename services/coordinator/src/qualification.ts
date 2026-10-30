@@ -86,7 +86,11 @@ export class QualificationService {
         !sampleUsableV2(profile.foreground,this.now(),this.directory.domain)||profile.foreground.value!=='FOREGROUND')
         return this.publish(peer,targetId,job,'WAITING_WINDOW','OWNER_OR_HOST_NOT_AVAILABLE');
       if(job.cooldownUntil>this.now())return this.publish(peer,targetId,job,'SUSPENDED','EVALUATION_COOLDOWN');
-      if(job.quality!==null&&job.next>=Math.max(pack.cases.length,this.policy.activeSamples))return this.publish(peer,targetId,job,'ACTIVE','EVALUATION_PASSED');
+      if(job.quality!==null&&job.next>=Math.max(pack.cases.length,this.policy.activeSamples)){
+        const current=await this.db.capabilityState.findUnique({where:{id}});
+        if(current&&JSON.parse(current.metadataJson).state==='ACTIVE')return 'ACTIVE';
+        return this.publish(peer,targetId,job,'ACTIVE','EVALUATION_PASSED');
+      }
       await this.publish(peer,targetId,job,'VALIDATING','CHECKING_TRUSTED_SUITE');
       const test=pack.cases[job.next%pack.cases.length];
       if(!executor.configurations.some(c=>canonical(c)===canonical(test.config))||!vectorFitsV2(executor.resources,pack.manifest.resourceLimit))return this.publish(peer,targetId,job,'SUSPENDED','PACK_EXECUTOR_INCOMPATIBLE');

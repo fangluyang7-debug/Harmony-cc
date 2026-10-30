@@ -5,7 +5,8 @@
   "scripts": {
     "build": "npm --prefix ../.. run core:build && npm --prefix ../.. run transport:build && tsc -p tsconfig.json",
     "test": "npm run build && node --test test/*.test.cjs",
-    "recovery": "node dist/recovery-main.js"
+    "recovery": "node dist/recovery-main.js",
+    "pair": "node dist/pairing-main.js"
   },
   "dependencies": {
     "@harmony/scheduler-core": "0.1.0",

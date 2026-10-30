@@ -8,7 +8,7 @@ import { DurableLedger } from './durable-ledger';
 export interface RecoveryConnection {
   address:string;certificate:string;fingerprint:string;credential:string;domain:'REAL'|'SIMULATED';
 }
-function pinned(connection:RecoveryConnection):https.RequestOptions{
+export function pinned(connection:RecoveryConnection):https.RequestOptions{
   const url=new URL(connection.address),fingerprint=new X509Certificate(connection.certificate).fingerprint256.replaceAll(':','').toLowerCase();
   if(url.protocol!=='https:'||url.pathname!=='/'||url.username||url.password||url.search||url.hash||fingerprint!==connection.fingerprint||
     !/^[A-Za-z0-9_-]{43}$/.test(connection.credential)||!['REAL','SIMULATED'].includes(connection.domain))throw Error('CONNECTION_INVALID');
@@ -32,6 +32,7 @@ async function identity(connection:RecoveryConnection){
 export interface LiveControl {
   dispatch(message:MessageEnvelopeV2):void;
   state(ready:boolean,epoch:number):void;
+  acknowledged?(message:MessageEnvelopeV2):void;
 }
 /** Recovery-only by default. Optional host dispatch is enabled only after the recovery request is acknowledged. */
 export class RecoveryClient {
@@ -91,6 +92,7 @@ export class RecoveryClient {
           else{
             const pending=this.ledger.pendingMessages().find(p=>p.messageId===payload.messageId);
             this.ledger.acknowledgeMessage(payload.messageId);
+            if(pending)this.live?.acknowledged?.(pending);
             if(pending?.type==='RecoveryRequest'&&!liveReady){liveReady=true;this.live?.state(true,info.epoch);}
           }
         }else if(m.type==='AttemptStatusQuery')this.ledger.answerStatus(m);

@@ -52,6 +52,18 @@ export class DeviceDirectory {
     const rows=await db.deviceInstance.findMany({where:{groupId}});
     return rows.filter(r=>r.id.startsWith('["profile",')).map(r=>JSON.parse(r.metadataJson)).filter(p=>validDeviceProfileV2(p)&&p.domain===this.domain);
   }
+  /** Credential-scoped evidence read; a device cannot read or approve another holder's execution targets. */
+  async qualification(peer:Peer,targetId:string){
+    return this.db.$transaction(async tx=>{
+      const profile=(await this.profiles(peer.groupId,tx)).find(p=>p.holderInstanceId===peer.holderInstanceId&&p.deviceId===peer.deviceId);
+      const executor=profile?.executors.find(e=>e.target.targetId===targetId);
+      const row=await tx.capabilityState.findUnique({where:{id:JSON.stringify([peer.groupId,peer.holderInstanceId,targetId])}});
+      const admission=row?JSON.parse(row.metadataJson):null;
+      if(!executor||!row||!validCapabilityAdmissionV2(admission)||admission.groupId!==peer.groupId||admission.holderInstanceId!==peer.holderInstanceId||
+        admission.targetId!==targetId||admission.domain!==this.domain||admission.revision!==row.revision||admission.identity!==executorIdentity(executor))throw Error('QUALIFICATION_UNAVAILABLE');
+      return {executor,admission};
+    });
+  }
   reason(p:DeviceProfileV2,policy:ContributionPolicy,now:number):string|null{
     if(!sampleUsableV2(p.ownerActivity,now,this.domain)||p.ownerActivity.value!=='IDLE')return 'OWNER_ACTIVE_OR_UNKNOWN';
     if(policy.requireForeground&&(!sampleUsableV2(p.foreground,now,this.domain)||p.foreground.value!=='FOREGROUND'))return 'BACKGROUND';

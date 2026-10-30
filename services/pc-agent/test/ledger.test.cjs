@@ -147,3 +147,17 @@ test('external-engine recovery retains unknown occupancy and requires matching l
   assert.deepEqual(occupiedV2(restored.snapshot()),[]);
  }finally{await restored.close();}
 });
+
+test('profile sequence and outbox persist together; duplicate pending profile is bounded',async()=>{
+ const {ledger,dir}=await setup();
+ ledger.bindChannel('coordinator1',1);
+ const p=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DeviceProfile.json'));
+ p.holderInstanceId=identity.holderInstanceId;p.ledgerEpoch=ledger.snapshot().ledgerEpoch;
+ const first=ledger.queueProfile(p);assert.equal(JSON.parse(first.payload).sequence,first.seq);
+ await assert.rejects(async()=>ledger.queueProfile(p),/PROFILE_PENDING/);
+ await ledger.close();const restored=await DurableLedger.open(dir,identity,cert);
+ try{assert.deepEqual(restored.pendingMessages().find(m=>m.messageId===first.messageId),first);
+  restored.acknowledgeMessage(first.messageId);p.ledgerEpoch=restored.snapshot().ledgerEpoch;
+  const second=restored.queueProfile(p);assert.ok(second.seq>first.seq);
+ }finally{await restored.close();}
+});
