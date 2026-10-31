@@ -1,0 +1,233 @@
+# Harmony 协作空间、云端部署与时延实验综合交接
+
+日期：2026-10-31（北京时间）。交接对象：继续开发与准备国赛路演的协作者。
+
+## 1. 接手时先确认这几件事
+
+1. 当前产品方向是**团队共享设备资源的“协作空间”**，不是旧购物应用专用调度。用户要求功能落地优先，先实现可启动、可接入、可执行、可观察的流程；不把完整生产加固或真机条件作为所有软件工作的前置。
+2. 已上线“创建/加入空间 → 成员和设备 → 仪表盘 → CPU 任务 → 结果”的真实软件链路。线上协调中心在 Railway，设备代理负责本机执行。
+3. 最新时延实验显示当前美西 Railway 路径明显慢于本机回环。**建议优先验证现场指定电脑统一调度，但最终云端/本地架构尚未确定，线上仍为云端模式。** 本轮只完成实验，没有实现云边组合、主节点选举或自动接管。
+4. 尚无第二台电脑参与局域网对照；鸿蒙 SDK、手机、GPU、多台物理设备的验收均未完成。REAL 域只表示真实采样域，不能等同于真机验收完成。
+5. 本文是本次工作的综合接手入口。早期文档中“团队界面尚未实现”“业务 CLI 未接入”“校准周期领取”等描述已被后续工作覆盖；不要据此重复搭建。
+
+## 2. 仓库、分支与精确基线
+
+仓库：[fangluyang7-debug/Harmony-cc](https://github.com/fangluyang7-debug/Harmony-cc)。本机目录：`C:/Users/17321/Desktop/Harmony-final`。
+
+| 用途 | 分支 / 提交 | 接续方式 |
+| --- | --- | --- |
+| 正式功能开发 | `codex/scheduler-v2-foundation` | 后续功能修改从此分支继续，或从它建立新的开发分支 |
+| 本轮功能实现 | `d7a9d968a9c997fa0a15044a9fa2da5a7c5acd39` | 协作空间、CPU 宿主、远程校准和云端整合实现基线 |
+| 实验所用业务基线 | `2b6159e8866af7b123f52bf3285f198785a2663a` | 在上述实现上补充交接基线；本综合文档属于之后的文档增量 |
+| 独立时延实验 | `codex/latency-cloud-vs-local`，`92023a57b944f98f4073727e3de68e7787c8b30b` | 仅新增 `experiments/latency-cloud-vs-local/`，未改生产源码或部署配置 |
+| 接手前协作者基线 | `29fa2e435474104be62b32f6d591128f298fb69c` | 历史参考，不是本轮完成后的代码版本 |
+
+功能代码与实验提交均已推送 GitHub。本文放在开发分支；**不要为了读取测试结论把整个实验分支合并进开发分支**。下面的实验链接固定到 `92023a5`，在开发分支上没有实验目录是正常现象。
+
+在自己的干净工作区更新开发分支：
+
+```powershell
+git fetch origin
+git switch codex/scheduler-v2-foundation
+git pull --ff-only origin codex/scheduler-v2-foundation
+```
+
+有未提交工作时先自行保存；不要覆盖或重置它。只查看实验可直接使用后文 GitHub 链接；确需复跑时，在干净工作区切换到 `codex/latency-cloud-vs-local`，结束后回到开发分支。
+
+## 3. 已完成的功能与边界
+
+| 模块 | 当前可用能力 | 不能据此宣称完成的部分 |
+| --- | --- | --- |
+| 首页与空间 | 创建空间、邀请码/链接加入、我的空间；进入空间后才显示总览、设备、成员、任务 | 本地/云端模式选择 UI 尚未交付 |
+| 账号与成员 | 注册、登录、退出；持久化成员关系；OWNER/MEMBER/VIEWER；负责人修改非负责人角色 | 密码找回、邮箱验证、成员移除/退出、负责人转移未提供 |
+| 邀请 | 24 小时成员邀请码；10 分钟一次性设备配对邀请 | 邀请撤销 UI 待补 |
+| 设备与共享 | 登记名称、CPU/内存贡献上限，下载邀请和配置；PC Agent 配对后常驻连接；暂停/恢复共享 | 浏览器本身不能贡献算力；仍需 CLI 代理；容量在线修改、重命名/删除、图形安装器待补 |
+| 仪表盘 | 真实成员、在线设备、能力检查状态、可准入 CPU、协同任务占用、任务状态；桌面及 390px 布局检查 | 资源条不是整机 CPU/GPU 利用率；未知硬件指标不填假值 |
+| 协调器 | 独立服务、持久化目录与配额、WS 派发、回执与恢复；网页关闭后继续运行 | 网页任务路径不是完整 DAG 全局最优规划器；没有云边主节点自动切换 |
+| CPU 宿主 | 系统 CPU/RAM 采样、贡献策略、额度续期、队列、账本、子进程执行、工件读写和结果回传 | GPU 执行器、原生鸿蒙贡献端、通用应用 SDK 未完成 |
+| 自动能力检查 | 内置可信参考包、持久化远程评测、EvaluationChanged 事件唤醒、结果判定和 ACTIVE/CANARY 状态 | 未覆盖所有平台、所有能力和 R5 全部验收场景 |
+| 任务 | `text.count.v1`、`vector.normalize.v1`；自动选择有资格且有资源的目标，或指定目标；读取本人结果 | 任务取消/重规划、完整优先级预留、指定成员优先 GPU、流式会话和多阶段工作流尚未接入此入口 |
+
+补充：页面“恢复共享”当前设置为 `dedicated`，不会自动恢复此前的 `windows-idle` 模式。贡献模式体验后续可一并完善。
+
+当前业务调用路径：
+
+```text
+浏览器账号 / 协作空间
+  → /v2/spaces/:spaceId/jobs
+  → CPU 目标选择、输入登记与工件保存
+  → WebSocket DispatchOffer
+  → PC Agent 前置校验、队列与本地资源准入
+  → 下载输入、CPU 子进程执行、发布结果、持久化回执
+  → 来源用户查询并读取结果
+```
+
+设备自己的操作系统始终负责本机执行。“统一协调中心”是跨设备的上层服务，不是合并内核、显存或任意进程。浏览器账号、空间角色和设备凭据是不同层次的身份；Harmony 应用成员邀请也不等于 Railway 项目协作者权限，本轮未变更 Railway 成员授权。
+
+## 4. 代码导航与已处理的集成问题
+
+以下路径均相对仓库根目录。
+
+| 入口 | 用途 |
+| --- | --- |
+| `apps/team-space-web/` | 新首页、空间页面、交互、2.5 秒快照轮询；原 `apps/test-entry-web` 不是新入口 |
+| `services/coordinator/src/spaces.ts` | 账号会话、空间/成员/邀请、设备设置、网页任务 API |
+| `services/coordinator/src/cpu-jobs.ts` | CPU 任务选择、提交、启动、结果状态、执行端授权及工件票据 |
+| `services/coordinator/src/remote-evaluation.ts` | 持久化远程评测派发与回报 |
+| `services/coordinator/src/app.ts`、`channel.ts`、`config.ts` | 服务装配、HTTP/WS、代理 TLS 模式、静态页面与配置 |
+| `services/pc-agent/src/host.ts`、`host-main.ts` | 常驻 CPU 宿主、资源采样、云端共享设置同步、启动入口 |
+| `services/pc-agent/src/calibration-worker.ts`、`calibration-executor.ts` | 远程评测执行、确定未准入时的持久化未执行回报 |
+| `services/pc-agent/src/pairing-main.ts`、`submit-main.ts` | 配对与任务命令行入口 |
+| `packages/reference-capabilities/` | 协调器与代理共享的文本、向量契约、样例与 schema |
+| `packages/resource-transport/` | 工件和评测协议、公网/固定证书连接支持 |
+| `services/coordinator/prisma/migrations/202610310001_*` 至 `202610310003_*` | 远程评测、CPU 任务、协作空间三组增量迁移 |
+| `services/coordinator/Dockerfile`、`railway.json`、`scripts/prepare-space-deploy.ps1` | 服务器镜像与按白名单打包部署 |
+
+后续修改应保留以下已验证行为，避免旧版本代理或重构造成回退：
+
+- **公网 TLS 与签名身份分离**：`tlsMode=public` 使用系统 CA 校验 HTTPS，持久化协调者签名证书仍校验额度；本地连接继续支持固定证书模式。
+- **设备时钟换算**：设备可能比服务器快。宿主利用 HTTPS Date 保守换算画像时间，不修改 OS 时钟或实测硬件值；快 2.5 秒的场景已验证。
+- **评测领取后未准入**：确定没有持久化准入记录时写入未执行标记并支持补报，避免永久等待资源。已经准入但状态未知时仍须保留账本和对账语义。
+- **请求体解析**：Express JSON 中间件应全局装配；仅挂在空间路径曾干扰 Nest 的其他接口解析，导致配对失败。
+- **设备设置响应**：`/v2/device-settings` 返回 `{settings: ... 或 null}`，不能直接返回裸 null。
+- **空空间任务**：返回 `NO_AVAILABLE_TARGET`，而非 `GROUP_UNKNOWN`。
+
+网页完整接口表和权限说明见 [协作空间云端说明](TEAM-SPACE-CLOUD-20261031.md)。早期工作包差距见 [设计落地核对](DESIGN-GAP-AND-CPU-HOST-20261031.md)，但其中团队界面、图形邀请等历史缺口以本文为准。
+
+## 5. Railway 运行中心
+
+| 项目 | 已验证值 |
+| --- | --- |
+| Railway 项目 | Harmony，`f4dce7ff-75a2-4969-9137-2a9467f46475` |
+| 项目控制台 | <https://railway.com/project/f4dce7ff-75a2-4969-9137-2a9467f46475> |
+| 环境 | production，`549f0768-2819-4c0b-a5d6-ab910067f7fc` |
+| 新服务 | `harmony-space`，`e8263b30-469d-4be5-938e-101f89d5648d` |
+| 产品入口 | <https://harmony-space-production.up.railway.app> |
+| 就绪检查 | `/v2/health/ready`，实验收尾时返回 `ready: true` |
+| 部署编号 | `5551c54e-e521-463b-a26b-d529e10e1e53`，实验收尾时仍为 SUCCESS |
+| 实测部署区 | `railway/us-west2`；正式时延样本的边缘入口为 `cdg1`，两者含义不同 |
+| 持久卷 | `harmony-space-volume`，`2f3ff9cf-bc8a-4294-a53c-5120c956e60d`，挂载 `/data` |
+| 持久数据 | `/data/coordinator`：SQLite、协调者签名身份、工件缓存 |
+
+服务变量为 `PORT=8080`、`COORDINATOR_PUBLIC_URL=https://harmony-space-production.up.railway.app`、`RAILWAY_DOCKERFILE_PATH=services/coordinator/Dockerfile`。镜像默认启用 proxy TLS、CPU Host、REAL 域、`0.0.0.0` 监听和静态网页服务。当前按单实例运行，启动时执行迁移，恢复完成后才就绪。
+
+原 `api-server` 服务 ID 为 `76889976-f04c-4590-8589-581ff127f08f`，原服务、卷及其他 Railway 项目均未修改。后续 Railway CLI 操作显式指定 `harmony-space` 的服务 ID 和 production 环境；不能依赖 CLI 默认选中服务。不要在实验过程中更换正式实例部署区或重建持久卷。
+
+当前通过 CLI 上传源码部署，**未配置 GitHub 自动部署**。因此 GitHub 推送不等于线上更新。`prepare-space-deploy.ps1` 会生成新的 `.test/space-deploy-*`，只复制枚举的部署源码；不要直接上传整个含本地凭据/数据库的工作目录。具体上传前核对目标服务和打包目录。本交接不要求立刻重新部署。
+
+## 6. 协作者怎样先跑通现有功能
+
+环境：Node.js 22+、npm、可用的 OpenSSL。以下命令在仓库根目录执行。
+
+```powershell
+npm ci
+npm --workspace @harmony/coordinator run build
+npm --workspace @harmony/pc-agent run build
+```
+
+优先使用已上线入口验证：注册自己的 Harmony 账号，创建空间，邀请另一个成员，在贡献设备的账号下“接入设备”，下载 `invitation.json` 与 `contribution.json`，使用页面生成的配对和启动命令。邀请 10 分钟内有效；过期则重新生成。代理退出后重启使用原 `agent.json` 与账本，不要把重连变成重新注册。
+
+需要本机运行协调服务时，可在**新的 PowerShell 窗口**使用独立实验目录：
+
+```powershell
+$env:COORDINATOR_DATA_DIR = Join-Path (Get-Location) '.test/handoff-local-coordinator'
+$env:COORDINATOR_PORT = '7443'
+$env:COORDINATOR_HOST = '127.0.0.1'
+$env:COORDINATOR_CERTIFICATE_HOST = 'localhost'
+$env:COORDINATOR_TLS_MODE = 'pinned'
+$env:COORDINATOR_PUBLIC_URL = 'https://localhost:7443'
+$env:COORDINATOR_CPU_HOST = '1'
+$env:COORDINATOR_DOMAIN = 'REAL'
+$env:COORDINATOR_WEB_DIR = Join-Path (Get-Location) 'apps/team-space-web'
+npm --workspace @harmony/coordinator run db:init
+node services/coordinator/dist/main.js
+```
+
+这是已有配置的本机启动方式，不是本轮额外完成的局域网产品模式验收。本地 HTTPS 为自签名证书，浏览器需要信任；设备配对使用邀请中的证书固定校验。**另一台电脑无法通过这里的 localhost 地址接入**：后续局域网工作需要明确可达地址、监听地址、证书主机名、邀请 URL 和前端入口，并做双设备验证。
+
+软件烟测脚本：`node scripts/smoke-team-space-cloud.cjs https://harmony-space-production.up.railway.app`。它会新建私有测试空间并真实执行 CPU 任务，不是只读检查；结束后停止代理并撤销测试凭据。首次接入等待自动能力检查完成后再提交。
+
+## 7. 已完成的验证
+
+以下是此前实现轮次留下的验证记录，本次整理文档没有重新跑全部开发测试。
+
+| 验证 | 结果与解释 |
+| --- | --- |
+| 协调服务完整回归 | 52/52；随后对公网修复又做远程评估/空间联调 4/4、CPU Host/空间联调 2/2 |
+| PC Agent | 34/34，包含未准入评测的持久化未执行回报与重试 |
+| 架构检查 / 工件传输测试 | 18/18、1/1 |
+| 快时钟完整空间测试 | 设备时钟人为快 2.5 秒，1/1 |
+| Railway 公网软件链路 | HTTPS 配对、WSS、自动能力检查、真实 CPU、结果回传、暂停共享均通过；`Hello cloud` 返回 11 字符、2 词、1 行 |
+| 浏览器 | 桌面首页与空间内页面、390px 手机尺寸布局检查；不等于鸿蒙原生端验收 |
+| 新时延实验 | 三轮、426 个正式观测、6 次预热；样本数、分位数和清理核验脚本通过；保留 2 次正式失败 |
+
+开发修改后的检查按影响范围执行。常用入口为 `npm run coordinator:test`、`npm run pc-agent:test`、`npm run architecture:deps`、`npm run transport:test`；前端纯脚本可先执行 `node --check apps/team-space-web/app.js`。涉及公网路径时再跑独立私有空间烟测；不要用重新跑通一次来掩盖批量实验中的失败。
+
+## 8. 云端 / 本地时延实测结论
+
+正式采样时间：北京时间 **2026-10-31 10:23:54—10:33:42**。Windows 电脑为 Core Ultra 7 155H、22 逻辑 CPU、约 31 GiB 内存；两个代理都在同一台电脑，分别连接本机独立协调器和现有 Railway。每个代理贡献 1 CPU 槽位、256 MiB 上限。三轮顺序交替，先配对/能力检查和预热，再串行提交真实任务。
+
+下表单位为**毫秒，成功样本的中位数 / P95**；每组 WebSocket/复用 HTTPS 60 次，仪表盘 30 次，任务每类 15 次，暂停仅 3 次。
+
+| 场景 | 本机回环 | Railway 公网 |
+| --- | ---: | ---: |
+| WebSocket ping/pong 往返 | 0.26 / 0.58 | 319.90 / 328.36 |
+| HTTPS 复用连接往返 | 0.73 / 1.15 | 326.32 / 688.25 |
+| 仪表盘读取 | 13.98 / 37.22 | 722.94 / 1408.44 |
+| 小文本：提交至设备收到指令 | 87.95 / 100.44 | 445.15 / 629.78 |
+| 小文本：提交至完整结果 | 644.43 / 713.82 | 3825.06 / 4757.67 |
+| 256 KiB 文本：提交至完整结果 | 631.48 / 779.64 | 5317.54 / 14203.33 |
+| 向量：约 72 KiB 输入、704 KiB 输出 | 724.71 / 905.42 | 12379.15 / 18438.58 |
+| 暂停共享到代理已应用 | 655.78 / 1102.91 | 1433.53 / 2301.22 |
+
+本地 45 个正式任务全部成功；云端 45 个正式任务中 **2 次 TASK_REJECTED**，分别为小文本和向量。不是 2 次网络丢包，具体根因未定位。其余正式观测成功，6 次预热成功；不能据短时样本推断长期成功率。
+
+解释这些数字时必须同时说明：
+
+- **本机回环不是双设备局域网**；尚不能宣称现场 Wi-Fi、热点或主节点失效情况下达到上述数值。
+- 上表任务在确认目标可用后开始计时。额外等待可用状态单独记录；本地某些连续提交等待接近 2 秒。包含等待后，256 KiB 文本本地 P95 为 2618.89 ms、云端 14984.33 ms；向量本地 2706.12 ms、云端 21018.96 ms。
+- 任务结果采用每次查询后等待 100 ms 的实验观察方式；正式页面是每 2.5 秒刷新。上表没有包含页面渲染，也没有人为给每项加 2.5 秒。
+- 小文本算法中位数约 0.15–0.16 ms，但 CPU 子进程整体约 238–251 ms；云端前置校验、输入读取、输出发布各含多个请求。不能把全部差值都解释成调度算法慢。
+- 输入与结果当前经协调中心转发；这不是设备直连带宽测试，不覆盖 GPU、视频流或有实际计算收益的大任务。
+- P95 使用 nearest-rank；15 个任务样本的 P95 即成功样本的最大值。失败单列，各分段分位数不能直接相加。
+
+完整报告与可复现数据均在独立实验提交：
+
+- [完整实验报告](https://github.com/fangluyang7-debug/Harmony-cc/blob/92023a57b944f98f4073727e3de68e7787c8b30b/experiments/latency-cloud-vs-local/RESULTS-20261031.md)
+- [复现说明与命令](https://github.com/fangluyang7-debug/Harmony-cc/blob/92023a57b944f98f4073727e3de68e7787c8b30b/experiments/latency-cloud-vs-local/README.md)
+- [正式逐次数据](https://github.com/fangluyang7-debug/Harmony-cc/blob/92023a57b944f98f4073727e3de68e7787c8b30b/experiments/latency-cloud-vs-local/formal-results.json)
+
+### 实验中的异常与清理记录
+
+首轮预跑的测试脚本复用了会被代理修改的共享设置对象，导致暂停后恢复仍发送 paused；整次预跑作废，原始数据保留为 `pilot-invalid-results.json`，未挑选成功项混入正式结果。正式脚本采用深拷贝并独立计量等待可用状态。
+
+撤销凭据接口返回 HTTP 201，首版实验客户端只接受 200，因而原始清理记录写有 `revokeError: HTTP_201`。实际撤销已执行；随后独立核验本地数据库 revoked 字段和云端受保护任务接口的 `CREDENTIAL_REVOKED`，确认正式与预跑两组凭据均失效。最终脚本已接受成功的 2xx，此修正不影响时延样本。
+
+代理和本地协调器均已停止；云端私有实验空间历史仍保留。密码、邀请、安装目录与数据库只在被 Git 忽略的 `.test/`，没有随实验数据提交。协作者应创建自己的账号和邀请，不依赖本机临时凭据。
+
+## 9. 接下来建议按此顺序推进
+
+这是开发优先级建议，不代表用户已确定云边组合架构；也不要求在设备尚未准备好时继续等待。
+
+| 优先级 | 工作 | 建议完成标准 |
+| --- | --- | --- |
+| P0 | 保存并展示 TASK_REJECTED 的完整原因与关键阶段 | attemptId 能关联调度、画像、额度版本、代理准入和拒绝原因；重复相同案例后能够解释每次拒绝。未确认前不把问题归结为网络或放开某项校验 |
+| P0 | 任务结束后的可用状态、连续提交体验 | 结算后及时更新资源状态；无目标时明确显示等待/排队或可重试状态；不能仅靠实验脚本等待来遮住正式产品的提交失败 |
+| P0 | 准备明确的本地部署与空间接入流程 | 配置可达地址、证书、邀请、静态页面和持久目录；界面明确当前协调中心。无设备时先完成软件实现与回环验证 |
+| P0（设备到位后） | 第二台电脑的真实局域网 A/B 对照 | A 为协调器/控制台，B 执行；再让同样两台设备接 Railway；比较完整结果、失败、重连与多个时段，不用回环值代替 |
+| P1 | 降低串行往返和数据绕行 | 评估合并请求、连接复用、缓存/直连、执行进程复用；每项优化保留前后同口径数据，不只比较 ping |
+| P1 | 页面任务事件与状态反馈 | 提交即时反馈，展示真实排队/执行/结果；减少 2.5 秒轮询带来的视觉等待，断连和旧数据状态可识别 |
+| P1 | 统一错误状态与诊断 | 已撤销凭据访问 `/v2/devices` 当前返回 500，任务接口返回 400 / CREDENTIAL_REVOKED；统一语义并保留便于定位的原因 |
+| P1 | 真实有计算量的路演任务 | 证明节约的计算时间超过传输与协调成本；当前文本/向量只是链路案例，不能声称已证明算力加速收益 |
+| 后续 | 成员/设备操作完善、优先级预留、GPU、鸿蒙 SDK、完整 DAG 与通用应用接入 | 按设计方案分批推进；手机/GPU/多设备真实验收另行安排 |
+
+当前建议的路演方向是“现场指定电脑做统一协调中心，云端保留异地协同模式”，最终以真实局域网与赛场网络结果定版。若后续决定云端管理叠加本地调度，应明确每个空间的权威协调者、状态归属和切换规则；当前独立本地数据库与云端数据库不会自动同步。若坚持纯云端作为主链路，应先在独立测试服务验证更近区域，不直接移动正在使用的正式服务。
+
+## 10. 接手完成的最小核对单
+
+- 已拉取正确开发基线，能打开线上协作空间并用自己的账号创建、加入。
+- 能在一台 PC 上配对、完成能力检查、执行文本/向量、取回结果、暂停/恢复；理解仍需代理。
+- 已阅读实验的成功时间、两次拒绝、等待可用状态和样本限制；没有将实验分支当作新的功能主分支。
+- 下一次提交明确写出修了哪个缺口、如何验证、是否部署、部署编号和仍未验证的设备条件。
+
+本次交接不宣称全部 B/C/D 工作包、完整共享算力操作系统、局域网产品模式或真机验收已经完成。
