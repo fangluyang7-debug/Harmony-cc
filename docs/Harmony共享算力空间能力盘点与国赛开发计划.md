@@ -1,5 +1,7 @@
 # Harmony 共享算力空间能力盘点与国赛开发计划
 
+> **历史文档（2026-10-31 标注）**：本文已不再有效，仅作历史记录。其中的产品定位、里程碑和开发顺序均已被取代，不得作为开发依据。现行方向、范围与执行顺序以 [调度 v2 文档入口](scheduler-v2/README.md)、[规格修订 6](scheduler-v2/specification-r6.md) 和 [STATUS.md](scheduler-v2/STATUS.md) 为准：协调者部署在局域网 PC 上，SoleAI 为演示 App，按切片 S1 → S8 推进。
+
 更新日期：2026 年 10 月 29 日。
 
 产品目标以 [Harmony 团队共享算力空间功能设计方案](Harmony团队共享算力空间功能设计方案.md) 为准。当前代码基线为 `codex/scheduling-data-pipeline` 分支的 `5c63ee3`，包括协作人最近对成本数据、终端计时和能力质量准入的修订。

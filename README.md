@@ -1,10 +1,10 @@
-> 2026-10-31：协作空间首页、成员/设备管理与 Railway 云端协调已落地。访问 https://harmony-space-production.up.railway.app ，接入和验证记录见 [协作空间云端交接说明](docs/scheduler-v2/TEAM-SPACE-CLOUD-20261031.md).
+> **当前开发方向（2026-10-31，所有提交者必读）**：跨设备资源协同运行时 v2 的协调者（宏观调度器）部署在局域网内指定的一台 PC 上；手机、平板、PC 是等价终端；所有任务只经过一条派发路径；按切片 S1 → S8 推进。开工前先读 [调度 v2 文档入口](docs/scheduler-v2/README.md)、[规格修订 6 §00](docs/scheduler-v2/specification-r6.md) 和 [STATUS.md](docs/scheduler-v2/STATUS.md)。Railway 云端协调与协作空间功能扩展属于非主线，已冻结，只修缺陷。
 
 # Harmony-cc · 智调鸿枢鸿蒙调度项目
 
-最新接手入口：[协作空间、云端部署与时延实验综合交接（2026-10-31）](docs/scheduler-v2/HANDOFF-TEAM-SPACE-AND-LATENCY-20261031.md)，包含开发/实验分支基线、已完成能力、实测结果和后续优先级。
+接手入口：[调度 v2 文档入口](docs/scheduler-v2/README.md)。进度只记录在 [STATUS.md](docs/scheduler-v2/STATUS.md)；`docs/scheduler-v2/HANDOFF-*.md` 是历史记录，其中的“下一步”与优先级已不再适用。
 
-当前 v2 开发面向团队共享资源空间及跨设备协同。2026-10-31 已接通独立 CPU 代理、自动校准、任务提交与结果读取，见 [设计差距核对与运行说明](docs/scheduler-v2/DESIGN-GAP-AND-CPU-HOST-20261031.md)。下方购物链路是既有 v1 实现，不是 v2 新功能的限定场景。
+当前 v2 开发面向局域网内的跨设备资源协同。已接通 PC CPU 代理、自动校准、任务提交与结果读取；鸿蒙代理、SDK、两个鸿蒙 App 与多阶段联合调度尚未完成，详见 [STATUS.md](docs/scheduler-v2/STATUS.md)。SoleAI（购物识别）是演示用 App，通过 SDK 接入 v2；下方购物链路是既有 v1 实现。
 
 Harmony-cc 是独立的鸿蒙参赛项目仓库，包含手机购物应用、调度 HAR、云端 Runtime、可信 CPU Worker、双手机派发、PC 监控、模型与商品样本、测试及参赛材料。
 
