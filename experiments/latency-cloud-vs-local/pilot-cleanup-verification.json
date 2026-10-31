@@ -1,0 +1,19 @@
+{
+  "verifiedAt": "2026-10-31T02:35:10.813Z",
+  "run": "latency-rlsVYa",
+  "note": "The revoke endpoint returns HTTP 201. The original benchmark recorded this successful response as revokeError; subsequent read-only verification follows.",
+  "checks": [
+    {
+      "env": "local",
+      "credentials": 1,
+      "allRevoked": true
+    },
+    {
+      "env": "cloud",
+      "protectedEndpoint": "/v2/jobs/latency-cleanup-check",
+      "protectedEndpointStatus": 400,
+      "reason": "CREDENTIAL_REVOKED",
+      "credentialRejected": true
+    }
+  ]
+}
