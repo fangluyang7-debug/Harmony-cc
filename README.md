@@ -110,6 +110,6 @@ npm run cloud-shopping:typecheck
 
 环境凭据、本机签名、数据库、运行日志和缓存仅在本机保留。模型 `.ms`、模型描述、商品样本、原生工程、服务端迁移、契约与参赛文档纳入 Git。旧目录与原 Cixin 仓库保留原状，迁移后请以此目录作为新的鸿蒙开发入口。
 
-## 团队共享算力空间：调度 v2
+## 跨设备资源协同：调度 v2
 
-后续以团队共享算力空间为主线，不继续扩展旧购物业务。最新进展见 [B 阶段软件整合交接](docs/scheduler-v2/HANDOFF-B-INTEGRATION-20261030.md)，历史基础见 [阶段 A 交接](docs/scheduler-v2/HANDOFF-20261030.md)，运行方式见 [协调者说明](services/coordinator/README.md) 与 [PC agent 说明](services/pc-agent/README.md)。已整合可信校准、真实 CPU、HTTPS 制品、WS 派发与持久化回执；业务宿主产品化和完整场景验收仍待接续，真机验收按用户要求暂缓。
+架构以跨设备资源协同运行时为主线，协作空间作为应用入口。局域网运行见 [本地协调者指南](docs/scheduler-v2/LOCAL-COORDINATOR-20261031.md)。最新进展见 [B 阶段软件整合交接](docs/scheduler-v2/HANDOFF-B-INTEGRATION-20261030.md)，历史基础见 [阶段 A 交接](docs/scheduler-v2/HANDOFF-20261030.md)，运行方式见 [协调者说明](services/coordinator/README.md) 与 [PC agent 说明](services/pc-agent/README.md)。已整合可信校准、真实 CPU、HTTPS 制品、WS 派发与持久化回执；业务宿主产品化和完整场景验收仍待接续，真机验收按用户要求暂缓。

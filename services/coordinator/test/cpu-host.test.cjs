@@ -3,6 +3,7 @@ const {execFile,fork}=require('node:child_process');
 const {runtime}=require('./helpers.cjs');
 const {allotmentTransport}=require('../../pc-agent/dist/allotment-client');
 const {transfer}=require('@harmony/resource-transport');
+const {submitWhenAvailable}=require('../../pc-agent/dist/submit-wait');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const command=(file,args)=>new Promise((resolve,reject)=>execFile(process.execPath,[file,...args],{windowsHide:true,timeout:60000},(e,stdout,stderr)=>e?reject(Error(stderr||e.message)):resolve(stdout)));
 async function until(check,errors){const until=Date.now()+45000;while(Date.now()<until){if(await check())return;await new Promise(r=>setTimeout(r,100));}throw Error('HOST_TIMEOUT '+JSON.stringify(errors));}
@@ -39,6 +40,15 @@ test('paired standalone CPU host automatically qualifies; metadata submission ->
   const vectorInput=path.join(dir,'vector.json'),vectorOutput=path.join(dir,'normalized.json');fs.writeFileSync(vectorInput,JSON.stringify({dimension:2,rows:[[3,4]]}));
   await command(path.resolve('../pc-agent/dist/submit-main.js'),[sourceConfig,'vector.normalize.v1',vectorInput,vectorOutput]);
   assert.deepEqual(JSON.parse(fs.readFileSync(vectorOutput)),{dimension:2,rows:[[.6,.8]],norms:[5]});
+  // Use the production submission path, without a test-only readiness wait.
+  for(let i=0;i<3;i++){
+    const bytes=Buffer.from(JSON.stringify({text:'continuous '+i})),id=crypto.randomUUID();
+    const next=await submitWhenAvailable(request,{requestId:id,capability:'text.count.v1',contentHash:hash(bytes),bytes:bytes.length},()=>{});
+    await transfer(connection,next.inputTicket,source.credential,bytes);await request('/v2/jobs/'+id+'/start',{});
+    let completed;await until(async()=>{completed=await request('/v2/jobs/'+id,null);assert.notEqual(completed.state,'REJECTED',JSON.stringify(completed));return completed.outputTicket;},errors);
+    assert.ok(completed.decisionEvidence.profileSequence>0);
+    assert.deepEqual(JSON.parse((await transfer(connection,completed.outputTicket,source.credential)).bytes),{characters:12,words:2,lines:1});
+  }
   const current=await r.snapshots.build('team1');
   await r.profiles.configure('team1',{...current.policy,version:'manual-policy',allowedTargetIds:[]},
    {minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true});

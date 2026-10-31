@@ -9,7 +9,7 @@ export function loadConfig(env:NodeJS.ProcessEnv):CoordinatorConfig {
   if(!Number.isSafeInteger(port)||port<0||port>65535||!host||(!isIP(certificateHost)&&!/^[a-zA-Z0-9][a-zA-Z0-9.-]{0,252}$/.test(certificateHost))||!['REAL','SIMULATED'].includes(domain))throw new Error('COORDINATOR_CONFIG_INVALID');
   const dataDir=path.resolve(env.COORDINATOR_DATA_DIR??path.join(__dirname,'../data',domain.toLowerCase()));
   const publicUrl=env.COORDINATOR_PUBLIC_URL??(env.RAILWAY_PUBLIC_DOMAIN?'https://'+env.RAILWAY_PUBLIC_DOMAIN:undefined);
-  if(publicUrl){const u=new URL(publicUrl);if(u.protocol!=='https:'||u.pathname!=='/'||u.search||u.hash||u.username||u.password)throw Error('PUBLIC_URL_INVALID');}
+  if(publicUrl){const u=new URL(publicUrl);if(u.protocol!=='https:'||u.pathname!=='/'||u.search||u.hash||u.username||u.password)throw Error('PUBLIC_URL_INVALID');if(!proxy&&u.hostname.replace(/^\[|\]$/g,'')!==certificateHost)throw Error('PUBLIC_URL_CERTIFICATE_MISMATCH');}
   return {dataDir,host,port,domain:domain as CoordinatorConfig['domain'],certificateHost,openssl:env.COORDINATOR_OPENSSL??'openssl',proxy,publicUrl,webDir:env.COORDINATOR_WEB_DIR};
 }
 export function databaseUrl(config:CoordinatorConfig):string{return 'file:'+path.join(config.dataDir,'coordinator.sqlite').replaceAll('\\','/');}

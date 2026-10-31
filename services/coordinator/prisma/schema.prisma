@@ -49,6 +49,7 @@ model Attempt {
   recordJson String?
   taskJson String
   offerJson String?
+  rejectionJson String?
 }
 
 model Outbox {

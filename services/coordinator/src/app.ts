@@ -1,7 +1,8 @@
+import { SpaceEvents } from './space-events';
 import 'reflect-metadata';
 import fs from 'node:fs';
 import path from 'node:path';
-import { BadRequestException, Body, Controller, Get, Header, Headers, Param, Module, Post, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Body, Controller, Get, Header, Headers, Param, Module, Post, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaClient } from '../generated/client';
 import { CoordinatorConfig, databaseUrl } from './config';
@@ -33,6 +34,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     if(!fs.existsSync(path.join(config.dataDir,'identity.json'))&&await db.coordinatorState.count()>0)throw new Error('COORDINATOR_IDENTITY_LOST');
     const identity=loadIdentity(config);
     const store=new CoordinatorStore(db,identity.id);
+    const events=new SpaceEvents();
     const auth=new PairingService(db,identity.cert,config.domain);
     const artifacts=new ArtifactChannel(path.join(config.dataDir,'artifact-cache'),config.domain,token=>auth.authenticate(token),options.artifactSchemas??(options.cpuHost?cpuSchemas:new Map()));
     artifacts.sweep();
@@ -49,10 +51,10 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     }
     @Controller('/v2')
     class Pairing {
-      @Post('device-settings')async deviceSettings(@Headers('authorization') header:string){return {settings:await spaces.deviceSettings(await auth.authenticate(bearer(header)))};}
-      private async jobResponse(work:()=>Promise<unknown>){try{return await work();}catch(error){throw new BadRequestException(error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'JOB_FAILED');}}
+      @Post('device-settings')async deviceSettings(@Headers('authorization') header:string){return this.jobResponse(async()=>({settings:await spaces.deviceSettings(await auth.authenticate(bearer(header)))}));}
+      private async jobResponse(work:()=>Promise<unknown>){try{return await work();}catch(error){const code=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(code==='NO_AVAILABLE_TARGET')throw new ConflictException(code);throw new BadRequestException(code);}}
       @Get('devices')@Header('Cache-Control','no-store')async devices(@Headers('authorization') header:string){
-        const peer=await auth.authenticate(bearer(header));return {profiles:await directory.profiles(peer.groupId)};
+        return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));return {profiles:await directory.profiles(peer.groupId)};});
       }
       @Post('jobs')async submitJob(@Headers('authorization') header:string,@Body() body:any){
         if(!ready||!options.cpuHost)throw new ServiceUnavailableException('CPU_HOST_DISABLED');
@@ -128,9 +130,9 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     await app.init();
     let epoch=0;
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
-    const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)));
+    const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>events.changed(groupId));
     const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush());
-    const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots);
+    const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
     auth.onRevoked(id=>channel.revoke(id));
     const configureCpuGroup=async(groupId:string)=>{
@@ -173,11 +175,11 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       },refresh:async groupId=>{
         const states=await db.capabilityState.findMany({where:{groupId},orderBy:{id:'asc'},select:{id:true,revision:true}});
         const revision=JSON.stringify(states);if(published.get(groupId)===revision)return;
-        await profiles.refresh(groupId);published.set(groupId,revision);
+        await profiles.refresh(groupId);published.set(groupId,revision);events.changed(groupId);
       },onError:input.onError},input.intervalMs);
       calibration.start();return service;
     };
     return {app,db,identity,store,snapshots,planning,channel,auth,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
-      close:async()=>{if(closed)return;closed=true;ready=false;remoteEvaluation.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
+      close:async()=>{if(closed)return;closed=true;ready=false;spaces.close();remoteEvaluation.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
   }catch(error){await db.$disconnect();await unlock();throw error;}
 }

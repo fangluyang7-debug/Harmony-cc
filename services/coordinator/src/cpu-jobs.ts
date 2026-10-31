@@ -10,7 +10,7 @@ import { AllotmentIssuer } from './allotments';
 import { ProfileProjection } from './profile-projection';
 import { SnapshotBuilder } from './planning';
 
-interface JobData {offer:DispatchOfferV2;holderId:string;input:ArtifactDescriptor;output:ArtifactDescriptor|null;traceId:string;}
+interface JobData {offer:DispatchOfferV2;holderId:string;input:ArtifactDescriptor;output:ArtifactDescriptor|null;traceId:string;decisionEvidence?:{snapshotVersion:number;profileSequence:number;profileSampledAt:number};}
 /** First usable single-node submission path. Uses qualified available targets, with an optional explicit target. */
 export class CpuJobs {
   constructor(private readonly db:PrismaClient,private readonly directory:DeviceDirectory,private readonly profiles:ProfileProjection,
@@ -40,7 +40,7 @@ export class CpuJobs {
       contract:executor.contract,budget:{remainingMs:30000,deadlineAt:now+30000},inputs:[artifact.ref],allowedTargetIds:[executor.target.targetId],qualityTarget:'reference',privacy:'AUTHORIZED_REMOTE',
       priority:'REMOTE_INTERACTIVE',parameters:'{}',allowedConfigurations:executor.configurations.map(c=>c.id),businessIdempotencyKey:null},target:executor.target,resources:executor.resources,allowedConfigs:executor.configurations,
       allotmentId:grant.allotmentId,allotmentVersion:grant.version,leaseMs:30000,transferPlan:[],dependencies:[],reasonCode:input.targetId?'USER_TARGET':'QUALIFIED_CPU_BASELINE'};
-    const data:JobData={offer,holderId:profile.holderInstanceId,input:artifact,output:null,traceId:randomUUID()};
+    const data:JobData={offer,holderId:profile.holderInstanceId,input:artifact,output:null,traceId:randomUUID(),decisionEvidence:{snapshotVersion:snapshot.version,profileSequence:profile.sequence,profileSampledAt:profile.ownerActivity.sampledAt}};
     this.artifacts.register(artifact);
     await this.db.cpuJob.create({data:{id,groupId:peer.groupId,principalId:peer.principalId,sourceHolderId:peer.holderInstanceId,state:'WAITING_INPUT',metadataJson:JSON.stringify(data)}});
     return this.upload(peer,id,data);
@@ -72,6 +72,9 @@ export class CpuJobs {
     const result=receipt?JSON.parse(receipt.recordJson):null;
     const committed=receipt?.committed===true&&result?.state==='SUCCEEDED'&&d.output&&result.outputs.some((r:any)=>canonical(r)===canonical(d.output!.ref));
     return {jobId:id,state:attempt?.state??'WAITING_INPUT',targetId:d.offer.target.targetId,deviceId:d.offer.target.deviceId,traceId:d.traceId,
+      decisionEvidence:d.decisionEvidence??null,
+      rejection:attempt?.rejectionJson?JSON.parse(attempt.rejectionJson):null,
+      dispatch:{coordinatorEpoch:d.offer.task.coordinatorEpoch,planRevision:d.offer.task.planRevision,allotmentId:d.offer.allotmentId,allotmentVersion:d.offer.allotmentVersion},
       outputTicket:committed&&d.output&&this.artifacts.available(d.output)?this.artifacts.issue(d.output,peer,'READ'):null};
   }
   async execution(peer:Peer,id:string,action:string,body:any){

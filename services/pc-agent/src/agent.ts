@@ -21,6 +21,7 @@ export interface AgentOptions {
   now?:()=>number;
   onYield(notice:YieldNoticeV2):void;
   onError(error:unknown):void;
+  onExecutionSettled?():void;
   allotments?:{policy:()=>AllotmentPolicy;renewEveryMs:number};
   resources?:{policy:ResourceMonitorPolicy;owner:()=>Promise<'IDLE'|'ACTIVE'|'UNKNOWN'>};
   calibration?:{executor:CalibrationExecutor;intervalMs?:number};
@@ -105,10 +106,10 @@ export class PcAgent {
         await this.scheduler.submit(offer,this.options.select(offer),{message,trace,admitted:()=>{void this.client.flush();}});
       }catch(error){
         if(!this.ledger.status(id)){
-          const reason=error instanceof Error&&/^[A-Z_]{1,100}$/.test(error.message)?error.message:'EXECUTION_REJECTED';
+          const reason=error instanceof Error&&/^[A-Z_]{1,100}(?::[A-Z_]{1,26})?$/.test(error.message)?error.message:'EXECUTION_REJECTED';
           try{this.ledger.rejectDispatch(message,reason);}catch(rejection){this.options.onError(rejection);}
         }else this.options.onError(error);
-      }finally{await this.flush();}
+      }finally{await this.flush();this.options.onExecutionSettled?.();}
     })();
     this.pending.set(id,{message:structuredClone(message),done});void done.finally(()=>this.pending.delete(id)).catch(this.options.onError);
   }

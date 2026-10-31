@@ -51,7 +51,7 @@ export class CpuHost {
       ports:{...artifactPorts({read:async(_ref,offer)=>route(offer,'input'),write:async(bytes,schemaId,offer)=>route(offer,'output',{bytes:bytes.length,contentHash:digest(bytes),schemaId})}),
         authorize:async offer=>{const reply=await request('/v2/executions/'+offer.task.attemptId+'/authorize',{}) as {offer:DispatchOfferV2};if(canonical(reply.offer)!==canonical(offer))throw Error('OFFER_SCOPE');return context();}},
       allotments:{policy:()=>({base:[],extra:[{resourcePoolId:'cpu',amount:config.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:config.contribution.maxMemoryBytes}],leaseMs:60000}),renewEveryMs:20000},
-      calibration:{executor:evaluator},onYield:()=>{},onError});
+      calibration:{executor:evaluator},onYield:()=>{},onExecutionSettled:()=>{void (this.pending??Promise.resolve()).then(()=>this.tick(false)).catch(onError);},onError});
   }
   static async open(config:CpuHostConfig,onError:(e:unknown)=>void=()=>{}){
     const p=config?.contribution;
@@ -67,9 +67,9 @@ export class CpuHost {
       executorId:'node.cpu.v1',executorVersion:'1',backend:'CPU',resourcePoolIds:['cpu','ram'],stableExecutionId:'node.cpu.v1'},contract:pack.manifest.contract,model:null,
       resources:structuredClone(cpuResources),configurations:[{...cpuConfiguration}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(0),cold:prior(0),publish:prior(0),uncertainty:prior(0)};
   }
-  private async sample(){
+  private async sample(syncSettings=true){
     try{
-      if(this.agent.ready){
+      if(this.agent.ready&&syncSettings){
         // HTTPS Date is rounded down to seconds. Anchor at receipt time so telemetry is conservatively
         // aged by network delay, never moved into the coordinator's future by a fast device wall clock.
         const reply=await allotmentTransport(this.config.connection,time=>{this.clockOffset=time-Date.now();})('/v2/device-settings',{} ) as {settings:CpuHostConfig['contribution']|null};
@@ -98,9 +98,9 @@ export class CpuHost {
           admissionLimit:numeric(this.limits.find(r=>r.resourcePoolId===pool.id)!.amount,pool.unit),occupied:numeric(occupied.find(r=>r.resourcePoolId===pool.id)?.amount??0,pool.unit),draining:owner!=='IDLE'&&occupied.length>0,drainMs:unknown('ms')})),
         executors:builtinCpuPacks().map(pack=>this.executor(pack.manifest.contract.capability,now)),links:[],credits:['ORIGIN_INTERACTIVE','REMOTE_INTERACTIVE','REMOTE_BATCH'].map(priority=>({priority,slots:owner==='IDLE'?1:0}))};
       await this.agent.publishProfile(profile);
-    }catch(error){this.owner='UNKNOWN';this.limits=[];await this.agent.updateResources([],'UNKNOWN');this.onError(error);}
+    }catch(error){this.onError(error);this.owner='UNKNOWN';this.limits=[];await this.agent.updateResources([],'UNKNOWN');}
   }
-  tick(){if(!this.pending&&!this.stopped)this.pending=this.sample().finally(()=>{this.pending=undefined;});return this.pending??Promise.resolve();}
+  tick(syncSettings=true){if(!this.pending&&!this.stopped)this.pending=this.sample(syncSettings).finally(()=>{this.pending=undefined;});return this.pending??Promise.resolve();}
   start(){if(this.timer||this.stopped)throw Error('HOST_STARTED');this.agent.start();this.timer=setInterval(()=>{void this.tick().catch(this.onError);},2000);void this.tick().catch(this.onError);}
   async close(){if(this.stopped)return;this.stopped=true;if(this.timer)clearInterval(this.timer);await this.agent.close();await this.pending;await this.ledger.close();}
 }

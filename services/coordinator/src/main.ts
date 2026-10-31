@@ -1,3 +1,6 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { X509Certificate } from 'node:crypto';
 import { createCoordinator } from './app';
 import { loadConfig } from './config';
 async function main(){
@@ -5,6 +8,7 @@ async function main(){
   try{await runtime.app.listen(config.port,config.host);await runtime.restore();}
   catch(error){await runtime.close();throw error;}
   for(const signal of ['SIGINT','SIGTERM'] as const)process.once(signal,()=>{void runtime.close().then(()=>process.exit(0));});
-  console.log('Coordinator ready');
+  if(!config.proxy){const certificateFile=path.join(config.dataDir,'coordinator-public.crt');fs.writeFileSync(certificateFile,runtime.identity.cert);console.log('Public certificate: '+certificateFile+'\nSHA-256: '+new X509Certificate(runtime.identity.cert).fingerprint256);}
+  console.log('Coordinator ready: '+(config.publicUrl??'(no public URL configured)'));
 }
-void main().catch(()=>{console.error('COORDINATOR_START_FAILED');process.exitCode=1;});
+void main().catch(error=>{console.error('COORDINATOR_START_FAILED '+(error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:''));process.exitCode=1;});

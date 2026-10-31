@@ -1,3 +1,4 @@
+import { SpaceEvents } from './space-events';
 import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { PrismaClient } from '../generated/client';
 import { CoordinatorConfig } from './config';
@@ -19,10 +20,12 @@ export function contribution(v:any){
 
 /** Browser accounts and room membership are separate from device execution credentials. */
 export class TeamSpaces {
+  private readonly streams=new Map<()=>void,string>();
+  close(){for(const close of this.streams.keys())close();}
   private readonly authAttempts=new Map<string,{count:number;until:number}>();
   constructor(private readonly db:PrismaClient,private readonly auth:PairingService,private readonly allotments:AllotmentIssuer,
     private readonly directory:DeviceDirectory,private readonly jobs:CpuJobs,private readonly artifacts:ArtifactChannel,
-    private readonly config:CoordinatorConfig,private readonly status:()=>{ready:boolean;epoch:number},private readonly snapshots:SnapshotBuilder){}
+    private readonly config:CoordinatorConfig,private readonly status:()=>{ready:boolean;epoch:number},private readonly snapshots:SnapshotBuilder,private readonly events=new SpaceEvents()){}
   async session(cookie:string|undefined){
     const token=/(?:^|;\s*)harmony_session=([A-Za-z0-9_-]{43})(?:;|$)/.exec(cookie??'')?.[1];
     const session=token?await this.db.spaceSession.findUnique({where:{id:hash(token)}}):null;
@@ -48,13 +51,31 @@ export class TeamSpaces {
         capabilities:(p?.executors??[]).map(e=>{const state=JSON.parse(states.find(s=>s.id===JSON.stringify([spaceId,p!.holderInstanceId,e.target.targetId]))?.metadataJson??'{"state":"DISCOVERED"}').state;
           return {capability:e.contract.capability,targetId:e.target.targetId,backend:e.target.backend,available:online&&available.includes(e.target.targetId)&&['ACTIVE','CANARY'].includes(state),state};})};});
     return {space,me,members:members.map(m=>({...m,name:users.find(u=>u.id===m.userId)?.name??'成员'})),devices,
-      jobs:rows.map(r=>{const d=JSON.parse(r.metadataJson);return {id:r.id,userId:r.principalId,state:attempts.find(a=>a.id===r.id)?.state??r.state,deviceId:d.offer.target.deviceId,capability:d.offer.task.contract.capability,reason:d.offer.reasonCode};}),
-      coordinator:{...this.status(),location:this.config.proxy&&this.config.publicUrl&&!['localhost','127.0.0.1','[::1]'].includes(new URL(this.config.publicUrl).hostname)?'CLOUD':'LOCAL_DEVELOPMENT',domain:this.config.domain},updatedAt:now};
+      jobs:rows.map(r=>{const d=JSON.parse(r.metadataJson);return {id:r.id,userId:r.principalId,state:attempts.find(a=>a.id===r.id)?.state??r.state,deviceId:d.offer.target.deviceId,capability:d.offer.task.contract.capability,reason:d.offer.reasonCode,rejection:attempts.find(a=>a.id===r.id)?.rejectionJson?JSON.parse(attempts.find(a=>a.id===r.id)!.rejectionJson!):null};}),
+      coordinator:{...this.status(),location:this.config.proxy&&this.config.publicUrl&&!['localhost','127.0.0.1','[::1]'].includes(new URL(this.config.publicUrl).hostname)?'CLOUD':'LOCAL_DEVELOPMENT',domain:this.config.domain,address:this.config.publicUrl??null},updatedAt:now};
+  }
+  private stream(req:any,res:any,spaceId:string,sessionId:string){
+    res.status(200).set({'Content-Type':'text/event-stream','Cache-Control':'no-store','X-Accel-Buffering':'no'});
+    res.flushHeaders();let closed=false,busy=false,dirty=true;
+    const stop=()=>{if(closed)return;closed=true;clearInterval(timer);unsubscribe();this.streams.delete(stop);res.end();};
+    const send=async()=>{
+      if(closed||busy)return;busy=true;
+      try{
+        const {user}=await this.session(req.headers.cookie);await this.member(user.id,spaceId);
+        if(closed)return;
+        const text=dirty?'event: changed\ndata: {}\n\n':': heartbeat\n\n';dirty=false;
+        if(!res.write(text))stop();
+      }catch{stop();}finally{busy=false;if(dirty&&!closed)void send();}
+    };
+    const unsubscribe=this.events.subscribe(spaceId,()=>{dirty=true;void send();});
+    const timer=setInterval(()=>{void send();},15000);timer.unref();
+    this.streams.set(stop,sessionId);res.on('close',stop);void send();
   }
   async handle(req:any,res:any){
     res.setHeader('Cache-Control','no-store');
     try{
       if(!this.status().ready)throw Error('COORDINATOR_NOT_READY');
+      if(req.method==='POST')res.once('finish',()=>{if(res.statusCode<300){const id=req.path.replace(/^\/v2\/spaces/,'').split('/').filter(Boolean)[0];if(id)this.events.changed(id);}});
       const route=req.path.replace(/^\/v2\/spaces/,'')||'/',body=req.body??{},method=req.method;
       if(method==='POST'){
         if(!req.is('application/json'))throw Error('JSON_REQUIRED');
@@ -78,17 +99,18 @@ export class TeamSpaces {
       }
       const {user,session}=await this.session(req.headers.cookie);
       if(route==='/me'&&method==='GET'){res.json({user:{id:user.id,name:user.name},spaces:await this.db.teamSpace.findMany({where:{id:{in:(await this.db.spaceMember.findMany({where:{userId:user.id}})).map(m=>m.spaceId)}}})});return;}
-      if(route==='/logout'&&method==='POST'){await this.db.spaceSession.delete({where:{id:session.id}});res.setHeader('Set-Cookie','harmony_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');res.json({ok:true});return;}
+      if(route==='/logout'&&method==='POST'){await this.db.spaceSession.delete({where:{id:session.id}});for(const [close,id] of this.streams)if(id===session.id)close();res.setHeader('Set-Cookie','harmony_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');res.json({ok:true});return;}
       if(route==='/'&&method==='POST'){
         const id=randomUUID();await this.db.$transaction([this.db.teamSpace.create({data:{id,name:label(body.name),createdAt:Date.now()}}),this.db.spaceMember.create({data:{id:randomUUID(),spaceId:id,userId:user.id,role:'OWNER',joinedAt:Date.now()}})]);res.json({id});return;
       }
       if(route==='/join'&&method==='POST'){
         const code=label(body.code,80),invite=await this.db.spaceInvite.findUnique({where:{id:hash(code)}});
         if(!invite||invite.revoked||invite.expiresAt<=Date.now())throw Error('INVITE_EXPIRED');
-        await this.db.spaceMember.upsert({where:{spaceId_userId:{spaceId:invite.spaceId,userId:user.id}},create:{id:randomUUID(),spaceId:invite.spaceId,userId:user.id,role:invite.role,joinedAt:Date.now()},update:{}});res.json({id:invite.spaceId});return;
+        await this.db.spaceMember.upsert({where:{spaceId_userId:{spaceId:invite.spaceId,userId:user.id}},create:{id:randomUUID(),spaceId:invite.spaceId,userId:user.id,role:invite.role,joinedAt:Date.now()},update:{}});this.events.changed(invite.spaceId);res.json({id:invite.spaceId});return;
       }
       const parts=route.split('/').filter(Boolean),[spaceId,action,id]=parts;
       const member=await this.member(user.id,spaceId);
+      if(action==='events'&&parts.length===2&&method==='GET'){this.stream(req,res,spaceId,session.id);return;}
       if(parts.length===1&&method==='GET'){res.json(await this.dashboard(user.id,spaceId));return;}
       if(action==='invites'&&method==='POST'){
         await this.member(user.id,spaceId,['OWNER']);if(!['MEMBER','VIEWER'].includes(body.role))throw Error('ROLE_INVALID');
@@ -124,6 +146,6 @@ export class TeamSpaces {
         res.json({...result,outputTicket:undefined,output});return;
       }
       res.status(404).json({error:'NOT_FOUND'});
-    }catch(e){const code=e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'REQUEST_FAILED';res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:400).json({error:code});}
+    }catch(e){const code=e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'REQUEST_FAILED';res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:code==='NO_AVAILABLE_TARGET'?409:400).json({error:code,retryable:code==='NO_AVAILABLE_TARGET'});}
   }
 }

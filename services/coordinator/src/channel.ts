@@ -19,7 +19,7 @@ export class ControlChannel {
   private readonly upgrade:(request:any,socket:any,head:Buffer)=>void;
   constructor(private readonly server:Server,private readonly db:PrismaClient,private readonly store:CoordinatorStore,
     private readonly ready:()=>boolean,private readonly epoch:()=>number,private readonly authenticate:(token:string)=>Promise<Peer>,
-    readonly limits={queuedMessages:64,bufferedBytes:1048576,inFlight:64}){
+    readonly limits={queuedMessages:64,bufferedBytes:1048576,inFlight:64},private readonly changed:(groupId:string)=>void=()=>{}){
     this.register('Hello',{validate:p=>validVersionHelloV2(p)&&negotiateVersionV2({versions:[2],extensions:[]},p)===2,handle:async()=>{}});
     this.register('RecoveryRequest',{validate:p=>exact(p,[]),handle:async peer=>store.requestStatus(peer.groupId,peer.holderInstanceId,epoch())});
     this.register('AttemptStatusReply',{validate:validAttemptStatusReplyV2,handle:async(peer,p,message)=>{
@@ -33,14 +33,15 @@ export class ControlChannel {
       if(!attempt||attempt.holderInstanceId!==peer.holderInstanceId)throw Error('ACK_UNAUTHORIZED');
       await store.acknowledge(peer.groupId,p.messageId);
     }});
-    this.register('AdmissionReply',{validate:validAdmissionReplyV2,handle:async(peer,p)=>{
+    this.register('AdmissionReply',{validate:validAdmissionReplyV2,handle:async(peer,p,message)=>{
       if(p.holderInstanceId!==peer.holderInstanceId)throw Error('ADMISSION_UNAUTHORIZED');
       if(p.status==='REJECTED'){
         await db.$transaction(async tx=>{
           const row=await tx.attempt.findUnique({where:{id:p.attemptId}});
           if(!row||row.groupId!==peer.groupId||row.holderInstanceId!==peer.holderInstanceId)throw Error('ADMISSION_UNAUTHORIZED');
           if(row.recordJson!==null)throw Error('ADMISSION_CONFLICT');
-          await tx.attempt.update({where:{id:row.id},data:{state:'REJECTED'}});
+          if(row.rejectionJson){if(canonical(JSON.parse(row.rejectionJson).reply)!==canonical(p))throw Error('ADMISSION_CONFLICT');return;}
+          await tx.attempt.update({where:{id:row.id},data:{state:'REJECTED',rejectionJson:JSON.stringify({reply:p,receivedAt:Date.now(),messageId:message.messageId,traceId:message.traceId})}});
           await tx.node.update({where:{id:row.nodeId},data:{state:'REJECTED'}});
         });return;
       }
@@ -104,7 +105,7 @@ export class ControlChannel {
       if(m.type!=='Hello')await tx.channelCursor.upsert({where:{id:scope},create:{id:scope,sequence:m.seq},update:{sequence:m.seq}});
       return false;
     });
-    if(!duplicate){await handler.handle(s.peer,payload,m);await this.db.channelInbox.update({where:{id},data:{done:true}});}
+    if(!duplicate){await handler.handle(s.peer,payload,m);await this.db.channelInbox.update({where:{id},data:{done:true}});if(!['Hello','Ack','TraceBatch'].includes(m.type))this.changed(s.peer.groupId);}
     if(m.type==='Hello')s.hello=true;
     if(m.type==='Ack')s.inFlight.delete(payload.messageId);
     await this.pump(s);

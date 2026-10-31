@@ -1,3 +1,5 @@
+> 局域网演示入口：在根目录构建后执行 `npm run coordinator:lan -- <本机 IPv4> 7443`。证书信任、设备接入及双设备验收见 [局域网指南](../../docs/scheduler-v2/LOCAL-COORDINATOR-20261031.md)。
+
 > 2026-10-31：协作空间首页、成员/设备管理与 Railway 云端协调已落地。访问 https://harmony-space-production.up.railway.app ，接入和验证记录见 [协作空间云端交接说明](../../docs/scheduler-v2/TEAM-SPACE-CLOUD-20261031.md).
 
 # Coordinator v2 — 通信与资源账本基础
