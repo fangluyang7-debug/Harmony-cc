@@ -18,6 +18,29 @@ function signed(ledger,extra=capacity,version=1,request='request1',base=[]){cons
 function receipt(entry,state='SUCCEEDED'){return {attemptId:entry.record.attemptId,coordinatorEpoch:1,planRevision:entry.record.planRevision,fence:entry.record.fence,state,resourcesSettled:true,outputs:[],actualTarget:entry.offer.target,actualConfiguration:entry.offer.allowedConfigs[0].id,errorCode:null};}
 async function setup(dir=directory(),who=identity){let now=0;const ledger=await DurableLedger.open(dir,who,cert,()=>now);ledger.requestGrant('request1');ledger.installGrant(signed(ledger));return {ledger,dir,setNow:n=>now=n};}
 
+test('rename failure reports sanitized stage, poisons writer and preserves last committed snapshot',async()=>{
+ const {ledger,dir}=await setup(),rename=fs.renameSync;
+ const before=fs.readFileSync(path.join(dir,'ledger.json'),'utf8');
+ try{
+  fs.renameSync=()=>{throw Object.assign(Error('sensitive local path'),{code:'EACCES'});};
+  assert.throws(()=>ledger.requestGrant('failed-request'),/^Error: LEDGER_COMMIT_RENAME:EACCES$/);
+  assert.throws(()=>ledger.snapshot(),/LEDGER_UNAVAILABLE/);
+  assert.equal(fs.readFileSync(path.join(dir,'ledger.json'),'utf8'),before);
+ }finally{fs.renameSync=rename;await ledger.close();}
+ const reopened=await DurableLedger.open(dir,identity,cert,()=>0);
+ try{assert.ok(reopened.snapshot().grant);}finally{await reopened.close();}
+});
+
+test('Windows transient replacement contention retries the same snapshot and commits once',{skip:process.platform!=='win32'},async()=>{
+ const {ledger,dir}=await setup(),rename=fs.renameSync;let calls=0;
+ try{
+  fs.renameSync=(...args)=>{if(++calls<3)throw Object.assign(Error('busy'),{code:'EPERM'});return rename(...args);};
+  ledger.requestGrant('retry-request');assert.equal(calls,3);
+  assert.match(fs.readFileSync(path.join(dir,'ledger.json'),'utf8'),/retry-request/);
+  assert.ok(ledger.snapshot().grant);
+ }finally{fs.renameSync=rename;await ledger.close();}
+});
+
 test('dispatch reservation and reply commit together; terminal report survives crash; wrong envelope cannot reserve',async()=>{
  const {ledger:l,dir}=await setup();l.bindChannel('coordinator1',1);const o=offer(),m=dispatch(o);
  assert.throws(()=>l.admit(o,context,{...m,senderInstanceId:'forged'}),/UNAUTHORIZED/);assert.equal(l.status('a1'),null);

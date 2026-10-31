@@ -59,14 +59,30 @@ export class DurableLedger {
   private commit(next:LedgerStateV2,channel:ChannelJournal=this.channel){
     this.guard();const temporary=path.join(this.directory,'ledger-'+randomUUID()+'.tmp');
     validateJournal(channel,next.groupId,next.holderInstanceId);
+    let phase='OPEN';
     try{
       const fd=fs.openSync(temporary,'wx',0o600);
       const body={format:2,state:next,channel};
-      try{fs.writeFileSync(fd,JSON.stringify({...body,sha256:hash(body)}));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
-      fs.renameSync(temporary,path.join(this.directory,'ledger.json'));
+      try{phase='WRITE';fs.writeFileSync(fd,JSON.stringify({...body,sha256:hash(body)}));phase='SYNC';fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+      phase='RENAME';
+      for(let retry=0;;retry++){
+        try{fs.renameSync(temporary,path.join(this.directory,'ledger.json'));break;}
+        catch(error){
+          const code=(error as NodeJS.ErrnoException).code;
+          if(process.platform!=='win32'||!['EPERM','EACCES','EBUSY'].includes(code??'')||retry>=5)throw error;
+          // Retry only replacement of the same fully synced snapshot; never unlink the old ledger.
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,10*(retry+1));
+        }
+      }
+      phase='DIRECTORY_SYNC';
       if(process.platform!=='win32'){const directoryFd=fs.openSync(this.directory,'r');try{fs.fsyncSync(directoryFd);}finally{fs.closeSync(directoryFd);}}
       this.state=clone(next);this.channel=clone(channel);
-    }catch(error){this.poisoned=true;throw error;}
+    }catch(error){
+      this.poisoned=true;
+      const code=(error as NodeJS.ErrnoException)?.code;
+      // Keep diagnostic stage and OS error, without exposing paths or persisted content.
+      throw Error('LEDGER_COMMIT_'+phase+':'+(typeof code==='string'&&/^[A-Z_]+$/.test(code)?code:'UNKNOWN'));
+    }
   }
   snapshot():LedgerStateV2{this.guard();return clone(this.state);}
   requestGrant(id:string){this.commit(requestGrantV2(this.state,id,this.clock()));return {leaseRequestId:id,ledgerEpoch:this.state.ledgerEpoch};}

@@ -68,7 +68,7 @@ export class PcAgent {
         if(ready)this.calibration?.notify();
         if(!ready){for(const waiter of this.profileWaiters.values())waiter.reject(Error('PROFILE_CONNECTION_LOST'));this.profileWaiters.clear();}
         if(!ready)for(const id of this.pending.keys())this.scheduler.cancel(id);
-        void this.scheduler.update(ready?this.limits:[],ready?this.owner:'UNKNOWN').catch(options.onError);
+        void Promise.resolve().then(()=>this.scheduler.update(ready?this.limits:[],ready?this.owner:'UNKNOWN')).catch(options.onError);
       },dispatch:message=>this.dispatch(message),evaluationChanged:()=>this.calibration?.notify(),acknowledged:message=>{this.profileWaiters.get(message.messageId)?.resolve();this.profileWaiters.delete(message.messageId);}
     });
     if(options.calibration)this.calibration=new CalibrationWorker(ledger,options.calibration.executor,allotmentTransport(options.connection),{

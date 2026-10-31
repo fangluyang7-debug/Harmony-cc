@@ -7,8 +7,11 @@ const {submitWhenAvailable}=require('../../pc-agent/dist/submit-wait');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const command=(file,args)=>new Promise((resolve,reject)=>execFile(process.execPath,[file,...args],{windowsHide:true,timeout:60000},(e,stdout,stderr)=>e?reject(Error(stderr||e.message)):resolve(stdout)));
 async function until(check,errors){const until=Date.now()+45000;while(Date.now()<until){if(await check())return;await new Promise(r=>setTimeout(r,100));}throw Error('HOST_TIMEOUT '+JSON.stringify(errors));}
-test('paired standalone CPU host automatically qualifies; metadata submission -> real cross-device text/vector results through public APIs',async()=>{
+test('paired standalone CPU host automatically qualifies; metadata submission -> real cross-device text/vector results through public APIs',async t=>{
  const r=await runtime({cpuHost:true});let host;const errors=[];
+ const execution=r.jobs.execution.bind(r.jobs),actions=[];
+ let legacyInput=false;
+ r.jobs.execution=async(...args)=>{const result=await execution(...args);actions.push(args[2]);if(legacyInput&&args[2]==='authorize'){const {inputTicket,...legacy}=result;return legacy;}return result;};
  try{
   const dir=r.config.dataDir,invite=await r.auth.invite('team1','owner1','worker-pc',r.url);
   await r.allotments.confirmDevice('worker-pc',[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:268435456}],[{groupId:'team1',holderInstanceId:'worker-holder',appInstanceId:null}]);
@@ -48,6 +51,36 @@ test('paired standalone CPU host automatically qualifies; metadata submission ->
     let completed;await until(async()=>{completed=await request('/v2/jobs/'+id,null);assert.notEqual(completed.state,'REJECTED',JSON.stringify(completed));return completed.outputTicket;},errors);
     assert.ok(completed.decisionEvidence.profileSequence>0);
     assert.deepEqual(JSON.parse((await transfer(connection,completed.outputTicket,source.credential)).bytes),{characters:12,words:2,lines:1});
+  }
+  assert.ok(actions.includes('authorize'));
+  assert.ok(actions.includes('output'));
+  assert.equal(actions.filter(action=>action==='input').length,0,'bundled authorization avoids a separate input-ticket request');
+  if(process.env.HARMONY_TICKET_BENCHMARK==='1'){
+    const samples=[];
+    for(let round=0;round<3;round++)for(const legacy of (round%2?[false,true]:[true,false])){
+      legacyInput=legacy;
+      for(let sample=0;sample<2;sample++){
+        const started=performance.now(),id=crypto.randomUUID(),before=actions.length;
+        const observation={round,mode:legacy?'separate':'bundled',sample,jobId:id,waited:false};
+        try{
+          const bytes=Buffer.from(JSON.stringify({text:'ticket benchmark'}));
+          const plan=await submitWhenAvailable(request,{requestId:id,capability:'text.count.v1',contentHash:hash(bytes),bytes:bytes.length},()=>{observation.waited=true;});
+          observation.submitMs=performance.now()-started;
+          await transfer(connection,plan.inputTicket,source.credential,bytes);await request('/v2/jobs/'+id+'/start',{});
+          let state;await until(async()=>{state=await request('/v2/jobs/'+id,null);if(['REJECTED','FAILED'].includes(state.state))throw Error(JSON.stringify(state));return state.outputTicket;},errors);
+          const output=await transfer(connection,state.outputTicket,source.credential);
+          assert.deepEqual(JSON.parse(output.bytes),{characters:16,words:2,lines:1});
+          observation.ok=true;
+        }catch(error){observation.ok=false;observation.error=error.message;}
+        observation.totalMs=performance.now()-started;
+        observation.executionRequests=actions.slice(before);
+        samples.push(observation);
+      }
+    }
+    legacyInput=false;
+    t.diagnostic('TICKET_BENCHMARK '+JSON.stringify({environment:'single-host-loopback',pollMs:100,samples}));
+    assert.ok(samples.every(s=>s.ok),'all failures retained in diagnostic output');
+    for(const s of samples)assert.equal(s.executionRequests.filter(a=>a==='input').length,s.mode==='separate'?1:0);
   }
   const current=await r.snapshots.build('team1');
   await r.profiles.configure('team1',{...current.policy,version:'manual-policy',allowedTargetIds:[]},

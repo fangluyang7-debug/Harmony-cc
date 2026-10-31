@@ -42,14 +42,27 @@ export class CpuHost {
     },context);
     const run=evaluator.runInstalled.bind(evaluator);
     evaluator.runInstalled=async(permit,executor,signal)=>{const result=await run(permit,executor,signal);if(result.output.length)this.costs.set(executor.contract.capability,{value:result.durationMs,at:Date.now()});return result;};
+    // Authorization and the input ticket share one authenticated response. Consume once;
+    // older coordinators keep using the separate input endpoint.
+    const inputTickets=new Map<string,any>();
     const route=async(offer:DispatchOfferV2,action:string,body:unknown={})=>{
       const reply=await request('/v2/executions/'+offer.task.attemptId+'/'+action,body) as any;
       return {endpoint:config.connection,ticket:reply.ticket,credential:config.connection.credential};
     };
     this.agent=new PcAgent(ledger,{connection:config.connection,deviceInstanceId:this.instance,
       queuePolicy:{shares:[.5,.3,.2],agingMs:1000,maxConsecutive:2,yieldDeadlineMs:1000},select:o=>o.allowedConfigs[0],snapshotVersion:()=>null,
-      ports:{...artifactPorts({read:async(_ref,offer)=>route(offer,'input'),write:async(bytes,schemaId,offer)=>route(offer,'output',{bytes:bytes.length,contentHash:digest(bytes),schemaId})}),
-        authorize:async offer=>{const reply=await request('/v2/executions/'+offer.task.attemptId+'/authorize',{}) as {offer:DispatchOfferV2};if(canonical(reply.offer)!==canonical(offer))throw Error('OFFER_SCOPE');return context();}},
+      ports:{...artifactPorts({read:async(_ref,offer)=>{
+        const id=offer.task.attemptId,ticket=inputTickets.get(id);inputTickets.delete(id);
+        return ticket?{endpoint:config.connection,ticket,credential:config.connection.credential}:route(offer,'input');
+      },write:async(bytes,schemaId,offer)=>route(offer,'output',{bytes:bytes.length,contentHash:digest(bytes),schemaId})}),
+        authorize:async offer=>{
+          const id=offer.task.attemptId;inputTickets.delete(id);
+          const reply=await request('/v2/executions/'+id+'/authorize',{}) as {offer:DispatchOfferV2;inputTicket?:unknown};
+          if(canonical(reply.offer)!==canonical(offer))throw Error('OFFER_SCOPE');
+          const admitted=await context();
+          if(reply.inputTicket){if(inputTickets.size>=8)inputTickets.delete(inputTickets.keys().next().value!);inputTickets.set(id,reply.inputTicket);}
+          return admitted;
+        }},
       allotments:{policy:()=>({base:[],extra:[{resourcePoolId:'cpu',amount:config.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:config.contribution.maxMemoryBytes}],leaseMs:60000}),renewEveryMs:20000},
       calibration:{executor:evaluator},onYield:()=>{},onExecutionSettled:()=>{void (this.pending??Promise.resolve()).then(()=>this.tick(false)).catch(onError);},onError});
   }
