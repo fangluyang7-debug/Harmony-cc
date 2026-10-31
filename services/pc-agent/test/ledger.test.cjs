@@ -18,6 +18,15 @@ function signed(ledger,extra=capacity,version=1,request='request1',base=[]){cons
 function receipt(entry,state='SUCCEEDED'){return {attemptId:entry.record.attemptId,coordinatorEpoch:1,planRevision:entry.record.planRevision,fence:entry.record.fence,state,resourcesSettled:true,outputs:[],actualTarget:entry.offer.target,actualConfiguration:entry.offer.allowedConfigs[0].id,errorCode:null};}
 async function setup(dir=directory(),who=identity){let now=0;const ledger=await DurableLedger.open(dir,who,cert,()=>now);ledger.requestGrant('request1');ledger.installGrant(signed(ledger));return {ledger,dir,setNow:n=>now=n};}
 
+test('reference settlement persists and frees only settled capacity without initiating business recovery',async()=>{
+ for(const delivery of ['BUSINESS','EVALUATION']){
+  const {ledger}=await setup();try{ledger.bindChannel('coordinator1',1);const entry=ledger.admit(offer(),context);ledger.begin(entry.record.attemptId);ledger.settle(receipt(entry),delivery);
+   assert.equal(ledger.status(entry.record.attemptId).resourcesSettled,true);assert.deepEqual(occupiedV2(ledger.snapshot()),[]);
+   assert.equal(ledger.pendingMessages().some(m=>m.type==='RecoveryRequest'),delivery==='BUSINESS');
+  }finally{await ledger.close();}
+ }
+});
+
 test('rename failure reports sanitized stage, poisons writer and preserves last committed snapshot',async()=>{
  const {ledger,dir}=await setup(),rename=fs.renameSync;
  const before=fs.readFileSync(path.join(dir,'ledger.json'),'utf8');

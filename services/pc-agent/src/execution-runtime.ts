@@ -12,10 +12,11 @@ export interface ExecutionPorts {
 }
 export class PcExecutionRuntime {
   private readonly active=new Map<string,{abort:AbortController;done:Promise<ExecutionReceiptV2>}>();
-  constructor(private readonly ledger:DurableLedger,private readonly ports:ExecutionPorts){}
-  async run(offer:DispatchOfferV2,selected:ExecutionConfigV2,hooks:{admitted?:()=>void;trace?:ExecutionTrace;maxDurationMs?:number;message?:MessageEnvelopeV2}={}):Promise<ExecutionReceiptV2>{
+  constructor(private readonly ledger:DurableLedger,private readonly ports:ExecutionPorts,private readonly delivery:'BUSINESS'|'EVALUATION'='BUSINESS'){}
+  async run(offer:DispatchOfferV2,selected:ExecutionConfigV2,hooks:{selected?:()=>void;admitted?:()=>void;trace?:ExecutionTrace;maxDurationMs?:number;message?:MessageEnvelopeV2}={}):Promise<ExecutionReceiptV2>{
     if(offer.target.backend!=='CPU'||offer.task.contract.sideEffectPolicy!=='PURE'||offer.task.inputs.length!==1||!offer.allowedConfigs.some(c=>canonical(c)===canonical(selected)))throw Error('EXECUTION_UNSUPPORTED');
-    const context=await this.ports.authorize(offer),entry=this.ledger.admit(offer,context,hooks.message),id=entry.record.attemptId;
+    const admit=async()=>{const context=await this.ports.authorize(offer);return this.ledger.admit(offer,context,hooks.message);};
+    const entry=hooks.trace?await hooks.trace.segment('ADMIT',admit):await admit(),id=entry.record.attemptId;
     if(entry.record.receipt)return entry.record.receipt;
     if(this.active.has(id))return this.active.get(id)!.done;
     if(entry.record.state!=='ACCEPTED')throw Error('EXECUTION_RECOVERY_REQUIRED');
@@ -41,7 +42,7 @@ export class PcExecutionRuntime {
     }catch(error){errorCode=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'EXECUTION_FAILED';if(abort.signal.aborted||errorCode==='CANCELLED_SETTLED')state='CANCELLED_SETTLED';}
     finally{clearTimeout(deadline);}
     const receipt:ExecutionReceiptV2={attemptId:task.attemptId,coordinatorEpoch:task.coordinatorEpoch,planRevision:task.planRevision,fence,state,resourcesSettled:true,outputs,
-      actualTarget:offer.target,actualConfiguration:config.id,errorCode};this.ledger.settle(receipt);return receipt;
+      actualTarget:offer.target,actualConfiguration:config.id,errorCode};this.ledger.settle(receipt,this.delivery);return receipt;
   }
   cancel(attemptId:string){this.ledger.cancel(attemptId);this.active.get(attemptId)?.abort.abort();}
   async close(){for(const [id]of this.active)this.cancel(id);await Promise.allSettled([...this.active.values()].map(a=>a.done));}

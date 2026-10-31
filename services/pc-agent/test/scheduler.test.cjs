@@ -38,7 +38,7 @@ test('real execution emits local phase spans; failed telemetry flush retries wit
   const trace=new ExecutionTrace(buffer,{traceId:'trace1',parentSpanId:null,snapshotVersion:1,deviceInstanceId:'instance1'},x.offer);
   assert.equal((await runtime.run(x.offer,x.offer.allowedConfigs[0],{trace})).state,'SUCCEEDED');let batch;
   await buffer.flush(async()=>{throw Error('NETWORK');});await buffer.flush(async spans=>{batch=spans;});
-  assert.deepEqual(batch.map(s=>s.phase),['LOAD','EXECUTE','PUBLISH']);assert.ok(batch.every(validTraceSpanV2));assert.equal(new Set(batch.map(s=>s.clockDomainId)).size,1);
+  assert.deepEqual(batch.map(s=>s.phase),['ADMIT','LOAD','EXECUTE','PUBLISH']);assert.ok(batch.every(validTraceSpanV2));assert.equal(new Set(batch.map(s=>s.clockDomainId)).size,1);
   assert.deepEqual(batch[1].dependsOn,[batch[0].spanId]);assert.ok(batch.every(s=>s.durationMs===s.endMono-s.startMono));
   for(let i=0;i<300;i++)buffer.emit({...batch[0],spanId:'span'+i});assert.equal(buffer.dropped,44);
  }finally{await runtime.close();await x.ledger.close();}

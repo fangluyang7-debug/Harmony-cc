@@ -51,6 +51,13 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     }
     @Controller('/v2')
     class Pairing {
+      @Post('link-probe')async probe(@Headers('authorization') header:string,@Body() body:any){
+        try{await auth.authenticate(bearer(header));}catch{throw new UnauthorizedException('CREDENTIAL_REJECTED');}
+        if(!body||!['upload','download'].includes(body.mode)||!Number.isSafeInteger(body.bytes)||body.bytes<1||body.bytes>32768||
+          Object.keys(body).some(k=>!['mode','bytes','padding'].includes(k))||
+          (body.mode==='upload'?(typeof body.padding!=='string'||body.padding.length!==body.bytes||!/^[x]+$/.test(body.padding)):body.padding!==undefined))throw new BadRequestException('PROBE_INVALID');
+        return {relayId:identity.id,padding:body.mode==='download'?'x'.repeat(body.bytes):''};
+      }
       @Post('device-settings')async deviceSettings(@Headers('authorization') header:string){return this.jobResponse(async()=>({settings:await spaces.deviceSettings(await auth.authenticate(bearer(header)))}));}
       private async jobResponse(work:()=>Promise<unknown>){try{return await work();}catch(error){const code=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(code==='NO_AVAILABLE_TARGET')throw new ConflictException(code);throw new BadRequestException(code);}}
       @Get('devices')@Header('Cache-Control','no-store')async devices(@Headers('authorization') header:string){
@@ -131,7 +138,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     let epoch=0;
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
     const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>events.changed(groupId));
-    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush());
+    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces);
     const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
     auth.onRevoked(id=>channel.revoke(id));
@@ -140,7 +147,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       if(existing&&JSON.parse(existing.metadataJson).policy?.version!=='cpu-host-v1'){await profiles.refresh(groupId);return;}
       const packs=builtinCpuPacks(),targets=(await directory.profiles(groupId)).flatMap(p=>p.executors.filter(e=>packs.some(pack=>pack.manifest.contract.capability===e.contract.capability)).map(e=>e.target.targetId));
       await profiles.configure(groupId,{version:'cpu-host-v1',revoked:false,allowedTargetIds:targets,limits:{maxCandidates:64,lookahead:16,beamWidth:8,planningBudgetMs:20,switchCostMs:0,hysteresisMs:0}},
-        {minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true});
+        {minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true},'cpu-host-v1');
     };
     channel.register('DeviceProfile',{validate:validDeviceProfileV2,handle:async(peer,payload)=>{await profiles.ingest(peer,payload);if(options.cpuHost)await configureCpuGroup(peer.groupId);}});
     channel.register('TraceBatch',{validate:p=>p&&Object.keys(p).join('|')==='spans'&&Array.isArray(p.spans),handle:(peer,p)=>traces.ingest(peer,p.spans)});

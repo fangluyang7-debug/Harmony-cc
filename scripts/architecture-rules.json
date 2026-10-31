@@ -39,5 +39,9 @@
     "services/api-server",
     "services/device-worker",
     "harmony-agent-api-server"
-  ]
+  ],
+  "candidateSelectionRoot": "services/coordinator/src",
+  "candidateReaders": ["services/coordinator/src/planning.ts", "services/coordinator/src/spaces.ts"],
+  "credentialIdentityRoots": ["services/coordinator/src", "apps/harmony/scheduler/src/main/ets/v2/client"],
+  "credentialIdentityFields": ["appId", "principalId", "deviceId"]
 }

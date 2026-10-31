@@ -14,7 +14,7 @@ test('browser spaces persist, isolate roles and operate a paired CPU host with a
   assert.equal((await owner('/',{name:'空间'},'https://unrelated.example')).status,400);
   group=(await owner('/',{name:'协同演示空间'})).body.id;assert.ok(group);
   assert.equal((await owner('/'+group)).body.devices.length,0);
-  assert.equal((await owner('/'+group+'/jobs',{requestId:crypto.randomUUID(),capability:'text.count.v1',input:{text:'empty'}})).body.error,'NO_AVAILABLE_TARGET');
+  assert.equal((await owner('/'+group+'/jobs',{requestId:crypto.randomUUID(),capability:'text.count.v1',input:{text:'empty'}})).body.error,'NO_LEGAL_PLAN');
   await guest('/register',{account:crypto.randomUUID(),name:'观察者',password:'test-password-123'});
   const invite=await owner('/'+group+'/invites',{role:'VIEWER'});
   assert.equal((await guest('/join',{code:invite.body.code})).body.id,group);
@@ -36,11 +36,14 @@ test('browser spaces persist, isolate roles and operate a paired CPU host with a
   const id=crypto.randomUUID(),submitted=await guest('/'+group+'/jobs',{requestId:id,capability:'text.count.v1',input:{text:'Hello team'}});assert.equal(submitted.status,200,JSON.stringify(submitted.body));
   let result;await until(async()=>{result=await guest('/'+group+'/jobs/'+id);return result.body.output;});
   assert.deepEqual(result.body.output,{characters:10,words:2,lines:1});assert.equal((await owner('/'+group+'/jobs/'+id)).status,400);
+  let trace;await until(async()=>{trace=await guest('/'+group+'/jobs/'+id+'/trace');return trace.status===200&&['PLAN','OFFER','ADMIT','QUEUE','EXECUTE','PUBLISH'].every(p=>trace.body.spans.some(s=>s.phase===p));});
+  assert.ok(trace.body.spans.every(s=>s.snapshotVersion===result.body.decisionEvidence.snapshotVersion));
+  assert.equal((await owner('/'+group+'/jobs/'+id+'/trace')).status,400);
   const deviceId=(await owner('/'+group)).body.devices[0].id;
   assert.equal((await guest('/'+group+'/devices/'+deviceId,{settings:{...settings,ownerMode:'paused'}})).status,403);
   assert.equal((await owner('/'+group+'/devices/'+deviceId,{settings:{...settings,ownerMode:'paused'}})).status,200);
   await until(async()=>((await owner('/'+group)).body.devices[0].profile.ownerActivity.value==='ACTIVE'));
-  const blocked=await guest('/'+group+'/jobs',{requestId:crypto.randomUUID(),capability:'text.count.v1',input:{text:'paused'}});assert.equal(blocked.body.error,'NO_AVAILABLE_TARGET');
+  const blocked=await guest('/'+group+'/jobs',{requestId:crypto.randomUUID(),capability:'text.count.v1',input:{text:'paused'}});assert.equal(blocked.body.error,'NO_LEGAL_PLAN');
   await owner('/logout',{});assert.equal((await owner('/me')).status,401);
   assert.equal((await owner('/login',{account,password:'wrong-password'})).status,400);
   assert.equal((await owner('/login',{account,password:'test-password-123'})).status,200);

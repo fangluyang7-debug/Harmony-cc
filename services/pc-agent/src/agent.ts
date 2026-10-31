@@ -16,7 +16,7 @@ export interface AgentOptions {
   connection:RecoveryConnection;queuePolicy:QueuePolicy;deviceInstanceId:string;
   ports:ExecutionPorts;
   select(offer:DispatchOfferV2):ExecutionConfigV2;
-  snapshotVersion(offer:DispatchOfferV2):number|null;
+  snapshotVersion(offer:DispatchOfferV2):number|null|Promise<number|null>;
   qualification?(offer:DispatchOfferV2):Promise<{executor:ExecutorV2;admission:CapabilityAdmissionV2}>;
   now?:()=>number;
   onYield(notice:YieldNoticeV2):void;
@@ -101,9 +101,11 @@ export class PcAgent {
     const done=(async()=>{
       try{
         if(offer.target.backend!=='CPU'||offer.task.contract.interruptibility!=='CANCEL_RESTART')throw Error('EXECUTOR_UNSUPPORTED');
-        const version=this.options.snapshotVersion(offer);
+        const version=await this.options.snapshotVersion(offer);
         const trace=version===null?undefined:new ExecutionTrace(this.traces,{traceId:message.traceId,parentSpanId:null,snapshotVersion:version,deviceInstanceId:this.options.deviceInstanceId},offer);
-        await this.scheduler.submit(offer,this.options.select(offer),{message,trace,admitted:()=>{void this.client.flush();}});
+        const endQueue=trace?.begin('QUEUE');
+        try{await this.scheduler.submit(offer,this.options.select(offer),{message,trace,selected:()=>endQueue?.(),admitted:()=>{void this.client.flush();}});}
+        finally{endQueue?.();}
       }catch(error){
         if(!this.ledger.status(id)){
           const reason=error instanceof Error&&/^[A-Z_]{1,100}(?::[A-Z_]{1,26})?$/.test(error.message)?error.message:'EXECUTION_REJECTED';

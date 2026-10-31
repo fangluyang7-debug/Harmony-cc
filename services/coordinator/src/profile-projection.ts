@@ -16,12 +16,20 @@ function validPolicy(p:ContributionPolicy):boolean {
 export class ProfileProjection {
   constructor(private readonly db:PrismaClient,private readonly directory:DeviceDirectory,private readonly snapshots:SnapshotBuilder){}
   /** Trusted local administration only. Pairing alone does not authorize targets or pick a contribution policy. */
-  async configure(groupId:string,policy:PlanningPolicy,contribution:ContributionPolicy):Promise<void>{
+  async configure(groupId:string,policy:PlanningPolicy,contribution:ContributionPolicy,onlyReplacePolicyVersion?:string):Promise<void>{
     if(!protocolId(groupId)||!policy||!protocolId(policy.version)||typeof policy.revoked!=='boolean'||
       !Array.isArray(policy.allowedTargetIds)||policy.allowedTargetIds.length>4096||!policy.allowedTargetIds.every(protocolId)||
       new Set(policy.allowedTargetIds).size!==policy.allowedTargetIds.length||!validPolicy(contribution))throw Error('PROFILE_POLICY_INVALID');
     new WorkflowPlacementPlanner(policy.limits,()=>0);
-    await this.db.$transaction(tx=>this.publish(tx,groupId,policy,contribution));
+    await this.db.$transaction(async tx=>{
+      // Bootstrap must not overwrite an explicit policy installed after its initial read.
+      if(onlyReplacePolicyVersion){const row=await tx.group.findUnique({where:{id:groupId}});
+        if(row){const saved=JSON.parse(row.metadataJson);if(saved.policy.version!==onlyReplacePolicyVersion){
+          if(saved.contributionPolicy)await this.publish(tx,groupId,saved.policy,saved.contributionPolicy);return;
+        }}
+      }
+      await this.publish(tx,groupId,policy,contribution);
+    });
   }
   async ingest(peer:Peer,profile:DeviceProfileV2):Promise<void>{
     await this.db.$transaction(async tx=>{

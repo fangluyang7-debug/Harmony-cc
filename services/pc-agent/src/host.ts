@@ -10,6 +10,7 @@ import { RecoveryConnection } from './recovery-client';
 import { allotmentTransport } from './allotment-client';
 import { artifactPorts } from './artifact-client';
 import { collectSystemResources, windowsOwnerActivity } from './system-resources';
+import { RelayLinks } from './relay-links';
 
 export interface CpuHostConfig {
   directory:string;identity:{groupId:string;deviceId:string;holderInstanceId:string;appInstanceId:string|null};connection:RecoveryConnection;
@@ -22,9 +23,11 @@ export class CpuHost {
   private readonly instance=randomUUID();
   private readonly costs=new Map<string,{value:number;at:number}>();
   private clockOffset=0;
+  private readonly relayLinks:RelayLinks;
   readonly agent:PcAgent;
   private constructor(readonly ledger:DurableLedger,private readonly config:CpuHostConfig,private readonly onError:(e:unknown)=>void){
     const request=allotmentTransport(config.connection),packs=builtinCpuPacks(),installed=new Map(packs.flatMap(p=>p.cases.map(c=>[packDigest(p)+':'+c.id,c] as const)));
+    this.relayLinks=new RelayLinks(config.identity.deviceId,config.connection.domain,request);
     const context=async()=>{
       if(!this.agent.ready||this.owner!=='IDLE')throw Error('HOST_NOT_AVAILABLE');
       return {coordinatorEpoch:this.agent.coordinatorEpoch,online:true,ownerIdle:true,admissionLimit:this.limits};
@@ -34,7 +37,7 @@ export class CpuHost {
       if(!grant||!test)throw Error('CALIBRATION_NOT_READY');
       const offer:DispatchOfferV2={task:{groupId:state.groupId,sessionId:null,originDeviceId:state.deviceId,resultDestination:state.deviceId,
         workflowId:'eval-'+permit.id,nodeId:'reference',attemptId:permit.id,coordinatorEpoch:this.agent.coordinatorEpoch,planRevision:1,
-        app:{groupId:state.groupId,principalId:state.holderInstanceId,appId:'reference-evaluator',appInstanceId:state.holderInstanceId,allowedContracts:[executor.contract.contractId]},
+        app:{groupId:state.groupId,principalId:state.holderInstanceId,appId:state.holderInstanceId,appInstanceId:state.holderInstanceId,allowedContracts:[executor.contract.contractId]},
         contract:executor.contract,budget:{remainingMs:permit.timeoutMs,deadlineAt:Date.now()+permit.timeoutMs},inputs:[{artifactId:'eval-input-'+permit.id,contentVersion:1,contentHash:permit.inputHash,schemaId:executor.contract.inputSchemas[0],schemaVersion:1}],
         allowedTargetIds:[executor.target.targetId],qualityTarget:'reference',privacy:'LOCAL_ONLY',priority:'REMOTE_BATCH',parameters:test.parameters,allowedConfigurations:[permit.config.id],businessIdempotencyKey:null},
         target:executor.target,resources:executor.resources,allowedConfigs:[permit.config],allotmentId:grant.allotmentId,allotmentVersion:grant.version,leaseMs:permit.timeoutMs,transferPlan:[],dependencies:[],reasonCode:'TRUSTED_REFERENCE'};
@@ -45,22 +48,31 @@ export class CpuHost {
     // Authorization and the input ticket share one authenticated response. Consume once;
     // older coordinators keep using the separate input endpoint.
     const inputTickets=new Map<string,any>();
+    const authorizations=new Map<string,DispatchOfferV2>();
+    const authorize=async(offer:DispatchOfferV2)=>{
+      const id=offer.task.attemptId;inputTickets.delete(id);
+      const reply=await request('/v2/executions/'+id+'/authorize',{}) as {offer:DispatchOfferV2;inputTicket?:unknown;snapshotVersion?:number};
+      if(canonical(reply.offer)!==canonical(offer))throw Error('OFFER_SCOPE');
+      if(reply.inputTicket){if(inputTickets.size>=8)inputTickets.delete(inputTickets.keys().next().value!);inputTickets.set(id,reply.inputTicket);}
+      return reply;
+    };
     const route=async(offer:DispatchOfferV2,action:string,body:unknown={})=>{
       const reply=await request('/v2/executions/'+offer.task.attemptId+'/'+action,body) as any;
       return {endpoint:config.connection,ticket:reply.ticket,credential:config.connection.credential};
     };
     this.agent=new PcAgent(ledger,{connection:config.connection,deviceInstanceId:this.instance,
-      queuePolicy:{shares:[.5,.3,.2],agingMs:1000,maxConsecutive:2,yieldDeadlineMs:1000},select:o=>o.allowedConfigs[0],snapshotVersion:()=>null,
+      queuePolicy:{shares:[.5,.3,.2],agingMs:1000,maxConsecutive:2,yieldDeadlineMs:1000},select:o=>o.allowedConfigs[0],snapshotVersion:async offer=>{
+        const reply=await authorize(offer);if(authorizations.size>=8)authorizations.delete(authorizations.keys().next().value!);authorizations.set(offer.task.attemptId,reply.offer);
+        return Number.isSafeInteger(reply.snapshotVersion)&&reply.snapshotVersion!>0?reply.snapshotVersion!:null;
+      },
       ports:{...artifactPorts({read:async(_ref,offer)=>{
         const id=offer.task.attemptId,ticket=inputTickets.get(id);inputTickets.delete(id);
         return ticket?{endpoint:config.connection,ticket,credential:config.connection.credential}:route(offer,'input');
       },write:async(bytes,schemaId,offer)=>route(offer,'output',{bytes:bytes.length,contentHash:digest(bytes),schemaId})}),
         authorize:async offer=>{
-          const id=offer.task.attemptId;inputTickets.delete(id);
-          const reply=await request('/v2/executions/'+id+'/authorize',{}) as {offer:DispatchOfferV2;inputTicket?:unknown};
-          if(canonical(reply.offer)!==canonical(offer))throw Error('OFFER_SCOPE');
+          const id=offer.task.attemptId,cached=authorizations.get(id);authorizations.delete(id);
+          if(cached){if(canonical(cached)!==canonical(offer))throw Error('OFFER_SCOPE');}else await authorize(offer);
           const admitted=await context();
-          if(reply.inputTicket){if(inputTickets.size>=8)inputTickets.delete(inputTickets.keys().next().value!);inputTickets.set(id,reply.inputTicket);}
           return admitted;
         }},
       allotments:{policy:()=>({base:[],extra:[{resourcePoolId:'cpu',amount:config.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:config.contribution.maxMemoryBytes}],leaseMs:60000}),renewEveryMs:20000},
@@ -93,6 +105,7 @@ export class CpuHost {
           this.config.contribution.reserveMemoryBytes=Math.max(this.config.contribution.reserveMemoryBytes,settings.reserveMemoryBytes);
         }
       }
+      const links=this.agent.ready?await this.relayLinks.sample(Date.now()+this.clockOffset):[];
       const system=collectSystemResources(),p=this.config.contribution,state=this.ledger.snapshot(),occupied=occupiedV2(state),now=Date.now()+this.clockOffset;
       const owner=p.ownerMode==='dedicated'?'IDLE':p.ownerMode==='paused'?'ACTIVE':await windowsOwnerActivity(p.idleThresholdMs??60000);
       if(this.stopped)return;
@@ -109,7 +122,7 @@ export class CpuHost {
         ownerActivity:owner==='UNKNOWN'?unknown('state'):status(owner,p.ownerMode==='windows-idle'?source:'PRIOR'),foreground:status('FOREGROUND'),powerSave:status('OFF'),charging:unknown('state'),battery:unknown('percent'),temperature:unknown('level'),
         pools:[{id:'cpu',kind:'CPU_SLOTS',unit:'slots',total:system.cpuThreads,limit:p.maxCpuThreads},{id:'ram',kind:'RAM_BYTES',unit:'bytes',total:system.totalMemoryBytes,limit:p.maxMemoryBytes}].map(pool=>({resourcePoolId:pool.id,kind:pool.kind,exclusive:false,total:numeric(pool.total,pool.unit),ownerReserved:Math.max(0,pool.total-pool.limit),contributionLimit:pool.limit,
           admissionLimit:numeric(this.limits.find(r=>r.resourcePoolId===pool.id)!.amount,pool.unit),occupied:numeric(occupied.find(r=>r.resourcePoolId===pool.id)?.amount??0,pool.unit),draining:owner!=='IDLE'&&occupied.length>0,drainMs:unknown('ms')})),
-        executors:builtinCpuPacks().map(pack=>this.executor(pack.manifest.contract.capability,now)),links:[],credits:['ORIGIN_INTERACTIVE','REMOTE_INTERACTIVE','REMOTE_BATCH'].map(priority=>({priority,slots:owner==='IDLE'?1:0}))};
+        executors:builtinCpuPacks().map(pack=>this.executor(pack.manifest.contract.capability,now)),links,credits:['ORIGIN_INTERACTIVE','REMOTE_INTERACTIVE','REMOTE_BATCH'].map(priority=>({priority,slots:owner==='IDLE'?1:0}))};
       await this.agent.publishProfile(profile);
     }catch(error){this.onError(error);this.owner='UNKNOWN';this.limits=[];await this.agent.updateResources([],'UNKNOWN');}
   }

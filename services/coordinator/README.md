@@ -4,6 +4,8 @@
 
 # Coordinator v2 — 通信与资源账本基础
 
+2026-11-01，S1：网页与命令行 CPU 任务经过 `PlanningService.plan()`、持久化计划、`preflight()` 后进入 outbox。来源 App 身份按认证 principal/holder/group 签发并保存在 ConsoleApp；任务状态包含真实快照/策略版本，追踪查询包含 PLAN/OFFER 与代理阶段。当前状态以 [STATUS](../../docs/scheduler-v2/STATUS.md) 为准，API 见 [CPU Host API](../../contracts/scheduling/v2/CPU-HOST-API.md)。主部署使用上方局域网入口，下面的历史实现记录不作为开发顺序。
+
 最新可运行入口：设置 `COORDINATOR_CPU_HOST=1` 后启动 main，自动装配内置文本/向量参考包、校准循环和单节点 CPU 任务服务。公开接口包括 `GET /v2/devices`、`POST /v2/jobs`、`POST /v2/jobs/:id/start`、`GET /v2/jobs/:id` 及执行者专用 `/v2/executions/:id/:action`。先提交元数据、取得票据上传输入，再通过 WS 派发；已有非默认组策略不会被覆盖。完整步骤与当前简化边界见 [运行说明](../../docs/scheduler-v2/DESIGN-GAP-AND-CPU-HOST-20261031.md)。旧段落保留各组件介绍，关于未装配入口的描述以此处为准。
 
 2026-10-31：`startCalibration` 现在可以省略 `runner`，使用持久化远程评测。新增认证的 `/v2/evaluations/claim`、`/v2/evaluations/:id`、`/v2/evaluations/:id/report`，PC 通过网络执行本机可信样例。运行方式和边界见 `docs/scheduler-v2/HANDOFF-REMOTE-CALIBRATION-20261031.md`。默认 main 仍需安装能力包并启动该循环。

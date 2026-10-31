@@ -4,11 +4,15 @@ const {runtime}=require('./helpers.cjs');
 const {allotmentTransport}=require('../../pc-agent/dist/allotment-client');
 const {transfer}=require('@harmony/resource-transport');
 const {submitWhenAvailable}=require('../../pc-agent/dist/submit-wait');
+const {pinnedRequest}=require('../dist/pinned-client');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const command=(file,args)=>new Promise((resolve,reject)=>execFile(process.execPath,[file,...args],{windowsHide:true,timeout:60000},(e,stdout,stderr)=>e?reject(Error(stderr||e.message)):resolve(stdout)));
 async function until(check,errors){const until=Date.now()+45000;while(Date.now()<until){if(await check())return;await new Promise(r=>setTimeout(r,100));}throw Error('HOST_TIMEOUT '+JSON.stringify(errors));}
 test('paired standalone CPU host automatically qualifies; metadata submission -> real cross-device text/vector results through public APIs',async t=>{
  const r=await runtime({cpuHost:true});let host;const errors=[];
+ const originalPlan=r.planning.plan.bind(r.planning),originalPreflight=r.planning.preflight.bind(r.planning);let plans=0,preflights=0;
+ r.planning.plan=(...args)=>{plans++;return originalPlan(...args);};
+ r.planning.preflight=(...args)=>{preflights++;return originalPreflight(...args);};
  const execution=r.jobs.execution.bind(r.jobs),actions=[];
  let legacyInput=false;
  r.jobs.execution=async(...args)=>{const result=await execution(...args);actions.push(args[2]);if(legacyInput&&args[2]==='authorize'){const {inputTicket,...legacy}=result;return legacy;}return result;};
@@ -28,14 +32,32 @@ test('paired standalone CPU host automatically qualifies; metadata submission ->
   const sourceConfig=path.join(dir,'source.json');fs.writeFileSync(sourceConfig,JSON.stringify({connection}),{mode:0o600});
   const input=Buffer.from(JSON.stringify({text:'Hello team\n资源协同'})),requestId=crypto.randomUUID(),metadata={requestId,capability:'text.count.v1',contentHash:hash(input),bytes:input.length};
   const plan=await request('/v2/jobs',metadata);assert.equal(plan.deviceId,'worker-pc');
+  assert.ok(plans>0);assert.equal(preflights,0);
+  await assert.rejects(request('/v2/jobs',{...metadata,requestId:crypto.randomUUID(),targetId:'unqualified-target'}),/NO_LEGAL_PLAN/);
+  await assert.rejects(request('/v2/jobs',{...metadata,requestId:crypto.randomUUID(),budgetMs:0}),/BUDGET_EXHAUSTED/);
+  const app=await r.db.consoleApp.findFirst({where:{principalId:'submitter'}});assert.ok(app.appId&&app.appInstanceId);
+  assert.equal(JSON.parse((await r.db.cpuJob.findUnique({where:{id:requestId}})).metadataJson).offer.task.app.appId,app.appId);
   assert.equal(await r.db.attempt.count({where:{id:requestId}}),0); // Planning/registration does not dispatch before upload.
   await assert.rejects(request('/v2/jobs/'+requestId+'/start',{}),/REJECTED/);
   const repeated=await request('/v2/jobs',metadata);assert.equal(repeated.jobId,requestId);
+  await assert.rejects(request('/v2/jobs',{...metadata,budgetMs:1}),/JOB_CONFLICT/);
   await assert.rejects(request('/v2/jobs',{...metadata,contentHash:'0'.repeat(64)}),/REJECTED/);
   await transfer(connection,plan.inputTicket,source.credential,input);
+  const originalJob=(await r.db.cpuJob.findUnique({where:{id:requestId}})).metadataJson;
+  await r.db.cpuJob.update({where:{id:requestId},data:{metadataJson:JSON.stringify({...JSON.parse(originalJob),deadlineAt:0})}});
+  await assert.rejects(request('/v2/jobs/'+requestId+'/start',{}),/BUDGET_EXHAUSTED/);
+  assert.equal(await r.db.attempt.count({where:{id:requestId}}),0);
+  await r.db.cpuJob.update({where:{id:requestId},data:{metadataJson:originalJob}});
+  r.planning.preflight=async()=>false;
+  await assert.rejects(request('/v2/jobs/'+requestId+'/start',{}),/PLAN_STALE/);
+  assert.equal(await r.db.attempt.count({where:{id:requestId}}),0);
+  r.planning.preflight=(...args)=>{preflights++;return originalPreflight(...args);};
   await request('/v2/jobs/'+requestId+'/start',{});let result;
   await until(async()=>{result=await request('/v2/jobs/'+requestId,null);return result.outputTicket;},errors);
   const output=await transfer(connection,result.outputTicket,source.credential);assert.deepEqual(JSON.parse(output.bytes),{characters:15,words:3,lines:2});
+  assert.ok(preflights>0);assert.ok(result.decisionEvidence.snapshotVersion>0);assert.equal(result.decisionEvidence.policyVersion,'cpu-host-v1');
+  let trace;await until(async()=>{trace=await pinnedRequest(sourceInvite,'/v2/traces/'+result.traceId,undefined,source.credential);return ['PLAN','OFFER','ADMIT','QUEUE','EXECUTE','PUBLISH'].every(p=>trace.spans.some(s=>s.phase===p));},errors);
+  assert.ok(trace.spans.every(s=>s.snapshotVersion===result.decisionEvidence.snapshotVersion));
   await request('/v2/jobs/'+requestId+'/start',{});assert.equal(await r.db.attempt.count({where:{id:requestId}}),1);
   const otherInvite=await r.auth.invite('team1','other','other-device',r.url),other=await r.auth.exchange({inviteId:otherInvite.inviteId,code:otherInvite.code,holderInstanceId:'other-holder'}),otherRequest=allotmentTransport({...connection,credential:other.credential});
   await assert.rejects(otherRequest('/v2/jobs/'+requestId,null),/REJECTED/);
@@ -85,6 +107,9 @@ test('paired standalone CPU host automatically qualifies; metadata submission ->
   const current=await r.snapshots.build('team1');
   await r.profiles.configure('team1',{...current.policy,version:'manual-policy',allowedTargetIds:[]},
    {minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true});
+  await r.profiles.configure('team1',current.policy,
+   {minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true},'cpu-host-v1');
+  assert.equal((await r.snapshots.build('team1')).policy.version,'manual-policy','late bootstrap cannot overwrite owner policy');
   const beforeSequence=(await r.directory.profiles('team1'))[0].sequence;
   await until(async()=>(await r.directory.profiles('team1'))[0].sequence>beforeSequence,errors);
   assert.equal((await r.snapshots.build('team1')).policy.version,'manual-policy');

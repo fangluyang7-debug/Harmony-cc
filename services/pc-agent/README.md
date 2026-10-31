@@ -1,6 +1,8 @@
-> 2026-10-31：协作空间首页、成员/设备管理与 Railway 云端协调已落地。访问 https://harmony-space-production.up.railway.app ，接入和验证记录见 [协作空间云端交接说明](../../docs/scheduler-v2/TEAM-SPACE-CLOUD-20261031.md).
+> 当前主部署：局域网 PC 协调者，按 [局域网指南](../../docs/scheduler-v2/LOCAL-COORDINATOR-20261031.md) 启动。开发顺序和进度以 [v2 文档入口](../../docs/scheduler-v2/README.md) 与 [STATUS](../../docs/scheduler-v2/STATUS.md) 为准。下方旧组件接续记录保留历史说明。
 
 # PC agent v2：执行整合、账本与恢复通信
+
+2026-11-01，S1：常驻 `host-main`、配对和任务 CLI 已可运行。正式网页/CLI 任务统一经过协调者 PlanningService；代理从认证的派发授权响应取得真实快照版本，产生 QUEUE/ADMIT/LOAD/EXECUTE/PUBLISH 追踪，并上报已有 B5 模块拟合的中继链路观测。无观测时 links 为空且状态 UNKNOWN，不能补造带宽。接口与范围见 [CPU Host API](../../contracts/scheduling/v2/CPU-HOST-API.md)。更早的“尚无 CLI / 未装配采样”等描述不代表当前状态。
 
 `src/agent.ts` 将认证连接、恢复屏障、设备内队列、能力准入检查、真实 CPU 执行、持久化回执与追踪组装为 `PcAgent`。`src/artifact-client.ts` 将受信路由服务提供的短期票据接到执行输入/输出，`artifact-endpoint.ts` 提供 PC HTTPS 制品端点。CPU 支持裁剪和向量归一化；没有 GPU 执行器。
 

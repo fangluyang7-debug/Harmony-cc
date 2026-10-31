@@ -48,7 +48,7 @@ export class CalibrationExecutor {
       const temporary=filename+'.tmp',fd=fs.openSync(temporary,'wx',0o600);
       try{fs.writeFileSync(fd,JSON.stringify(report));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(temporary,filename);
       return {artifactId:permit.id,contentVersion:1,contentHash:report.hash,schemaId,schemaVersion:1};
-    }});
+    }},'EVALUATION');
     let admitted=false;
     const cancel=()=>{if(admitted)runtime.cancel(permit.id);};signal.addEventListener('abort',cancel,{once:true});
     try{

@@ -27,7 +27,7 @@ export class DeviceScheduler {
     if(previous){if(canonical(previous.offer)!==canonical(offer)||canonical(previous.config)!==canonical(config))throw Error('QUEUE_CONFLICT');return previous.done;}
     if(!offer.allowedConfigs.some(c=>canonical(c)===canonical(config)))throw Error('CONFIG_NOT_ALLOWED');
     const existing=this.ledger.status(offer.task.attemptId);
-    if(existing)return this.runtime.run(offer,config,hooks); // Runtime verifies immutable offer and never reruns recovered attempts.
+    if(existing){hooks.selected?.();return this.runtime.run(offer,config,hooks);} // Runtime verifies immutable offer and never reruns recovered attempts.
     this.queue.enqueue(offer,this.now());
     let resolve!:(v:ExecutionReceiptV2)=>void,reject!:(e:Error)=>void;
     const done=new Promise<ExecutionReceiptV2>((yes,no)=>{resolve=yes;reject=no;});
@@ -56,6 +56,7 @@ export class DeviceScheduler {
         const offer=this.queue.choose(this.limits,occupiedV2(this.ledger.snapshot()),this.now(),this.ownerIdle);if(!offer)break;
         const item=this.pending.get(offer.task.attemptId)!;
         item.launching=true;
+        item.hooks.selected?.();
         let released!:()=>void;const admitted=new Promise<void>(resolve=>{released=resolve;});
         const work=this.runtime.run(offer,item.config,{...item.hooks,admitted:()=>{item.started=true;this.queue.start(offer.task.attemptId,this.now());item.hooks.admitted?.();
           if(item.cancelRequested||this.closed||!this.ownerIdle)queueMicrotask(()=>this.runtime.cancel(offer.task.attemptId));released();},

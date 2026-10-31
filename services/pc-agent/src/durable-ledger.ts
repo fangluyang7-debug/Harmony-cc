@@ -125,9 +125,11 @@ export class DurableLedger {
   cancel(attemptId:string){this.commit(cancelAttemptV2(this.state,attemptId));}
   expire(){for(const e of this.state.entries)if(!e.record.resourcesSettled&&this.clock()>=e.deadline&&!e.cancelRequested)this.cancel(e.record.attemptId);}
   /** Only a locally confirmed engine settlement may invoke this method, never a network timeout. */
-  settle(receipt:ExecutionReceiptV2){
+  settle(receipt:ExecutionReceiptV2,delivery:'BUSINESS'|'EVALUATION'='BUSINESS'){
     const next=settleAttemptV2(this.state,receipt),channel=clone(this.channel);
-    if(next.settlementSeq!==this.state.settlementSeq&&channel.coordinatorId!==null){
+    // Reference evaluation results use the durable permit-report protocol. A
+    // successful reference is not a missing business dispatch to reconcile.
+    if(delivery==='BUSINESS'&&next.settlementSeq!==this.state.settlementSeq&&channel.coordinatorId!==null){
       if(receipt.coordinatorEpoch===channel.epoch&&channel.dispatches?.some(d=>d.attemptId===receipt.attemptId))this.addReport(channel,next,receipt);
       else if(!channel.outbox.some(m=>m.type==='RecoveryRequest'))channel.outbox.push(journalMessage(channel,next.groupId,next.holderInstanceId,'RecoveryRequest',{}));
     }

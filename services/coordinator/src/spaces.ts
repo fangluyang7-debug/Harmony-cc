@@ -141,11 +141,12 @@ export class TeamSpaces {
         await this.artifacts.writeForControl(descriptor,bytes);res.json(await this.jobs.start(peer,plan.jobId));return;
       }
       if(action==='jobs'&&id&&method==='GET'){
+        if(parts[3]==='trace'){res.json(await this.jobs.trace(this.peer(user.id,spaceId),id));return;}
         const result=await this.jobs.status(this.peer(user.id,spaceId),id);let output=null;
         if(result.outputTicket){const d=this.artifacts.lookup(spaceId,result.outputTicket.ref);if(d)output=JSON.parse((await this.artifacts.readForControl(d)).toString());}
         res.json({...result,outputTicket:undefined,output});return;
       }
       res.status(404).json({error:'NOT_FOUND'});
-    }catch(e){const code=e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'REQUEST_FAILED';res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:code==='NO_AVAILABLE_TARGET'?409:400).json({error:code,retryable:code==='NO_AVAILABLE_TARGET'});}
+    }catch(e){const code=e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'REQUEST_FAILED',retryable=['NO_AVAILABLE_TARGET','NO_LEGAL_PLAN'].includes(code);res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:retryable?409:400).json({error:code,retryable});}
   }
 }

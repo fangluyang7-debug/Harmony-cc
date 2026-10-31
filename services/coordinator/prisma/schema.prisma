@@ -194,6 +194,16 @@ model CpuJob {
   @@index([groupId, principalId])
 }
 
+model ConsoleApp {
+  id String @id
+  groupId String
+  principalId String
+  holderInstanceId String
+  appId String
+  appInstanceId String
+  @@unique([groupId, principalId, holderInstanceId])
+}
+
 model SpaceUser {
   id String @id
   account String @unique

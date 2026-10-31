@@ -20,6 +20,7 @@ export interface PlacementCandidate {
   uncertaintyMs: number; publishMs: number; model?: ModelCompatibility;
 }
 export interface PlacementNode {
+  allowedTargetIds?: string[];
   modelManifest?:ModelManifestV2|null;
   qualityRequirements?: QualityEvidence[];
   maxMemoryBytes?: number;

@@ -47,13 +47,14 @@ test('integrated agent: trusted CPU qualification -> pinned artifacts -> WS disp
   await dispatch('unqualified');await until(async()=> (await r.db.attempt.findUnique({where:{id:'unqualified'}}))?.state==='REJECTED');assert.equal(ledger.status('unqualified'),null);
   const qualification=new QualificationService(r.db,directory,[pack],r.remoteEvaluation,{maxRuns:4,maxDurationMs:20000,maxBytes:100000,maxConcurrent:1,caseTimeoutMs:5000,canarySamples:1,activeSamples:2,evidenceTtlMs:10000,cooldownMs:100},async()=>null,()=>100);
   assert.equal(await qualification.advance(peer,'target1'),'CANARY');assert.equal(await qualification.advance(peer,'target1'),'ACTIVE');
+  assert.equal(ledger.pendingMessages().filter(m=>m.type==='RecoveryRequest').length,0,'reference settlement must not trigger global business recovery');
   let dropped=false,reportId;const send=r.channel.send.bind(r.channel);
   r.channel.send=async(session,m)=>{const pending=ledger.pendingMessages().find(p=>p.messageId===m.ackOf);if(!dropped&&m.type==='Ack'&&pending?.type==='ExecutionReceipt'){dropped=true;reportId=pending.messageId;session.socket.terminate();return;}return send(session,m);};
   const business=await dispatch('business');try{await until(async()=> (await r.db.receipt.findUnique({where:{id:'business'}}))?.committed);}catch(error){throw Error(JSON.stringify({cause:error.message,errors,local:ledger.status('business'),pending:ledger.pendingMessages().map(m=>({type:m.type,payload:m.type==='AdmissionReply'?m.payload:undefined}))}));}
   await until(()=>dropped&&agent.ready&&!ledger.pendingMessages().some(m=>m.messageId===reportId));
   assert.equal(publishes,1);assert.equal(ledger.snapshot().entries.filter(e=>e.record.attemptId==='business').length,1);assert.deepEqual(occupiedV2(ledger.snapshot()),[]);
   const d=outputs.get('business'),result=await transfer(invite,r.artifacts.issue(d,peer,'READ'),pair.credential);assert.deepEqual(JSON.parse(result.bytes),{dimension:2,rows:[[.6,.8],[0,0]],norms:[5,0]});
-  await until(async()=>await r.db.traceSpan.count()>=3);const trace=await r.traces.read(peer,'trace-business');assert.deepEqual(trace.spans.map(s=>s.phase).sort(),['EXECUTE','LOAD','PUBLISH']);assert.equal(trace.analysis.issues.includes('ROOT_INCOMPLETE'),true);
+  await until(async()=>await r.db.traceSpan.count()>=5);const trace=await r.traces.read(peer,'trace-business');assert.deepEqual(trace.spans.map(s=>s.phase).sort(),['ADMIT','EXECUTE','LOAD','PUBLISH','QUEUE']);assert.equal(trace.analysis.issues.includes('ROOT_INCOMPLETE'),true);
   assert.ok(!errors.some(e=>/CONFLICT|CORRUPT|UNAUTHORIZED|INVALID/.test(e)),errors.join(','));
   await agent.close();agent=null;await ledger.close();ledger=await DurableLedger.open(ledgerDir,identity,r.identity.cert);
   assert.equal(ledger.status(business.task.attemptId).state,'SUCCEEDED');assert.throws(()=>ledger.begin('business'),/NOT_STARTABLE/);assert.equal(publishes,1);

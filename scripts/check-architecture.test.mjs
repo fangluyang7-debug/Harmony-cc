@@ -7,6 +7,32 @@ import { spawnSync } from 'node:child_process';
 import { inspectSource, checkArchitecture } from './check-architecture.mjs';
 const fixtures=JSON.parse(fs.readFileSync(new URL('./fixtures/architecture.json',import.meta.url),'utf8'));
 for(const f of fixtures)test(f.name,()=>assert.equal(inspectSource(f.source,'fixture.ts',f.core).errors.length===0,f.valid));
+
+test('R21 rejects candidate access, aliases and destructuring outside registered planning/read-only modules',()=>{
+  for(const source of ['snapshot.candidates.filter(c=>c.trusted);', 'const rows = view["candidates"]; rows.sort(compare);', 'const {candidates: rows}=snapshot;']){
+    assert.ok(inspectSource(source,'services/coordinator/src/bypass.ts',false).errors.some(e=>e.includes('DISPATCH_OUTSIDE_PLANNING')));
+    assert.deepEqual(inspectSource(source,'services/coordinator/src/planning.ts',false).errors,[]);
+    assert.deepEqual(inspectSource(source,'services/coordinator/src/spaces.ts',false).errors,[]);
+  }
+});
+test('R25 rejects literal identities in coordinator and SDK but accepts credential-derived identities',()=>{
+  for(const file of ['services/coordinator/src/new-entry.ts','apps/harmony/scheduler/src/main/ets/v2/client/submit.ets']){
+    for(const source of ['const app={appId:"fixed"};','offer.appId="fixed";','peer["deviceId"]="fixed";','const p={principalId:`fixed`};','const appId="fixed";','class App { deviceId="fixed"; }'])assert.ok(inspectSource(source,file,false).errors.some(e=>e.includes('HARDCODED_CREDENTIAL_IDENTITY')));
+    assert.deepEqual(inspectSource('const app={appId:credential.appId,principalId:peer.principalId,deviceId:peer.deviceId};',file,false).errors,[]);
+  }
+});
+
+test('CLI rejects R21/R25 violation fixtures in a production-shaped tree',()=>{
+  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'architecture-fixture-'));
+  try{
+    for(const [name,source] of Object.entries({'packages/scheduler-core/src/index.ts':'export const value=1;',
+      'services/coordinator/src/bypass.ts':'const chosen=snapshot.candidates[0]; const app={appId:"fixed"};'})){
+      const file=path.join(dir,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,source);
+    }
+    const result=spawnSync(process.execPath,['scripts/check-architecture.mjs',dir],{encoding:'utf8'});
+    assert.equal(result.status,1);assert.match(result.stderr,/DISPATCH_OUTSIDE_PLANNING/);assert.match(result.stderr,/HARDCODED_CREDENTIAL_IDENTITY/);
+  }finally{if(path.resolve(dir).startsWith(path.resolve(os.tmpdir())+path.sep+'architecture-fixture-'))fs.rmSync(dir,{recursive:true,force:true});}
+});
 test('production tree passes and CLI exits successfully',()=>{
   assert.deepEqual(checkArchitecture().errors,[]);
   assert.equal(spawnSync(process.execPath,['scripts/check-architecture.mjs']).status,0);

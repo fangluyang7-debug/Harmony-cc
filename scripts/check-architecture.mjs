@@ -18,7 +18,19 @@ export function inspectSource(source, file, core, config=rules) {
     if(core&&!n.text.startsWith('.'))fail(n,'CORE_EXTERNAL_DEPENDENCY');
     if(config.forbiddenServicePaths.some(p=>slash(n.text).includes(p)))fail(n,'V1_DEPENDENCY');
   };
+  const filename=slash(file),name=n=>ts.isIdentifier(n)||ts.isStringLiteralLike(n)?n.text:null;
+  const credentialScope=(config.credentialIdentityRoots??[]).some(dir=>within(filename,dir));
+  const candidateScope=config.candidateSelectionRoot&&within(filename,config.candidateSelectionRoot)&&!(config.candidateReaders??[]).includes(filename);
+  const literal=n=>ts.isStringLiteralLike(n)||ts.isNumericLiteral(n)||n.kind===ts.SyntaxKind.NullKeyword;
   function visit(n){
+    if(candidateScope&&((ts.isPropertyAccessExpression(n)&&n.name.text==='candidates')||
+      (ts.isElementAccessExpression(n)&&n.argumentExpression&&name(n.argumentExpression)==='candidates')||
+      (ts.isBindingElement(n)&&name(n.propertyName??n.name)==='candidates')))fail(n,'DISPATCH_OUTSIDE_PLANNING');
+    if(credentialScope&&((ts.isPropertyAssignment(n)&&(config.credentialIdentityFields??[]).includes(name(n.name))&&literal(n.initializer))||
+      ((ts.isVariableDeclaration(n)||ts.isPropertyDeclaration(n)||ts.isBindingElement(n))&&n.initializer&&(config.credentialIdentityFields??[]).includes(name(n.name))&&literal(n.initializer))||
+      (ts.isBinaryExpression(n)&&n.operatorToken.kind===ts.SyntaxKind.EqualsToken&&literal(n.right)&&
+        ((ts.isPropertyAccessExpression(n.left)&&(config.credentialIdentityFields??[]).includes(n.left.name.text))||
+        (ts.isElementAccessExpression(n.left)&&n.left.argumentExpression&&(config.credentialIdentityFields??[]).includes(name(n.left.argumentExpression)))))))fail(n,'HARDCODED_CREDENTIAL_IDENTITY');
     if(ts.isImportDeclaration(n)||ts.isExportDeclaration(n)){if(n.moduleSpecifier)dependency(n.moduleSpecifier);}
     if(ts.isImportEqualsDeclaration(n)&&ts.isExternalModuleReference(n.moduleReference))dependency(n.moduleReference.expression);
     if(ts.isImportTypeNode(n)&&ts.isLiteralTypeNode(n.argument))dependency(n.argument.literal);

@@ -30,6 +30,14 @@ test('device epoch freshness and target authorization affect the decision',()=>{
   f.policy.allowedTargetIds=['target1'];f.snapshot.resources[0].availableMemoryBytes=0;
   assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
 });
+
+test('explicit target is a planner constraint; qualified alternatives cannot bypass it',()=>{
+  const service=new PlanningService(null),f=fixture();f.request.nodes[0].allowedTargetIds=['missing'];
+  assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.reason,'NO_LEGAL_PLAN');
+  f.request.nodes[0].allowedTargetIds=['target1'];
+  assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0].targetId,'target1');
+  f.request.remainingBudgetMs=0;assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.reason,'BUDGET_EXHAUSTED');
+});
 test('database projection is consistent and preflight rejects changed versions and revocation',async()=>{
   fs.mkdirSync(path.resolve('../../.test'),{recursive:true});const data=fs.mkdtempSync(path.resolve('../../.test/planning-'));
   execFileSync(process.execPath,['scripts/migrate.cjs'],{env:{...process.env,COORDINATOR_DATA_DIR:data},stdio:'pipe'});

@@ -9,16 +9,19 @@ const clockDomainId=randomUUID();
 export class ExecutionTrace {
   private previous:string|null=null;
   constructor(private readonly buffer:TraceBuffer,private readonly context:TraceContext,private readonly offer:DispatchOfferV2){}
-  async segment<T>(phase:string,work:()=>Promise<T>):Promise<T>{
-    const startMono=performance.now();let reasonCode:string|null=null;
-    try{return await work();}catch(error){reasonCode='PHASE_FAILED';throw error;}
-    finally{
+  begin(phase:string){
+    const startMono=performance.now();let finished=false;
+    return (reasonCode:string|null=null)=>{
+      if(finished)return;finished=true;
       const endMono=performance.now(),spanId=randomUUID();
       const span:TraceSpanV2={...this.context,spanId,dependsOn:this.previous?[this.previous]:[],transferId:null,
         workflowId:this.offer.task.workflowId,nodeId:this.offer.task.nodeId,attemptId:this.offer.task.attemptId,targetId:this.offer.target.targetId,
         phase,durationMs:endMono-startMono,predictedMs:null,reasonCode,startMono,endMono,clockDomainId,measurementScope:'LOCAL_INTERVAL',authoritativeSide:'SELF'};
       // Telemetry must not prevent execution or alter settlement.
       try{this.buffer.emit(span);this.previous=spanId;}catch{this.buffer.dropped++;}
-    }
+    };
+  }
+  async segment<T>(phase:string,work:()=>Promise<T>):Promise<T>{
+    const end=this.begin(phase);try{const result=await work();end();return result;}catch(error){end('PHASE_FAILED');throw error;}
   }
 }

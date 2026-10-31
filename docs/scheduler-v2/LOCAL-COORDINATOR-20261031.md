@@ -6,6 +6,8 @@
 
 ## 启动
 
+S1 已将现有控制台/CLI 的文本与向量入口接入正式规划器。示例地址（含 `examples/cpu-host/device.json`）必须替换为实际本机 IPv4；启动脚本会校验该地址属于本机网卡。新控制库自动迁移 ConsoleApp 表，不要用不同设备或实例的账本目录互换配置。
+
 在仓库根目录使用 Node.js 22、npm 和 OpenSSL。先安装并构建：
 
 ```powershell

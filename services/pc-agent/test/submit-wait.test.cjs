@@ -9,3 +9,8 @@ test('unknown delivery, rejection and exhausted capacity never trigger blind res
  for(const code of ['CONTROL_TIMEOUT','CONTROL_REQUEST_REJECTED:JOB_CONFLICT','JOB_REJECTED']){let calls=0;await assert.rejects(submitWhenAvailable(async()=>{calls++;throw Error(code);},{},()=>{}),new RegExp(code));assert.equal(calls,1);}
  await assert.rejects(submitWhenAvailable(async()=>{throw Error('CONTROL_REQUEST_REJECTED:NO_AVAILABLE_TARGET');},{},()=>{},{timeoutMs:0,delayMs:1}),/^Error: NO_AVAILABLE_TARGET$/);
 });
+
+test('planner refusal is bounded and budget exhaustion is never retried',async()=>{
+ let calls=0;await submitWhenAvailable(async()=>{if(++calls===1)throw Error('CONTROL_REQUEST_REJECTED:NO_LEGAL_PLAN');return {};},{},()=>{},{timeoutMs:1000,delayMs:1});assert.equal(calls,2);
+ calls=0;await assert.rejects(submitWhenAvailable(async()=>{calls++;throw Error('CONTROL_REQUEST_REJECTED:BUDGET_EXHAUSTED');},{},()=>{}),/BUDGET_EXHAUSTED/);assert.equal(calls,1);
+});

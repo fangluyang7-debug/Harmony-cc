@@ -21,6 +21,6 @@ export function plan(snapshot:PlanningSnapshot,request:PlacementRequest,policy:P
   }).map(d=>d.deviceId+':'+(d.holderInstanceId??'')));
   const candidates=snapshot.candidates.filter(c=>validDevices.has(c.deviceId+':'+(c.holderInstanceId??''))&&policy.allowedTargetIds.includes(c.targetId));
   const effective:PlacementRequest={...request,now:clock.now,domain:snapshot.domain,deviceResources:snapshot.resources,links:snapshot.links,
-    nodes:request.nodes.map(node=>({...node,candidates:candidates.filter(c=>c.capability===node.capability)}))};
+    nodes:request.nodes.map(node=>({...node,candidates:candidates.filter(c=>c.capability===node.capability&&(!node.allowedTargetIds||node.allowedTargetIds.includes(c.targetId)))}))};
   return {groupId:snapshot.groupId,domain:snapshot.domain,snapshotVersion:snapshot.version,policyVersion:policy.version,decision:new WorkflowPlacementPlanner(policy.limits,clock.monotonic).plan(effective)};
 }
