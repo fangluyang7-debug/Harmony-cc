@@ -2,6 +2,12 @@
 
 日期：2026-10-31。产品入口命名为 **协作空间**，首页操作为 **创建空间 / 加入空间**。
 
+## 代码交接基线
+
+- 分支：`codex/scheduler-v2-foundation`
+- 本轮实现基线：`d7a9d968a9c997fa0a15044a9fa2da5a7c5acd39`（`Implement cloud team spaces and integrated CPU orchestration`）。后续交接说明提交只补充此基线记录。
+- 协作者请拉取该分支，并使用该基线或更新版本的 PC Agent。云端部署编号及部署方式见第 3 节；GitHub 推送不会自动触发 Railway 部署。
+
 ## 1. 本轮落地效果
 
 首页先呈现创建、加入和我的空间；进入空间后才呈现仪表盘。成员可以返回首页、重新进入空间，关闭网页不影响云端协调服务与设备代理。
