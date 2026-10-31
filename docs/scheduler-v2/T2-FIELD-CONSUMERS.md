@@ -75,6 +75,10 @@
 
 ## T2 冻结出口
 
+2026-10-31 后续：CPU 宿主已将 OS CPU/RAM、贡献配置、资源占用与持续画像发送装配；任务入口消费能力/目标/资源/配置并通过制品票据执行。`EvaluationChanged` 仅作事件唤醒，许可仍以持久化表为准。新入口及明确简化见 [CPU 宿主接口](../../contracts/scheduling/v2/CPU-HOST-API.md) 与 [设计差距核对](DESIGN-GAP-AND-CPU-HOST-20261031.md)。核心源码未因文本能力接入而修改，T2 仍未冻结。
+
+2026-10-31 增量：`CalibrationWorker` 与 `RemoteEvaluationRunner` 已消费许可中的目标/执行器身份、组/持有者、运行域、账本代次、配置、输入摘要、结果大小与期限，实现跨进程可信校准和能力投影更新。网络许可类型位于 `packages/resource-transport/src/evaluation-wire.ts`，属于当前 Node 控制面扩展；尚未声明鸿蒙 ETS/HAR 已支持这些新接口。完整字段消费者及 T2 冻结状态仍按下列出口核对。
+
 1. 上表“只校验/保存”字段逐项补行为消费者与拒绝测试，或从当前可上报协议中明确删减；不能以 fixture 存在替代。
 2. 补贡献状态、credit 等动态信号的来源/有效期契约；当前心跳发送器绝不刷新采样时间。
 3. 完成真实平台采集与能力状态发布适配。B4 接续已实现恢复通信的持久化序号/outbox 和重连对账；画像发布及新任务执行尚未合入同一个完整 agent，`ProfilePublisher` 仍为可注入适配层。

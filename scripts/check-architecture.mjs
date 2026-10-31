@@ -44,7 +44,7 @@ export function checkArchitecture(treeRoot=root){
   function follow(file){
     if(visited.has(file))return;visited.add(file);
     const relative=slash(path.relative(treeRoot,file));
-    if(relative.startsWith('..')||relative.includes('/node_modules/')||relative.includes('/generated/')||relative.includes('/dist/')||relative.endsWith('.d.ts'))return;
+    if(relative.startsWith('..')||relative.startsWith('node_modules/')||relative.includes('/node_modules/')||relative.includes('/generated/')||relative.includes('/dist/')||relative.endsWith('.d.ts'))return;
     const source=fs.readFileSync(file,'utf8'),checked=inspectSource(source,relative,false);
     errors.push(...checked.errors);
     const configPath=ts.findConfigFile(path.dirname(file),ts.sys.fileExists);

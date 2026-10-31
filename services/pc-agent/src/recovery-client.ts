@@ -4,16 +4,16 @@ import { X509Certificate } from 'node:crypto';
 import { WebSocket } from 'ws';
 import { MessageEnvelopeV2, validMessageEnvelopeV2, validDispatchOfferV2, protocolId } from '@harmony/scheduler-core';
 import { DurableLedger } from './durable-ledger';
+import { pinOptions } from '@harmony/resource-transport';
 
 export interface RecoveryConnection {
-  address:string;certificate:string;fingerprint:string;credential:string;domain:'REAL'|'SIMULATED';
+  address:string;certificate:string;fingerprint:string;credential:string;domain:'REAL'|'SIMULATED';tlsMode?:'pinned'|'public';
 }
 export function pinned(connection:RecoveryConnection):https.RequestOptions{
   const url=new URL(connection.address),fingerprint=new X509Certificate(connection.certificate).fingerprint256.replaceAll(':','').toLowerCase();
   if(url.protocol!=='https:'||url.pathname!=='/'||url.username||url.password||url.search||url.hash||fingerprint!==connection.fingerprint||
     !/^[A-Za-z0-9_-]{43}$/.test(connection.credential)||!['REAL','SIMULATED'].includes(connection.domain))throw Error('CONNECTION_INVALID');
-  return {ca:connection.certificate,rejectUnauthorized:true,checkServerIdentity:(host,cert)=>tls.checkServerIdentity(host,cert)||
-    (cert.fingerprint256?.replaceAll(':','').toLowerCase()===connection.fingerprint?undefined:Error('CERTIFICATE_PIN_MISMATCH'))};
+  return pinOptions(connection);
 }
 async function identity(connection:RecoveryConnection){
   const options=pinned(connection);
@@ -33,6 +33,7 @@ export interface LiveControl {
   dispatch(message:MessageEnvelopeV2):void;
   state(ready:boolean,epoch:number):void;
   acknowledged?(message:MessageEnvelopeV2):void;
+  evaluationChanged?():void;
 }
 /** Recovery-only by default. Optional host dispatch is enabled only after the recovery request is acknowledged. */
 export class RecoveryClient {
@@ -70,9 +71,10 @@ export class RecoveryClient {
       if(!this.ledger.pendingMessages().length&&watchdog){clearTimeout(watchdog);watchdog=undefined;}
     };
     this.pumpCurrent=pump;
-    this.closed=new Promise(resolve=>socket.once('close',()=>{
+    this.closed=new Promise(resolve=>socket.once('close',(code,reason)=>{
       clearTimeout(timeout);if(watchdog)clearTimeout(watchdog);if(this.socket===socket)this.socket=undefined;
       liveReady=false;this.live?.state(false,info.epoch);
+      if(!this.closing&&code!==1000){const detail=reason.toString();this.onError(Error('CHANNEL_CLOSED_'+code+(/^[A-Z_]+$/.test(detail)?'_'+detail:'')));}
       failed!(Error('CHANNEL_CLOSED'));resolve();
     }));
     socket.on('error',()=>{failed!(Error('CHANNEL_CONNECTION_FAILED'));});
@@ -95,6 +97,9 @@ export class RecoveryClient {
             if(pending)this.live?.acknowledged?.(pending);
             if(pending?.type==='RecoveryRequest'&&!liveReady){liveReady=true;this.live?.state(true,info.epoch);}
           }
+        }else if(m.type==='EvaluationChanged'){
+          if(!payload||Object.keys(payload).length)throw Error('EVALUATION_HINT_INVALID');
+          if(liveReady)this.live?.evaluationChanged?.();
         }else if(m.type==='AttemptStatusQuery')this.ledger.answerStatus(m);
         else if(m.type==='DispatchOffer'){
           // Hello may race a previously queued offer. RecoveryRequest supersedes it; never ACK or execute it here.

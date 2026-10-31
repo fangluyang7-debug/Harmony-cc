@@ -9,6 +9,8 @@ import { requireBusinessQualification } from './business-gate';
 import { AllotmentClient, AllotmentPolicy, allotmentTransport } from './allotment-client';
 import { DeviceProfileV2, occupiedV2 } from '@harmony/scheduler-core';
 import { ResourceMonitor, ResourceMonitorPolicy, collectSystemResources } from './system-resources';
+import { CalibrationExecutor } from './calibration-executor';
+import { CalibrationWorker } from './calibration-worker';
 
 export interface AgentOptions {
   connection:RecoveryConnection;queuePolicy:QueuePolicy;deviceInstanceId:string;
@@ -21,6 +23,7 @@ export interface AgentOptions {
   onError(error:unknown):void;
   allotments?:{policy:()=>AllotmentPolicy;renewEveryMs:number};
   resources?:{policy:ResourceMonitorPolicy;owner:()=>Promise<'IDLE'|'ACTIVE'|'UNKNOWN'>};
+  calibration?:{executor:CalibrationExecutor;intervalMs?:number};
 }
 /** Integrated host: authenticated transport -> micro queue -> durable admission -> real CPU -> durable report. */
 export class PcAgent {
@@ -34,6 +37,7 @@ export class PcAgent {
   private timer:NodeJS.Timeout|undefined;
   private readonly allotments:AllotmentClient|undefined;
   private readonly resourceMonitor:ResourceMonitor|undefined;
+  private readonly calibration:CalibrationWorker|undefined;
   private readonly profileWaiters=new Map<string,{resolve:()=>void;reject:(e:Error)=>void}>();
   constructor(private readonly ledger:DurableLedger,private readonly options:AgentOptions){
     if(options.allotments){
@@ -60,13 +64,19 @@ export class PcAgent {
     });
     this.client=new RecoveryClient(ledger,options.connection,options.onError,{
       state:(ready,epoch)=>{this.online=ready;this.epoch=epoch;
+        if(ready)this.calibration?.notify();
         if(!ready){for(const waiter of this.profileWaiters.values())waiter.reject(Error('PROFILE_CONNECTION_LOST'));this.profileWaiters.clear();}
         if(!ready)for(const id of this.pending.keys())this.scheduler.cancel(id);
         void this.scheduler.update(ready?this.limits:[],ready?this.owner:'UNKNOWN').catch(options.onError);
-      },dispatch:message=>this.dispatch(message),acknowledged:message=>{this.profileWaiters.get(message.messageId)?.resolve();this.profileWaiters.delete(message.messageId);}
+      },dispatch:message=>this.dispatch(message),evaluationChanged:()=>this.calibration?.notify(),acknowledged:message=>{this.profileWaiters.get(message.messageId)?.resolve();this.profileWaiters.delete(message.messageId);}
+    });
+    if(options.calibration)this.calibration=new CalibrationWorker(ledger,options.calibration.executor,allotmentTransport(options.connection),{
+      domain:options.connection.domain,deviceInstanceId:options.deviceInstanceId,ready:()=>this.ready&&this.owner==='IDLE',
+      authorize:async work=>this.ready&&this.owner==='IDLE'&&this.epoch===work.coordinatorEpoch,onError:options.onError
     });
   }
   get ready(){return this.online&&!this.stopped;}
+  get coordinatorEpoch(){return this.epoch;}
   async publishProfile(profile:Omit<DeviceProfileV2,'sequence'>):Promise<void>{
     if(!this.ready||profile.domain!==this.options.connection.domain||profile.deviceInstanceId!==this.options.deviceInstanceId)throw Error('PROFILE_HOST_UNAVAILABLE');
     const message=this.ledger.queueProfile(profile);
@@ -77,8 +87,10 @@ export class PcAgent {
     });
   }
   async updateResources(limits:ResourceAmountV2[],owner:'IDLE'|'ACTIVE'|'UNKNOWN'){
+    const becameIdle=this.owner!=='IDLE'&&owner==='IDLE';
     this.limits=structuredClone(limits);this.owner=owner;
     await this.scheduler.update(this.online?limits:[],this.online?owner:'UNKNOWN');
+    if(becameIdle)this.calibration?.notify();
   }
   private dispatch(message:MessageEnvelopeV2){
     if(this.stopped)return;
@@ -108,10 +120,11 @@ export class PcAgent {
     if(this.timer||this.stopped)throw Error('AGENT_ALREADY_STARTED');this.client.start();
     if(this.allotments)this.allotments.start(this.options.allotments!.renewEveryMs);
     this.resourceMonitor?.start();
+    this.calibration?.start(this.options.calibration?.intervalMs);
     this.timer=setInterval(()=>{void this.flush().catch(this.options.onError);},250);this.timer.unref();
   }
   async close(){
     if(this.stopped)return;this.stopped=true;if(this.timer)clearInterval(this.timer);
-    await this.resourceMonitor?.close();await this.allotments?.close();await this.client.close();await this.scheduler.close();await Promise.allSettled([...this.pending.values()].map(p=>p.done));
+    await this.calibration?.close();await this.resourceMonitor?.close();await this.allotments?.close();await this.client.close();await this.scheduler.close();await Promise.allSettled([...this.pending.values()].map(p=>p.done));
   }
 }

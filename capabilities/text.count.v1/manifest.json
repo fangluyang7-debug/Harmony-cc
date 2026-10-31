@@ -1,0 +1,33 @@
+{
+  "packId": "text.count.v1",
+  "contract": {
+    "contractId": "text.count.v1",
+    "version": 1,
+    "capability": "text.count.v1",
+    "inputSchemas": [
+      "text.input"
+    ],
+    "outputSchemas": [
+      "text.counts"
+    ],
+    "sideEffectPolicy": "PURE",
+    "interruptibility": "CANCEL_RESTART",
+    "maxNonPreemptibleMs": null
+  },
+  "executorIds": [
+    "node.cpu.v1"
+  ],
+  "model": null,
+  "suiteId": "text.count.v1.reference",
+  "qualityThreshold": 1,
+  "resourceLimit": [
+    {
+      "resourcePoolId": "cpu",
+      "amount": 1
+    },
+    {
+      "resourcePoolId": "ram",
+      "amount": 67108864
+    }
+  ]
+}

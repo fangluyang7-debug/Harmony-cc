@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+export * from './evaluation-wire';
 import path from 'node:path';
 import https from 'node:https';
 import tls from 'node:tls';
@@ -42,6 +43,23 @@ export class ArtifactChannel {
     if(old&&canonical(old)!==canonical(d))throw Error('ARTIFACT_IDENTITY_CONFLICT');
     if(!old){if(this.objects.size>=4096)throw Error('ARTIFACT_METADATA_FULL');save(path.join(this.directory,id+'.json'),d);this.objects.set(id,structuredClone(d));}
   }
+  /** Local control-plane lookup; callers still enforce task and data ownership before issuing a ticket. */
+  lookup(groupId:string,ref:ArtifactRefV2):ArtifactDescriptor|null {
+    const d=[...this.objects.values()].find(v=>v.groupId===groupId&&canonical(v.ref)===canonical(ref)&&v.expiresAt>this.now());
+    return d?structuredClone(d):null;
+  }
+  available(d:ArtifactDescriptor):boolean{return canonical(this.objects.get(key(d)))===canonical(d)&&d.expiresAt>this.now()&&fs.existsSync(path.join(this.directory,key(d)+'.blob'));}
+  /** In-process application gateway; callers must verify the authenticated job owner. */
+  async writeForControl(d:ArtifactDescriptor,bytes:Buffer){
+    if(canonical(this.objects.get(key(d)))!==canonical(d)||d.expiresAt<=this.now())throw Error('ARTIFACT_EXPIRED');
+    await this.check(d,bytes);
+    const filename=path.join(this.directory,key(d)+'.blob');
+    if(fs.existsSync(filename)){if(hash(fs.readFileSync(filename))!==d.ref.contentHash)throw Error('ARTIFACT_CORRUPT');return;}
+    const used=fs.readdirSync(this.directory).filter(n=>n.endsWith('.blob')).reduce((n,f)=>n+fs.statSync(path.join(this.directory,f)).size,0);
+    if(used+bytes.length>this.limits.cacheBytes)throw Error('ARTIFACT_CACHE_FULL');
+    const temporary=filename+'.'+randomUUID()+'.part';fs.writeFileSync(temporary,bytes,{flag:'wx',mode:0o600});fs.renameSync(temporary,filename);
+  }
+  async readForControl(d:ArtifactDescriptor){if(!this.available(d))throw Error('ARTIFACT_EXPIRED');const bytes=fs.readFileSync(path.join(this.directory,key(d)+'.blob'));await this.check(d,bytes);return bytes;}
   /** Caller must have already checked task/App/data-owner permission. Peer binding is checked again at transfer time. */
   issue(d:ArtifactDescriptor,peer:ArtifactPeer,operation:'READ'|'WRITE',ttlMs=30000):ArtifactTicket{
     this.validate(d);
@@ -97,11 +115,13 @@ export class ArtifactChannel {
   }
 }
 
-export interface PinnedEndpoint {address:string;certificate:string;fingerprint:string;}
+export interface PinnedEndpoint {address:string;certificate:string;fingerprint:string;tlsMode?:'pinned'|'public';}
 export function pinOptions(endpoint:PinnedEndpoint):https.RequestOptions{
   const url=new URL(endpoint.address);
   if(url.protocol!=='https:'||url.pathname!=='/'||url.search||url.hash||url.username||url.password||
     new X509Certificate(endpoint.certificate).fingerprint256.replaceAll(':','').toLowerCase()!==endpoint.fingerprint)throw Error('ENDPOINT_INVALID');
+  if(endpoint.tlsMode==='public')return {rejectUnauthorized:true};
+  if(endpoint.tlsMode!==undefined&&endpoint.tlsMode!=='pinned')throw Error('TLS_MODE_INVALID');
   return {ca:endpoint.certificate,rejectUnauthorized:true,checkServerIdentity:(host,cert)=>tls.checkServerIdentity(host,cert)||
     (cert.fingerprint256?.replaceAll(':','').toLowerCase()===endpoint.fingerprint?undefined:Error('CERTIFICATE_PIN_MISMATCH'))};
 }

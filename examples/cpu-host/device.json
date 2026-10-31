@@ -1,0 +1,11 @@
+{
+  "address": "https://localhost:7443/",
+  "deviceId": "demo-pc",
+  "groupId": "demo-team",
+  "holderInstanceId": "demo-pc-agent",
+  "principalId": "demo-owner",
+  "capacity": [
+    { "resourcePoolId": "cpu", "amount": 1 },
+    { "resourcePoolId": "ram", "amount": 268435456 }
+  ]
+}

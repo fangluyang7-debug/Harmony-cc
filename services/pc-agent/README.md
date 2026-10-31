@@ -1,3 +1,5 @@
+> 2026-10-31：协作空间首页、成员/设备管理与 Railway 云端协调已落地。访问 https://harmony-space-production.up.railway.app ，接入和验证记录见 [协作空间云端交接说明](../../docs/scheduler-v2/TEAM-SPACE-CLOUD-20261031.md).
+
 # PC agent v2：执行整合、账本与恢复通信
 
 `src/agent.ts` 将认证连接、恢复屏障、设备内队列、能力准入检查、真实 CPU 执行、持久化回执与追踪组装为 `PcAgent`。`src/artifact-client.ts` 将受信路由服务提供的短期票据接到执行输入/输出，`artifact-endpoint.ts` 提供 PC HTTPS 制品端点。CPU 支持裁剪和向量归一化；没有 GPU 执行器。
@@ -66,6 +68,18 @@ npm --workspace @harmony/pc-agent run recovery -- C:/path/to/recovery-config.jso
 `reconcileEngine(ledger, attemptId, localProbe)` 是本地受信引擎适配入口，不含启动或重试方法。UNKNOWN、仍运行和探测失败保留占用；只有匹配 fence/目标/配置且明确结算的回执能调用 settle。结算与新的恢复通知在同一快照写入；在线宿主随后调用 `client.flush()` 触发发送。CLI 未配置任何真实引擎 probe，故不能自行释放未知引擎资源。恢复回报不会代替签名额度 ACK，协调者预留继续保守保留。
 
 outbox 上限 64 条/1 MiB，inbox 上限 4096 条。超限停止新写入，不丢消息或清空账本；历史压缩/长期运行维护尚未实现。本阶段适用于接续集成与受控验收，不能标为完整设备代理已交付。
+
+## 可运行 CPU 宿主与提交命令（2026-10-31）
+
+已新增 `host-main.ts` 和 `submit-main.ts`，可从配对配置启动真实 PC CPU 宿主、自动采集/校准并执行文本或向量任务。构建后从仓库根目录运行 `node services/pc-agent/dist/host-main.js <agent.json> <contribution.json>`；提交命令为 `node services/pc-agent/dist/submit-main.js <agent.json> <capability> <input.json> <new-output.json> [targetId]`。完整例子见 [设计差距与运行说明](../../docs/scheduler-v2/DESIGN-GAP-AND-CPU-HOST-20261031.md)。
+
+校准 worker 已改为 WS `EvaluationChanged` 事件唤醒和重连对账，空闲时不定时领取；失败的投递仍可定时重试。下面保留上一轮组件描述，关于“周期领取”和“无业务 CLI”的状态以本节为准。
+
+## P0 接续：远程校准（2026-10-31）
+
+`PcAgent` 可配置 `calibration: { executor, intervalMs }`；executor 是使用同一 DurableLedger 的 `CalibrationExecutor`。恢复完成且所有者空闲后，worker 通过配对固定证书 HTTPS 领取评测，使用本地已安装的输入和参数执行，并提交真实结算后的输出。协调者负责参考判定和能力状态更新。结果丢失可从持久化记录补报；不重跑未知状态的 attempt。关闭时先取消并等待评测结束。
+
+网络参考输出上限 64 KiB，worker 默认每 500 ms 查询一次；没有改变普通业务 WS 派发。`remote-evaluation.test.cjs` 覆盖独立 PC 进程、自动校准循环与结果丢失重试。完整装配与剩余工作见 `docs/scheduler-v2/HANDOFF-REMOTE-CALIBRATION-20261031.md`；完整业务安装/启动 CLI 仍待接续。
 
 ## P0 接续：自动额度维护
 

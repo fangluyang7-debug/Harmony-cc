@@ -8,20 +8,25 @@ export interface AllotmentPolicy { base:ResourceAmountV2[];extra:ResourceAmountV
 export type ControlRequest=(route:string,body:unknown)=>Promise<unknown>;
 
 /** Bounded authenticated control requests; trust is established by pairing, never by the response. */
-export function allotmentTransport(connection:RecoveryConnection):ControlRequest {
+export function allotmentTransport(connection:RecoveryConnection,onServerTime?:(time:number)=>void):ControlRequest {
   return (route,body)=>new Promise((resolve,reject)=>{
-    const read=/^\/v2\/qualification\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(route);
-    if(!read&&!['/v2/allotments/request','/v2/allotments/ack'].includes(route)){reject(Error('CONTROL_ROUTE_INVALID'));return;}
+    const read=/^\/v2\/qualification\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(route)||/^\/v2\/evaluations\/[a-f0-9-]{36}$/.test(route)||/^\/v2\/jobs\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(route)||route==='/v2/devices';
+    const report=/^\/v2\/evaluations\/[a-f0-9-]{36}\/report$/.test(route);
+    const jobAction=/^\/v2\/(?:jobs\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}\/start|executions\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}\/(?:authorize|input|output))$/.test(route);
+    if(!read&&!report&&!jobAction&&!['/v2/allotments/request','/v2/allotments/ack','/v2/evaluations/claim','/v2/jobs','/v2/device-settings'].includes(route)){reject(Error('CONTROL_ROUTE_INVALID'));return;}
     const data=Buffer.from(JSON.stringify(body));
+    if(data.length>100000){reject(Error('CONTROL_REQUEST_TOO_LARGE'));return;}
     const request=https.request(new URL(route,connection.address),{...pinned(connection),method:read?'GET':'POST',headers:{
       Authorization:'Bearer '+connection.credential,'Content-Type':'application/json','Content-Length':read?0:data.length
     }},response=>{
+      const serverTime=Date.parse(response.headers.date??'');if(Number.isFinite(serverTime))onServerTime?.(serverTime);
       const chunks:Buffer[]=[];let size=0;
       response.on('data',(chunk:Buffer)=>{size+=chunk.length;if(size>262144)request.destroy(Error('CONTROL_RESPONSE_TOO_LARGE'));else chunks.push(chunk);});
       response.on('error',reject);
       response.on('end',()=>{try{
-        if(response.statusCode!==200&&response.statusCode!==201)throw Error('CONTROL_REQUEST_REJECTED');
-        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+        const reply=JSON.parse(Buffer.concat(chunks).toString('utf8'));
+        if(response.statusCode!==200&&response.statusCode!==201)throw Error('CONTROL_REQUEST_REJECTED'+(typeof reply?.message==='string'&&/^[A-Z_]+$/.test(reply.message)?':'+reply.message:''));
+        resolve(reply);
       }catch(error){reject(error);}});
     });
     const deadline=setTimeout(()=>request.destroy(Error('CONTROL_TIMEOUT')),10000);

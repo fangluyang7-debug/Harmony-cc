@@ -3,13 +3,13 @@ import { PrismaClient } from '../generated/client';
 import { CapabilityPackV2, CapabilityAdmissionV2, ExecutorV2, ExecutionConfigV2, canonical, sameModelV2, validCapabilityPackV2, validExecutionConfigV2, sampleUsableV2, vectorFitsV2 } from '@harmony/scheduler-core';
 import { DeviceDirectory, executorIdentity } from './directory';
 import { Peer } from './channel';
+import type { EvaluationPermit, EvaluationResult } from '@harmony/resource-transport';
+export type { EvaluationPermit, EvaluationResult } from '@harmony/resource-transport';
 
 export interface EvaluationCase {id:string;input:Buffer;parameters:string;config:ExecutionConfigV2;maxOutputBytes:number;}
 /** Installed by the host, never constructed from a device advertisement or an HTTP payload. */
 export interface TrustedPack {manifest:CapabilityPackV2;cases:EvaluationCase[];evaluate:(test:EvaluationCase,output:Buffer)=>Promise<number>;}
 export interface EvaluationPolicy {maxRuns:number;maxDurationMs:number;maxBytes:number;maxConcurrent:number;caseTimeoutMs:number;canarySamples:number;activeSamples:number;evidenceTtlMs:number;cooldownMs:number;}
-export interface EvaluationPermit {id:string;groupId:string;holderInstanceId:string;targetId:string;identity:string;packDigest:string;caseId:string;inputHash:string;config:ExecutionConfigV2;maxOutputBytes:number;timeoutMs:number;domain:'REAL'|'SIMULATED';}
-export interface EvaluationResult {settled:true;output:Buffer;durationMs:number;permitId:string;domain:'REAL'|'SIMULATED';}
 /** Adapter MUST enforce permit scope and real quota, persist attempt identity, and only return after engine settlement. */
 export interface EvaluationRunner {
   run(permit:EvaluationPermit,test:EvaluationCase,executor:ExecutorV2,signal:AbortSignal):Promise<EvaluationResult>;

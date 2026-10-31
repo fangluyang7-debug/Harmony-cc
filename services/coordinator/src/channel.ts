@@ -76,7 +76,10 @@ export class ControlChannel {
       if(binary){socket.close(1008,'TEXT_REQUIRED');return;}
       if(session.queued>=this.limits.queuedMessages){socket.close(1013,'BACKPRESSURE');return;}
       session.queued++;
-      session.work=session.work.then(()=>this.receive(session,bytes.toString())).catch(()=>{socket.close(1008,'MESSAGE_REJECTED');}).finally(()=>{session.queued--;});
+      session.work=session.work.then(()=>this.receive(session,bytes.toString())).catch(error=>{
+        const code=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'CONTROL_INTERNAL_ERROR';
+        console.warn('CONTROL_MESSAGE_REJECTED '+code);socket.close(1008,code);
+      }).finally(()=>{session.queued--;});
     });
   }
   private async receive(s:Session,text:string){
@@ -129,6 +132,15 @@ export class ControlChannel {
     }
   }
   async flush(){await Promise.all([...this.sessions].map(s=>s.work=s.work.then(()=>this.pump(s)).catch(()=>{s.socket.close(1008,'DELIVERY_REJECTED');})));}
+  /** A wake-up hint, not an execution command. Durable evaluation records are reconciled on reconnect. */
+  async evaluationChanged(groupId:string,holderInstanceId:string){
+    const seq=await this.db.dispatchSequence.upsert({where:{id:this.store.senderInstanceId},create:{id:this.store.senderInstanceId,value:1},update:{value:{increment:1}}});
+    await Promise.all([...this.sessions].filter(s=>s.hello&&s.peer.groupId===groupId&&s.peer.holderInstanceId===holderInstanceId).map(async s=>{
+      try{await this.send(s,{protocolVersion:2,messageId:randomUUID(),type:'EvaluationChanged',groupId,senderInstanceId:this.store.senderInstanceId,
+        coordinatorEpoch:this.epoch(),seq:seq.value,ackOf:null,traceId:randomUUID(),payload:'{}',extensions:[]});}
+      catch{s.socket.terminate();}
+    }));
+  }
   revoke(credentialId:string){for(const s of this.sessions)if(s.peer.credentialId===credentialId)s.socket.close(1008,'CREDENTIAL_REVOKED');}
   async close(){this.server.off('upgrade',this.upgrade);for(const s of this.sessions)s.socket.terminate();await Promise.allSettled([...this.sessions].map(s=>s.work));await new Promise<void>(r=>this.wss.close(()=>r()));}
 }

@@ -13,7 +13,8 @@
     "packages/scheduler-core",
     "services/coordinator",
     "services/pc-agent",
-    "packages/resource-transport"
+    "packages/resource-transport",
+    "packages/reference-capabilities"
   ],
   "scripts": {
     "data:prepare": "node scripts/upload-harmony-products.mjs --prepare",
@@ -61,7 +62,9 @@
     "scheduler:v2:test": "npm run core:test && npm run protocol:v2:test && npm run transport:test && npm run pc-agent:test && npm run coordinator:test && npm run architecture:deps",
     "transport:build": "npm --workspace @harmony/resource-transport run build",
     "transport:test": "npm --workspace @harmony/resource-transport test",
-    "lab:test": "npm --workspace @harmony/coordinator run build && npm --workspace @harmony/pc-agent run build && node tests/scheduler-lab/run.cjs"
+    "lab:test": "npm --workspace @harmony/coordinator run build && npm --workspace @harmony/pc-agent run build && node tests/scheduler-lab/run.cjs",
+    "references:build": "npm --workspace @harmony/reference-capabilities run build",
+    "pc-agent:start": "npm --workspace @harmony/pc-agent run start --"
   },
   "devDependencies": {
     "ajv": "8.20.0"

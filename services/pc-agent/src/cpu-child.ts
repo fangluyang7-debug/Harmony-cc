@@ -27,6 +27,10 @@ process.once('message',async(raw:any)=>{
         if(i%raw.config.batchSize===0)await new Promise(resolve=>setImmediate(resolve));
       }
       output=Buffer.from(JSON.stringify({dimension:v.dimension,rows,norms}));schemaId='vector.normalized';
+    }else if(raw.capability==='text.count.v1'){
+      const v=JSON.parse(bytes.toString('utf8'));
+      if(!v||Object.keys(v).join('|')!=='text'||typeof v.text!=='string')throw Error('TEXT_INVALID');
+      output=Buffer.from(JSON.stringify({characters:Array.from(v.text).length,words:v.text.trim()?v.text.trim().split(/\s+/u).length:0,lines:v.text.length?v.text.split(/\r\n|\r|\n/u).length:0}));schemaId='text.counts';
     }else throw Error('CAPABILITY_UNSUPPORTED');
     if(output.length>8388608)throw Error('OUTPUT_TOO_LARGE');
     process.send?.({ok:true,output:output.toString('base64'),hash:createHash('sha256').update(output).digest('hex'),schemaId,durationMs:performance.now()-started},()=>process.disconnect());

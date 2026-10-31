@@ -169,3 +169,68 @@ model CapabilityState {
   revision Int
   metadataJson String
 }
+
+model EvaluationDispatch {
+  id String @id
+  groupId String
+  holderInstanceId String
+  deviceId String
+  epoch Int
+  state String
+  expiresAt Float
+  workJson String
+  resultJson String?
+  @@index([groupId, holderInstanceId, state])
+}
+
+model CpuJob {
+  id String @id
+  groupId String
+  principalId String
+  sourceHolderId String
+  state String
+  metadataJson String
+  @@index([groupId, principalId])
+}
+
+model SpaceUser {
+  id String @id
+  account String @unique
+  name String
+  password String
+}
+model SpaceSession {
+  id String @id
+  userId String
+  expiresAt Float
+}
+model TeamSpace {
+  id String @id
+  name String
+  createdAt Float
+}
+model SpaceMember {
+  id String @id
+  spaceId String
+  userId String
+  role String
+  joinedAt Float
+  @@unique([spaceId, userId])
+}
+model SpaceInvite {
+  id String @id
+  spaceId String
+  role String
+  expiresAt Float
+  revoked Boolean @default(false)
+}
+model SpaceDevice {
+  id String @id
+  spaceId String
+  userId String
+  holderId String @unique
+  name String
+  settingsJson String
+  createdAt Float
+  @@index([spaceId])
+}

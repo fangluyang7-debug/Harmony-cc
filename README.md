@@ -1,4 +1,8 @@
+> 2026-10-31：协作空间首页、成员/设备管理与 Railway 云端协调已落地。访问 https://harmony-space-production.up.railway.app ，接入和验证记录见 [协作空间云端交接说明](docs/scheduler-v2/TEAM-SPACE-CLOUD-20261031.md).
+
 # Harmony-cc · 智调鸿枢鸿蒙调度项目
+
+当前 v2 开发面向团队共享资源空间及跨设备协同。2026-10-31 已接通独立 CPU 代理、自动校准、任务提交与结果读取，见 [设计差距核对与运行说明](docs/scheduler-v2/DESIGN-GAP-AND-CPU-HOST-20261031.md)。下方购物链路是既有 v1 实现，不是 v2 新功能的限定场景。
 
 Harmony-cc 是独立的鸿蒙参赛项目仓库，包含手机购物应用、调度 HAR、云端 Runtime、可信 CPU Worker、双手机派发、PC 监控、模型与商品样本、测试及参赛材料。
 

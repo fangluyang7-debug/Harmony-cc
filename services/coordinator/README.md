@@ -1,4 +1,10 @@
+> 2026-10-31：协作空间首页、成员/设备管理与 Railway 云端协调已落地。访问 https://harmony-space-production.up.railway.app ，接入和验证记录见 [协作空间云端交接说明](../../docs/scheduler-v2/TEAM-SPACE-CLOUD-20261031.md).
+
 # Coordinator v2 — 通信与资源账本基础
+
+最新可运行入口：设置 `COORDINATOR_CPU_HOST=1` 后启动 main，自动装配内置文本/向量参考包、校准循环和单节点 CPU 任务服务。公开接口包括 `GET /v2/devices`、`POST /v2/jobs`、`POST /v2/jobs/:id/start`、`GET /v2/jobs/:id` 及执行者专用 `/v2/executions/:id/:action`。先提交元数据、取得票据上传输入，再通过 WS 派发；已有非默认组策略不会被覆盖。完整步骤与当前简化边界见 [运行说明](../../docs/scheduler-v2/DESIGN-GAP-AND-CPU-HOST-20261031.md)。旧段落保留各组件介绍，关于未装配入口的描述以此处为准。
+
+2026-10-31：`startCalibration` 现在可以省略 `runner`，使用持久化远程评测。新增认证的 `/v2/evaluations/claim`、`/v2/evaluations/:id`、`/v2/evaluations/:id/report`，PC 通过网络执行本机可信样例。运行方式和边界见 `docs/scheduler-v2/HANDOFF-REMOTE-CALIBRATION-20261031.md`。默认 main 仍需安装能力包并启动该循环。
 
 独立 NestJS 控制面、SQLite 控制状态、事务 outbox、恢复查询和快照规划；包括 WebSocket、一次性配对、设备目录、额度、HTTPS 制品及认证追踪查询。可信校准服务已有可注入的执行适配器，整合测试连接真实 PC CPU 子进程。业务 PC 宿主的安装/启动与管理接口尚待产品化，手机 agent 尚未验收。最新状态见 `docs/scheduler-v2/HANDOFF-B-INTEGRATION-20261030.md`。
 

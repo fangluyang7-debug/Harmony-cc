@@ -1,0 +1,33 @@
+{
+  "packId": "vector.normalize.v1",
+  "contract": {
+    "contractId": "vector.normalize.v1",
+    "version": 1,
+    "capability": "vector.normalize.v1",
+    "inputSchemas": [
+      "vector.input"
+    ],
+    "outputSchemas": [
+      "vector.normalized"
+    ],
+    "sideEffectPolicy": "PURE",
+    "interruptibility": "CANCEL_RESTART",
+    "maxNonPreemptibleMs": null
+  },
+  "executorIds": [
+    "node.cpu.v1"
+  ],
+  "model": null,
+  "suiteId": "vector.normalize.v1.reference",
+  "qualityThreshold": 1,
+  "resourceLimit": [
+    {
+      "resourcePoolId": "cpu",
+      "amount": 1
+    },
+    {
+      "resourcePoolId": "ram",
+      "amount": 67108864
+    }
+  ]
+}

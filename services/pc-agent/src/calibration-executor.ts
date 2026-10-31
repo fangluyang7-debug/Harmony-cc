@@ -5,10 +5,9 @@ import { performance } from 'node:perf_hooks';
 import { DispatchOfferV2, ExecutionConfigV2, ExecutorV2, canonical } from '@harmony/scheduler-core';
 import { DurableLedger } from './durable-ledger';
 import { ExecutionPorts, PcExecutionRuntime } from './execution-runtime';
+import type { EvaluationPermit as Permit, EvaluationResult as Result } from '@harmony/resource-transport';
 
-interface Permit {id:string;groupId:string;holderInstanceId:string;targetId:string;identity:string;packDigest:string;caseId:string;inputHash:string;config:ExecutionConfigV2;maxOutputBytes:number;timeoutMs:number;domain:'REAL'|'SIMULATED';}
 interface EvaluationCase {id:string;input:Buffer;parameters:string;config:ExecutionConfigV2;maxOutputBytes:number;}
-interface Result {settled:true;output:Buffer;durationMs:number;permitId:string;domain:'REAL'|'SIMULATED';}
 const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
 /** Local trusted calibration path; never accepts ordinary business offers. Uses the SAME durable quota ledger as business execution. */
 export class CalibrationExecutor {
@@ -18,6 +17,20 @@ export class CalibrationExecutor {
     fs.mkdirSync(directory,{recursive:true});
   }
   private filename(id:string){if(!/^[a-f0-9-]{36}$/.test(id))throw Error('PERMIT_INVALID');return path.join(this.directory,id+'.json');}
+  /** A RUN delivery rejected before durable admission proves no engine started in this installation. */
+  async decline(permit:Permit):Promise<Result>{
+    const state=this.ledger.snapshot();
+    if(permit.domain!==this.domain||permit.groupId!==state.groupId||permit.holderInstanceId!==state.holderInstanceId||this.ledger.status(permit.id))throw Error('EVALUATION_DECLINE_INVALID');
+    const filename=this.filename(permit.id)+'.declined',text=canonical(permit);
+    if(fs.existsSync(filename)){if(fs.readFileSync(filename,'utf8')!==text)throw Error('EVALUATION_DECLINE_CONFLICT');}
+    else{const temporary=filename+'.tmp',fd=fs.openSync(temporary,'wx',0o600);try{fs.writeFileSync(fd,text);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(temporary,filename);}
+    return {settled:true,permitId:permit.id,domain:this.domain,output:Buffer.alloc(0),durationMs:0};
+  }
+  async runInstalled(permit:Permit,executor:ExecutorV2,signal:AbortSignal):Promise<Result>{
+    if(fs.existsSync(this.filename(permit.id)+'.declined'))return (await this.reconcile(permit))!;
+    const test=this.installed.get(permit.packDigest+':'+permit.caseId);if(!test)throw Error('TRUSTED_PACK_REQUIRED');
+    return this.run(permit,test,executor,signal);
+  }
   async run(permit:Permit,test:EvaluationCase,executor:ExecutorV2,signal:AbortSignal):Promise<Result>{
     const installed=this.installed.get(permit.packDigest+':'+permit.caseId),state=this.ledger.snapshot();
     const identity=hash(Buffer.from(canonical({target:executor.target,contract:executor.contract,model:executor.model,resources:executor.resources,configurations:executor.configurations})));
@@ -45,6 +58,11 @@ export class CalibrationExecutor {
     }finally{signal.removeEventListener('abort',cancel);await runtime.close();}
   }
   async reconcile(permit:Permit):Promise<Result|null>{
+    const declined=this.filename(permit.id)+'.declined';
+    if(fs.existsSync(declined)){
+      if(fs.readFileSync(declined,'utf8')!==canonical(permit)||this.ledger.status(permit.id))throw Error('EVALUATION_DECLINE_CONFLICT');
+      return {settled:true,permitId:permit.id,domain:this.domain,output:Buffer.alloc(0),durationMs:0};
+    }
     const record=this.ledger.status(permit.id);if(!record?.resourcesSettled||permit.domain!==this.domain||record.groupId!==permit.groupId||record.holderInstanceId!==permit.holderInstanceId||record.receipt?.actualTarget.targetId!==permit.targetId)return null;
     if(record.receipt?.state!=='SUCCEEDED')return {settled:true,permitId:permit.id,domain:this.domain,output:Buffer.alloc(0),durationMs:0};
     try{

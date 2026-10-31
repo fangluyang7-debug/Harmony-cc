@@ -5,7 +5,8 @@
   "serviceRoots": [
     "services/coordinator/src",
     "services/pc-agent/src",
-    "packages/resource-transport/src"
+    "packages/resource-transport/src",
+    "packages/reference-capabilities/src"
   ],
   "forbiddenLiterals": [
     "cloud-runtime",

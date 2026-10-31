@@ -23,6 +23,15 @@ test('real CPU cancellation waits for process termination before declaring settl
  const work=executeCpu('vector.normalize.v1',bytes,{},config,signal.signal);setTimeout(()=>signal.abort(),50);
  await assert.rejects(work,/CANCELLED_SETTLED/);
 });
+
+test('text capability counts Unicode code points and lines, and rejects a non-text input',async()=>{
+ const run=value=>executeCpu('text.count.v1',Buffer.from(JSON.stringify(value)),{},config,new AbortController().signal);
+ assert.deepEqual(JSON.parse((await run({text:'A😀\r\nB'})).bytes),{characters:5,words:2,lines:2});
+ assert.deepEqual(JSON.parse((await run({text:''})).bytes),{characters:0,words:0,lines:0});
+ await assert.rejects(run({text:42}),/TEXT_INVALID/);
+ const {builtinCpuPacks}=require('@harmony/reference-capabilities');
+ for(const pack of builtinCpuPacks())assert.deepEqual(JSON.parse(fs.readFileSync(path.resolve('../../capabilities',pack.manifest.packId,'manifest.json'))),pack.manifest);
+});
 test('execution runtime persists before computing, verifies artifacts, returns the existing result on duplicate and survives restart',async()=>{
  const directory=fs.mkdtempSync(path.resolve('../../.test/cpu-runtime-'));const {privateKey,publicKey}=crypto.generateKeyPairSync('rsa',{modulusLength:2048});
  const certificate=publicKey.export({type:'spki',format:'pem'}),who={groupId:'g1',deviceId:'device1',holderInstanceId:'h1',appInstanceId:null};

@@ -1,0 +1,10 @@
+CREATE TABLE "SpaceUser" ("id" TEXT NOT NULL PRIMARY KEY, "account" TEXT NOT NULL, "name" TEXT NOT NULL, "password" TEXT NOT NULL);
+CREATE UNIQUE INDEX "SpaceUser_account_key" ON "SpaceUser"("account");
+CREATE TABLE "SpaceSession" ("id" TEXT NOT NULL PRIMARY KEY, "userId" TEXT NOT NULL, "expiresAt" REAL NOT NULL);
+CREATE TABLE "TeamSpace" ("id" TEXT NOT NULL PRIMARY KEY, "name" TEXT NOT NULL, "createdAt" REAL NOT NULL);
+CREATE TABLE "SpaceMember" ("id" TEXT NOT NULL PRIMARY KEY, "spaceId" TEXT NOT NULL, "userId" TEXT NOT NULL, "role" TEXT NOT NULL, "joinedAt" REAL NOT NULL);
+CREATE UNIQUE INDEX "SpaceMember_spaceId_userId_key" ON "SpaceMember"("spaceId", "userId");
+CREATE TABLE "SpaceInvite" ("id" TEXT NOT NULL PRIMARY KEY, "spaceId" TEXT NOT NULL, "role" TEXT NOT NULL, "expiresAt" REAL NOT NULL, "revoked" BOOLEAN NOT NULL DEFAULT false);
+CREATE TABLE "SpaceDevice" ("id" TEXT NOT NULL PRIMARY KEY, "spaceId" TEXT NOT NULL, "userId" TEXT NOT NULL, "holderId" TEXT NOT NULL, "name" TEXT NOT NULL, "settingsJson" TEXT NOT NULL, "createdAt" REAL NOT NULL);
+CREATE UNIQUE INDEX "SpaceDevice_holderId_key" ON "SpaceDevice"("holderId");
+CREATE INDEX "SpaceDevice_spaceId_idx" ON "SpaceDevice"("spaceId");
