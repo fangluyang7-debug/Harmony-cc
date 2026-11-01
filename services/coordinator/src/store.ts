@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { PrismaClient } from '../generated/client';
+import { PrismaClient, Prisma } from '../generated/client';
 import {
   AttemptRecordV2, ExecutionReceiptV2, MessageEnvelopeV2, TaskInstanceV2,
   canonical, validAttemptRecordV2, validExecutionReceiptV2, validMessageEnvelopeV2,
-  validTaskInstanceV2, mayCommitReceiptV2, protocolId, recoveryAction, RecoveryAction, DispatchOfferV2, validDispatchOfferV2,
+  validTaskInstanceV2, mayCommitReceiptV2, equalFenceV2, protocolId, recoveryAction, RecoveryAction, DispatchOfferV2, validDispatchOfferV2,
   AttemptStatusReplyV2, validAttemptStatusReplyV2
 } from '@harmony/scheduler-core';
 
@@ -14,7 +14,7 @@ export function executionDigest(task:TaskInstanceV2):string {
 /** All methods are internal control-plane operations; HTTP adapters must authenticate first. */
 export class CoordinatorStore {
   constructor(readonly db:PrismaClient,readonly senderInstanceId:string){}
-  async persistOffer(offer:DispatchOfferV2,holderInstanceId:string,message:MessageEnvelopeV2):Promise<'CREATED'|'EXISTING'> {
+  async persistOffer(offer:DispatchOfferV2,holderInstanceId:string,message:MessageEnvelopeV2,validateGrant?:(tx:Prisma.TransactionClient)=>Promise<void>):Promise<'CREATED'|'EXISTING'> {
     if(!validDispatchOfferV2(offer))throw new Error('ATTEMPT_INVALID');
     const task=offer.task;
     if(!validTaskInstanceV2(task)||!protocolId(holderInstanceId)||!validMessageEnvelopeV2(message,[])||
@@ -29,6 +29,7 @@ export class CoordinatorStore {
           previous.app.principalId!==task.app.principalId||previous.app.appInstanceId!==task.app.appInstanceId||existing.workflowId!==task.workflowId||existing.nodeId!==JSON.stringify([task.workflowId,task.nodeId]))throw new Error('ATTEMPT_CONFLICT');
         return 'EXISTING';
       }
+      await validateGrant?.(tx);
       const workflow=await tx.workflow.findUnique({where:{id:task.workflowId}});
       if(workflow&&(workflow.groupId!==task.groupId||workflow.planRevision!==task.planRevision))throw new Error('WORKFLOW_CONFLICT');
       await tx.workflow.upsert({where:{id:task.workflowId},create:{id:task.workflowId,groupId:task.groupId,planRevision:task.planRevision,state:'ACTIVE'},update:{}});
@@ -190,6 +191,18 @@ export class CoordinatorStore {
       const offer=row.offerJson===null?null:JSON.parse(row.offerJson) as DispatchOfferV2;
       if(offer&&(canonical(offer.target)!==canonical(receipt.actualTarget)||!offer.allowedConfigs.some(c=>c.id===receipt.actualConfiguration)))throw new Error('EXECUTION_SCOPE_MISMATCH');
       const workflow=await tx.workflow.findUniqueOrThrow({where:{id:row.workflowId}}),node=await tx.node.findUniqueOrThrow({where:{id:row.nodeId}});
+      const currentFence=record&&record.attemptId===receipt.attemptId&&equalFenceV2(record.fence,receipt.fence)&&
+        record.coordinatorEpoch===currentEpoch&&receipt.coordinatorEpoch===currentEpoch&&record.planRevision===workflow.planRevision&&receipt.planRevision===workflow.planRevision;
+      if(currentFence&&record.resourcesSettled&&record.receipt&&canonical(record.receipt)!==canonical(receipt))throw Error('RECEIPT_CONFLICT');
+      // A confirmed failure settles the mirror immediately, without committing a business result.
+      // Recovery recommendations still do not create or dispatch a new attempt.
+      if(currentFence&&workflow.state==='ACTIVE'&&node.currentAttemptId===row.id&&receipt.resourcesSettled&&['FAILED','CANCELLED_SETTLED','YIELDED'].includes(receipt.state)){
+        await tx.receipt.upsert({where:{id:row.id},create:{id:row.id,attemptId:row.id,recordJson:JSON.stringify(receipt),committed:false},update:{recordJson:JSON.stringify(receipt)}});
+        await tx.attempt.update({where:{id:row.id},data:{state:receipt.state,recordJson:JSON.stringify({...record,state:receipt.state,resourcesSettled:true,receipt})}});
+        await tx.node.update({where:{id:row.nodeId},data:{state:receipt.state}});
+        await tx.outbox.updateMany({where:{attemptId:row.id},data:{acked:true}});
+        return 'RECONCILE';
+      }
       if(!record||workflow.state!=='ACTIVE'||node.currentAttemptId!==row.id||!mayCommitReceiptV2(record,receipt,currentEpoch,workflow.planRevision)){
         // Preserve evidence for reconciliation; an old epoch is not a new execution grant.
         await tx.receipt.upsert({where:{id:receipt.attemptId},create:{id:receipt.attemptId,attemptId:row.id,recordJson:JSON.stringify(receipt),committed:false},update:{}});

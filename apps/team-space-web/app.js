@@ -50,7 +50,7 @@ async function submitJob(group,metadata){
   for(;;){
     try{return await api('/'+group+'/jobs',metadata);}
     catch(e){
-      if(!['NO_AVAILABLE_TARGET','NO_LEGAL_PLAN'].includes(e.code)||Date.now()>=deadline)throw e;
+      if(!['NO_AVAILABLE_TARGET','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(e.code)||Date.now()>=deadline)throw e;
       if(!dialog.open||!dialog.contains(form))throw Error('已停止等待，任务尚未提交。');
       form.querySelector('.form-error').textContent='等待可用设备，任务尚未提交（最多 15 秒）；关闭窗口可停止等待。';
       await new Promise(resolve=>setTimeout(resolve,500));

@@ -50,6 +50,7 @@ model Attempt {
   taskJson String
   offerJson String?
   rejectionJson String?
+  yieldJson String?
 }
 
 model Outbox {

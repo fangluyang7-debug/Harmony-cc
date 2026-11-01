@@ -13,6 +13,7 @@ import { collectSystemResources, windowsOwnerActivity } from './system-resources
 import { RelayLinks } from './relay-links';
 
 export interface CpuHostConfig {
+  controlIntervalMs?:number;
   directory:string;identity:{groupId:string;deviceId:string;holderInstanceId:string;appInstanceId:string|null};connection:RecoveryConnection;
   contribution:{ownerMode:'dedicated'|'windows-idle'|'paused';maxCpuThreads:number;maxMemoryBytes:number;reserveMemoryBytes:number;idleThresholdMs?:number};
 }
@@ -75,12 +76,12 @@ export class CpuHost {
           const admitted=await context();
           return admitted;
         }},
-      allotments:{policy:()=>({base:[],extra:[{resourcePoolId:'cpu',amount:config.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:config.contribution.maxMemoryBytes}],leaseMs:60000}),renewEveryMs:20000},
+      allotments:{policy:()=>({base:[],extra:[{resourcePoolId:'cpu',amount:config.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:config.contribution.maxMemoryBytes}],leaseMs:60000}),renewEveryMs:config.controlIntervalMs??20000},
       calibration:{executor:evaluator},onYield:()=>{},onExecutionSettled:()=>{void (this.pending??Promise.resolve()).then(()=>this.tick(false)).catch(onError);},onError});
   }
   static async open(config:CpuHostConfig,onError:(e:unknown)=>void=()=>{}){
     const p=config?.contribution;
-    if(!config||!path.isAbsolute(config.directory)||!fs.existsSync(path.join(config.directory,'ledger.initialized'))||!p||!['dedicated','windows-idle','paused'].includes(p.ownerMode)||
+    if(!config||config.controlIntervalMs!==undefined&&(!Number.isSafeInteger(config.controlIntervalMs)||config.controlIntervalMs<100||config.controlIntervalMs>=60000)||!path.isAbsolute(config.directory)||!fs.existsSync(path.join(config.directory,'ledger.initialized'))||!p||!['dedicated','windows-idle','paused'].includes(p.ownerMode)||
       !Number.isSafeInteger(p.maxCpuThreads)||p.maxCpuThreads<1||!Number.isSafeInteger(p.maxMemoryBytes)||p.maxMemoryBytes<67108864||!Number.isSafeInteger(p.reserveMemoryBytes)||p.reserveMemoryBytes<0)throw Error('HOST_CONFIG_INVALID');
     const ledger=await DurableLedger.open(config.directory,config.identity,config.connection.certificate);
     try{return new CpuHost(ledger,config,onError);}catch(error){await ledger.close();throw error;}
@@ -112,6 +113,7 @@ export class CpuHost {
       const ownRam=occupied.find(r=>r.resourcePoolId==='ram')?.amount??0;
       this.owner=owner;this.limits=[{resourcePoolId:'cpu',amount:Math.min(system.cpuThreads,p.maxCpuThreads)},
         {resourcePoolId:'ram',amount:Math.min(p.maxMemoryBytes,system.totalMemoryBytes,ownRam+Math.max(0,system.freeMemoryBytes-p.reserveMemoryBytes))}];
+      if(owner!=='IDLE')this.limits=this.limits.map(r=>({...r,amount:0}));
       await this.agent.updateResources(this.limits,owner);
       if(!this.agent.ready||!state.grant||this.ledger.pendingMessages().some(m=>m.type==='DeviceProfile'))return;
       const source=this.config.connection.domain==='REAL'?'MEASURED':'SIMULATED';
@@ -121,7 +123,7 @@ export class CpuHost {
       const profile:Omit<DeviceProfileV2,'sequence'>={deviceId:state.deviceId,deviceInstanceId:this.instance,holderInstanceId:state.holderInstanceId,ledgerEpoch:state.ledgerEpoch,domain:this.config.connection.domain,
         ownerActivity:owner==='UNKNOWN'?unknown('state'):status(owner,p.ownerMode==='windows-idle'?source:'PRIOR'),foreground:status('FOREGROUND'),powerSave:status('OFF'),charging:unknown('state'),battery:unknown('percent'),temperature:unknown('level'),
         pools:[{id:'cpu',kind:'CPU_SLOTS',unit:'slots',total:system.cpuThreads,limit:p.maxCpuThreads},{id:'ram',kind:'RAM_BYTES',unit:'bytes',total:system.totalMemoryBytes,limit:p.maxMemoryBytes}].map(pool=>({resourcePoolId:pool.id,kind:pool.kind,exclusive:false,total:numeric(pool.total,pool.unit),ownerReserved:Math.max(0,pool.total-pool.limit),contributionLimit:pool.limit,
-          admissionLimit:numeric(this.limits.find(r=>r.resourcePoolId===pool.id)!.amount,pool.unit),occupied:numeric(occupied.find(r=>r.resourcePoolId===pool.id)?.amount??0,pool.unit),draining:owner!=='IDLE'&&occupied.length>0,drainMs:unknown('ms')})),
+          admissionLimit:numeric(this.limits.find(r=>r.resourcePoolId===pool.id)!.amount,pool.unit),occupied:numeric(occupied.find(r=>r.resourcePoolId===pool.id)?.amount??0,pool.unit),draining:(occupied.find(r=>r.resourcePoolId===pool.id)?.amount??0)>this.limits.find(r=>r.resourcePoolId===pool.id)!.amount,drainMs:unknown('ms')})),
         executors:builtinCpuPacks().map(pack=>this.executor(pack.manifest.contract.capability,now)),links,credits:['ORIGIN_INTERACTIVE','REMOTE_INTERACTIVE','REMOTE_BATCH'].map(priority=>({priority,slots:owner==='IDLE'?1:0}))};
       await this.agent.publishProfile(profile);
     }catch(error){this.onError(error);this.owner='UNKNOWN';this.limits=[];await this.agent.updateResources([],'UNKNOWN');}

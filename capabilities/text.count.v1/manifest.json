@@ -15,7 +15,8 @@
     "maxNonPreemptibleMs": null
   },
   "executorIds": [
-    "node.cpu.v1"
+    "node.cpu.v1",
+    "harmony.cpu.v1"
   ],
   "model": null,
   "suiteId": "text.count.v1.reference",

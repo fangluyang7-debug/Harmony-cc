@@ -91,7 +91,10 @@ export class QualificationService {
         if(current&&JSON.parse(current.metadataJson).state==='ACTIVE')return 'ACTIVE';
         return this.publish(peer,targetId,job,'ACTIVE','EVALUATION_PASSED');
       }
-      await this.publish(peer,targetId,job,'VALIDATING','CHECKING_TRUSTED_SUITE');
+      // Further bounded evaluation advances CANARY -> ACTIVE. Fresh existing evidence
+      // is not withdrawn merely because the next reference case is in flight.
+      const retainCanary=job.quality!==null&&job.expiresAt>this.now()&&job.next>=Math.max(pack.cases.length,this.policy.canarySamples);
+      if(!retainCanary)await this.publish(peer,targetId,job,'VALIDATING','CHECKING_TRUSTED_SUITE');
       const test=pack.cases[job.next%pack.cases.length];
       if(!executor.configurations.some(c=>canonical(c)===canonical(test.config))||!vectorFitsV2(executor.resources,pack.manifest.resourceLimit))return this.publish(peer,targetId,job,'SUSPENDED','PACK_EXECUTOR_INCOMPATIBLE');
       const bytes=test.input.length+test.maxOutputBytes;
@@ -99,7 +102,7 @@ export class QualificationService {
       const permit:EvaluationPermit={id:randomUUID(),groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,targetId,identity,packDigest:installed.digest,caseId:test.id,
         inputHash:inputHash(test.input),config:structuredClone(test.config),maxOutputBytes:test.maxOutputBytes,timeoutMs:this.policy.caseTimeoutMs,domain:this.directory.domain};
       job.inFlight=permit;job.runs++;job.durationMs+=permit.timeoutMs;job.bytes+=bytes;
-      await this.publish(peer,targetId,job,'CALIBRATING','RUNNING_TRUSTED_SUITE');
+      await this.publish(peer,targetId,job,retainCanary?'CANARY':'CALIBRATING','RUNNING_TRUSTED_SUITE');
       const timer=setTimeout(()=>abort.abort(),permit.timeoutMs);
       let result:EvaluationResult;
       try{result=await this.runner.run(permit,{...test,input:Buffer.from(test.input)},executor,abort.signal);}

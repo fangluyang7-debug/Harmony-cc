@@ -18,7 +18,7 @@ import { TraceService } from './traces';
 import { QualificationService, TrustedPack, EvaluationRunner, EvaluationPolicy } from './qualification';
 import { QualificationLoop } from './qualification-loop';
 import { RemoteEvaluationRunner } from './remote-evaluation';
-import { builtinCpuPacks, cpuSchemas } from '@harmony/reference-capabilities';
+import { builtinCpuPacks, builtinReferencePacks, cpuSchemas } from '@harmony/reference-capabilities';
 import { CpuJobs } from './cpu-jobs';
 import { TeamSpaces } from './spaces';
 import type { ExecutorV2 } from '@harmony/scheduler-core';
@@ -33,6 +33,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     await db.$connect();
     if(!fs.existsSync(path.join(config.dataDir,'identity.json'))&&await db.coordinatorState.count()>0)throw new Error('COORDINATOR_IDENTITY_LOST');
     const identity=loadIdentity(config);
+    const referencePacks=options.cpuHost?await builtinReferencePacks():builtinCpuPacks();
     const store=new CoordinatorStore(db,identity.id);
     const events=new SpaceEvents();
     const auth=new PairingService(db,identity.cert,config.domain);
@@ -138,14 +139,14 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     let epoch=0;
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
     const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>events.changed(groupId));
-    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces);
+    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,referencePacks);
     const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
     auth.onRevoked(id=>channel.revoke(id));
     const configureCpuGroup=async(groupId:string)=>{
       const existing=await db.group.findUnique({where:{id:groupId}});
       if(existing&&JSON.parse(existing.metadataJson).policy?.version!=='cpu-host-v1'){await profiles.refresh(groupId);return;}
-      const packs=builtinCpuPacks(),targets=(await directory.profiles(groupId)).flatMap(p=>p.executors.filter(e=>packs.some(pack=>pack.manifest.contract.capability===e.contract.capability)).map(e=>e.target.targetId));
+      const packs=referencePacks,targets=(await directory.profiles(groupId)).flatMap(p=>p.executors.filter(e=>packs.some(pack=>pack.manifest.contract.capability===e.contract.capability)).map(e=>e.target.targetId));
       await profiles.configure(groupId,{version:'cpu-host-v1',revoked:false,allowedTargetIds:targets,limits:{maxCandidates:64,lookahead:16,beamWidth:8,planningBudgetMs:20,switchCostMs:0,hysteresisMs:0}},
         {minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true},'cpu-host-v1');
     };
@@ -158,7 +159,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       await store.recover(epoch);await recover(db,epoch);ready=true;
       if(options.cpuHost){
         for(const groupId of new Set((await auth.activePeers()).map(p=>p.groupId)))await configureCpuGroup(groupId);
-        startCalibration({packs:builtinCpuPacks(),policy:{maxRuns:8,maxDurationMs:120000,maxBytes:1048576,maxConcurrent:1,caseTimeoutMs:15000,canarySamples:1,activeSamples:2,evidenceTtlMs:3600000,cooldownMs:5000},
+        startCalibration({packs:referencePacks,policy:{maxRuns:8,maxDurationMs:120000,maxBytes:1048576,maxConcurrent:1,caseTimeoutMs:15000,canarySamples:1,activeSamples:2,evidenceTtlMs:3600000,cooldownMs:5000},
           gate:async()=>null,onError:()=>{},intervalMs:1000});
       }
     })());

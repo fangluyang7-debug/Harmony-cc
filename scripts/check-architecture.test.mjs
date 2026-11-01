@@ -37,6 +37,24 @@ test('production tree passes and CLI exits successfully',()=>{
   assert.deepEqual(checkArchitecture().errors,[]);
   assert.equal(spawnSync(process.execPath,['scripts/check-architecture.mjs']).status,0);
 });
+test('ArkTS pure core rejects Kit IO and ambient clocks',()=>{
+  for(const source of ["import {http} from '@kit.NetworkKit';",'const now=Date.now();',"import fs from 'node:fs';"])
+    assert.ok(inspectSource(source,'apps/harmony/scheduler/src/main/ets/v2/core/Bad.ets',true).errors.length);
+});
+test('ArkTS dependency scanner resolves ets and forbids client-to-agent/core-to-agent imports',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'architecture-fixture-'));
+ try{
+  for(const [file,source]of Object.entries({'apps/harmony/scheduler/src/main/ets/v2/client/Bad.ets':"export * from '../agent/Target';",'apps/harmony/scheduler/src/main/ets/v2/agent/Target.ets':'export const target=1;','apps/harmony/scheduler/src/main/ets/v2/core/Bad.ets':"export * from '../agent/Target';"})){const p=path.join(dir,file);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,source);}
+  const errors=checkArchitecture(dir).errors;assert.ok(errors.some(e=>e.includes('CLIENT_AGENT_DEPENDENCY')));assert.ok(errors.some(e=>e.includes('CORE_ESCAPING_DEPENDENCY')));
+ }finally{const resolved=path.resolve(dir);assert.ok(resolved.startsWith(path.resolve(os.tmpdir())+path.sep+'architecture-fixture-'));fs.rmSync(resolved,{recursive:true,force:true});}
+});
+test('ArkTS client and agent cannot hide a dependency through a shared ets bridge',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'architecture-fixture-'));
+ try{
+  for(const [file,source]of Object.entries({'client/Start.ets':"export * from '../Bridge';",'Bridge.ets':"export * from './agent/Target';",'agent/Target.ets':'export const target=1;'})){const p=path.join(dir,'apps/harmony/scheduler/src/main/ets/v2',file);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,source);}
+  assert.ok(checkArchitecture(dir).errors.some(e=>e.includes('CLIENT_AGENT_DEPENDENCY')));
+ }finally{const resolved=path.resolve(dir);assert.ok(resolved.startsWith(path.resolve(os.tmpdir())+path.sep+'architecture-fixture-'));fs.rmSync(resolved,{recursive:true,force:true});}
+});
 test('real CLI rejects a relative v1 service import and core escape',()=>{
   const dir=fs.mkdtempSync(path.join(os.tmpdir(),'architecture-fixture-'));
   try {

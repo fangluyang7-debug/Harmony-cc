@@ -65,7 +65,13 @@
     "transport:test": "npm --workspace @harmony/resource-transport test",
     "lab:test": "npm --workspace @harmony/coordinator run build && npm --workspace @harmony/pc-agent run build && node tests/scheduler-lab/run.cjs",
     "references:build": "npm --workspace @harmony/reference-capabilities run build",
-    "pc-agent:start": "npm --workspace @harmony/pc-agent run start --"
+    "pc-agent:start": "npm --workspace @harmony/pc-agent run start --",
+    "conformance:build": "npm --workspace @harmony/coordinator run build && npm --workspace @harmony/pc-agent run build",
+    "conformance:test": "npm run conformance:build && node tests/agent-conformance/run.cjs",
+    "harmony:v2:har": "node scripts/harmony-v2-build.cjs",
+    "harmony:v2:agent": "npm run references:build && node scripts/harmony-v2-app-build.cjs harmony-agent --har",
+    "harmony:v2:probe": "npm run references:build && node scripts/harmony-v2-app-build.cjs harmony-har-probe --har",
+    "ledger:v2:parity": "npm run core:build && node scripts/test-ledger-parity-v2.mjs"
   },
   "devDependencies": {
     "ajv": "8.20.0"

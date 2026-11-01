@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { WebSocket, WebSocketServer } from 'ws';
 import { PrismaClient } from '../generated/client';
 import { canonical, MessageEnvelopeV2, validMessageEnvelopeV2, validVersionHelloV2, negotiateVersionV2,
-  validAdmissionReplyV2, validExecutionReportV2, validAttemptStatusReplyV2, protocolId } from '@harmony/scheduler-core';
+  validAdmissionReplyV2, validExecutionReportV2, validAttemptStatusReplyV2, protocolId,validYieldNoticeV2,validProtocolErrorV2 } from '@harmony/scheduler-core';
 import { CoordinatorStore } from './store';
 
 export interface Peer { groupId:string; holderInstanceId:string; deviceId:string; principalId:string; credentialId:string; }
@@ -22,6 +22,17 @@ export class ControlChannel {
     readonly limits={queuedMessages:64,bufferedBytes:1048576,inFlight:64},private readonly changed:(groupId:string)=>void=()=>{}){
     this.register('Hello',{validate:p=>validVersionHelloV2(p)&&negotiateVersionV2({versions:[2],extensions:[]},p)===2,handle:async()=>{}});
     this.register('RecoveryRequest',{validate:p=>exact(p,[]),handle:async peer=>store.requestStatus(peer.groupId,peer.holderInstanceId,epoch())});
+    this.register('ProtocolError',{validate:validProtocolErrorV2,handle:async(peer,p)=>{
+      const rows=await db.outbox.findMany({where:{groupId:peer.groupId,kind:'DispatchOffer'}}),row=rows.find(r=>JSON.parse(r.messageJson).messageId===p.messageId);
+      const attempt=row?await db.attempt.findUnique({where:{id:row.attemptId}}):null;
+      if(!attempt||attempt.holderInstanceId!==peer.holderInstanceId)throw Error('ERROR_SCOPE');
+      console.warn('AGENT_PROTOCOL_ERROR '+p.code);
+    }});
+    this.register('YieldNotice',{validate:validYieldNoticeV2,handle:async(peer,p)=>{
+      const row=await db.attempt.findUnique({where:{id:p.attemptId}}),offer=row?.offerJson?JSON.parse(row.offerJson):null;
+      if(!row||row.groupId!==peer.groupId||row.holderInstanceId!==peer.holderInstanceId||offer?.target.deviceId!==peer.deviceId||!row.recordJson)throw Error('YIELD_SCOPE');
+      await db.attempt.update({where:{id:row.id},data:{yieldJson:JSON.stringify({notice:p,receivedAt:Date.now()})}});this.changed(peer.groupId);
+    }});
     this.register('AttemptStatusReply',{validate:validAttemptStatusReplyV2,handle:async(peer,p,message)=>{
       if(message.ackOf===null)throw Error('STATUS_QUERY_REQUIRED');
       await store.reconcileStatus(peer.groupId,peer.holderInstanceId,peer.deviceId,message.ackOf,p,epoch());

@@ -1,0 +1,7 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "dependencies": {
+    "scheduler": "file:../../../.test/s2-har/scheduler/build/default/outputs/default/scheduler.har"
+  }
+}

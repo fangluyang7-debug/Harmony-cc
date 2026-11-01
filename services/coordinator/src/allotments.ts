@@ -39,6 +39,7 @@ export class AllotmentIssuer {
         if(g.ledgerEpoch!==input.ledgerEpoch||g.coordinatorEpoch!==this.epoch()||g.leaseMs!==input.leaseMs||canonical(g.base)!==canonical(input.base)||canonical(g.extra)!==canonical(input.extra))throw Error('LEASE_REQUEST_CONFLICT');
         return g;
       }
+      if(previous&&await tx.attempt.findFirst({where:{groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,state:'OFFERED'}}))throw Error('DISPATCH_ADMISSION_PENDING');
       if(previous&&input.ledgerEpoch<previous.grant.ledgerEpoch)throw Error('LEDGER_EPOCH_REPLAY');
       const grant:AllotmentGrantV2={allotmentId:previous?.grant.allotmentId??'allotment:'+peer.holderInstanceId,groupId:peer.groupId,deviceId:peer.deviceId,holderInstanceId:peer.holderInstanceId,appInstanceId:binding.appInstanceId,
         ledgerEpoch:input.ledgerEpoch,coordinatorEpoch:this.epoch(),version:(previous?.grant.version??0)+1,base:input.base,extra:input.extra,leaseRequestId:input.leaseRequestId,leaseMs:input.leaseMs,signature:'A'.repeat(64)};

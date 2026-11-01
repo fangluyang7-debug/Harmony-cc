@@ -1,4 +1,4 @@
-# CPU 软件宿主接口（S1，2026-11-01）
+# CPU 软件宿主接口（S1 / S2，2026-11-01）
 
 用于当前可运行的单节点 CPU 子集，不代表 T2/T3 已冻结或鸿蒙 SDK 已实现。协调者须启用 `COORDINATOR_CPU_HOST=1`；所有下列请求携带配对所得 `Authorization: Bearer <设备凭证>`，使用配对时固定的 HTTPS 证书。
 
@@ -15,11 +15,14 @@
   "contentHash": "输入文件的 SHA-256，小写 64 位十六进制",
   "bytes": 123,
   "targetId": "可选；作为正式规划器的目标约束",
-  "budgetMs": 30000
+  "budgetMs": 30000,
+  "parameters": "{}"
 }
 ```
 
-支持 `text.count.v1` 和 `vector.normalize.v1`。requestId 最长 100 字符；输入最多 8 MiB。重复相同请求返回同一任务及新的短期上传票据；同 requestId 的内容、能力或明确目标冲突会被拒绝。身份、App 标识、资源需求和能力契约由服务端派生，不能在请求中自授。
+支持 `text.count.v1`、`vector.normalize.v1`，以及 S2 接入的 `image.crop.v1`。后者目前由鸿蒙 ImageKit 代理贡献，PC 独立宿主仍只发布文本、向量两个目标。requestId 最长 100 字符；输入最多 8 MiB。`parameters` 是可选 JSON 字符串，最多 32 KiB，默认 `"{}"`；被纳入任务执行身份，同 requestId 的参数变化返回 `JOB_CONFLICT`。重复相同请求返回同一任务及新的短期上传票据；同 requestId 的内容、能力或明确目标冲突会被拒绝。身份、App 标识、资源需求和能力契约由服务端派生，不能在请求中自授。
+
+裁剪输入直接上传 PNG/JPEG 二进制，schema 为 `image.raster:1`，不是包装图片的 JSON。参数示例：`{"box":{"x":0,"y":0,"width":0.5,"height":1},"paddingRatio":0,"targetSize":32,"jpegQuality":90}`。box 使用归一化坐标；输出为 JPEG 二进制。先由正式规划器选择已通过参考质量评测的目标，再上传和派发。非法裁剪参数返回已结算的 `FAILED` 回执，不发布输出。该入口没有增加单独的图像调度路径。
 
 主启动方式见 `docs/scheduler-v2/LOCAL-COORDINATOR-20261031.md`。提交经 `PlanningService.plan()`；开始执行前重新规划并经 `preflight()` 复核，最多因快照变化重新规划两次。`budgetMs` 可选，范围 0–30000，默认 30000；0 返回规划器的 `BUDGET_EXHAUSTED`。截止时间从首次登记起计算，上传和重规划不延长它；输入等待期间预算耗尽时不得创建 attempt。目标不合格、无可达链路或预算不足以形成计划时，返回 `NO_LEGAL_PLAN`，不能通过指定目标绕过规划器。`PLAN_STALE` 表示有界重规划后仍未能通过派发前复核，尚未创建 attempt。
 
@@ -35,7 +38,7 @@
 
 ## 执行者接口
 
-以下接口仅允许该 attempt 的实际执行 holder/device 调用；由 PC 宿主自动使用，不用于来源客户端：
+以下接口仅允许该 attempt 的实际执行 holder/device 调用；由 PC 或 Harmony 宿主自动使用，不用于来源客户端：
 
 | 请求 | 正文 | 返回 |
 | --- | --- | --- |

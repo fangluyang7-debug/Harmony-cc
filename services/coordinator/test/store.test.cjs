@@ -12,6 +12,16 @@ async function database(){
   const url='file:'+path.join(data,'coordinator.sqlite').replaceAll('\\','/');
   const db=new PrismaClient({datasources:{db:{url}}});return {db,url,store:new CoordinatorStore(db,'coordinator1')};
 }
+test('quota preflight and offer creation are one transaction; stale quota creates no attempt/outbox',async()=>{
+ const {db,store}=await database();try{
+  const a=attempt();let calls=0;
+  await assert.rejects(store.persistOffer(a.offer,a.record.holderInstanceId,a.message,async tx=>{calls++;assert.equal(await tx.attempt.count(),0);throw Error('PLAN_STALE');}),/PLAN_STALE/);
+  assert.equal(calls,1);assert.equal(await db.attempt.count(),0);assert.equal(await db.outbox.count(),0);
+  await store.persistOffer(a.offer,a.record.holderInstanceId,a.message,async()=>{calls++;});
+  await store.persistOffer(a.offer,a.record.holderInstanceId,a.message,async()=>{throw Error('duplicate must retain existing identity');});
+  assert.equal(calls,2);assert.equal(await db.attempt.count(),1);
+ }finally{await db.$disconnect();}
+});
 for(const point of ['before-send','after-send'])test(`crash ${point}: durable query replaces offer without a second attempt`,async()=>{
   const {db,url,store}=await database();
   try{
@@ -79,6 +89,10 @@ test('reconciliation honors side-effect policy and cannot turn unknown execution
       await store.persistOffer(f.offer,'h1',f.message);await store.recordAdmission(f.record);
       const receipt={...fixture('ExecutionReceipt'),attemptId:id,fence:f.record.fence,state:'FAILED',resourcesSettled:true,outputs:[],errorCode:'EXECUTION_FAILED'};
       assert.equal(await store.receive('g1','h1',receipt,1),'RECONCILE');
+      const settled=await db.attempt.findUnique({where:{id}});assert.equal(settled.state,'FAILED');assert.equal(JSON.parse(settled.recordJson).resourcesSettled,true);
+      assert.equal((await db.receipt.findUnique({where:{id}})).committed,false,'failure must never publish a business result');
+      assert.equal(await store.receive('g1','h1',receipt,1),'RECONCILE');
+      await assert.rejects(store.receive('g1','h1',{...receipt,errorCode:'CONFLICTING_FAILURE'},1),/RECEIPT_CONFLICT/);
       assert.equal(await store.reconciliationAction('g1',id),action);
     }
     assert.equal(await db.attempt.count(),4); // Recommendations do not create attempts.

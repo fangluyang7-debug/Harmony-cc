@@ -5,7 +5,8 @@ import { createHash, createHmac, verify, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { canonical, LedgerStateV2, LedgerAdmissionV2, DispatchOfferV2, AllotmentGrantV2, ExecutionReceiptV2,
   newLedgerV2, recoverLedgerV2, requestGrantV2, installGrantV2, admitV2, startAttemptV2, cancelAttemptV2, settleAttemptV2,
-  occupiedV2, validAttemptRecordV2, validDispatchOfferV2, validAllotmentGrantV2, validResourceVectorV2, MessageEnvelopeV2, validTraceSpanV2, TraceSpanV2 } from '@harmony/scheduler-core';
+  occupiedV2, validAttemptRecordV2, validDispatchOfferV2, validAllotmentGrantV2, validResourceVectorV2, MessageEnvelopeV2, validTraceSpanV2, TraceSpanV2,
+  YieldNoticeV2,validYieldNoticeV2,validProtocolErrorV2 } from '@harmony/scheduler-core';
 import { ChannelJournal, newChannelJournal, validateJournal, bindJournal, journalMessage, answerQuery, receiveDispatch } from './channel-journal';
 import { DeviceProfileV2, validDeviceProfileV2 } from '@harmony/scheduler-core';
 
@@ -109,6 +110,20 @@ export class DurableLedger {
       {attemptId:offer.task.attemptId,holderInstanceId:this.state.holderInstanceId,status:'REJECTED',reasonCode,record:null,wait:{value:null,source:'UNKNOWN',sampledAt:0,ttlMs:1,unit:'ms'}},message.messageId));
     if(!channel.outbox.some(m=>m.type==='Ack'&&m.ackOf===message.messageId))channel.outbox.push(journalMessage(channel,this.state.groupId,this.state.holderInstanceId,'Ack',{messageId:message.messageId},message.messageId));
     this.commit(this.state,channel);
+  }
+  replayDispatch(message:MessageEnvelopeV2){
+    const offer=JSON.parse(message.payload) as DispatchOfferV2;
+    if(!this.status(offer.task.attemptId))throw Error('ATTEMPT_UNKNOWN');
+    return this.admit(offer,{coordinatorEpoch:offer.task.coordinatorEpoch,online:false,ownerIdle:false,admissionLimit:[]},message);
+  }
+  queueProtocolError(messageId:string,code:string){
+    const payload={version:2,code,retryable:false,messageId};if(!validProtocolErrorV2(payload))throw Error('PROTOCOL_ERROR_INVALID');
+    const channel=clone(this.channel);channel.outbox.push(journalMessage(channel,this.state.groupId,this.state.holderInstanceId,'ProtocolError',payload));this.commit(this.state,channel);
+  }
+  queueYield(notice:YieldNoticeV2){
+    if(!validYieldNoticeV2(notice))throw Error('YIELD_INVALID');const record=this.status(notice.attemptId);
+    if(!record)throw Error('ATTEMPT_UNKNOWN');if(record.resourcesSettled)return;
+    const channel=clone(this.channel);channel.outbox.push(journalMessage(channel,this.state.groupId,this.state.holderInstanceId,'YieldNotice',notice));this.commit(this.state,channel);
   }
   private addReport(channel:ChannelJournal,state:LedgerStateV2,receipt:ExecutionReceiptV2){
     if(channel.outbox.some(m=>m.type==='ExecutionReceipt'&&JSON.parse(m.payload).receipt.attemptId===receipt.attemptId))return;

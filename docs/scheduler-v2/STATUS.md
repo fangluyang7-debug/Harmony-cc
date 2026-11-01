@@ -4,10 +4,10 @@
 | --- | --- |
 | 现行规格 | [specification-r6.md](specification-r6.md)（文档 36 修订 6） |
 | 开发分支 | `codex/scheduler-v2-foundation` |
-| 最近核对 | 2026-11-01，已快进拉取 `c276134` 后执行 S1 |
+| 最近核对 | 2026-11-01，基于 `f8f359d` 推进并完成 S2 替身链路；提交号见 Git 日志 |
 | 主部署 | 局域网 PC 协调者（`npm run coordinator:lan`），云端协调者为非主线 |
-| 当前切片 | **S1 完成-替身；下一切片 S2 第二种终端实现** |
-| 下一步 | 进入 S2 前复核 A3/B3/B4 的替身验收证据，再推进 WP-S2a 黑盒一致性入口、WP-C1 protocol/core、X7/X8；X6 继续冻结模型评测方案 |
+| 当前切片 | **S2 完成-替身；真机留待验收；下一切片 S3** |
+| 下一步 | S3/C2、C3：独立 App 身份、SDK 提交与生命周期；保留唯一 PlanningService 路径。真机 B9/S2a 按接入文档执行，本轮未做 |
 
 ## 0. 更新规则
 
@@ -21,7 +21,7 @@
 | 切片 | 状态 | 已有证据（来源） | 下一步 |
 | --- | --- | --- | --- |
 | S1 单一派发路径收口 | 完成-替身 | 网页/CLI 已改走 plan → 持久化 → preflight → outbox；已删除自行排序与写死 App 身份；真实版本与六类跨度通过联调；R21/R25 违规 fixture 被拒绝；最终协调者 58/58、PC 41/41（核对、测试，见 §8） | 按 S2 推进，不代表鸿蒙或多物理设备验收完成 |
-| S2 第二种终端实现 | 未开始 | HAR `v2/` 下只有 `protocol/` 两个文件；`apps/harmony-agent` 不存在；`tests/agent-conformance` 不存在（核对） | 先复核 S2a 依赖 A3/B3/B4 的替身验收，再做 X7/X8、WP-S2a、WP-C1 protocol/core 与 WP-B9 |
+| S2 第二种终端实现 | 完成-替身 | 独立 HAR 与两个 HAP 原生构建；PC 8/8、Harmony 模拟器共同 8 项及裁剪/生命周期共 10/10；原生 27 fixture、RDB 重启及 TLS 正反例（测试，见 §9） | 真机 B9/S2a 待验；进入 S3 前阅读本节限制 |
 | S3 SDK 与 App 身份 | 未开始 | 没有通用 SDK；现有 CPU 薄入口已统一经过 PlanningService，控制台临时 App 身份已持久化（核对） | 依赖 S1 与 C1；正式 C2 不能用临时控制台身份代替 |
 | S4 两个 App 同机 | 未开始 | `apps/harmony-indexer` 不存在（核对） | 依赖 S3 |
 | S5 多阶段任务与数据路径 | 未开始 | 任务入口只支持单节点；数据经协调者中转（核对、记录） | 依赖 S3 |
@@ -35,24 +35,24 @@
 | WP | 状态 | 说明（来源） |
 | --- | --- | --- |
 | A1 | 已有实现（待复核） | `packages/scheduler-core`（记录） |
-| A2 | 完成-替身 | 本轮扩展 R21/R25，原依赖检查与违规 fixture 共 21 项通过；v1 回归 41 套件 / 326 项通过（测试） |
-| A3 | 已有实现（待复核） | TS 与 ArkTS fixture 一致性检查存在；HAR 构建未验证（记录） |
+| A2 | 完成-替身 | TS/ETS 依赖扫描、核心纯净和 client/agent 直接及桥接依赖反例，24/24；v1 326/326（测试） |
+| A3 | 完成-替身 | T1 495、T2 352 fixture；HAR 原生编译通过，协议源未改变（测试） |
 | A4 | 已有实现（待复核） | 独立协调者与数据库（记录） |
 | A5 | 已有实现（待复核） | outbox 与恢复（记录） |
 | A6 | 完成-替身 | 正式 CPU 入口接入 plan/preflight，持久化真实快照与策略版本；纯规划零 I/O、过期/撤销、指定目标、旧快照拒绝均有测试 |
-| B1 | 已有实现（待复核） | TLS/WSS、去重、重连（记录） |
-| B2 | 部分 | 配对码与邀请文件可用；鸿蒙侧扫码未实现（记录） |
-| B3 | 部分 | PC 画像只有 CPU 与内存；T2 未最终冻结（记录） |
-| B4 | 部分 | PC 侧账本、额度、attempt 持久化与恢复已有（记录）；同机多进程场景未覆盖 |
-| B5 | 部分 | 经协调者中继；PC 对认证中继上传/下载做实际 HTTP 区间采样，接入 DirectionalLinks、画像和正式规划。直连/副本路径选择仍未实现（核对、测试） |
+| B1 | 完成-替身 | PC/Harmony 同一 WSS/HTTPS 黑盒检查通过，含重连、重复、冲突和撤销；模拟器 TLS 正反例 3/3（测试） |
+| B2 | 部分 | PC 文件配对、Harmony 粘贴完整邀请 JSON 可用；独立短码向导/扫码仍未实现，X4 待后续（测试、核对） |
+| B3 | 部分 | PC/Harmony CPU、RAM 画像接入；Harmony 读取实际内存/电源模式，CPU 槽位为声明并发；未知电量/温度不伪造；其他硬件与完整采集待后续（测试） |
+| B4 | 部分 | TS/ArkTS 账本同 27 fixture；PC 持久化和 Harmony RDB 状态/outbox 重启通过；同机 SDK/多进程、离线基础额度场景待 S3/S4（测试） |
+| B5 | 部分 | PC/Harmony 测量认证中继的上传/下载 HTTP 区间并进入正式规划；模拟器使用 hdc rport；直连/副本选择与真实 Wi-Fi 待后续（测试） |
 | B6 | 部分 | CPU 子集可运行（记录）；GPU 执行目标未实现 |
-| B7 | 部分 | 队列与公平规则已有；`YieldNotice` 重规划未实现（记录） |
+| B7 | 部分 | PC/Harmony 份额、老化、有界连续服务微观队列接入，判定一致；YieldNotice 持久化及停止准入已测，重规划仍属 S6（测试） |
 | B8 | 部分 | 确定性层与多进程层基础已有；SDK 与 agent 同机、CPU/GPU 共享 RAM 场景缺失（记录） |
-| B9 | 未开始 | 鸿蒙代理工程不存在（核对） |
-| B10 | 部分 | 正式任务 PLAN/OFFER/QUEUE/ADMIT/EXECUTE/PUBLISH 可查询且使用真实快照版本；SDK 根跨度、完整传输因果与关键路径仍未贯通，不输出完整端到端收益（测试） |
-| B11 | 部分 | PC 侧自动校准可运行（记录） |
+| B9 | 完成-替身 | 独立原生代理、前台贡献设置、RDB、文本/向量/ImageKit、自动参考评测与统一派发通过；手动邀请 JSON 入网，扫码后续；真机待验（测试） |
+| B10 | 部分 | PC/Harmony 业务七类跨度及真实 snapshotVersion 通过同一查询；无 SDK 根跨度和完整传输因果，仍不输出完整端到端收益（测试） |
+| B11 | 部分 | PC 与 Harmony 均接远端受限参考评测，业务/评测共用账本；Harmony 裁剪左右区域由独立质量检查晋级；全硬件/真机仍待后续（测试） |
 | B12 | 未开始 | 依赖 B9；需真机 |
-| C1 | 部分 | 只有 `v2/protocol/`（核对） |
+| C1 | 完成-替身 | v2 protocol/core/client/agent 分界；HAR、跨工程 HAP、TS/ArkTS 账本与微观队列判定通过；client 仅端口边界，不等于通用 SDK（测试） |
 | C2 | 部分 | 按已认证 group/principal/holder 签发并持久化 ConsoleApp 身份；完整 App 注册、独立 App 凭据和配额待 S3（核对） |
 | C3 | 未开始 | S1 已将 CPU 入口接入正式规划器；通用 SDK、DAG 与生命周期待 S3（核对） |
 | C4a | 部分 | 文本、向量、裁剪参考包存在（记录）；【真实·裁剪】待真机 |
@@ -65,7 +65,7 @@
 | D10 | 未开始 | 需真机 |
 | E1、E2 | 未开始 | — |
 | S1 | 完成-替身 | 端到端、目标/预算拒绝、旧快照、追踪查询及最终组件回归通过，见 §8 |
-| S2a | 未开始 | — |
+| S2a | 完成-替身 | 同一套 8 项 PC/Harmony 黑盒检查均通过；模拟器额外裁剪/生命周期通过；真机手工接入入口准备，未执行（测试） |
 | F1 | 冻结 | 非主线 |
 
 ## 3. 待真机清单
@@ -75,8 +75,8 @@
 | 条目 | 需要的设备 | 真机执行文档 | 状态 |
 | --- | --- | --- | --- |
 | B6【真实·GPU】 | 带 CUDA 显卡的 PC | 待编写 | 未开始 |
-| B9【真实】 | 鸿蒙手机 + 局域网 PC | 待编写 | 未开始 |
-| S2a（`--agent harmony-device`） | 鸿蒙手机 | 待编写 | 未开始 |
+| B9【真实】 | 鸿蒙手机 + 局域网 PC | [B9.md](../experiments/real-device/B9.md) | 待真机，未执行 |
+| S2a（`--agent harmony-device`） | 鸿蒙手机 | [S2a.md](../experiments/real-device/S2a.md) | 待真机，未执行 |
 | B12 | 鸿蒙手机 + 局域网 PC | 待编写 | 未开始 |
 | C3【真实】 | 鸿蒙手机 | 待编写 | 未开始 |
 | C4a【真实·裁剪】 | 鸿蒙手机 + PC | 待编写 | 未开始 |
@@ -90,18 +90,18 @@
 
 ## 4. 平台与模型实验
 
-记录位置：`docs/experiments/X<n>-<名称>.md`（目录尚未建立）。
+记录位置：`docs/experiments/X<n>-<名称>.md`。
 
 | 实验 | 状态 | 说明 |
 | --- | --- | --- |
 | X1 后台接任务 | 未开始 | 需真机；完成前鸿蒙代理按“切到后台即停止准入”处理 |
-| X2 局域网与 TLS | 未开始 | 证书固定可先在模拟器验证 |
+| X2 局域网与 TLS | 部分 | 模拟器 rport + 原生 HTTPS/WSS 与正确/错误指纹、错误服务端证书已验证；真机局域网待验 |
 | X3 ODID | 未开始 | 需真机 |
 | X4 扫码 | 未开始 | 完成前使用配对码 |
 | X5 App 身份 | 未开始 | — |
 | X6 跨端图像模型 | 部分 | [环境核对与记录表](../experiments/X6-跨端图像模型.md)；当前 Python 3.13 环境未发现模型运行依赖，模型/质量/转换未执行 |
-| X7 跨工程引用 HAR | 部分 | [构建环境核对](../experiments/X7-跨工程引用HAR.md)；已找到 DevEco/Hvigor/JBR/API 24 SDK；独立工程不存在，未构建 |
-| X8 DevEco 模拟器能力 | 部分 | [镜像与目标清单核对](../experiments/X8-DevEco模拟器能力.md)；hdc 返回 Empty，未启动模拟器、未安装 HAP、未验证网络与持久化 |
+| X7 跨工程引用 HAR | 完成-替身 | [双 HAP / HAR 原生构建与源码路径失败退路](../experiments/X7-跨工程引用HAR.md) |
+| X8 DevEco 模拟器能力 | 完成-替身 | [网络、TLS、RDB 跨进程、实际前后台、文本/裁剪与日志](../experiments/X8-DevEco模拟器能力.md) |
 
 ## 5. 已知问题（来自记录，待在局域网部署下复现）
 
@@ -130,6 +130,7 @@
 | 2026-10-31 | `c276134` | — | 规格升级为修订 6；建立本状态文件；历史交接文档标注为历史记录 | 仅文档，未运行代码测试 |
 | 2026-11-01 | `c276134`（拉取基线） | S1 开工 | 按 README 顺序阅读修订 6、状态与 WP-S1，执行基线复核 | `npm run scheduler:v2:test` 通过：core 24、transport 1、PC agent 38、coordinator 56、architecture 18；T1/T2 fixture 脚本通过 |
 | 2026-11-01 | 本轮 S1 提交（基于 `c276134`，提交号见 Git 日志） | S1 / WP-S1、A6、B10 正式链路 | 单一规划派发、临时 App 身份、真实版本追踪、实测中继链路；修复评测触发业务恢复与策略初始化覆盖；启动 X6/X7/X8 环境记录 | 最终组件结果：core 24、T1 495、T2 352、transport 1、PC 41、coordinator 58、architecture 21；v1 41 套件 / 326 项；真机、GPU、HAP 未验收 |
+| 2026-11-01 | 本轮 S2 提交（基于 `f8f359d`，提交号见 Git 日志） | S2 / S2a、C1、B9、X7、X8 | 双代理协议一致性；HAR ArkTS 账本/队列；独立原生代理与探针；规划器文本/裁剪、原生 TLS、RDB 与生命周期验证；真机留接口 | PC 8/8、Harmony 10/10、原生账本 27 fixture、TLS 3/3；详细回归与限制见 §9 |
 
 ## 8. S1 本轮实现与验证（2026-11-01）
 
@@ -179,3 +180,51 @@
 5. 本轮未执行手机、GPU、双物理终端、模拟器 HAP 或性能收益验收。PC 的链路观测、真实版本获取和新追踪行为，Harmony 代理须在 S2/C1/B9 中实现并通过同一黑盒一致性测试；未实现，不宣称终端等价已验收。
 6. 回归发现并修复两项实际问题：默认 CPU 策略初始化在事务内检查旧版本，避免覆盖刚安装的显式策略；受限参考评测仍在同一账本结算，但结果只走持久化许可回报，不再误发业务全局 RecoveryRequest、撤销未投递的业务 offer。业务结算和未知业务恢复语义保持原有路径；新增正/反例，Harmony 代理后续须采用同样的渠道区分。
 7. 任务截止时间从首次登记保留；上传与有界重规划不会重置预算，最终 leaseMs 不超过剩余预算。上传后耗尽预算的场景不创建 attempt。没有对资源准入、TLS 或协议校验做放宽。
+
+## 9. S2 本轮实现与验证（2026-11-01）
+
+完成级别：**完成-替身**。协作者可从本次 S2 提交继续 S3；不要回到历史团队空间产品方案，也不要部署 Railway。本轮没有运行 `--agent harmony-device`、手机签名/安装、GPU 或多物理终端验收，没有新建 HANDOFF 文档。
+
+### 已落地链路
+
+- `tests/agent-conformance` 为语言无关的 WSS/HTTPS 黑盒套件，PC 与 Harmony 共用 8 项行为断言。正向任务走生产 PlanningService；仅测试协调者构造负例、重复投递和篡改签名，不读取代理账本断言通过。重复投递检查已有回执与单次输出上传，伪造签名不得获持久化 ACK。
+- HAR `v2/{protocol,core,client,agent}` 分界建立，v1 导出保留。纯核心移植账本、额度、微观队列；状态与 outbox 由平台原子保存。client 目前是接口边界，**通用 SDK、独立 App 认证尚未完成**。
+- `apps/harmony-agent` 是独立原生 HAP，使用 relationalStore、固定证书的 HTTPS/WSS、RSA-3072 额度验签和 HMAC ACK。前台贡献开关、CPU 槽位/内存上限保存在本机，不能超过配对时确认的上限；后台停止准入并让出。当前手动粘贴完整邀请 JSON，不声称扫码或独立短码向导已完成。
+- 文本、向量和 ImageKit 裁剪复用同一画像、参考资格与任务派发链路。裁剪参考包移到 `packages/reference-capabilities` 供协调者共享，几何与颜色评测独立于执行器。新增该包对已存在的 `sharp ^0.34.5` 的显式依赖，用于参考图片和制品校验；没有引入另一种推理服务或新的依赖版本。
+- Harmony 中继上传/下载 HTTP 区间观测进入画像与规划；QUEUE/ADMIT/LOAD/EXECUTE/PUBLISH 使用实际快照版本，与协调者 PLAN/OFFER 经同一接口查询。仍缺 SDK 根跨度及完整传输因果，不能报告完整端到端收益。
+- `apps/harmony-har-probe` 独立引用构建后的 HAR，执行同 27 fixture 并验证跨进程账本/outbox；没有复制协议/核心来伪造跨工程引用。
+
+### 最终证据
+
+| 范围 | 实际结果 | 本地证据 |
+| --- | --- | --- |
+| PC 黑盒共同协议 | 8/8 | `.test/s2-conformance-pc-final.log` |
+| Harmony 模拟器 | 共同 8 项 + 裁剪正反例 + 实际前后台，共 10/10 | `.test/s2-conformance-harmony-final.log` |
+| 原生 TLS 正反例 | 3/3：错误指纹、错误服务端证书、正确信任进入配对接口 | `.test/s2-native-trust.log` |
+| HAR、两个 HAP | 三个原生构建均 BUILD SUCCESSFUL，API 24 | `.test/s2-har-build.log`、`.test/s2-agent-hap-build.log`、`.test/s2-probe-har-build.log` |
+| 账本与队列 | TS/ArkTS 同 27 组账本 fixture；队列选择/债务/让出/credit/过期/越权判定一致 | `.test/s2-ledger-parity.log` |
+| 原生执行与 RDB | 27 fixture；强制停止后计数增加，ACCEPTED 恢复为已结算取消，outbox 保留 | `.test/s2-probe-runtime.log`；X8 运行记录 |
+| core / T1 / T2 / transport / PC 单测 | 24 / 495 / 352 / 1 / 41，均通过 | `.test/s2-final-regression.log` 的对应组件 |
+| 协调者最终完整回归 | 61/61，通过 | `.test/s2-coordinator-final.log` |
+| CANARY 竞态与 CPU 正式链路针对性回归 | 7/7 | `.test/s2-qualification-cpu-final.log` |
+| 依赖方向与架构反例 | 24/24；生产树 79 个文件通过 | `.test/s2-architecture-final.log` |
+| v1 | 41 套件 / 326 项；HAR 原算法 8 项与并发检查通过 | `.test/s2-v1-regression.log`、`.test/s2-har-v1-algorithm.log`、`.test/s2-har-v1-concurrency.log` |
+
+原始私有邀请、凭据、证书密钥、构建包和详细日志留在本机忽略目录；仓库只保留去除私有配置的 [实验结果摘要](../experiments/results/S2-20261101.json) 与复现入口。测试域为 SIMULATED，模拟器网络是 hdc 回环转发，不能当成真机局域网时延结果。`REAL` 手工运行入口已经准备，但未执行。
+
+### 本轮修复的实际缺陷
+
+1. 同一 attempt 换 messageId 重投时，按不可变 offer 比较并返回已有准入/回执；变更输入返回 ATTEMPT_CONFLICT，不重复启动引擎。YieldNotice 和 ProtocolError 持久化进 outbox，协调者记录让出信息；S6 重规划尚未实现。
+2. 续期可能改变已选 offer 的额度版本。现在派发前的 grant/ACK 版本复核与 offer 持久化位于同一事务，等待准入的 OFFERED 期间不换新额度版本；暂不可用返回有界可重试原因，预算不延长。
+3. 暂停贡献时原 PC 画像的 draining 与非零准入额度矛盾，导致校验拒绝。现在准入额度归零，已占用量保留到实际结算，不放宽 schema。
+4. 已结算的失败回执此前只被保存为待对账证据，任务状态要等重连才变化。现在同一有效 fence 下的失败立即更新镜像，业务结果仍不提交；冲突终态被拒绝。取消/超时本身仍不释放资源。
+5. 总入口首次在 CPU 宿主用例失败：任务 PUBLISH 阶段撞上 CANARY 继续参考评测时退回 CALIBRATING。已改为新鲜 CANARY 证据在追加评测期间保持有效；真实质量失败仍撤销资格，并补充正反例。首次失败的总入口日志不计为通过，以修复后最终组件结果为准。
+
+### 后续边界
+
+- 下一切片是 **S3/C2、C3**：正式 App 注册/凭据/离线基础额度、SDK 提交/取消/结果回调，控制台临时身份仍需替换；不新增第二条派发路径。
+- 双物理设备、API 22、GPU、扫码、持续后台能力、SDK/agent 同机共享预算均没有在本轮验收。B9/S2a 的真机步骤已登记到 §3。
+- 框架目前有界队列、额度和单安装账本；完整能耗/温度策略、公平重规划、直接数据路径与完整追踪收益属于后续切片。
+- 部分压力/撤销运行曾出现 CONTROL_INTERNAL_ERROR 日志，最终协议重连断言通过；后续仍需更细的异常分类，不能把重试成功当成没有发生过异常。
+
+运行入口及测试 App 的数据重置范围见 `tests/agent-conformance/README.md`；平台具体结果见 X7/X8。服务端迁移新增 Attempt.yieldJson；启动前执行现有 `db:init`，不要手工跳过迁移。

@@ -49,24 +49,31 @@ export function inspectSource(source, file, core, config=rules) {
   return {errors,imports};
 }
 function files(dir){return !fs.existsSync(dir)?[]:fs.readdirSync(dir,{withFileTypes:true}).flatMap(e=>e.isDirectory()?files(path.join(dir,e.name)):/\.(?:ts|mts|cts|js|mjs|ets)$/.test(e.name)?[path.join(dir,e.name)]:[]);}
+function resolveSource(spec,file,options={}){
+  if(spec.startsWith('.'))for(const name of [spec,spec+'.ets',spec+'/Index.ets']){const p=path.resolve(path.dirname(file),name);if(fs.existsSync(p)&&fs.statSync(p).isFile())return p;}
+  return ts.resolveModuleName(spec,file,{...options,moduleResolution:ts.ModuleResolutionKind.Node10},ts.sys).resolvedModule?.resolvedFileName;
+}
 export function checkArchitecture(treeRoot=root){
   const errors=[];let count=0;
   for(const dir of rules.coreRoots)if(!files(path.join(treeRoot,dir)).length)errors.push(`${dir} CORE_SOURCE_MISSING`);
   const visited=new Set();
-  function follow(file){
-    if(visited.has(file))return;visited.add(file);
+  function follow(file,origin=null){
     const relative=slash(path.relative(treeRoot,file));
+    const independent=rules.mutuallyIndependentRoots??[];
+    origin??=independent.find(r=>within(relative,r))??null;
+    const visitKey=(origin??'')+':'+file;if(visited.has(visitKey))return;visited.add(visitKey);
     if(relative.startsWith('..')||relative.startsWith('node_modules/')||relative.includes('/node_modules/')||relative.includes('/generated/')||relative.includes('/dist/')||relative.endsWith('.d.ts'))return;
     const source=fs.readFileSync(file,'utf8'),checked=inspectSource(source,relative,false);
     errors.push(...checked.errors);
     const configPath=ts.findConfigFile(path.dirname(file),ts.sys.fileExists);
     const options=configPath?ts.parseJsonConfigFileContent(ts.readConfigFile(configPath,ts.sys.readFile).config,ts.sys,path.dirname(configPath)).options:{};
     for(const spec of checked.imports){
-      const resolved=ts.resolveModuleName(spec,file,{...options,moduleResolution:ts.ModuleResolutionKind.Node10},ts.sys).resolvedModule?.resolvedFileName;
+      const resolved=resolveSource(spec,file,options);
       if(!resolved)continue;
       const destination=slash(path.relative(treeRoot,resolved));
+      if(origin&&independent.some(r=>r!==origin&&within(destination,r)))errors.push(`${relative} CLIENT_AGENT_DEPENDENCY ${spec}`);
       if(rules.forbiddenServicePaths.some(p=>within(destination,p)))errors.push(`${relative} TRANSITIVE_V1_DEPENDENCY ${spec}`);
-      else if(/\.[cm]?[jt]s$/.test(resolved))follow(resolved);
+      else if(/\.(?:[cm]?[jt]s|ets)$/.test(resolved))follow(resolved,origin);
     }
   }
   for(const [roots,core] of [[rules.coreRoots,true],[rules.serviceRoots,false]])for(const dir of roots)for(const file of files(path.join(treeRoot,dir))){
@@ -74,9 +81,11 @@ export function checkArchitecture(treeRoot=root){
     const checked=inspectSource(fs.readFileSync(file,'utf8'),path.relative(treeRoot,file),core);errors.push(...checked.errors);
     if(!core)follow(file);
     for(const spec of checked.imports){
-      const resolved=ts.resolveModuleName(spec,file,{moduleResolution:ts.ModuleResolutionKind.Node10},ts.sys).resolvedModule?.resolvedFileName;
+      const resolved=resolveSource(spec,file);
       const destination=slash(path.relative(treeRoot,resolved??path.resolve(path.dirname(file),spec)));
-      if(core&&!within(destination,dir))errors.push(`${slash(path.relative(root,file))} CORE_ESCAPING_DEPENDENCY ${spec}`);
+      if(core&&!within(destination,dir)&&!(rules.coreSiblingDependencies?.[dir]??[]).some(allowed=>within(destination,allowed)))errors.push(`${slash(path.relative(root,file))} CORE_ESCAPING_DEPENDENCY ${spec}`);
+      const independent=rules.mutuallyIndependentRoots??[],scope=independent.find(r=>within(slash(path.relative(treeRoot,file)),r));
+      if(scope&&independent.some(r=>r!==scope&&within(destination,r)))errors.push(`${slash(path.relative(treeRoot,file))} CLIENT_AGENT_DEPENDENCY ${spec}`);
       if(rules.forbiddenServicePaths.some(p=>within(destination,p)))errors.push(`${slash(path.relative(root,file))} V1_DEPENDENCY ${spec}`);
     }
   }

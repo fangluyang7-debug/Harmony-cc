@@ -13,6 +13,20 @@ function packFor(p){const e=p.executors[0],input=Buffer.from('{"dimension":2,"ro
  return {manifest:{packId:'normalize.v1',contract:e.contract,executorIds:[e.target.executorId],model:e.model,suiteId:'normalize-suite.v1',qualityThreshold:1,resourceLimit:e.resources},
  cases:[{id:'normal',input,parameters:'{}',config:e.configurations[0],maxOutputBytes:4096}],evaluate:async(_test,bytes)=>JSON.parse(bytes).rows[0][0]===.6?1:0};}
 const contribution={minimumBattery:20,maximumTemperature:3,allowMetered:false,priority:'REMOTE_INTERACTIVE',requireForeground:true};
+
+test('fresh CANARY evidence remains usable while the next case runs; a failed reference still suspends it',async()=>{
+ const r=await runtime();let release;try{
+  const now=100,dir=new DeviceDirectory(r.db,'SIMULATED',()=>now),p=profile();await dir.ingest(peer,p);const pack=packFor(p);let runs=0;
+  const held=new Promise(resolve=>{release=resolve;});
+  const runner={run:async permit=>{if(++runs===2)await held;return {settled:true,permitId:permit.id,domain:'SIMULATED',durationMs:1,output:Buffer.from(runs===1?'{"rows":[[0.6,0.8]]}':'{"rows":[[0,0]]}')};},reconcile:async()=>null};
+  const service=new QualificationService(r.db,dir,[pack],runner,policy,async()=>null,()=>now);
+  assert.equal(await service.advance(peer,'target1'),'CANARY');
+  const pending=service.advance(peer,'target1');
+  const deadline=Date.now()+5000;while(runs<2){if(Date.now()>deadline)throw Error('REFERENCE_DID_NOT_START');await new Promise(resolve=>setTimeout(resolve,10));}
+  const evidence=await dir.qualification(peer,'target1');assert.equal(evidence.admission.state,'CANARY');assert.equal(evidence.admission.quality.value,1);
+  release();assert.equal(await pending,'SUSPENDED');assert.equal((await dir.qualification(peer,'target1')).admission.quality.value,null);
+ }finally{release?.();await r.close();}
+});
 test('trusted calibration uses real CPU and durable quota before automatic CANARY/ACTIVE; restart, pause, expiry and scoped evidence',async()=>{
  const r=await runtime();let ledger;let now=100,gate=null;
  try{

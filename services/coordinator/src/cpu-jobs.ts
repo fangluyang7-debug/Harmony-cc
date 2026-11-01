@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { canonical, DispatchOfferV2, sampleUsableV2, protocolId, PlacementRequest, SnapshotDecision } from '@harmony/scheduler-core';
 import { ArtifactChannel, ArtifactDescriptor } from '@harmony/resource-transport';
-import { builtinCpuPacks } from '@harmony/reference-capabilities';
+import { builtinCpuPacks, ReferencePack } from '@harmony/reference-capabilities';
 import { PrismaClient } from '../generated/client';
 import { Peer } from './channel';
 import { DeviceDirectory } from './directory';
@@ -21,15 +21,17 @@ export class CpuJobs {
   constructor(private readonly db:PrismaClient,private readonly directory:DeviceDirectory,private readonly profiles:ProfileProjection,
     private readonly snapshots:SnapshotBuilder,private readonly allotments:AllotmentIssuer,private readonly artifacts:ArtifactChannel,
     private readonly store:CoordinatorStore,private readonly epoch:()=>number,private readonly flush:()=>Promise<void>,
-    private readonly planning:PlanningService,private readonly traces:TraceService){}
+    private readonly planning:PlanningService,private readonly traces:TraceService,private readonly packs:ReferencePack[]=builtinCpuPacks()){}
   async submit(peer:Peer,input:any){
     if(!input||!protocolId(input.requestId)||input.requestId.length>100||typeof input.capability!=='string'||typeof input.contentHash!=='string'||!/^[a-f0-9]{64}$/.test(input.contentHash)||
       !Number.isSafeInteger(input.bytes)||input.bytes<1||input.bytes>8388608||input.targetId!==undefined&&!protocolId(input.targetId)||
       input.budgetMs!==undefined&&(!Number.isSafeInteger(input.budgetMs)||input.budgetMs<0||input.budgetMs>30000)||
-      Object.keys(input).some(k=>!['requestId','capability','contentHash','bytes','targetId','budgetMs'].includes(k)))throw Error('JOB_INPUT_INVALID');
+      input.parameters!==undefined&&(typeof input.parameters!=='string'||Buffer.byteLength(input.parameters)>32768)||
+      Object.keys(input).some(k=>!['requestId','capability','contentHash','bytes','targetId','budgetMs','parameters'].includes(k)))throw Error('JOB_INPUT_INVALID');
+    const parameters=input.parameters??'{}';try{JSON.parse(parameters);}catch{throw Error('JOB_INPUT_INVALID');}
     const id=input.requestId,existing=await this.db.cpuJob.findUnique({where:{id}});
-    if(existing){const d=await this.owned(peer,id);if(d.input.ref.contentHash!==input.contentHash||d.input.bytes!==input.bytes||d.offer.task.contract.capability!==input.capability||input.targetId&&d.offer.target.targetId!==input.targetId||input.budgetMs!==undefined&&d.budgetMs!==input.budgetMs)throw Error('JOB_CONFLICT');return this.upload(peer,id,d);}
-    const pack=builtinCpuPacks().find(p=>p.manifest.contract.capability===input.capability);if(!pack)throw Error('CAPABILITY_UNSUPPORTED');
+    if(existing){const d=await this.owned(peer,id);if(d.offer.task.parameters!==parameters||d.input.ref.contentHash!==input.contentHash||d.input.bytes!==input.bytes||d.offer.task.contract.capability!==input.capability||input.targetId&&d.offer.target.targetId!==input.targetId||input.budgetMs!==undefined&&d.budgetMs!==input.budgetMs)throw Error('JOB_CONFLICT');return this.upload(peer,id,d);}
+    const pack=this.packs.find(p=>p.manifest.contract.capability===input.capability);if(!pack)throw Error('CAPABILITY_UNSUPPORTED');
     const now=Date.now();
     const artifact:ArtifactDescriptor={ref:{artifactId:'in-'+id,contentVersion:1,contentHash:input.contentHash,schemaId:pack.manifest.contract.inputSchemas[0],schemaVersion:1},
       groupId:peer.groupId,ownerPrincipalId:peer.principalId,domain:this.directory.domain,bytes:input.bytes,expiresAt:now+3600000};
@@ -38,7 +40,8 @@ export class CpuJobs {
     const request:PlacementRequest={nodes:[{id:'compute',capability:input.capability,dependencies:[],inputs:[artifact.ref.artifactId],
       // Reference numeric/text transforms: bound expansion conservatively rather
       // than pricing every tiny vector result as the global 8 MiB limit.
-      output:{id:'out-'+id,bytes:Math.min(pack.maxOutputBytes,input.bytes*64+4096)},
+      // Raster expansion depends on crop/resize parameters; retain its declared maximum.
+      output:{id:'out-'+id,bytes:pack.manifest.contract.outputSchemas.includes('image.raster')?pack.maxOutputBytes:Math.min(pack.maxOutputBytes,input.bytes*64+4096)},
       baselineTargetId:input.targetId??'',...(input.targetId?{allowedTargetIds:[input.targetId]}:{}),
       memoryBytes:pack.manifest.resourceLimit.find(r=>r.resourcePoolId==='ram')?.amount??0,minimumQuality:pack.manifest.qualityThreshold,candidates:[]}],
       artifacts:[{id:artifact.ref.artifactId,bytes:artifact.bytes,replicas:[{deviceId:this.store.senderInstanceId,readMs:0}]}],links:[],deviceResources:[],
@@ -51,7 +54,7 @@ export class CpuJobs {
     const offer:DispatchOfferV2={task:{groupId:peer.groupId,sessionId:null,originDeviceId:peer.deviceId,resultDestination:peer.deviceId,workflowId:id,nodeId:'compute',attemptId:id,
       coordinatorEpoch:this.epoch(),planRevision:1,app:{groupId:peer.groupId,principalId:peer.principalId,appId:app.appId,appInstanceId:app.appInstanceId,allowedContracts:[pack.manifest.contract.contractId]},
       contract:executor.contract,budget:{remainingMs:request.remainingBudgetMs,deadlineAt:now+request.remainingBudgetMs},inputs:[artifact.ref],allowedTargetIds:[executor.target.targetId],qualityTarget:'reference',privacy:'AUTHORIZED_REMOTE',
-      priority:'REMOTE_INTERACTIVE',parameters:'{}',allowedConfigurations:executor.configurations.map(c=>c.id),businessIdempotencyKey:null},target:executor.target,resources:executor.resources,allowedConfigs:executor.configurations,
+      priority:'REMOTE_INTERACTIVE',parameters,allowedConfigurations:executor.configurations.map(c=>c.id),businessIdempotencyKey:null},target:executor.target,resources:executor.resources,allowedConfigs:executor.configurations,
       allotmentId:grant.allotmentId,allotmentVersion:grant.version,leaseMs:request.remainingBudgetMs,
       transferPlan:[{ref:artifact.ref,from:this.store.senderInstanceId,to:executor.target.deviceId,via:null}],dependencies:[],reasonCode:decision.decision.reason};
     const data:JobData={offer,holderId:profile.holderInstanceId,input:artifact,output:null,traceId:randomUUID(),budgetMs:request.remainingBudgetMs,deadlineAt:now+request.remainingBudgetMs,request,plan:decision,planTiming,
@@ -70,9 +73,10 @@ export class CpuJobs {
     const start=performance.now(),decision=this.planning.plan(built.snapshot,request,built.policy,{now:Date.now(),monotonic:()=>performance.now()}),end=performance.now();
     const selected=decision.decision.suggestion?.[0];if(!selected)throw Error(decision.decision.reason);
     const profile=(await this.directory.profiles(peer.groupId)).find(p=>p.deviceId===selected.deviceId&&p.executors.some(e=>e.target.targetId===selected.targetId));
-    const executor=profile?.executors.find(e=>e.target.targetId===selected.targetId),pack=builtinCpuPacks().find(p=>p.manifest.contract.capability===request.nodes[0].capability);
+    const executor=profile?.executors.find(e=>e.target.targetId===selected.targetId),pack=this.packs.find(p=>p.manifest.contract.capability===request.nodes[0].capability);
     if(!profile||!executor||!pack||canonical(executor.contract)!==canonical(pack.manifest.contract))throw Error('TARGET_UNAVAILABLE');
-    const grant=(await this.allotments.reservations(profile.deviceId)).find(a=>a.grant.groupId===peer.groupId&&a.grant.holderInstanceId===profile.holderInstanceId)?.grant;
+    const reservation=(await this.allotments.reservations(profile.deviceId)).find(a=>a.grant.groupId===peer.groupId&&a.grant.holderInstanceId===profile.holderInstanceId);
+    const grant=reservation?.ack?.version===reservation?.grant.version?reservation?.grant:undefined;
     if(!grant||grant.coordinatorEpoch!==this.epoch())throw Error('ALLOTMENT_UNAVAILABLE');
     return {decision,profile,executor,grant,planTiming:{start,end}};
   }
@@ -107,8 +111,16 @@ export class CpuJobs {
         if(replans<2)return this.start(peer,id,replans+1);throw Error('PLAN_STALE');
       }
       const offerStart=performance.now();
-      await this.store.persistOffer(data.offer,data.holderId,{protocolVersion:2,messageId:'job-'+id,type:'DispatchOffer',groupId:peer.groupId,senderInstanceId:this.store.senderInstanceId,
-        coordinatorEpoch:this.epoch(),seq:1,ackOf:null,traceId:data.traceId,payload:JSON.stringify(data.offer),extensions:[]});
+      try{await this.store.persistOffer(data.offer,data.holderId,{protocolVersion:2,messageId:'job-'+id,type:'DispatchOffer',groupId:peer.groupId,senderInstanceId:this.store.senderInstanceId,
+        coordinatorEpoch:this.epoch(),seq:1,ackOf:null,traceId:data.traceId,payload:JSON.stringify(data.offer),extensions:[]},async tx=>{
+          const row=await tx.allotment.findUnique({where:{id:JSON.stringify(['allotment',peer.groupId,data.holderId])}}),reservation=row?JSON.parse(row.metadataJson):null;
+          if(!reservation||reservation.grant.version!==data.offer.allotmentVersion||reservation.ack?.version!==reservation.grant.version)throw Error('PLAN_STALE');
+        });}catch(error){
+          if(error instanceof Error&&error.message==='PLAN_STALE'){
+            await this.db.cpuJob.updateMany({where:{id,state:'DISPATCHING'},data:{state:'WAITING_INPUT'}});
+            if(replans<2)return this.start(peer,id,replans+1);
+          }throw error;
+        }
       await this.db.cpuJob.update({where:{id},data:{state:'DISPATCHED'}});
       await this.flush();
       try{await this.traces.control(data.offer,data.traceId,data.plan.snapshotVersion,'PLAN',data.planTiming.start,data.planTiming.end);

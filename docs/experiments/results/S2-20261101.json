@@ -1,0 +1,207 @@
+{
+  "scope": "S2 software and DevEco emulator; no real-device acceptance",
+  "date": "2026-11-01",
+  "baseCommit": "f8f359d",
+  "branch": "codex/scheduler-v2-foundation",
+  "environment": {
+    "deveco": "6.1.1.290",
+    "sdkApi": 24,
+    "sdk": "6.1.1.125",
+    "guest": "OpenHarmony-6.1.1.125",
+    "target": "127.0.0.1:5555",
+    "network": "hdc reverse forwarding; not physical LAN measurement"
+  },
+  "reports": [
+    {
+      "source": ".test/agent-conformance-sdcZ6A/report.json",
+      "label": "8 common wire checks",
+      "agent": "pc",
+      "domain": "SIMULATED",
+      "startedAt": "2026-11-01T03:01:00.638Z",
+      "finishedAt": "2026-11-01T03:01:30.012Z",
+      "passed": 8,
+      "checks": [
+        {
+          "name": "01 pairing, credential binding and one-use invitation",
+          "status": "PASS"
+        },
+        {
+          "name": "02 profile schema, unknown values and monotonic sequence",
+          "status": "PASS"
+        },
+        {
+          "name": "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+          "status": "PASS"
+        },
+        {
+          "name": "04 same attempt with a new messageId returns existing admission/result without executing twice",
+          "status": "PASS"
+        },
+        {
+          "name": "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+          "status": "PASS"
+        },
+        {
+          "name": "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+          "status": "PASS"
+        },
+        {
+          "name": "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+          "status": "PASS",
+          "forgedSignatureRejected": true
+        },
+        {
+          "name": "08 revoked credential cannot reconnect or publish new telemetry",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "source": ".test/agent-conformance-ateXRq/report.json",
+      "label": "8 common wire checks plus ImageKit and lifecycle",
+      "agent": "harmony-emulator",
+      "domain": "SIMULATED",
+      "startedAt": "2026-11-01T03:11:05.746Z",
+      "finishedAt": "2026-11-01T03:11:45.171Z",
+      "passed": 10,
+      "checks": [
+        {
+          "name": "01 pairing, credential binding and one-use invitation",
+          "status": "PASS"
+        },
+        {
+          "name": "02 profile schema, unknown values and monotonic sequence",
+          "status": "PASS"
+        },
+        {
+          "name": "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+          "status": "PASS"
+        },
+        {
+          "name": "03b ImageKit crop dispatched by PlanningService; geometry/colour checked; malformed crop settles as failed",
+          "status": "PASS"
+        },
+        {
+          "name": "03c emulator lifecycle: background stops admission, foreground resumes qualified contribution",
+          "status": "PASS"
+        },
+        {
+          "name": "04 same attempt with a new messageId returns existing admission/result without executing twice",
+          "status": "PASS"
+        },
+        {
+          "name": "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+          "status": "PASS"
+        },
+        {
+          "name": "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+          "status": "PASS"
+        },
+        {
+          "name": "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+          "status": "PASS",
+          "forgedSignatureRejected": true
+        },
+        {
+          "name": "08 revoked credential cannot reconnect or publish new telemetry",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "source": ".test/s2-native-trust-nKFcil/report.json",
+      "label": "native TLS positive and negative cases",
+      "domain": "SIMULATED",
+      "passed": 3,
+      "checks": [
+        {
+          "name": "wrong fingerprint",
+          "status": "PASS",
+          "nativeOutcome": "CERTIFICATE_PIN_MISMATCH",
+          "httpRequests": 0
+        },
+        {
+          "name": "wrong TLS certificate",
+          "status": "PASS",
+          "nativeOutcome": "TLS_CERTIFICATE_REJECTED",
+          "httpRequests": 0
+        },
+        {
+          "name": "correct certificate and fingerprint",
+          "status": "PASS",
+          "nativeOutcome": "EXPECTED_PAIR_REJECTION",
+          "httpRequests": 2
+        }
+      ]
+    }
+  ],
+  "nativeFixtures": {
+    "count": 27,
+    "persistenceLog": ".test/s2-probe-runtime.log",
+    "atomicLedgerAndOutbox": "SEEDED then RECOVERED after process stop",
+    "acceptedAttempt": "CANCELLED_SETTLED on recovery"
+  },
+  "artifacts": [
+    {
+      "file": ".test/s2-har/scheduler/build/default/outputs/default/scheduler.har",
+      "sha256": "3d9f80b34418a628a956a44487c8995cce3edc11d0291593f02cd7d01a7023f5"
+    },
+    {
+      "file": ".test/s2-harmony-agent/entry/build/default/outputs/default/entry-default-unsigned.hap",
+      "sha256": "11171b183625406e808e6d479ecb0b6dbef70addd52e794f3aa7811816fdc669"
+    },
+    {
+      "file": ".test/s2-harmony-har-probe/entry/build/default/outputs/default/entry-default-unsigned.hap",
+      "sha256": "5e8a11925b3f1a8a360e185bbb50a53b930125124168fad262513349fab4be1f"
+    }
+  ],
+  "notExecuted": [
+    "real Harmony phone installation/signing/acceptance",
+    "GPU acceptance",
+    "physical LAN performance",
+    "API 22 build",
+    "long-running background operation",
+    "QR scan"
+  ],
+  "components": {
+    "core": {
+      "passed": 24
+    },
+    "protocolT1": {
+      "passed": 495
+    },
+    "protocolT2": {
+      "passed": 352
+    },
+    "transport": {
+      "passed": 1
+    },
+    "pcAgent": {
+      "passed": 41
+    },
+    "coordinator": {
+      "passed": 61,
+      "source": ".test/s2-coordinator-final.log"
+    },
+    "architecture": {
+      "passed": 24,
+      "productionFiles": 79
+    },
+    "v1Api": {
+      "suites": 41,
+      "passed": 326
+    },
+    "v1HarAlgorithms": {
+      "passed": 8
+    },
+    "targetedCanaryAndCpu": {
+      "passed": 7
+    }
+  },
+  "initialAggregateRun": {
+    "source": ".test/s2-final-regression.log",
+    "status": "FAILED",
+    "reason": "CANARY temporarily revoked during additional reference evaluation; PUBLISH refused",
+    "resolution": "Fixed monotonic CANARY advancement; targeted 7/7 and final complete coordinator 61/61 passed"
+  }
+}

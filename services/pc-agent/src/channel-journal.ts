@@ -14,7 +14,7 @@ export function validateJournal(j:ChannelJournal,groupId:string,holderInstanceId
     !Array.isArray(j.inbox)||j.inbox.length>4096||j.inbox.some(e=>!protocolId(e.id)||!/^[a-f0-9]{64}$/.test(e.digest))||
     new Set(j.inbox.map(e=>e.id)).size!==j.inbox.length||!Array.isArray(j.outbox)||j.outbox.length>64||
     j.outbox.some(m=>!validMessageEnvelopeV2(m,[])||m.groupId!==groupId||m.senderInstanceId!==holderInstanceId||m.coordinatorEpoch!==j.epoch||
-      !['RecoveryRequest','AttemptStatusReply','Ack','AdmissionReply','ExecutionReceipt','TraceBatch','DeviceProfile'].includes(m.type)||m.seq>j.sequence)||
+      !['RecoveryRequest','AttemptStatusReply','Ack','AdmissionReply','ExecutionReceipt','TraceBatch','DeviceProfile','YieldNotice','ProtocolError'].includes(m.type)||m.seq>j.sequence)||
     new Set(j.outbox.map(m=>m.messageId)).size!==j.outbox.length||j.outbox.some((m,i)=>i>0&&m.seq<=j.outbox[i-1].seq))throw Error('CHANNEL_JOURNAL_CORRUPT');
   if(Buffer.byteLength(JSON.stringify(j.outbox))>1048576)throw Error('CHANNEL_BACKPRESSURE');
   if(j.dispatches!==undefined&&(!Array.isArray(j.dispatches)||j.dispatches.length>4096||j.dispatches.some(d=>!protocolId(d.messageId)||!protocolId(d.attemptId))))throw Error('CHANNEL_JOURNAL_CORRUPT');

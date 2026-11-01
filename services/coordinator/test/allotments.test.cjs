@@ -6,6 +6,23 @@ const {DurableLedger}=require('../../pc-agent/dist/durable-ledger');
 const template=require('../../../contracts/scheduling/v2/fixtures/t2/valid/DispatchOffer.json');
 const {vectorSumV2}=require('@harmony/scheduler-core');
 async function pair(r,holder){const invite=await r.auth.invite('g1','p1','device1',r.url);return r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:holder});}
+
+test('an offered dispatch pins its acknowledged quota version until admission is persisted',async()=>{
+ const {attempt}=require('./fixtures.cjs');const r=await runtime();
+ try{
+  const a=await pair(r,'h1'),capacity=[{resourcePoolId:'memory1',amount:100},{resourcePoolId:'cpu1',amount:1}];
+  await r.allotments.confirmDevice('device1',capacity,[{groupId:'g1',holderInstanceId:'h1',appInstanceId:null}]);
+  const request={ledgerEpoch:1,leaseRequestId:'r1',leaseMs:30000,base:[],extra:capacity},g=await r.allotments.issue(a.peer,request),fixture=attempt();
+  fixture.offer.allotmentId=g.allotmentId;fixture.offer.allotmentVersion=g.version;fixture.message.senderInstanceId=r.identity.id;fixture.message.payload=JSON.stringify(fixture.offer);
+  await r.store.persistOffer(fixture.offer,'h1',fixture.message);
+  await assert.rejects(r.allotments.issue(a.peer,{...request,leaseRequestId:'r2'}),/DISPATCH_ADMISSION_PENDING/);
+  assert.equal((await r.allotments.reservations('device1'))[0].grant.version,1);
+  assert.deepEqual(await r.allotments.issue(a.peer,request),g,'idempotent delivery remains possible');
+  fixture.record.allotmentId=g.allotmentId;fixture.record.allotmentVersion=g.version;
+  await r.store.recordAdmission(fixture.record);
+  assert.equal((await r.allotments.issue(a.peer,{...request,leaseRequestId:'r2'})).version,2);
+ }finally{await r.close();}
+});
 test('same-device budget stays reserved across expiry, restart and shrink until authenticated persisted settlement',async()=>{
  const r=await runtime();let ledger;
  try{

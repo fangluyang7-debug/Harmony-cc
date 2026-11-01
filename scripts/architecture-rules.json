@@ -1,12 +1,17 @@
 {
   "coreRoots": [
-    "packages/scheduler-core/src"
+    "packages/scheduler-core/src",
+    "apps/harmony/scheduler/src/main/ets/v2/core",
+    "apps/harmony/scheduler/src/main/ets/v2/protocol"
   ],
   "serviceRoots": [
     "services/coordinator/src",
     "services/pc-agent/src",
     "packages/resource-transport/src",
-    "packages/reference-capabilities/src"
+    "packages/reference-capabilities/src",
+    "apps/harmony/scheduler/src/main/ets/v2/client",
+    "apps/harmony/scheduler/src/main/ets/v2/agent",
+    "apps/harmony-agent/entry/src/main/ets"
   ],
   "forbiddenLiterals": [
     "cloud-runtime",
@@ -40,6 +45,8 @@
     "services/device-worker",
     "harmony-agent-api-server"
   ],
+  "coreSiblingDependencies": {"apps/harmony/scheduler/src/main/ets/v2/core":["apps/harmony/scheduler/src/main/ets/v2/protocol"]},
+  "mutuallyIndependentRoots": ["apps/harmony/scheduler/src/main/ets/v2/client","apps/harmony/scheduler/src/main/ets/v2/agent"],
   "candidateSelectionRoot": "services/coordinator/src",
   "candidateReaders": ["services/coordinator/src/planning.ts", "services/coordinator/src/spaces.ts"],
   "credentialIdentityRoots": ["services/coordinator/src", "apps/harmony/scheduler/src/main/ets/v2/client"],

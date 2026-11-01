@@ -58,7 +58,9 @@ export class PcAgent {
       if(!this.online||this.stopped||this.owner!=='IDLE'||offer.task.coordinatorEpoch!==this.epoch||context.coordinatorEpoch!==this.epoch)throw Error('AGENT_NOT_READY');
       return {...context,online:true,ownerIdle:true,admissionLimit:context.admissionLimit.map(r=>({...r,amount:Math.min(r.amount,this.limits.find(p=>p.resourcePoolId===r.resourcePoolId)?.amount??0)}))};
     }});
-    this.scheduler=new DeviceScheduler(ledger,this.runtime,options.queuePolicy,options.onYield);
+    this.scheduler=new DeviceScheduler(ledger,this.runtime,options.queuePolicy,notice=>{
+      ledger.queueYield(notice);options.onYield(notice);void this.flush();
+    });
     if(options.resources)this.resourceMonitor=new ResourceMonitor(options.resources.policy,{
       sample:async()=>collectSystemResources(),owner:options.resources.owner,occupied:()=>occupiedV2(ledger.snapshot()),
       update:(limits,owner)=>this.updateResources(limits,owner),onError:options.onError
@@ -96,7 +98,14 @@ export class PcAgent {
   private dispatch(message:MessageEnvelopeV2){
     if(this.stopped)return;
     const offer=JSON.parse(message.payload) as DispatchOfferV2,id=offer.task.attemptId,previous=this.pending.get(id);
-    if(previous){if(canonical(previous.message)!==canonical(message))throw Error('INFLIGHT_DISPATCH_CONFLICT');return;}
+    if(this.ledger.status(id)){
+      try{this.ledger.replayDispatch(message);}catch(error){this.ledger.queueProtocolError(message.messageId,error instanceof Error&&error.message==='ATTEMPT_CONFLICT'?'ATTEMPT_CONFLICT':'DISPATCH_OFFER_CONFLICT');}
+      void this.flush();return;
+    }
+    if(previous){
+      if(canonical(JSON.parse(previous.message.payload))!==canonical(offer)){this.ledger.queueProtocolError(message.messageId,'ATTEMPT_CONFLICT');void this.flush();return;}
+      void previous.done.then(()=>{if(this.ledger.status(id))this.ledger.replayDispatch(message);else this.ledger.rejectDispatch(message,'DISPATCH_PREVIOUSLY_REJECTED');return this.flush();}).catch(this.options.onError);return;
+    }
     if(this.pending.size>=8){this.ledger.rejectDispatch(message,'AGENT_BACKPRESSURE');void this.client.flush();return;}
     const done=(async()=>{
       try{

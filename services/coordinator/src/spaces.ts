@@ -147,6 +147,6 @@ export class TeamSpaces {
         res.json({...result,outputTicket:undefined,output});return;
       }
       res.status(404).json({error:'NOT_FOUND'});
-    }catch(e){const code=e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'REQUEST_FAILED',retryable=['NO_AVAILABLE_TARGET','NO_LEGAL_PLAN'].includes(code);res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:retryable?409:400).json({error:code,retryable});}
+    }catch(e){const code=e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'REQUEST_FAILED',retryable=['NO_AVAILABLE_TARGET','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(code);res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:retryable?409:400).json({error:code,retryable});}
   }
 }
