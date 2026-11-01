@@ -3,10 +3,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { WebSocket, WebSocketServer } from 'ws';
 import { PrismaClient } from '../generated/client';
 import { canonical, MessageEnvelopeV2, validMessageEnvelopeV2, validVersionHelloV2, negotiateVersionV2,
-  validAdmissionReplyV2, validExecutionReportV2, validAttemptStatusReplyV2, protocolId,validYieldNoticeV2,validProtocolErrorV2 } from '@harmony/scheduler-core';
+  validAdmissionReplyV2, validExecutionReportV2, validAttemptStatusReplyV2, protocolId,validYieldNoticeV2,validProtocolErrorV2, AppIdentityV2 } from '@harmony/scheduler-core';
 import { CoordinatorStore } from './store';
 
-export interface Peer { groupId:string; holderInstanceId:string; deviceId:string; principalId:string; credentialId:string; }
+export interface Peer { groupId:string; holderInstanceId:string; deviceId:string; principalId:string; credentialId:string; app?:AppIdentityV2; }
 export interface ChannelHandler { validate:(payload:any)=>boolean; handle:(peer:Peer,payload:any,message:MessageEnvelopeV2)=>Promise<void>; }
 interface Session { socket:WebSocket; token:string; peer:Peer; hello:boolean; work:Promise<void>; queued:number; inFlight:Set<string>; }
 const exact=(v:any,keys:string[])=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join('|')===[...keys].sort().join('|');

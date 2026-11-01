@@ -9,6 +9,9 @@ import { CpuJobs } from './cpu-jobs';
 import { ArtifactChannel } from '@harmony/resource-transport';
 import { Peer } from './channel';
 import { SnapshotBuilder } from './planning';
+import {AppRegistry} from './apps';
+import {SdkJobs} from './sdk';
+import {SchedulerSdk,SdkPort} from '@harmony/scheduler-client';
 
 const hash=(s:string|Buffer)=>createHash('sha256').update(s).digest('hex');
 const passwordHash=(password:string,salt:string)=>new Promise<Buffer>((resolve,reject)=>scrypt(password,salt,64,(e,v)=>e?reject(e):resolve(v)));
@@ -25,7 +28,7 @@ export class TeamSpaces {
   private readonly authAttempts=new Map<string,{count:number;until:number}>();
   constructor(private readonly db:PrismaClient,private readonly auth:PairingService,private readonly allotments:AllotmentIssuer,
     private readonly directory:DeviceDirectory,private readonly jobs:CpuJobs,private readonly artifacts:ArtifactChannel,
-    private readonly config:CoordinatorConfig,private readonly status:()=>{ready:boolean;epoch:number},private readonly snapshots:SnapshotBuilder,private readonly events=new SpaceEvents()){}
+    private readonly config:CoordinatorConfig,private readonly status:()=>{ready:boolean;epoch:number},private readonly snapshots:SnapshotBuilder,private readonly events:SpaceEvents,private readonly apps:AppRegistry,private readonly sdk:SdkJobs){}
   async session(cookie:string|undefined){
     const token=/(?:^|;\s*)harmony_session=([A-Za-z0-9_-]{43})(?:;|$)/.exec(cookie??'')?.[1];
     const session=token?await this.db.spaceSession.findUnique({where:{id:hash(token)}}):null;
@@ -37,6 +40,7 @@ export class TeamSpaces {
     if(!m||!roles.includes(m.role))throw Error('SPACE_FORBIDDEN');return m;
   }
   peer(userId:string,spaceId:string):Peer{return {groupId:spaceId,principalId:userId,deviceId:'web-'+userId,holderInstanceId:'web-'+userId,credentialId:'web-'+userId};}
+  private appPeer(userId:string,spaceId:string){return this.apps.console(this.peer(userId,spaceId),this.sdk.contractIds(),[{resourcePoolId:'cpu',amount:4},{resourcePoolId:'ram',amount:1073741824}]);}
   async deviceSettings(peer:Peer){const d=await this.db.spaceDevice.findUnique({where:{id:peer.deviceId}});return d&&d.spaceId===peer.groupId&&d.holderId===peer.holderInstanceId?JSON.parse(d.settingsJson):null;}
   async dashboard(userId:string,spaceId:string){
     const me=await this.member(userId,spaceId),space=await this.db.teamSpace.findUniqueOrThrow({where:{id:spaceId}}),now=Date.now();
@@ -77,8 +81,8 @@ export class TeamSpaces {
       if(!this.status().ready)throw Error('COORDINATOR_NOT_READY');
       if(req.method==='POST')res.once('finish',()=>{if(res.statusCode<300){const id=req.path.replace(/^\/v2\/spaces/,'').split('/').filter(Boolean)[0];if(id)this.events.changed(id);}});
       const route=req.path.replace(/^\/v2\/spaces/,'')||'/',body=req.body??{},method=req.method;
-      if(method==='POST'){
-        if(!req.is('application/json'))throw Error('JSON_REQUIRED');
+      if(method==='POST'||method==='PUT'){
+        if(method==='POST'&&!req.is('application/json'))throw Error('JSON_REQUIRED');
         const origin=req.headers.origin,expected=this.config.publicUrl?new URL(this.config.publicUrl).origin:(this.config.proxy?'http:':'https:')+'//'+req.headers.host;
         if(origin&&origin!==expected)throw Error('ORIGIN_REJECTED');
       }
@@ -134,19 +138,30 @@ export class TeamSpaces {
         await this.db.spaceDevice.create({data:{id:deviceId,spaceId,userId:user.id,holderId,name:label(body.name),settingsJson:JSON.stringify(settings),createdAt:Date.now()}});
         res.json({invitation:{...invitation,tlsMode:this.config.proxy?'public':'pinned'},holderInstanceId:holderId,domain:this.config.domain,contribution:settings});return;
       }
+      if(action==='sdk'&&parts[2]==='jobs'){
+        await this.member(user.id,spaceId,['OWNER','MEMBER']);const peer=await this.appPeer(user.id,spaceId),jobId=parts[3],operation=parts[4];
+        if(!jobId&&method==='POST'){res.json(await this.sdk.submit(peer,body));return;}
+        if(jobId&&method==='PUT'&&operation==='input'){if(!Buffer.isBuffer(body))throw Error('BINARY_INPUT_REQUIRED');await this.jobs.writeInput(peer,jobId,body);res.json({uploaded:true});return;}
+        if(jobId&&method==='GET'&&operation==='output'){res.type('application/octet-stream').send(await this.jobs.readOutput(peer,jobId));return;}
+        if(jobId&&method==='POST'&&operation==='start'){res.json(await this.sdk.start(peer,jobId));return;}
+        if(jobId&&method==='POST'&&operation==='cancel'){res.json(await this.sdk.cancel(peer,jobId));return;}
+        if(jobId&&method==='GET'&&!operation){res.json(await this.sdk.status(peer,jobId));return;}
+      }
       if(action==='jobs'&&method==='POST'){
-        await this.member(user.id,spaceId,['OWNER','MEMBER']);const bytes=Buffer.from(JSON.stringify(body.input)),peer=this.peer(user.id,spaceId);
-        const plan=await this.jobs.submit(peer,{requestId:body.requestId,capability:body.capability,contentHash:hash(bytes),bytes:bytes.length,...(body.targetId?{targetId:body.targetId}:{})});
-        const descriptor=this.artifacts.lookup(spaceId,plan.inputTicket.ref);if(!descriptor)throw Error('INPUT_UNAVAILABLE');
-        await this.artifacts.writeForControl(descriptor,bytes);res.json(await this.jobs.start(peer,plan.jobId));return;
+        // Compatibility gateway uses the SDK too; the web UI uses metadata/binary endpoints above.
+        await this.member(user.id,spaceId,['OWNER','MEMBER']);const bytes=Buffer.from(JSON.stringify(body.input)),peer=await this.appPeer(user.id,spaceId);
+        const port:SdkPort={request:async(route,encoded)=>{const id=route.split('/')[4],op=route.split('/')[5];return JSON.stringify(!id?await this.sdk.submit(peer,JSON.parse(encoded!)):op==='start'?await this.sdk.start(peer,id):await this.sdk.status(peer,id));},write:async(ticket,input)=>this.jobs.writeInput(peer,ticket.ref.artifactId.slice(3),Buffer.from(input)),read:async ticket=>this.jobs.readOutput(peer,ticket.ref.artifactId.slice(4)),digest:async input=>hash(Buffer.from(input)),now:Date.now,wait:ms=>new Promise(resolve=>setTimeout(resolve,ms))};
+        const client=new SchedulerSdk(port,{capacityWaitMs:0}),input=await client.registerInput(bytes,this.sdk.inputSchema(body.capability)),task=await client.submit({version:3,id:body.requestId,outputContract:this.sdk.outputSchema(body.capability),qualityTarget:'reference',nodes:[{id:'compute',capability:body.capability,input,parameters:'{}',dependsOn:[],...(body.targetId?{targetId:body.targetId}:{})}]},{requestId:body.requestId,budgetMs:30000,resultDestination:'ORIGIN'});
+        res.json(await task.status());return;
       }
       if(action==='jobs'&&id&&method==='GET'){
-        if(parts[3]==='trace'){res.json(await this.jobs.trace(this.peer(user.id,spaceId),id));return;}
-        const result=await this.jobs.status(this.peer(user.id,spaceId),id);let output=null;
+        const peer=await this.appPeer(user.id,spaceId);
+        if(parts[3]==='trace'){res.json(await this.jobs.trace(peer,id));return;}
+        const result=await this.jobs.status(peer,id);let output=null;
         if(result.outputTicket){const d=this.artifacts.lookup(spaceId,result.outputTicket.ref);if(d)output=JSON.parse((await this.artifacts.readForControl(d)).toString());}
         res.json({...result,outputTicket:undefined,output});return;
       }
       res.status(404).json({error:'NOT_FOUND'});
-    }catch(e){const code=e instanceof Error&&/^[A-Z_]+$/.test(e.message)?e.message:'REQUEST_FAILED',retryable=['NO_AVAILABLE_TARGET','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(code);res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:retryable?409:400).json({error:code,retryable});}
+    }catch(e){const code=e instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(e.message)?e.message:'REQUEST_FAILED',retryable=['NO_AVAILABLE_TARGET','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(code);res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:retryable?409:400).json({error:code,retryable});}
   }
 }

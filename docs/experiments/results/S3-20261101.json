@@ -1,0 +1,157 @@
+{
+  "scope": "S3 App registration and remote SDK submission; software/emulator only",
+  "date": "2026-11-01",
+  "baseCommit": "dba1859",
+  "branch": "codex/scheduler-v2-foundation",
+  "environment": {
+    "sdkApi": 24,
+    "network": "HDC loopback forwarding; not physical LAN latency"
+  },
+  "nativeSdk": {
+    "source": ".test/phase-b-gkMvoo/sdk-report.json",
+    "status": "PASS",
+    "checks": [
+      {
+        "capability": "text.count.v1",
+        "state": "SUCCEEDED",
+        "committed": true,
+        "appBound": true,
+        "snapshotVersion": 13
+      },
+      {
+        "capability": "vector.normalize.v1",
+        "state": "SUCCEEDED",
+        "committed": true,
+        "appBound": true,
+        "snapshotVersion": 20
+      }
+    ]
+  },
+  "conformance": [
+    {
+      "source": ".test/agent-conformance-vZXd4z/report.json",
+      "agent": "pc",
+      "domain": "SIMULATED",
+      "checks": [
+        {
+          "name": "01 pairing, credential binding and one-use invitation",
+          "status": "PASS"
+        },
+        {
+          "name": "02 profile schema, unknown values and monotonic sequence",
+          "status": "PASS"
+        },
+        {
+          "name": "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+          "status": "PASS"
+        },
+        {
+          "name": "04 same attempt with a new messageId returns existing admission/result without executing twice",
+          "status": "PASS"
+        },
+        {
+          "name": "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+          "status": "PASS"
+        },
+        {
+          "name": "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+          "status": "PASS"
+        },
+        {
+          "name": "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+          "status": "PASS"
+        },
+        {
+          "name": "08 revoked credential cannot reconnect or publish new telemetry",
+          "status": "PASS"
+        }
+      ]
+    },
+    {
+      "source": ".test/agent-conformance-PUE9hT/report.json",
+      "agent": "harmony-emulator",
+      "domain": "SIMULATED",
+      "checks": [
+        {
+          "name": "01 pairing, credential binding and one-use invitation",
+          "status": "PASS"
+        },
+        {
+          "name": "02 profile schema, unknown values and monotonic sequence",
+          "status": "PASS"
+        },
+        {
+          "name": "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+          "status": "PASS"
+        },
+        {
+          "name": "03b ImageKit crop dispatched by PlanningService; geometry/colour checked; malformed crop settles as failed",
+          "status": "PASS"
+        },
+        {
+          "name": "03c emulator lifecycle: background stops admission, foreground resumes qualified contribution",
+          "status": "PASS"
+        },
+        {
+          "name": "04 same attempt with a new messageId returns existing admission/result without executing twice",
+          "status": "PASS"
+        },
+        {
+          "name": "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+          "status": "PASS"
+        },
+        {
+          "name": "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+          "status": "PASS"
+        },
+        {
+          "name": "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+          "status": "PASS"
+        },
+        {
+          "name": "08 revoked credential cannot reconnect or publish new telemetry",
+          "status": "PASS"
+        }
+      ]
+    }
+  ],
+  "tls": {
+    "source": ".test/s2-native-trust-G6bKKf/report.json",
+    "checks": [
+      {
+        "name": "wrong fingerprint",
+        "status": "PASS",
+        "nativeOutcome": "CERTIFICATE_PIN_MISMATCH",
+        "httpRequests": 0
+      },
+      {
+        "name": "wrong TLS certificate",
+        "status": "PASS",
+        "nativeOutcome": "TLS_CERTIFICATE_REJECTED",
+        "httpRequests": 0
+      },
+      {
+        "name": "correct certificate and fingerprint",
+        "status": "PASS",
+        "nativeOutcome": "EXPECTED_PAIR_REJECTION",
+        "httpRequests": 2
+      }
+    ]
+  },
+  "regression": {
+    "core": 24,
+    "T1": 495,
+    "T2": 352,
+    "transport": 1,
+    "pcAgent": 41,
+    "coordinator": 64,
+    "sdk": 5,
+    "architecture": 24
+  },
+  "builds": {
+    "har": "BUILD SUCCESSFUL",
+    "probeHap": "BUILD SUCCESSFUL",
+    "agentHap": "BUILD SUCCESSFUL"
+  },
+  "progress": "See docs/scheduler-v2/STATUS.md; S3 remains partial"
+}

@@ -9,6 +9,8 @@
     "services/pc-agent/src",
     "packages/resource-transport/src",
     "packages/reference-capabilities/src",
+    "packages/scheduler-client/src",
+    "apps/harmony/scheduler/src/main/ets/v2/platform",
     "apps/harmony/scheduler/src/main/ets/v2/client",
     "apps/harmony/scheduler/src/main/ets/v2/agent",
     "apps/harmony-agent/entry/src/main/ets"

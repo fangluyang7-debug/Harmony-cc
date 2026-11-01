@@ -45,6 +45,14 @@ export class PlanningService {
   plan(snapshot:PlanningSnapshot,request:PlacementRequest,policy:PlanningPolicy,clock:PlanningClock):SnapshotDecision {
     return plan(snapshot,request,policy,clock);
   }
+  /** Equivalent paths compete in the same planner; callers never rank directory candidates. */
+  alternatives(snapshot:PlanningSnapshot,requests:PlacementRequest[],policy:PlanningPolicy,clock:PlanningClock){
+    if(requests.length<1||requests.length>8)throw Error('SDK_ALTERNATIVES_INVALID');
+    const decisions=requests.map(request=>this.plan(snapshot,request,policy,clock));
+    let selected=-1;
+    for(let i=0;i<decisions.length;i++)if(decisions[i].decision.suggestion&&(selected<0||decisions[i].decision.suggestionMs!<decisions[selected].decision.suggestionMs!))selected=i;
+    return {selected,decision:decisions[selected<0?0:selected]};
+  }
   /** Last check before an offer; the executing holder must still perform atomic admission. */
   async preflight(groupId:string,expected:SnapshotDecision,request:PlacementRequest,clock:PlanningClock):Promise<boolean>{
     const {snapshot,policy}=await this.snapshots.build(groupId);

@@ -65,7 +65,8 @@ async function main(){
    const pack=(await builtinReferencePacks()).find(p=>p.manifest.contract.capability==='image.crop.v1');
    await until(async()=>{const d=await spaces('/'+group);return d.devices[0].capabilities.some(c=>c.capability==='image.crop.v1'&&c.available&&c.state==='ACTIVE');});
    const owner=(await r.auth.activePeers()).find(p=>p.holderInstanceId===device.holderInstanceId),invite=await r.auth.invite(group,owner.principalId,crypto.randomUUID(),config.publicUrl);
-   const source=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:crypto.randomUUID()}),headers={Authorization:'Bearer '+source.credential};
+   const sourceOwner=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:crypto.randomUUID()});
+   const invitation=await r.apps.register(sourceOwner.peer,{label:'Conformance submission',allowedContracts:[pack.manifest.contract.contractId],maxConcurrent:1,resources:pack.manifest.resourceLimit,offlineBase:[],onlineExtra:[]},config.publicUrl),source=await r.apps.exchange({registrationId:invitation.registrationId,code:invitation.code}),headers={Authorization:'Bearer '+source.credential};
    const endpoint={address:config.publicUrl,certificate:invite.certificate,fingerprint:invite.fingerprint,domain};
    for(const [index,test]of [...pack.cases, {...pack.cases[0],parameters:'{"box":{"x":-1,"y":0,"width":1,"height":1},"paddingRatio":0,"targetSize":32,"jpegQuality":90}'}].entries()){
     const id=crypto.randomUUID(),metadata={requestId:id,capability:pack.manifest.contract.capability,contentHash:crypto.createHash('sha256').update(test.input).digest('hex'),bytes:test.input.length,parameters:test.parameters};

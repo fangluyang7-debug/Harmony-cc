@@ -3,14 +3,16 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "npm --prefix ../.. run core:build && npm --prefix ../.. run transport:build && npm --prefix ../.. run references:build && tsc -p tsconfig.json",
+    "build": "npm --prefix ../.. run core:build && npm --prefix ../.. run transport:build && npm --prefix ../.. run sdk:build && npm --prefix ../.. run references:build && tsc -p tsconfig.json",
     "test": "npm run build && node --test test/*.test.cjs",
     "recovery": "node dist/recovery-main.js",
     "pair": "node dist/pairing-main.js",
     "start": "node dist/host-main.js",
-    "submit": "node dist/submit-main.js"
+    "submit": "node dist/submit-main.js",
+    "app:register": "node dist/app-register-main.js"
   },
   "dependencies": {
+    "@harmony/scheduler-client": "0.1.0",
     "@harmony/scheduler-core": "0.1.0",
     "ws": "^8.18.3",
     "@harmony/resource-transport": "0.1.0",

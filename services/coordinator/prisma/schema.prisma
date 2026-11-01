@@ -205,6 +205,43 @@ model ConsoleApp {
   @@unique([groupId, principalId, holderInstanceId])
 }
 
+model RegisteredApp {
+  id String @id
+  groupId String
+  principalId String
+  label String
+  contractsJson String
+  resourcesJson String
+  maxConcurrent Int
+  @@unique([groupId, principalId, label])
+}
+
+model RegisteredInstallation {
+  id String @id
+  appId String
+  groupId String
+  principalId String
+  deviceId String
+  holderInstanceId String @unique
+  state String
+  secretHash String?
+  expiresAt Float
+  offlineJson String
+  onlineJson String
+  @@index([deviceId])
+}
+
+model AppJobReservation {
+  id String @id
+  appId String
+  groupId String
+  principalId String
+  appInstanceId String
+  resourcesJson String
+  deadlineAt Float
+  @@index([groupId, principalId, appId])
+}
+
 model SpaceUser {
   id String @id
   account String @unique

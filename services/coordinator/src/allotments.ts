@@ -19,8 +19,10 @@ export class AllotmentIssuer {
     if(!protocolId(deviceId)||!validResourceVectorV2(capacity)||!capacity.length||!bindings.length||bindings.some(b=>!protocolId(b.groupId)||!protocolId(b.holderInstanceId)||b.appInstanceId!==null&&!protocolId(b.appInstanceId))||new Set(bindings.map(b=>b.holderInstanceId)).size!==bindings.length||new Set(bindings.filter(b=>b.appInstanceId!==null).map(b=>b.appInstanceId)).size!==bindings.filter(b=>b.appInstanceId!==null).length)throw Error('BUDGET_INVALID');
     await this.db.$transaction(async tx=>{
       const all=(await tx.allotment.findMany()).filter(r=>r.id.startsWith('["allotment",')).map(r=>JSON.parse(r.metadataJson) as Reservation).filter(r=>r.grant.deviceId===deviceId);
-      if(!vectorFitsV2(vectorSumV2(...all.map(r=>r.reserved)),capacity))throw Error('BUDGET_RECONCILIATION_REQUIRED');
+      const unmaterialized=(await tx.registeredInstallation.findMany({where:{deviceId}})).filter(i=>!all.some(g=>g.grant.holderInstanceId===i.holderInstanceId));
+      if(!vectorFitsV2(vectorSumV2(...all.map(r=>r.reserved),...unmaterialized.map(i=>JSON.parse(i.offlineJson))),capacity))throw Error('BUDGET_RECONCILIATION_REQUIRED');
       if(all.some(r=>r.reserved.some(v=>v.amount>0)&&!bindings.some(b=>b.groupId===r.grant.groupId&&b.holderInstanceId===r.grant.holderInstanceId&&b.appInstanceId===r.grant.appInstanceId)))throw Error('BINDING_HAS_UNSETTLED_RESERVATION');
+      if(unmaterialized.some(i=>JSON.parse(i.offlineJson).some((v:ResourceAmountV2)=>v.amount>0)&&!bindings.some(b=>b.groupId===i.groupId&&b.holderInstanceId===i.holderInstanceId&&b.appInstanceId===i.id)))throw Error('BINDING_HAS_UNSETTLED_RESERVATION');
       const metadataJson=JSON.stringify({deviceId,capacity,bindings} satisfies Budget),id=key(deviceId);
       await tx.device.upsert({where:{id},create:{id,groupId:'physical-budget',revision:1,metadataJson},update:{revision:{increment:1},metadataJson}});
     });
@@ -32,6 +34,8 @@ export class AllotmentIssuer {
       const binding=budget?.bindings.find(b=>b.groupId===peer.groupId&&b.holderInstanceId===peer.holderInstanceId);
       if(!budget||!binding)throw Error('IDENTITY_UNRESOLVED');
       if(binding.appInstanceId===null&&input.base.some(v=>v.amount>0))throw Error('AGENT_BASE_FORBIDDEN');
+      const installation=await tx.registeredInstallation.findUnique({where:{holderInstanceId:peer.holderInstanceId}});
+      if(installation&&(installation.state!=='ACTIVE'||!peer.app||peer.app.appInstanceId!==installation.id||canonical(input.base)!==canonical(JSON.parse(installation.offlineJson))||!vectorFitsV2(input.extra,JSON.parse(installation.onlineJson))))throw Error('APP_ALLOTMENT_POLICY');
       const id=rowId(peer.groupId,peer.holderInstanceId),row=await tx.allotment.findUnique({where:{id}}),previous:Reservation|null=row?JSON.parse(row.metadataJson):null;
       if(previous&&(previous.grant.deviceId!==peer.deviceId||previous.grant.appInstanceId!==binding.appInstanceId))throw Error('HOLDER_BINDING_CHANGED');
       if(previous&&input.leaseRequestId===previous.grant.leaseRequestId){
@@ -46,7 +50,8 @@ export class AllotmentIssuer {
       if(!validAllotmentGrantV2(grant))throw Error('GRANT_INVALID');
       const desired=vectorSumV2(grant.base,grant.extra),reserved=previous?maximum(previous.reserved,desired):desired;
       const others=(await tx.allotment.findMany()).filter(r=>r.id.startsWith('["allotment",')&&r.id!==id).map(r=>JSON.parse(r.metadataJson) as Reservation).filter(r=>r.grant.deviceId===peer.deviceId);
-      if(!vectorFitsV2(vectorSumV2(reserved,...others.map(r=>r.reserved)),budget.capacity))throw Error('BUDGET_UNAVAILABLE');
+      const unmaterialized=(await tx.registeredInstallation.findMany({where:{deviceId:peer.deviceId}})).filter(i=>i.holderInstanceId!==peer.holderInstanceId&&!others.some(g=>g.grant.holderInstanceId===i.holderInstanceId));
+      if(!vectorFitsV2(vectorSumV2(reserved,...others.map(r=>r.reserved),...unmaterialized.map(i=>JSON.parse(i.offlineJson))),budget.capacity))throw Error('BUDGET_UNAVAILABLE');
       const {signature,...unsigned}=grant;grant.signature=sign('sha256',Buffer.from(canonical(unsigned)),this.privateKey).toString('base64');
       const metadataJson=JSON.stringify({grant,reserved,ack:previous?.ack??null} satisfies Reservation);
       await tx.allotment.upsert({where:{id},create:{id,groupId:peer.groupId,revision:grant.version,metadataJson},update:{revision:grant.version,metadataJson}});

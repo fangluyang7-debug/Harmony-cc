@@ -4,10 +4,10 @@
 | --- | --- |
 | 现行规格 | [specification-r6.md](specification-r6.md)（文档 36 修订 6） |
 | 开发分支 | `codex/scheduler-v2-foundation` |
-| 最近核对 | 2026-11-01，基于 `f8f359d` 推进并完成 S2 替身链路；提交号见 Git 日志 |
+| 最近核对 | 2026-11-01，基于 `dba1859` 推进 S3 的 App 注册与 SDK 提交；提交号见 Git 日志 |
 | 主部署 | 局域网 PC 协调者（`npm run coordinator:lan`），云端协调者为非主线 |
-| 当前切片 | **S2 完成-替身；真机留待验收；下一切片 S3** |
-| 下一步 | S3/C2、C3：独立 App 身份、SDK 提交与生命周期；保留唯一 PlanningService 路径。真机 B9/S2a 按接入文档执行，本轮未做 |
+| 当前切片 | **S3 部分：正式 App 身份与 SDK → PC 链路已实现；来源本地/离线宿主仍待整合** |
+| 下一步 | 继续 S3/C3：SDK 宿主接入同一账本、来源本地候选及无外传、离线基础额度回退、执行中取消与结果目的地；不进入 S4。真机本轮未做 |
 
 ## 0. 更新规则
 
@@ -22,7 +22,7 @@
 | --- | --- | --- | --- |
 | S1 单一派发路径收口 | 完成-替身 | 网页/CLI 已改走 plan → 持久化 → preflight → outbox；已删除自行排序与写死 App 身份；真实版本与六类跨度通过联调；R21/R25 违规 fixture 被拒绝；最终协调者 58/58、PC 41/41（核对、测试，见 §8） | 按 S2 推进，不代表鸿蒙或多物理设备验收完成 |
 | S2 第二种终端实现 | 完成-替身 | 独立 HAR 与两个 HAP 原生构建；PC 8/8、Harmony 模拟器共同 8 项及裁剪/生命周期共 10/10；原生 27 fixture、RDB 重启及 TLS 正反例（测试，见 §9） | 真机 B9/S2a 待验；进入 S3 前阅读本节限制 |
-| S3 SDK 与 App 身份 | 未开始 | 没有通用 SDK；现有 CPU 薄入口已统一经过 PlanningService，控制台临时 App 身份已持久化（核对） | 依赖 S1 与 C1；正式 C2 不能用临时控制台身份代替 |
+| S3 SDK 与 App 身份 | 部分 | 独立 App 注册/凭据、基础额度预留、在线任务配额；TS/ArkTS SDK 同源语义、网页/CLI 整合；模拟器 App → PC 文本/向量实际回执通过（测试，见 §10） | 来源本地/离线宿主、执行中取消、固定服务与完整 resultDestination 尚未接入；不满足 S3 整体完成条件 |
 | S4 两个 App 同机 | 未开始 | `apps/harmony-indexer` 不存在（核对） | 依赖 S3 |
 | S5 多阶段任务与数据路径 | 未开始 | 任务入口只支持单节点；数据经协调者中转（核对、记录） | 依赖 S3 |
 | S6 资源约束与公平 | 部分 | PC 代理有按类别的份额、老化、有界连续服务（记录）；`YieldNotice` 未触发重规划；电量与温度为 `UNKNOWN`（记录） | 依赖 S2 |
@@ -52,13 +52,13 @@
 | B10 | 部分 | PC/Harmony 业务七类跨度及真实 snapshotVersion 通过同一查询；无 SDK 根跨度和完整传输因果，仍不输出完整端到端收益（测试） |
 | B11 | 部分 | PC 与 Harmony 均接远端受限参考评测，业务/评测共用账本；Harmony 裁剪左右区域由独立质量检查晋级；全硬件/真机仍待后续（测试） |
 | B12 | 未开始 | 依赖 B9；需真机 |
-| C1 | 完成-替身 | v2 protocol/core/client/agent 分界；HAR、跨工程 HAP、TS/ArkTS 账本与微观队列判定通过；client 仅端口边界，不等于通用 SDK（测试） |
-| C2 | 部分 | 按已认证 group/principal/holder 签发并持久化 ConsoleApp 身份；完整 App 注册、独立 App 凭据和配额待 S3（核对） |
-| C3 | 未开始 | S1 已将 CPU 入口接入正式规划器；通用 SDK、DAG 与生命周期待 S3（核对） |
+| C1 | 完成-替身 | HAR v2 分界保留；新增实际 client SDK 与原生适配器，公共 TLS 代码移至中立 platform；client 不依赖 agent，核心保持纯净（测试） |
+| C2 | 部分 | 用户确认的一次性邀请、独立安装凭据、撤销/轮换、已确认物理预算内的离线基础额度预留和在线任务配额已实现；控制台采用正式注册实例。离线运行与配额对账、X5 尚未完成（测试，见 §10） |
+| C3 | 部分 | 单节点 workflow/等价方案 SDK、先元数据后字节、派发前取消、结果回调、网页/CLI 共用 TS SDK、模拟器 ArkTS SDK 提交通过；本地/离线宿主及执行中取消待续（测试，见 §10） |
 | C4a | 部分 | 文本、向量、裁剪参考包存在（记录）；【真实·裁剪】待真机 |
 | C4b | 未开始 | 依赖 X6 |
 | C5、C6、C7a、C7b、C9 | 未开始 | — |
-| C8 | 部分 | `text.count.v1` 经 CPU 入口跑通，未经 SDK（记录） |
+| C8 | 部分 | `text.count.v1` 已经 TS/ArkTS SDK → PC 跑通；完整业务 App 与本地宿主未完成（测试） |
 | D1、D4、D5、D6、D9 | 未开始 | — |
 | D2、D3、D8 | 部分 | 有相关模块和局部测试，未接入正式链路（记录） |
 | D7 | 未开始 | — |
@@ -131,6 +131,7 @@
 | 2026-11-01 | `c276134`（拉取基线） | S1 开工 | 按 README 顺序阅读修订 6、状态与 WP-S1，执行基线复核 | `npm run scheduler:v2:test` 通过：core 24、transport 1、PC agent 38、coordinator 56、architecture 18；T1/T2 fixture 脚本通过 |
 | 2026-11-01 | 本轮 S1 提交（基于 `c276134`，提交号见 Git 日志） | S1 / WP-S1、A6、B10 正式链路 | 单一规划派发、临时 App 身份、真实版本追踪、实测中继链路；修复评测触发业务恢复与策略初始化覆盖；启动 X6/X7/X8 环境记录 | 最终组件结果：core 24、T1 495、T2 352、transport 1、PC 41、coordinator 58、architecture 21；v1 41 套件 / 326 项；真机、GPU、HAP 未验收 |
 | 2026-11-01 | 本轮 S2 提交（基于 `f8f359d`，提交号见 Git 日志） | S2 / S2a、C1、B9、X7、X8 | 双代理协议一致性；HAR ArkTS 账本/队列；独立原生代理与探针；规划器文本/裁剪、原生 TLS、RDB 与生命周期验证；真机留接口 | PC 8/8、Harmony 10/10、原生账本 27 fixture、TLS 3/3；详细回归与限制见 §9 |
+| 2026-11-01 | 本轮 S3 提交（基于 `dba1859`，提交号见 Git 日志） | S3 / C2、C3 部分 | 独立 App 注册、基础额度预留、在线任务配额；TS/ArkTS SDK 提交、网页/CLI 整合、模拟器实际取回结果；不标记 S3 整体完成 | 最终证据与下一步见 §10；真机未做 |
 
 ## 8. S1 本轮实现与验证（2026-11-01）
 
@@ -228,3 +229,42 @@
 - 部分压力/撤销运行曾出现 CONTROL_INTERNAL_ERROR 日志，最终协议重连断言通过；后续仍需更细的异常分类，不能把重试成功当成没有发生过异常。
 
 运行入口及测试 App 的数据重置范围见 `tests/agent-conformance/README.md`；平台具体结果见 X7/X8。服务端迁移新增 Attempt.yieldJson；启动前执行现有 `db:init`，不要手工跳过迁移。
+
+## 10. S3 本轮：App 身份与 SDK 提交（2026-11-01）
+
+完成级别：**部分**。本批实现用户要求优先落地的注册与提交接口，并与当前协调者/代理、控制台、CLI 整合；来源本地/离线执行宿主尚未接入，不能将 S3 标为完成。基线 `dba18590ad3d31b5af4d23c2b145c0750ffd954a`，分支保持 `codex/scheduler-v2-foundation`。没有更新 Railway、改动 v1 业务路径或新建 HANDOFF 文档；没有执行真机、GPU、多物理终端验收。
+
+### 已实现
+
+- 新增 `RegisteredApp`、`RegisteredInstallation`、`AppJobReservation` 与迁移 `202611010003_sdk_apps`。设备所有者明确确认策略后签发一次性邀请；App 兑换独立凭据，身份与可用契约由服务端持久化记录构造，不接受任务自报身份。轮换保留身份，撤销使凭据失效；标签不代表发行者签名，X5 仍待完成。
+- 注册时预留离线基础额度，累计占用已确认物理预算；与已有 agent grant、尚未兑换/已过期/已撤销的未对账 App 保留量一起核算。逻辑 App 的离线基础额度总和也不能超过资源策略。不能通过撤销/过期自动回收未知离线资源。在线任务按 `(groupId,principalId,appId)` 共用并发和资源上限，等待输入也占配额；派发事务重新验证身份与配额。结果成功但未结算、记录缺失等未知状态继续占用。
+- `packages/scheduler-client` 提供 `registerInput`、`plan`、`submit(workflow|alternatives,options)`、状态/恢复查询、结果 Promise/回调和派发前取消。TS 与 HAR `v2/client` 的提交源码保持一致，两端各自编译。Native HTTPS 适配器与原生代理共用中立 `v2/platform/NativeTransport`，client 没有导入 agent；核心仍无平台 I/O。
+- 元数据与字节传输分开；等价路径先检查输出契约和质量目标，再在唯一 PlanningService 中比较，派发仍通过 preflight、已有 outbox 与代理 WSS。本批只支持同一输入/能力的单节点路径及目标约束；多节点和跨能力路径明确返回 S5 范围错误。当前结果目的地支持 ORIGIN，实际数据经协调者中继，仍标记 `SOURCE_PULL_NOT_ESTIMATED`，没有宣称完整端到端时延预测。
+- `cpu-jobs.ts` 改为 SDK 单节点服务端实现，停止临时签发 App 身份。旧 `/v2/jobs` 兼容入口也要求正式注册。网页通过会话网关绑定正式控制台 App，使用同一 TS SDK 的元数据、二进制输入和结果接口；CLI 使用相同 SDK，新增所有者侧 `app:register` 命令。旧 ConsoleApp 映射保留已有身份/历史任务的衔接作用。
+- 超时不重提、不释放；仅对明确的规划容量拒绝做有界等待。浏览器关闭提交窗口停止等待。兼容服务端网关关闭内部等待，由调用方负责等待，避免嵌套等待撞上 HTTP 超时。已派发的任务目前取消返回 `CANCEL_REQUIRES_HOST`，不伪造停止证明。
+- 独立 HAR probe 新增可选 SDK 模式：使用一次性 App 邀请，在原生 App 内经 ArkTS SDK 提交文本/向量，由 PC 实际执行，并在原生端检查取回结果。未传 SDK 邀请时保留 S2 原生账本探针行为。
+
+API、示例、命令与支持范围见 [SDK README](../../packages/scheduler-client/README.md)。更新代码后先 `npm ci`、构建并执行协调者 `db:init`；浏览器 SDK bundle 随 `sdk:build`/协调者构建生成，不提交生成文件。App 私有配置、原始邀请、证书密钥与详细日志留在忽略目录。
+
+### 验证记录
+
+| 范围 | 最终结果 | 本地证据 |
+| --- | --- | --- |
+| SDK 生命周期与源码一致性 | 5/5；元数据先行、输入复制、结果校验/回调、投递不明不重放、关闭窗口、网关无嵌套等待 | `.test/s3-sdk-unit.log` |
+| 注册与实际 SDK 集成针对性测试 | 3/3；一次性/过期/伪造/撤销/轮换、基础预算、跨安装配额、CLI 注册、等价路径和实际回执 | `.test/s3-registration-final.log` |
+| 原生 ArkTS SDK | 文本/向量 2 条实际提交及结果检查通过；两个 committed 回执绑定独立 App | `.test/s3-native-sdk-final.log`；`.test/phase-b-gkMvoo/sdk-report.json` |
+| HAR / probe HAP / agent HAP | API 24 三个原生构建 BUILD SUCCESSFUL | `.test/s3-har-build.log`、`.test/s3-probe-hap-build.log`、`.test/s3-agent-hap-build.log` |
+| 原生代理共同协议与裁剪/生命周期 | 10/10 | `.test/s3-conformance-harmony.log` |
+| 原生 TLS / PC 黑盒共同协议 | 3/3 / 8/8 | `.test/s3-native-trust.log`、`.test/s3-conformance-pc.log` |
+| 协调者最终全量回归 | 64/64；包含网页 SDK 元数据/二进制上传/结果、范围与 Origin 检查 | `.test/s3-coordinator-final.log` |
+| 架构与依赖方向 | 24/24；生产树扫描通过 | `.test/s3-architecture-final.log` |
+| core / T1 / T2 / transport / PC 单测 | 24 / 495 / 352 / 1 / 41，均通过 | `.test/s3-final-regression.log` 的对应组件 |
+
+最小实验摘要已提交到 [S3-20261101.json](../experiments/results/S3-20261101.json)。首次总入口有一个新增测试变量重名导致语法失败；首次原生共同套件暴露兼容网关嵌套等待超时。已修复，首次失败日志不计为通过，以本表最终组件检查为准。注册输入复制测试还发现 Node Buffer.slice 共享内存，已改成实际复制后哈希；新增正反例。运行中仍观察到 `CONTROL_INTERNAL_ERROR` 日志，未声称其分类问题已经消除。本轮未重跑 v1 API 326 项；没有改动其生产源代码，HAR 保留原有导出并原生编译成功。
+
+### 后续继续 S3，暂不进入 S4
+
+1. SDK 宿主接入同一个持久化账本、微观队列、资格评测与物理预算；App 沙箱输入/输出、来源 holder 候选和数据路径计价进入同一规划器。验收“本地更快选本地且无外传 / PC 更快选 PC”，不能用直接调用计算函数绕过 plan。
+2. 实现断网后的基础额度本地路径，以及在线/离线占用与逻辑 App 配额的联合对账。当前注册保留了离线容量，不表示运行时离线执行已完成；未提供自动收回未知保留量的按钮。
+3. 执行中取消接入两个代理的持久化请求与真实引擎停止/结算，保持未知状态保留资源；扩展固定服务节点、结果目的地和 SDK 根追踪。等待超时不得当成取消成功。
+4. 再做规格 S3 的本地/远端选择和离线验收；X5 与真机 C3 留待设备就绪。完整 DAG、跨能力等价路径与通用副本/直连数据路径仍是 S5，不能从当前单节点接口推断已支持。

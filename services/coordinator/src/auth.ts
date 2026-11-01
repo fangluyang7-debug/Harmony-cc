@@ -45,12 +45,19 @@ export class PairingService {
     if(!row||row.revoked)throw Error('CREDENTIAL_REVOKED');
     const data=JSON.parse(row.metadataJson) as CredentialData;
     if(data.domain!==this.domain||data.expiresAt<=this.now())throw Error('CREDENTIAL_EXPIRED');
-    return data.peer;
+    return this.context(data.peer);
+  }
+  private async context(peer:Peer):Promise<Peer>{
+    if(!peer.app)return peer;
+    const i=await this.db.registeredInstallation.findUnique({where:{id:peer.app.appInstanceId}}),app=i?await this.db.registeredApp.findUnique({where:{id:i.appId}}):null;
+    if(!i||!app||i.state!=='ACTIVE'||i.groupId!==peer.groupId||i.principalId!==peer.principalId||i.deviceId!==peer.deviceId||i.holderInstanceId!==peer.holderInstanceId||app.id!==peer.app.appId)throw Error('APP_CREDENTIAL_REVOKED');
+    return {...peer,app:{groupId:i.groupId,principalId:i.principalId,appId:app.id,appInstanceId:i.id,allowedContracts:JSON.parse(app.contractsJson)}};
   }
   async activePeers():Promise<Peer[]>{
     const rows=await this.db.credential.findMany({where:{revoked:false}});
-    return rows.map(row=>JSON.parse(row.metadataJson) as CredentialData)
-      .filter(data=>data.domain===this.domain&&data.expiresAt>this.now()).map(data=>data.peer);
+    const result:Peer[]=[];
+    for(const row of rows){const data=JSON.parse(row.metadataJson) as CredentialData;if(data.domain!==this.domain||data.expiresAt<=this.now())continue;try{result.push(await this.context(data.peer));}catch{/* Revoked installations do not contribute targets. */}}
+    return result;
   }
   async rotate(token:string){
     const old=await this.authenticate(token),credential=randomBytes(32).toString('base64url'),credentialId=randomUUID(),peer={...old,credentialId};

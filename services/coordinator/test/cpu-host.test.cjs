@@ -27,7 +27,8 @@ test('paired standalone CPU host automatically qualifies; metadata submission ->
   await until(async()=>{try{return (await r.snapshots.build('team1')).snapshot.candidates.length===2;}catch{return false;}},errors);
   const registered=await r.directory.profiles('team1');assert.equal(registered.length,1);assert.equal(registered[0].battery.value,null);
   assert.equal(registered[0].executors.length,2);assert.ok(registered[0].executors.every(e=>e.compute.source==='PRIOR'&&e.compute.value>0));
-  const sourceInvite=await r.auth.invite('team1','submitter','source-laptop',r.url),source=await r.auth.exchange({inviteId:sourceInvite.inviteId,code:sourceInvite.code,holderInstanceId:'source-holder'});
+  const sourceInvite=await r.auth.invite('team1','submitter','source-laptop',r.url),owner=await r.auth.exchange({inviteId:sourceInvite.inviteId,code:sourceInvite.code,holderInstanceId:'source-holder'});
+  const registration=await r.apps.register(owner.peer,{label:'CLI source',allowedContracts:['text.count.v1','vector.normalize.v1'],maxConcurrent:4,resources:[{resourcePoolId:'cpu',amount:4},{resourcePoolId:'ram',amount:268435456}],offlineBase:[],onlineExtra:[]},r.url),source=await r.apps.exchange({registrationId:registration.registrationId,code:registration.code});
   const connection={address:r.url,certificate:sourceInvite.certificate,fingerprint:sourceInvite.fingerprint,credential:source.credential,domain:'SIMULATED'},request=allotmentTransport(connection);
   const sourceConfig=path.join(dir,'source.json');fs.writeFileSync(sourceConfig,JSON.stringify({connection}),{mode:0o600});
   const input=Buffer.from(JSON.stringify({text:'Hello team\n资源协同'})),requestId=crypto.randomUUID(),metadata={requestId,capability:'text.count.v1',contentHash:hash(input),bytes:input.length};
@@ -35,8 +36,8 @@ test('paired standalone CPU host automatically qualifies; metadata submission ->
   assert.ok(plans>0);assert.equal(preflights,0);
   await assert.rejects(request('/v2/jobs',{...metadata,requestId:crypto.randomUUID(),targetId:'unqualified-target'}),/NO_LEGAL_PLAN/);
   await assert.rejects(request('/v2/jobs',{...metadata,requestId:crypto.randomUUID(),budgetMs:0}),/BUDGET_EXHAUSTED/);
-  const app=await r.db.consoleApp.findFirst({where:{principalId:'submitter'}});assert.ok(app.appId&&app.appInstanceId);
-  assert.equal(JSON.parse((await r.db.cpuJob.findUnique({where:{id:requestId}})).metadataJson).offer.task.app.appId,app.appId);
+  assert.equal(await r.db.consoleApp.count({where:{principalId:'submitter'}}),0);
+  assert.equal(JSON.parse((await r.db.cpuJob.findUnique({where:{id:requestId}})).metadataJson).offer.task.app.appId,registration.appId);
   assert.equal(await r.db.attempt.count({where:{id:requestId}}),0); // Planning/registration does not dispatch before upload.
   await assert.rejects(request('/v2/jobs/'+requestId+'/start',{}),/REJECTED/);
   const repeated=await request('/v2/jobs',metadata);assert.equal(repeated.jobId,requestId);

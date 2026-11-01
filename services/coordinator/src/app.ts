@@ -21,6 +21,8 @@ import { RemoteEvaluationRunner } from './remote-evaluation';
 import { builtinCpuPacks, builtinReferencePacks, cpuSchemas } from '@harmony/reference-capabilities';
 import { CpuJobs } from './cpu-jobs';
 import { TeamSpaces } from './spaces';
+import { AppRegistry } from './apps';
+import { SdkJobs } from './sdk';
 import type { ExecutorV2 } from '@harmony/scheduler-core';
 import { ArtifactChannel, ArtifactSchema } from '@harmony/resource-transport';
 import { validDeviceProfileV2, validResourceVectorV2, validAllotmentAckV2, protocolId } from '@harmony/scheduler-core';
@@ -37,6 +39,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const store=new CoordinatorStore(db,identity.id);
     const events=new SpaceEvents();
     const auth=new PairingService(db,identity.cert,config.domain);
+    const apps=new AppRegistry(db,auth,identity.cert,config.domain);
     const artifacts=new ArtifactChannel(path.join(config.dataDir,'artifact-cache'),config.domain,token=>auth.authenticate(token),options.artifactSchemas??(options.cpuHost?cpuSchemas:new Map()));
     artifacts.sweep();
     const directory=new DeviceDirectory(db,config.domain);
@@ -60,13 +63,25 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
         return {relayId:identity.id,padding:body.mode==='download'?'x'.repeat(body.bytes):''};
       }
       @Post('device-settings')async deviceSettings(@Headers('authorization') header:string){return this.jobResponse(async()=>({settings:await spaces.deviceSettings(await auth.authenticate(bearer(header)))}));}
-      private async jobResponse(work:()=>Promise<unknown>){try{return await work();}catch(error){const code=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(code==='NO_AVAILABLE_TARGET')throw new ConflictException(code);throw new BadRequestException(code);}}
+      private async jobResponse(work:()=>Promise<unknown>){if(!ready)throw new ServiceUnavailableException('RECOVERY_PENDING');try{return await work();}catch(error){const code=error instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(code==='NO_AVAILABLE_TARGET')throw new ConflictException(code);throw new BadRequestException(code);}}
       @Get('devices')@Header('Cache-Control','no-store')async devices(@Headers('authorization') header:string){
         return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));return {profiles:await directory.profiles(peer.groupId)};});
       }
       @Post('jobs')async submitJob(@Headers('authorization') header:string,@Body() body:any){
         if(!ready||!options.cpuHost)throw new ServiceUnavailableException('CPU_HOST_DISABLED');
         return this.jobResponse(async()=>jobs.submit(await auth.authenticate(bearer(header)),body));
+      }
+      @Post('sdk/jobs')async sdkSubmit(@Headers('authorization') header:string,@Body() body:any){
+        if(!ready||!options.cpuHost)throw new ServiceUnavailableException('CPU_HOST_DISABLED');return this.jobResponse(async()=>sdk.submit(await auth.authenticate(bearer(header)),body));
+      }
+      @Post('sdk/jobs/:id/start')async sdkStart(@Headers('authorization') header:string,@Param('id') id:string){
+        if(!ready||!options.cpuHost)throw new ServiceUnavailableException('CPU_HOST_DISABLED');return this.jobResponse(async()=>sdk.start(await auth.authenticate(bearer(header)),id));
+      }
+      @Get('sdk/jobs/:id')@Header('Cache-Control','no-store')async sdkStatus(@Headers('authorization') header:string,@Param('id') id:string){
+        if(!ready||!options.cpuHost)throw new ServiceUnavailableException('CPU_HOST_DISABLED');return this.jobResponse(async()=>sdk.status(await auth.authenticate(bearer(header)),id));
+      }
+      @Post('sdk/jobs/:id/cancel')async sdkCancel(@Headers('authorization') header:string,@Param('id') id:string){
+        if(!ready||!options.cpuHost)throw new ServiceUnavailableException('CPU_HOST_DISABLED');return this.jobResponse(async()=>sdk.cancel(await auth.authenticate(bearer(header)),id));
       }
       @Post('jobs/:id/start')async startJob(@Headers('authorization') header:string,@Param('id') id:string){
         if(!ready||!options.cpuHost)throw new ServiceUnavailableException('CPU_HOST_DISABLED');return this.jobResponse(async()=>jobs.start(await auth.authenticate(bearer(header)),id));
@@ -105,6 +120,11 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
         if(!ready)throw new ServiceUnavailableException();try{return await traces.read(await auth.authenticate(bearer(header)),traceId);}catch{throw new UnauthorizedException('TRACE_REJECTED');}
       }
       @Post('pair')async pair(@Body() body:any){if(!ready)throw new ServiceUnavailableException();try{return {...await auth.exchange(body),epoch};}catch{throw new UnauthorizedException('PAIRING_REJECTED');}}
+      @Post('apps/registrations')async registerApp(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>apps.register(await auth.authenticate(bearer(header)),body,config.publicUrl??'https://'+config.certificateHost+':'+app.getHttpServer().address().port));}
+      @Post('apps/exchange')async exchangeApp(@Body() body:any){return this.jobResponse(async()=>apps.exchange(body));}
+      @Get('apps/me')async appIdentity(@Headers('authorization') header:string){return this.jobResponse(async()=>apps.context(await auth.authenticate(bearer(header))));}
+      @Get('apps/registrations')async listApps(@Headers('authorization') header:string){return this.jobResponse(async()=>apps.list(await auth.authenticate(bearer(header))));}
+      @Post('apps/registrations/:id/revoke')async revokeApp(@Headers('authorization') header:string,@Param('id') id:string){return this.jobResponse(async()=>apps.revoke(await auth.authenticate(bearer(header)),id));}
       @Post('credentials/rotate')async rotate(@Headers('authorization') header:string){try{return await auth.rotate(bearer(header));}catch{throw new UnauthorizedException('CREDENTIAL_REJECTED');}}
       @Post('credentials/revoke')async revoke(@Headers('authorization') header:string){try{const peer=await auth.authenticate(bearer(header));await auth.revoke(peer.credentialId);return {revoked:true};}catch{throw new UnauthorizedException('CREDENTIAL_REJECTED');}}
       @Get('identity')info(){if(!ready)throw new ServiceUnavailableException();return {version:2,coordinatorId:identity.id,epoch,domain:config.domain};}
@@ -129,6 +149,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const app=await NestFactory.create(AppModule,{logger:false,...(config.proxy?{}:{httpsOptions:{key:identity.key,cert:identity.cert}}),abortOnError:false});
     const express=require('express');
     app.use(express.json({limit:'1mb'}));
+    app.use('/v2/spaces',express.raw({type:'application/octet-stream',limit:'8mb'}));
     app.use('/v2/spaces',(req:any,res:any)=>{void spaces.handle(req,res);});
     if(config.webDir)app.use(express.static(path.resolve(config.webDir),{index:'index.html',maxAge:0}));
     app.use((request:any,response:any,next:()=>void)=>{
@@ -139,8 +160,8 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     let epoch=0;
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
     const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>events.changed(groupId));
-    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,referencePacks);
-    const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events);
+    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks),sdk=new SdkJobs(jobs,referencePacks);
+    const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
     auth.onRevoked(id=>channel.revoke(id));
     const configureCpuGroup=async(groupId:string)=>{
@@ -187,7 +208,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       },onError:input.onError},input.intervalMs);
       calibration.start();return service;
     };
-    return {app,db,identity,store,snapshots,planning,channel,auth,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
+    return {app,db,identity,store,snapshots,planning,channel,auth,apps,sdk,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
       close:async()=>{if(closed)return;closed=true;ready=false;spaces.close();remoteEvaluation.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
   }catch(error){await db.$disconnect();await unlock();throw error;}
 }

@@ -1,3 +1,4 @@
+import {SchedulerSdk} from './scheduler-sdk.js';
 const root=document.querySelector('#app'),dialog=document.querySelector('#dialog');
 const icons={plus:'M12 5v14M5 12h14',join:'M14 3h6v18h-6M3 12h12M10 7l5 5-5 5',cloud:'M7 18a5 5 0 0 1-1-10 6 6 0 0 1 11-2 6 6 0 0 1 1 12ZM9 13h6M12 10v6',pc:'M3 4h18v13H3ZM8 21h8M12 17v4',phone:'M7 2h10v20H7ZM11 18h2',grid:'M3 3h7v7H3ZM14 3h7v7h-7ZM3 14h7v7H3ZM14 14h7v7h-7Z',people:'M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM2 21v-3a7 7 0 0 1 14 0v3M17 4a4 4 0 0 1 0 7M20 21v-3a7 7 0 0 0-3-6',task:'M5 3h14v18H5ZM8 8h8M8 12h8M8 16h4',arrow:'M5 12h14M14 7l5 5-5 5',back:'M19 12H5M10 7l-5 5 5 5',gear:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2',cpu:'M6 6h12v12H6ZM9 9h6v6H9ZM9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4',memory:'M3 6h18v12H3ZM7 10v4M11 10v4M15 10v4M6 18v3M10 18v3M14 18v3M18 18v3',check:'M5 12l4 4L19 6'};
 const icon=(name)=>`<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${icons[name]||icons.grid}"/></svg>`;
@@ -47,8 +48,19 @@ function addDevice(){modal('接入一台设备','登记你要贡献的电脑。�
     document.querySelector('#download-invite').onclick=()=>download('invitation.json',{invitation:d.invitation,holderInstanceId:d.holderInstanceId,domain:d.domain});document.querySelector('#download-policy').onclick=()=>download('contribution.json',d.contribution);await refresh();});}
 async function submitJob(group,metadata){
   const deadline=Date.now()+15000,form=dialog.querySelector('form');
+  const base='/v2/spaces/'+encodeURIComponent(group),request=async(route,body)=>{
+    const response=await fetch(base+route.replace('/v2/sdk','/sdk'),{method:body===null?'GET':'POST',headers:body===null?{}:{'Content-Type':'application/json'},body,credentials:'same-origin'}),text=await response.text();
+    if(!response.ok){const error=JSON.parse(text),failure=Error(error.error||'提交失败');failure.code=error.error;throw failure;}return text;
+  };
+  const binary=async(ticket,bytes)=>{
+    const upload=bytes!==undefined,id=ticket.ref.artifactId.slice(upload?3:4),response=await fetch(base+'/sdk/jobs/'+encodeURIComponent(id)+'/'+(upload?'input':'output'),{method:upload?'PUT':'GET',credentials:'same-origin',headers:upload?{'Content-Type':'application/octet-stream'}:{},...(upload?{body:bytes}:{})});
+    if(!response.ok)throw Error('输入或结果传输失败');return new Uint8Array(await response.arrayBuffer());
+  };
+  const sdk=new SchedulerSdk({request,cancelled:()=>!dialog.open||!dialog.contains(form),write:async(ticket,bytes)=>{await binary(ticket,bytes);},read:ticket=>binary(ticket),digest:async bytes=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),b=>b.toString(16).padStart(2,'0')).join(''),now:Date.now,wait:ms=>new Promise(resolve=>setTimeout(resolve,ms))});
+  const input=await sdk.registerInput(new TextEncoder().encode(JSON.stringify(metadata.input)),metadata.capability==='text.count.v1'?'text.input':'vector.input');
+  const workflow={version:3,id:metadata.requestId,outputContract:metadata.capability==='text.count.v1'?'text.counts':'vector.normalized',qualityTarget:'reference',nodes:[{id:'compute',capability:metadata.capability,input,parameters:'{}',dependsOn:[],...(metadata.targetId?{targetId:metadata.targetId}:{})}]};
   for(;;){
-    try{return await api('/'+group+'/jobs',metadata);}
+    try{return await sdk.submit(workflow,{requestId:metadata.requestId,budgetMs:30000,resultDestination:'ORIGIN'});}
     catch(e){
       if(!['NO_AVAILABLE_TARGET','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(e.code)||Date.now()>=deadline)throw e;
       if(!dialog.open||!dialog.contains(form))throw Error('已停止等待，任务尚未提交。');

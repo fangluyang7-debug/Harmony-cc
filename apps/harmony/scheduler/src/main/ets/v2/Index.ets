@@ -5,4 +5,7 @@ export { canonical } from './core/CanonicalV2';
 export * from './agent/AgentJournalV2';
 export * from './agent/AgentStoreV2';
 export * from './client/ClientPortV2';
+export * from './client/SchedulerSdk';
+export * from './client/HarmonySdkPort';
+export * from './platform/NativeTransport';
 export * from './core/MicroQueueV2';

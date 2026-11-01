@@ -66,6 +66,7 @@ coverage/
 *.tsbuildinfo
 .cache/
 .test/
+apps/team-space-web/scheduler-sdk.js
 BuildProfile.ets
 *.har
 

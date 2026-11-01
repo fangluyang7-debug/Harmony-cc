@@ -14,9 +14,13 @@
     "services/coordinator",
     "services/pc-agent",
     "packages/resource-transport",
-    "packages/reference-capabilities"
+    "packages/reference-capabilities",
+    "packages/scheduler-client"
   ],
   "scripts": {
+    "sdk:build": "npm --workspace @harmony/scheduler-client run build && esbuild packages/scheduler-client/src/index.ts --bundle --format=esm --platform=browser --outfile=apps/team-space-web/scheduler-sdk.js",
+    "sdk:test": "npm --workspace @harmony/scheduler-client test",
+    "sdk:native:test": "node tests/sdk/native.cjs",
     "data:prepare": "node scripts/upload-harmony-products.mjs --prepare",
     "data:upload": "node scripts/upload-harmony-products.mjs",
     "data:upload:test": "node --test scripts/upload-harmony-products.test.mjs",
@@ -60,7 +64,7 @@
     "coordinator:dev": "npm --workspace @harmony/coordinator run dev",
     "coordinator:test": "npm --workspace @harmony/coordinator test",
     "pc-agent:test": "npm --workspace @harmony/pc-agent test",
-    "scheduler:v2:test": "npm run core:test && npm run protocol:v2:test && npm run transport:test && npm run pc-agent:test && npm run coordinator:test && npm run architecture:deps",
+    "scheduler:v2:test": "npm run core:test && npm run protocol:v2:test && npm run transport:test && npm run sdk:test && npm run pc-agent:test && npm run coordinator:test && npm run architecture:deps",
     "transport:build": "npm --workspace @harmony/resource-transport run build",
     "transport:test": "npm --workspace @harmony/resource-transport test",
     "lab:test": "npm --workspace @harmony/coordinator run build && npm --workspace @harmony/pc-agent run build && node tests/scheduler-lab/run.cjs",
@@ -74,6 +78,7 @@
     "ledger:v2:parity": "npm run core:build && node scripts/test-ledger-parity-v2.mjs"
   },
   "devDependencies": {
-    "ajv": "8.20.0"
+    "ajv": "8.20.0",
+    "esbuild": "0.25.12"
   }
 }

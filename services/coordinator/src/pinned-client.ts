@@ -1,11 +1,14 @@
 import https from 'node:https';
 import tls from 'node:tls';
 import { certificateFingerprint, Invitation } from './auth';
-import { protocolId, validAllotmentGrantV2, validTraceSpanV2, analyzeTrace, canonical, validExecutorV2, validCapabilityAdmissionV2 } from '@harmony/scheduler-core';
+import { protocolId, validAppIdentityV2, validResourceVectorV2, validAllotmentGrantV2, validTraceSpanV2, analyzeTrace, canonical, validExecutorV2, validCapabilityAdmissionV2 } from '@harmony/scheduler-core';
 
 const exact=(v:any,keys:string[])=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join('|')===[...keys].sort().join('|');
 function validResponse(route:string,value:any):boolean {
-  const credential=()=>typeof value.credential==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value.credential)&&exact(value.peer,['groupId','holderInstanceId','deviceId','principalId','credentialId'])&&Object.values(value.peer).every(v=>protocolId(v as string));
+  const credential=()=>typeof value.credential==='string'&&/^[A-Za-z0-9_-]{43}$/.test(value.credential)&&exact(value.peer,['groupId','holderInstanceId','deviceId','principalId','credentialId',...(value.peer?.app?['app']:[])])&&['groupId','holderInstanceId','deviceId','principalId','credentialId'].every(k=>protocolId(value.peer[k]))&&(!value.peer.app||validAppIdentityV2(value.peer.app));
+  if(route==='/v2/apps/registrations')return exact(value,['version','registrationId','code','expiresAt','address','certificate','fingerprint','domain','appId','appInstanceId','holderInstanceId'])&&value.version===3&&protocolId(value.registrationId)&&/^[A-Za-z0-9_-]{24}$/.test(value.code)&&Number.isFinite(value.expiresAt)&&['appId','appInstanceId','holderInstanceId'].every(k=>protocolId(value[k]));
+  if(route==='/v2/apps/exchange')return exact(value,['credential','peer','offlineBase','onlineExtra','quota'])&&credential()&&validAppIdentityV2(value.peer.app)&&validResourceVectorV2(value.offlineBase)&&validResourceVectorV2(value.onlineExtra);
+  if(/^\/v2\/apps\/registrations\/[^/]+\/revoke$/.test(route))return exact(value,['revoked','baseRelease'])&&value.revoked===true&&value.baseRelease==='PENDING_RECONCILIATION';
   if(route==='/v2/pair')return exact(value,['credential','peer','epoch'])&&credential()&&Number.isSafeInteger(value.epoch)&&value.epoch>0;
   if(route==='/v2/credentials/rotate')return exact(value,['credential','peer'])&&credential();
   if(route==='/v2/credentials/revoke')return exact(value,['revoked'])&&value.revoked===true;

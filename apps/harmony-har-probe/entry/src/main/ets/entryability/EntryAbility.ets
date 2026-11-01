@@ -1,14 +1,17 @@
-import { UIAbility } from '@kit.AbilityKit';
+import { UIAbility, Want } from '@kit.AbilityKit';
 import { window } from '@kit.ArkUI';
 import { util } from '@kit.ArkTS';
 import { relationalStore } from '@kit.ArkData';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { runLedgerFixtures, acceptedFixture } from '../LedgerFixtures';
 import { AgentStoreV2, AgentPersistenceV2, AgentMessageFactoryV2, agentMessageV2, bindAgentJournalV2 } from 'scheduler';
+import { runSdkProbe } from '../SdkProbe';
 interface Ack {messageId:string;}
 export default class EntryAbility extends UIAbility {
-  async onCreate():Promise<void> {
+  async onCreate(want:Want):Promise<void> {
     try{
+      const encoded=want.parameters?.['sdkInvitation'] as string|undefined;
+      const sdkResult=await runSdkProbe(this.context,encoded??null);if(sdkResult!==null){AppStorage.setOrCreate('probeResult',sdkResult);hilog.info(0x0001,'HarmonyProbe','%{public}s',sdkResult);return;}
       const fixtures=util.TextDecoder.create('utf-8').decodeToString(await this.context.resourceManager.getRawFileContent('ledger-v2.json'));
       const count=runLedgerFixtures(fixtures);
       const db=await relationalStore.getRdbStore(this.context,{name:'probe.db',securityLevel:relationalStore.SecurityLevel.S1});
