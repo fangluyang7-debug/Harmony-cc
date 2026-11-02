@@ -15,6 +15,9 @@ const exact=(v:any,keys:string[])=>v!==null&&typeof v==='object'&&!Array.isArray
 export class ControlChannel {
   private readonly wss=new WebSocketServer({noServer:true,maxPayload:262144,perMessageDeflate:false});
   private readonly sessions=new Set<Session>();
+  // A disconnected session can still be committing a handler. Drain it before closing the database.
+  private readonly pending=new Set<Promise<void>>();
+  private closing=false;
   private readonly handlers=new Map<string,ChannelHandler>();
   private readonly upgrade:(request:any,socket:any,head:Buffer)=>void;
   constructor(private readonly server:Server,private readonly db:PrismaClient,private readonly store:CoordinatorStore,
@@ -68,13 +71,14 @@ export class ControlChannel {
       await store.receive(peer.groupId,peer.holderInstanceId,receipt,epoch());
     }});
     this.upgrade=(request,socket,head)=>{
-      void (async()=>{
-        if(request.url!=='/v2/channel'||!ready())throw Error('UNAVAILABLE');
+      void this.track((async()=>{
+        if(this.closing||request.url!=='/v2/channel'||!ready())throw Error('UNAVAILABLE');
         const auth=request.headers.authorization;
         if(typeof auth!=='string'||!auth.startsWith('Bearer '))throw Error('UNAUTHORIZED');
         const token=auth.slice(7),peer=await authenticate(token);
+        if(this.closing)throw Error('UNAVAILABLE');
         this.wss.handleUpgrade(request,socket,head,ws=>this.connected(ws,peer,token));
-      })().catch(()=>{socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');socket.destroy();});
+      })().catch(()=>{socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');socket.destroy();}));
     };
     server.on('upgrade',this.upgrade);
   }
@@ -85,18 +89,28 @@ export class ControlChannel {
     const timer=setTimeout(()=>{if(!session.hello)socket.close(1008,'HELLO_TIMEOUT');},10000);timer.unref();
     socket.on('close',()=>{clearTimeout(timer);this.sessions.delete(session);});socket.on('error',()=>{});
     socket.on('message',(bytes,binary)=>{
+      if(this.closing)return;
       if(binary){socket.close(1008,'TEXT_REQUIRED');return;}
       if(session.queued>=this.limits.queuedMessages){socket.close(1013,'BACKPRESSURE');return;}
       session.queued++;
-      session.work=session.work.then(()=>this.receive(session,bytes.toString())).catch(error=>{
-        this.onError(error);
-        const code=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'CONTROL_INTERNAL_ERROR';
-        console.warn('CONTROL_MESSAGE_REJECTED '+code);socket.close(1008,code);
-      }).finally(()=>{session.queued--;});
+      session.work=this.track(session.work.then(()=>this.receive(session,bytes.toString())).catch(error=>{
+        this.reject(session,error);
+      }).finally(()=>{session.queued--;}));
     });
   }
+  private track(work:Promise<void>):Promise<void>{
+    this.pending.add(work);void work.then(()=>this.pending.delete(work),()=>this.pending.delete(work));return work;
+  }
+  private reject(s:Session,error:unknown){
+    const code=error instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(error.message)?error.message:
+      error instanceof SyntaxError?'CONTROL_INVALID_JSON':
+      error instanceof Error&&error.name.startsWith('PrismaClient')?'CONTROL_STORAGE_ERROR':'CONTROL_INTERNAL_ERROR';
+    this.onError(error);
+    console.warn((code==='CONTROL_DISCONNECTED'?'CONTROL_TRANSPORT_INTERRUPTED ':'CONTROL_MESSAGE_REJECTED ')+code);
+    s.socket.close(code==='CONTROL_DISCONNECTED'?1011:1008,code);
+  }
   private async receive(s:Session,text:string){
-    if(s.socket.readyState!==WebSocket.OPEN)return;
+    if(this.closing||s.socket.readyState!==WebSocket.OPEN)return;
     const current=await this.authenticate(s.token);
     if(current.credentialId!==s.peer.credentialId)throw Error('CREDENTIAL_CHANGED');
     const m=JSON.parse(text) as MessageEnvelopeV2;
@@ -127,10 +141,12 @@ export class ControlChannel {
       coordinatorEpoch:this.epoch(),seq:seq.value,ackOf:m.messageId,traceId:m.traceId,payload:JSON.stringify({messageId:m.messageId}),extensions:[]});
   }
   private async send(s:Session,message:MessageEnvelopeV2){
+    if(this.closing||s.socket.readyState!==WebSocket.OPEN)throw Error('CONTROL_DISCONNECTED');
     await this.authenticate(s.token);
+    if(this.closing||s.socket.readyState!==WebSocket.OPEN)throw Error('CONTROL_DISCONNECTED');
     const text=JSON.stringify(message);
     if(s.socket.bufferedAmount+Buffer.byteLength(text)>this.limits.bufferedBytes){s.socket.close(1013,'BACKPRESSURE');throw Error('BACKPRESSURE');}
-    await new Promise<void>((resolve,reject)=>s.socket.send(text,error=>error?reject(error):resolve()));
+    await new Promise<void>((resolve,reject)=>s.socket.send(text,error=>error?reject(Error('CONTROL_DISCONNECTED')):resolve()));
   }
   private async pump(s:Session){
     if(!s.hello||s.socket.readyState!==WebSocket.OPEN)return;
@@ -144,16 +160,19 @@ export class ControlChannel {
       await this.db.outbox.update({where:{id:row.id},data:{deliveryCount:{increment:1}}});
     }
   }
-  async flush(){await Promise.all([...this.sessions].map(s=>s.work=s.work.then(()=>this.pump(s)).catch(()=>{s.socket.close(1008,'DELIVERY_REJECTED');})));}
+  async flush(){if(this.closing)return;await Promise.all([...this.sessions].map(s=>s.work=this.track(s.work.then(()=>this.pump(s)).catch(error=>this.reject(s,error)))));}
   /** A wake-up hint, not an execution command. Durable evaluation records are reconciled on reconnect. */
-  async evaluationChanged(groupId:string,holderInstanceId:string){
+  evaluationChanged(groupId:string,holderInstanceId:string){
+    if(this.closing)return Promise.resolve();return this.track(this.notifyEvaluation(groupId,holderInstanceId));
+  }
+  private async notifyEvaluation(groupId:string,holderInstanceId:string){
     const seq=await this.db.dispatchSequence.upsert({where:{id:this.store.senderInstanceId},create:{id:this.store.senderInstanceId,value:1},update:{value:{increment:1}}});
     await Promise.all([...this.sessions].filter(s=>s.hello&&s.peer.groupId===groupId&&s.peer.holderInstanceId===holderInstanceId).map(async s=>{
       try{await this.send(s,{protocolVersion:2,messageId:randomUUID(),type:'EvaluationChanged',groupId,senderInstanceId:this.store.senderInstanceId,
         coordinatorEpoch:this.epoch(),seq:seq.value,ackOf:null,traceId:randomUUID(),payload:'{}',extensions:[]});}
-      catch{s.socket.terminate();}
+      catch(error){this.reject(s,error);s.socket.terminate();}
     }));
   }
   revoke(credentialId:string){for(const s of this.sessions)if(s.peer.credentialId===credentialId)s.socket.close(1008,'CREDENTIAL_REVOKED');}
-  async close(){this.server.off('upgrade',this.upgrade);for(const s of this.sessions)s.socket.terminate();await Promise.allSettled([...this.sessions].map(s=>s.work));await new Promise<void>(r=>this.wss.close(()=>r()));}
+  async close(){this.closing=true;this.server.off('upgrade',this.upgrade);for(const s of this.sessions)s.socket.terminate();await Promise.allSettled([...this.pending]);await new Promise<void>(r=>this.wss.close(()=>r()));}
 }

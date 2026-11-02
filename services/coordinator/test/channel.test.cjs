@@ -8,12 +8,54 @@ const {ProfilePublisher}=require('../../pc-agent/dist/profile-publisher');
 const peer={groupId:'g1',holderInstanceId:'h1',deviceId:'device1',principalId:'p1',credentialId:'credential1'};
 const authenticate=async token=>{if(token!=='test-token')throw Error('UNAUTHORIZED');return peer;};
 function envelope(r,id,seq,type='Hello',payload={versions:[2],extensions:[]}){return {protocolVersion:2,messageId:id,type,groupId:'g1',senderInstanceId:'h1',coordinatorEpoch:r.epoch,seq,ackOf:null,traceId:'trace1',payload:JSON.stringify(payload),extensions:[]};}
+const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
 async function connect(r,token='test-token'){
   const ws=new WebSocket(r.url.replace('https:','wss:')+'/v2/channel',{ca:r.identity.cert,family:4,headers:{Authorization:'Bearer '+token}});
   const queue=[],waiters=[];ws.on('message',b=>{const m=JSON.parse(b.toString());if(waiters.length)waiters.shift()(m);else queue.push(m);});
   ws.next=()=>queue.length?Promise.resolve(queue.shift()):Promise.race([new Promise(resolve=>waiters.push(resolve)),new Promise((_,reject)=>{const t=setTimeout(()=>reject(Error('MESSAGE_TIMEOUT')),5000);t.unref();})]);
   await once(ws,'open');return ws;
 }
+
+test('disconnect during a durable handler is transport loss; reconnect ACKs without executing twice',{timeout:20000},async()=>{
+  const errors=[],r=await runtime({authenticate,onError:e=>errors.push(e.message)}),entered=deferred(),release=deferred(),finished=deferred();let ws,count=0;
+  r.channel.register('Paused',{validate:p=>Object.keys(p).length===0,handle:async()=>{count++;entered.resolve();await release.promise;}});
+  const send=r.channel.send.bind(r.channel);r.channel.send=async(s,m)=>{try{return await send(s,m);}finally{if(m.ackOf==='paused')finished.resolve();}};
+  try{
+    ws=await connect(r);ws.send(JSON.stringify(envelope(r,'hello',1)));await ws.next();
+    const m=envelope(r,'paused',2,'Paused',{});ws.send(JSON.stringify(m));await entered.promise;
+    const disconnected=once(ws,'close');ws.close();await disconnected;release.resolve();await finished.promise;
+    ws=await connect(r);ws.send(JSON.stringify(envelope(r,'hello-again',3)));await ws.next();ws.send(JSON.stringify(m));assert.equal((await ws.next()).ackOf,'paused');
+    assert.equal(count,1);assert.deepEqual(errors,['CONTROL_DISCONNECTED']);
+  }finally{release.resolve();ws?.terminate();await r.close();}
+});
+
+test('shutdown drains a disconnected session handler before disconnecting storage',{timeout:20000},async()=>{
+  const r=await runtime({authenticate}),entered=deferred(),release=deferred();let ws,closing,completed=false;
+  r.channel.register('Paused',{validate:p=>Object.keys(p).length===0,handle:async()=>{entered.resolve();await release.promise;await r.db.channelInbox.count();completed=true;}});
+  try{
+    ws=await connect(r);ws.send(JSON.stringify(envelope(r,'hello',1)));await ws.next();
+    ws.send(JSON.stringify(envelope(r,'paused',2,'Paused',{})));await entered.promise;
+    const disconnected=once(ws,'close');ws.close();await disconnected;
+    // Wait for the server close event, so this session is absent from its live-session set.
+    const deadline=Date.now()+5000;while(r.channel.sessions.size&&Date.now()<deadline)await new Promise(resolve=>setImmediate(resolve));assert.equal(r.channel.sessions.size,0);
+    const original=r.db.$disconnect.bind(r.db);r.db.$disconnect=async()=>{assert.equal(completed,true);await original();};
+    closing=r.close();release.resolve();await closing;assert.equal(completed,true);
+  }finally{release.resolve();ws?.terminate();await (closing??r.close());}
+});
+
+test('malformed JSON, storage failures and unknown handler faults have distinct safe close reasons',{timeout:20000},async()=>{
+  const r=await runtime({authenticate});let ws;
+  r.channel.register('StorageFault',{validate:()=>true,handle:async()=>{const e=Error('private database detail');e.name='PrismaClientUnknownRequestError';throw e;}});
+  r.channel.register('UnknownFault',{validate:()=>true,handle:async()=>{throw Error('private handler detail');}});
+  try{
+    let seq=0;
+    for(const [type,reason] of [['Malformed','CONTROL_INVALID_JSON'],['StorageFault','CONTROL_STORAGE_ERROR'],['UnknownFault','CONTROL_INTERNAL_ERROR']]){
+      ws=await connect(r);ws.send(JSON.stringify(envelope(r,'hello-'+(++seq),seq)));await ws.next();
+      const closed=once(ws,'close');ws.send(type==='Malformed'?'{':JSON.stringify(envelope(r,'fault-'+(++seq),seq,type,{})));
+      const [code,detail]=await closed;assert.equal(code,1008);assert.equal(detail.toString(),reason);
+    }
+  }finally{ws?.terminate();await r.close();}
+});
 test('duplicates, reconnect and out-of-order messages preserve durable message semantics',async()=>{
   const r=await runtime({authenticate});let count=0;
   r.channel.register('Probe',{validate:p=>p&&Object.keys(p).length===1&&p.value===1,handle:async()=>{count++;}});
