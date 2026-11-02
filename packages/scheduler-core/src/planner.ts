@@ -9,6 +9,8 @@ export interface PlacementReplica { deviceId: string; readMs: number | null; hol
 export interface PlacementArtifact { id: string; bytes: number; replicas: PlacementReplica[]; }
 export interface PlacementLink { from: string; to: string; bytesPerSecond: number; fixedMs: number; effective: boolean; observedAt: number; ttlMs: number; source: 'REAL' | 'SIMULATED'; endpointId?:string; endpointEpoch?:string; endpointOperation?:'READ'|'WRITE'; fromHolderInstanceId?:string; toHolderInstanceId?:string; }
 export interface PlacementCandidate {
+  /** Authenticated endpoint projection; never accepted from a self-reported executor. */
+  dataEndpoint?:{id:string;epoch:string};
   serviceId?:string;
   holderInstanceId?:string;
   /** Bound by the authenticated directory, never by an executor profile. */
@@ -28,7 +30,7 @@ export interface PlacementNode {
   modelManifest?:ModelManifestV2|null;
   qualityRequirements?: QualityEvidence[];
   maxMemoryBytes?: number;
-  id: string; capability: string; dependencies: string[]; inputs: string[]; output: { id: string; bytes: number };
+  id: string; capability: string; dependencies: string[]; inputs: string[]; output: { id: string; bytes: number; retainAtExecutor?:boolean };
   baselineTargetId: string; memoryBytes: number; minimumQuality: number; model?: ModelCompatibility;
   candidates: PlacementCandidate[];
 }
@@ -48,7 +50,7 @@ export interface PlacementRequest {
 }
 export interface PlannerLimits { maxCandidates: number; lookahead: number; beamWidth: number; planningBudgetMs: number; switchCostMs: number; hysteresisMs: number; }
 export interface DeviceResources { deviceId: string; resourcePoolId: string; availableMemoryBytes: number | null; availableSlots: number | null; available?:number|null; observedAt: number; ttlMs: number; }
-export interface PlannerAssignment { inputEndpointOperation?:'READ'|'WRITE'; inputEndpointId?:string; inputEndpointEpoch?:string; startMs?:number; finishMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
+export interface PlannerAssignment { outputEndpointId?:string; outputEndpointEpoch?:string; inputEndpointOperation?:'READ'|'WRITE'; inputEndpointId?:string; inputEndpointEpoch?:string; startMs?:number; finishMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
 export interface PlannerRejection { targetId: string; nodeId: string; deviceId: string; executorId: string; code: string; }
 export interface WorkflowPlacementDecision { status: 'ready' | 'blocked'; baseline: PlannerAssignment[] | null; suggestion: PlannerAssignment[] | null;
   baselineMs: number | null; suggestionMs: number | null; rejections: PlannerRejection[]; truncated: number; planningMs: number; reason: string; }
@@ -196,17 +198,19 @@ export class WorkflowPlacementPlanner {
     }
     const output:PlacementArtifact={id:node.output.id,bytes:node.output.bytes,replicas:[{deviceId:c.deviceId,readMs:0}]};
     const localResult=r.localResultHolderId!==undefined&&c.holderInstanceId===r.localResultHolderId&&c.appInstanceId!==undefined&&c.appInstanceId===r.appInstanceId;
+    const retained=!!(node.output.retainAtExecutor&&c.dataEndpoint&&c.holderInstanceId&&!localResult);
+    if(retained)output.replicas[0]={deviceId:c.deviceId,holderInstanceId:c.holderInstanceId,readMs:0,transferOperation:'READ'};
     if(localResult)output.replicas[0].holderInstanceId=c.holderInstanceId;
-    const publication=r.materializeOutputsAt&&!localResult?this.transfer(output,r.materializeOutputsAt,r):0;
+    const publication=r.materializeOutputsAt&&!localResult&&!retained?this.transfer(output,r.materializeOutputsAt,r):0;
     if(publication===null)return null;
     const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs+publication,duration=execution+c.uncertaintyMs;
     const demands=this.demands(c,node,r),start=this.earliest(state.occupancy,demands,ready+transfer,duration),end=start+duration;
     const cost=Math.max(state.cost,end);if(cost>r.remainingBudgetMs)return null;
-    artifacts.set(node.output.id,r.materializeOutputsAt&&!localResult?{...output,replicas:[{deviceId:r.materializeOutputsAt,readMs:0}]}:output);
+    artifacts.set(node.output.id,r.materializeOutputsAt&&!localResult&&!retained?{...output,replicas:[{deviceId:r.materializeOutputsAt,readMs:0}]}:output);
     const completed=new Map(state.completed);completed.set(node.id,end);
     const availability=new Map(state.ready);availability.set(node.output.id,end);
     return {cost,artifacts,ready:availability,completed,occupancy:[...state.occupancy,...demands.map(d=>({key:d.key,start,end,amount:d.amount}))],
-      assignments:[...state.assignments,{...(inputEndpointId?{inputEndpointId,inputEndpointEpoch,inputEndpointOperation}:{}),targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,inputTransferMs:transfer,executionMs:execution,uncertaintyMs:c.uncertaintyMs,startMs:start,finishMs:end}]};
+      assignments:[...state.assignments,{...(retained?{outputEndpointId:c.dataEndpoint!.id,outputEndpointEpoch:c.dataEndpoint!.epoch}:{}),...(inputEndpointId?{inputEndpointId,inputEndpointEpoch,inputEndpointOperation}:{}),targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,inputTransferMs:transfer,executionMs:execution,uncertaintyMs:c.uncertaintyMs,startMs:start,finishMs:end}]};
   }
   private finish(state:Beam|null,nodes:PlacementNode[],r:PlacementRequest):Beam|null {
     if(!state||!r.finalDestination||!nodes.length)return state;

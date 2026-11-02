@@ -24,7 +24,9 @@ test('registered App host qualifies and executes SDK work through the shared pla
   const otherSdk=new SchedulerSdk(nodeSdkPort({...connection,credential:other.credential}),{capacityWaitMs:0});
   const foreignInput=await otherSdk.registerInput(Buffer.from('{"text":"private"}'),'text.input');
   await assert.rejects(otherSdk.plan({version:3,id:randomUUID(),outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input:foreignInput,parameters:'{}',dependsOn:[]}]},{requestId:randomUUID(),budgetMs:30000,resultDestination:'ORIGIN'}),/NO_LEGAL_PLAN/);
-  const sdk=host.sdk(),input=await sdk.registerInput(Buffer.from('{"text":"App host"}'),'text.input'),id=randomUUID();
+  const sdk=host.sdk(),request=sdk.port.request.bind(sdk.port);
+  sdk.port.request=async(route,body)=>{try{return await request(route,body);}catch(error){error.requestRoute=route;error.hostErrors=[...errors];throw error;}};
+  const input=await sdk.registerInput(Buffer.from('{"text":"App host"}'),'text.input'),id=randomUUID();
   const task=await sdk.submit({version:3,id,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
   const result=await task.result();assert.deepEqual(JSON.parse(Buffer.from(result.output)),{characters:8,words:2,lines:1});
   const job=await r.db.cpuJob.findUnique({where:{id}}),data=JSON.parse(job.metadataJson);
@@ -85,7 +87,15 @@ test('registered App host qualifies and executes SDK work through the shared pla
     const choiceId=randomUUID(),chosen=await sdk.submit({version:3,id:choiceId,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:choiceId,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
     const chosenResult=await chosen.result();assert.equal(chosenResult.status.deviceId,local?device:remoteDevice);
     const metadata=JSON.parse((await r.db.cpuJob.findUnique({where:{id:choiceId}})).metadataJson);
-    assert.equal(r.artifacts.available(metadata.input),!local);assert.equal(r.artifacts.available(metadata.output),!local);
+    const relayedInput=r.artifacts.available(metadata.input);
+    if(local)assert.equal(relayedInput,false);
+    else if(!relayedInput){
+      assert.equal(await r.directTransfers.hasInput(group,remoteHolder,peer.app.appInstanceId,metadata.input.ref),true);
+      const copy=remoteHost.dataHost?.channel.lookup(group,metadata.input.ref);assert.ok(copy,'remote input must have a verified direct replica');
+      assert.deepEqual(await remoteHost.dataHost.channel.readForControl(copy),Buffer.from('{"text":"App host"}'));
+      assert.deepEqual(metadata.offer.transferPlan,[],'a completed upload is executor-local at dispatch');
+    }
+    assert.equal(r.artifacts.available(metadata.output),!local);
   }
  }finally{await remoteHost?.close();await host?.close();await r.close();}
 });

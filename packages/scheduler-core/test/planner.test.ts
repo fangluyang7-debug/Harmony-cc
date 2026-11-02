@@ -53,6 +53,24 @@ describe('bounded data-location planner',()=>{
 });
 
 describe('direct input routing',()=>{
+  it('prices retained intermediate outputs through the producer endpoint',()=>{
+    const r=fixture();r.finalDestination=undefined;r.inputRelayId='cloud';r.materializeOutputsAt='cloud';
+    r.nodes[0].baselineTargetId='pc';r.nodes[0].allowedTargetIds=['pc'];r.nodes[1].allowedTargetIds=['cloud'];
+    for(const node of r.nodes){node.candidates[0].holderInstanceId='source';node.candidates[1].holderInstanceId='worker';node.candidates[1].dataEndpoint={id:'producer',epoch:'epoch'};}
+    // PlanningService filters allowedTargetIds before invoking this pure planner.
+    r.nodes[0].candidates=r.nodes[0].candidates.filter(c=>c.targetId==='pc');
+    r.nodes[1].candidates=r.nodes[1].candidates.filter(c=>c.targetId==='cloud');
+    r.links.push({from:'pc',to:'cloud',fromHolderInstanceId:'worker',toHolderInstanceId:'source',endpointId:'producer',endpointEpoch:'epoch',endpointOperation:'READ',bytesPerSecond:100000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000});
+    const planner=new WorkflowPlacementPlanner(limits,()=>0);
+    expect(planner.plan(r).status).toBe('blocked'); // Mandatory relay publication exceeds the budget.
+    r.nodes[0].output.retainAtExecutor=true;
+    const result=planner.plan(r);
+    expect(result.suggestionMs).toBe(211);
+    expect(result.suggestion?.[0].outputEndpointId).toBe('producer');
+    expect(result.suggestion?.[1].inputEndpointOperation).toBe('READ');
+    r.nodes[0].candidates[0].dataEndpoint=undefined;
+    expect(planner.plan(r).status).toBe('blocked');
+  });
   function directFixture(){
     const r=fixture();r.nodes=r.nodes.slice(0,1);r.finalDestination=undefined;
     r.originHolderId='source';r.inputRelayId='relay';

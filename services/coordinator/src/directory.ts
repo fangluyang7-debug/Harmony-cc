@@ -129,11 +129,15 @@ export class DeviceDirectory {
     }
     const reportedLinks=profiles.flatMap(p=>p.links).filter(l=>sampleUsableV2(l.fixedMs,now,this.domain)&&sampleUsableV2(l.bytesPerSecond,now,this.domain));
     // A directional link with conflicting network epochs is unknown, not the fastest report.
-    const links=reportedLinks.filter(l=>(!l.metered||policy.allowMetered)&&l.via===null&&
+    const links:PlacementLink[]=reportedLinks.filter(l=>(!l.metered||policy.allowMetered)&&l.via===null&&
       !reportedLinks.some(other=>other.from===l.from&&other.to===l.to&&other.networkEpoch!==l.networkEpoch))
       .filter((l,index,all)=>all.findIndex(other=>other.from===l.from&&other.to===l.to)===index)
       .map(l=>({from:l.from,to:l.to,bytesPerSecond:l.bytesPerSecond.value!,fixedMs:l.fixedMs.value!,effective:false,source:this.domain,observedAt:Math.min(l.fixedMs.sampledAt,l.bytesPerSecond.sampledAt),ttlMs:Math.min(l.fixedMs.ttlMs,l.bytesPerSecond.ttlMs)}));
     if(policy.allowMetered&&this.directLinks)links.push(...await this.directLinks(db,groupId));
+    for(const candidate of candidates){
+      const link=links.find(l=>l.endpointId&&l.endpointEpoch&&(l.endpointOperation==='WRITE'?l.toHolderInstanceId:l.fromHolderInstanceId)===candidate.holderInstanceId);
+      if(link)candidate.dataEndpoint={id:link.endpointId!,epoch:link.endpointEpoch!};
+    }
     return {groupId,policyVersion,version,domain:this.domain,capturedAt:now,devices:profiles.map(p=>({deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,deviceInstanceId:p.deviceInstanceId,ledgerEpoch:p.ledgerEpoch,sampledAt:p.ownerActivity.sampledAt,ttlMs:p.ownerActivity.ttlMs})),resources,candidates,links};
   }
 }

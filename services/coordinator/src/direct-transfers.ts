@@ -1,7 +1,7 @@
 import {randomBytes, randomUUID, verify, X509Certificate} from 'node:crypto';
 import {PrismaClient, Prisma} from '../generated/client';
 import {canonical, protocolId, fitLink, PlacementLink, networkState, NetworkPairState} from '@harmony/scheduler-core';
-import {DataEndpointIdentity, SignedTransfer, TransferAuthorization, signTransfer, transferDigest, validDataEndpoint, verifyTransfer} from '@harmony/resource-transport';
+import {ArtifactDescriptor, DataEndpointIdentity, SignedTransfer, TransferAuthorization, signTransfer, transferDigest, validDataEndpoint, verifyTransfer} from '@harmony/resource-transport';
 import {Peer} from './channel';
 
 type Db=Prisma.TransactionClient;
@@ -159,9 +159,38 @@ export class DirectTransfers {
       const key=transferDigest(canonical([groupId,ref,endpoint.id,endpoint.epoch])),row=await this.db.dataReplica.findUnique({where:{id:key}});
       if(!row)return false;const data=JSON.parse(row.metadataJson);
       if(data.appInstanceId!==appInstanceId||data.expiresAt<=this.now()||canonical(data.ref)!==canonical(ref)||canonical(data.endpoint)!==canonical(endpoint))return false;
+      if(data.kind==='OUTPUT'){
+        await this.active(this.db,data.producerCredentialId);
+        const job=await this.db.cpuJob.findUnique({where:{id:data.attemptId}}),value=job?JSON.parse(job.metadataJson):null;
+        const receipt=await this.db.receipt.findUnique({where:{id:data.attemptId}}),result=receipt?JSON.parse(receipt.recordJson):null;
+        const node=value?await this.db.node.findUnique({where:{id:JSON.stringify([value.offer.task.workflowId,value.offer.task.nodeId])}}):null;
+        const installation=await this.db.registeredInstallation.findUnique({where:{id:appInstanceId}});
+        return !!(job&&job.groupId===groupId&&value.holderId===holderInstanceId&&value.offer.task.app.appInstanceId===appInstanceId&&
+          installation?.state==='ACTIVE'&&installation.groupId===groupId&&installation.principalId===job.principalId&&
+          value.output&&canonical(value.output.ref)===canonical(ref)&&node?.currentAttemptId===data.attemptId&&node?.state==='COMMITTED'&&
+          receipt?.committed&&result?.state==='SUCCEEDED'&&result.outputs.some((r:any)=>canonical(r)===canonical(ref)));
+      }
       const authorization=await this.db.transferAuthorization.findUnique({where:{id:data.authorizationId}});
       if(!authorization||authorization.state!=='COMPLETED')return false;await this.active(this.db,authorization.requesterCredentialId);return true;
     }catch{return false;}
+  }
+  async ownedEndpoint(peer:Peer){return this.endpoint(this.db,transferDigest(canonical([peer.groupId,peer.holderInstanceId])),peer.groupId);}
+  /** Producer has already atomically stored and verified bytes; execution receipt still gates consumption. */
+  async publishOutput(peer:Peer,attemptId:string,descriptor:ArtifactDescriptor){
+    return this.db.$transaction(async tx=>{
+      await this.active(tx,peer.credentialId);
+      const endpoint=await this.endpoint(tx,transferDigest(canonical([peer.groupId,peer.holderInstanceId])),peer.groupId);
+      const job=await tx.cpuJob.findUnique({where:{id:attemptId}}),data=job?JSON.parse(job.metadataJson):null,attempt=await tx.attempt.findUnique({where:{id:attemptId}});
+      if(!job||job.groupId!==peer.groupId||job.state==='CANCEL_REQUESTED'||!attempt||!['OFFERED','ACCEPTED','RUNNING'].includes(attempt.state)||
+        data.holderId!==peer.holderInstanceId||attempt.holderInstanceId!==peer.holderInstanceId||data.offer.target.deviceId!==peer.deviceId||
+        data.offer.task.coordinatorEpoch!==this.epoch()||!data.output||canonical(data.output)!==canonical(descriptor)||
+        data.retainOutput?.id!==endpoint.id||data.retainOutput?.epoch!==endpoint.epoch)throw Error('OUTPUT_REPLICA_SCOPE');
+      const id=transferDigest(canonical([peer.groupId,descriptor.ref,endpoint.id,endpoint.epoch]));
+      const metadataJson=JSON.stringify({kind:'OUTPUT',attemptId,producerCredentialId:peer.credentialId,ref:descriptor.ref,bytes:descriptor.bytes,
+        endpoint,appInstanceId:data.offer.task.app.appInstanceId,verifiedAt:this.now(),expiresAt:descriptor.expiresAt});
+      await tx.dataReplica.upsert({where:{id},create:{id,groupId:peer.groupId,endpointId:endpoint.id,metadataJson},update:{metadataJson}});
+      return {recorded:true};
+    });
   }
   /** Source App may transfer only its own job input to, or committed output from, the selected host. */
   private async scope(tx:Db,peer:Peer,id:string,operation:'READ'|'WRITE',endpoint:DataEndpointIdentity){

@@ -50,11 +50,19 @@ test('independent endpoint processes consume single-use scoped grants online and
   assert.equal((await r.directTransfers.observe(app.peer,measurement)).recorded,false);
   // Delegated reads are limited to a selected holder and a current committed DAG edge.
   const consumer=await pair('consumer-device');await r.directTransfers.resetNetwork(consumer.paired.peer);
-  data.offer.task.nodeId='parent';data.output=data.input;
+  data.offer.task.nodeId='parent';data.output=data.input;data.retainOutput={id:right.endpoint.id,epoch:right.endpoint.epoch};
   await r.db.cpuJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
   const parentNode=JSON.stringify([id,'parent']);
-  await r.db.node.create({data:{id:parentNode,workflowId:id,currentAttemptId:id,state:'COMMITTED'}});
+  await r.db.node.create({data:{id:parentNode,workflowId:id,currentAttemptId:id,state:'RUNNING'}});
+  await r.db.attempt.create({data:{id,groupId:group,workflowId:id,nodeId:'parent',executionDigest:'fixture-parent',state:'RUNNING',holderInstanceId:worker.paired.peer.holderInstanceId,taskJson:JSON.stringify(data.offer.task)}});
+  await assert.rejects(r.directTransfers.publishOutput(app.peer,id,data.output),/OUTPUT_REPLICA_SCOPE/);
+  await assert.rejects(r.directTransfers.publishOutput(worker.paired.peer,id,{...data.output,bytes:data.output.bytes+1}),/OUTPUT_REPLICA_SCOPE/);
+  await r.directTransfers.publishOutput(worker.paired.peer,id,data.output);
+  assert.equal(await r.directTransfers.hasInput(group,worker.paired.peer.holderInstanceId,app.peer.app.appInstanceId,ref),false,'stored output is not consumable before commit');
+  await r.db.node.update({where:{id:parentNode},data:{state:'COMMITTED'}});
+  await r.db.attempt.update({where:{id},data:{state:'SUCCEEDED'}});
   await r.db.receipt.create({data:{id,attemptId:id,committed:true,recordJson:JSON.stringify({state:'SUCCEEDED',outputs:[ref]})}});
+  assert.equal(await r.directTransfers.hasInput(group,worker.paired.peer.holderInstanceId,app.peer.app.appInstanceId,ref),true);
   const childId=randomUUID(),childData={...data,sourceAttemptId:id,holderId:consumer.paired.peer.holderInstanceId,
    plan:{decision:{suggestion:[{inputEndpointId:right.endpoint.id,inputEndpointEpoch:right.endpoint.epoch,inputEndpointOperation:'READ'}]}},
    offer:{target:{deviceId:consumer.paired.peer.deviceId},dependencies:[{nodeId:'parent',committed:true}],task:{workflowId:id,nodeId:'child',coordinatorEpoch:r.epoch,app:{appId:app.peer.app.appId,appInstanceId:app.peer.app.appInstanceId},contract:{contractId:'text.count.v1'}}}};
