@@ -1,0 +1,79 @@
+{
+  "date": "2026-11-02",
+  "baseCommit": "7792abf",
+  "scope": "E2 minimal read-only pre-integration; no S5 or E2 completion claim",
+  "environment": {
+    "domain": "SIMULATED",
+    "topology": "single physical Windows PC; coordinator and PC agent in separate processes",
+    "network": "loopback; not multi-device Wi-Fi",
+    "simulatorTested": false,
+    "physicalPhoneTested": false,
+    "gpuTested": false
+  },
+  "checks": {
+    "relatedIntegration": {
+      "passed": 5,
+      "total": 5,
+      "log": ".test/e2-integration-final.log"
+    },
+    "architecture": {
+      "passed": 24,
+      "total": 24,
+      "log": ".test/e2-architecture-final.log"
+    },
+    "livePc": {
+      "source": ".test/e2-preview-info.json",
+      "workloads": [
+        "text.count.v1",
+        "vector.normalize.v1"
+      ],
+      "results": [
+        {
+          "state": "SUCCEEDED",
+          "outputPresent": true
+        },
+        {
+          "state": "SUCCEEDED",
+          "outputPresent": true
+        }
+      ]
+    },
+    "browser": {
+      "viewports": [
+        {
+          "width": 1440,
+          "height": 1000,
+          "documentWidth": 1425
+        },
+        {
+          "width": 390,
+          "height": 844,
+          "documentWidth": 375
+        }
+      ],
+      "horizontalPageOverflow": false,
+      "realTaskRows": 2,
+      "eventRefreshObserved": true,
+      "taskTraceSwitchObserved": true,
+      "browserErrors": 0,
+      "browserWarnings": 0,
+      "disconnectNoticeObserved": true
+    }
+  },
+  "sourcePaths": {
+    "page": "apps/team-space-web/dispatch.html",
+    "projection": "services/coordinator/src/telemetry-view.ts"
+  },
+  "limits": {
+    "sourceSdkRoot": false,
+    "fullCandidateCosts": false,
+    "s6Hedging": false,
+    "s6Reassignment": false,
+    "existingQuotaRenewalRegression": "UNRESOLVED; previous full coordinator 78/79 not rerun or superseded"
+  },
+  "screenshots": [
+    ".test/e2-desktop.png",
+    ".test/e2-mobile.png"
+  ],
+  "progress": "docs/scheduler-v2/STATUS.md section 32"
+}

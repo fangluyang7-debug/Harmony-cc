@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#111316"><title>Harmony · 跨设备调度盘</title><link rel="stylesheet" href="/dispatch.css"></head>
+<body>
+<header class="masthead"><a class="brand" href="/" aria-label="返回 Harmony 控制台"><b class="brand-mark">H<span>↗</span></b><span>HARMONY<small>RESOURCE ORCHESTRATION</small></span></a><div class="mast-controls"><span class="tag">只读观测</span><label class="sr-only" for="space">协作空间</label><select id="space"><option value="">选择协作空间</option></select><button id="refresh" type="button">刷新 <span>↻</span></button><a href="/" class="console-link">控制台 ↗</a></div></header>
+<main>
+  <div class="page-title"><div><p class="eyebrow">DISTRIBUTED RUNTIME / OBSERVABILITY</p><h1>跨设备调度<span class="title-muted">，</span>运行可见<span class="title-dot">.</span></h1><p class="subtitle">设备画像、资源额度与任务决策，来自同一个协调者。</p></div><div class="live-status"><span id="connection" class="tag neutral"><i class="led"></i>等待连接</span><span id="updated" class="mono muted">尚未取得快照</span></div></div>
+  <div id="notice" class="notice" role="status">请通过协调者访问本页。正在读取登录状态；也可从控制台选择空间后打开只读调度盘。</div>
+  <section id="metrics" class="metrics" aria-label="当前空间统计"></section>
+  <div class="top-grid">
+    <section class="panel orchestration"><div class="panel-heading"><div><p class="eyebrow">01 / COORDINATION MAP</p><h2>设备协同拓扑</h2></div><span id="domain" class="tag neutral">UNKNOWN</span></div><div id="topology" class="topology"><div class="empty">等待真实设备画像</div></div><div class="panel-foot">连线表示画像关联，不代表直连已建立。协调者负责规划，执行能力以终端上报为准。</div></section>
+    <section class="panel network-summary"><div class="panel-heading"><div><p class="eyebrow">02 / NETWORK EVIDENCE</p><h2>网络与降级</h2></div><span class="mini-icon">⇄</span></div><div id="network-summary"></div><div class="panel-foot">按每个宿主的控制链路与成对探测证据分级；没有证据时不推定设备可直连。</div></section>
+  </div>
+  <section class="panel" id="device-section"><div class="panel-heading"><div><p class="eyebrow">03 / RESOURCE POOLS & EXECUTORS</p><h2>终端资源与执行目标</h2></div><span class="muted small">按设备 / holder 展示，不重复合计物理总量</span></div><div id="devices" class="device-grid"></div></section>
+  <section class="panel"><div class="panel-heading"><div><p class="eyebrow">04 / DIRECTIONAL LINKS</p><h2>链路证据与直传记录</h2></div><span class="muted small">时延含 HTTP 控制开销 · 非裸网络 RTT</span></div><div id="links"></div></section>
+  <div class="work-grid">
+    <section class="panel jobs-panel"><div class="panel-heading"><div><p class="eyebrow">05 / DISPATCH DECISIONS</p><h2>任务与调度决策</h2></div><span id="job-count" class="tag neutral">UNKNOWN</span></div><div id="workflows"></div><div id="jobs"></div></section>
+    <section class="panel detail-panel"><div class="panel-heading"><div><p class="eyebrow">06 / TRACE INSPECTOR</p><h2>决策证据与阶段区间</h2></div><span class="mini-icon">⌁</span></div><div id="decision"></div><div id="trace" aria-live="polite"></div></section>
+  </div>
+  <section class="panel"><div class="panel-heading"><div><p class="eyebrow">07 / FAILURE & RECOVERY EVIDENCE</p><h2>异常与恢复记录</h2></div><span class="tag neutral">以已记录事件为准</span></div><div id="faults"></div></section>
+  <footer><span>HARMONY / OBSERVATION PLANE</span><span id="footer-state">未知值显示 UNKNOWN · 估计与测量分别标注</span></footer>
+</main><script type="module" src="/dispatch.js"></script>
+</body></html>

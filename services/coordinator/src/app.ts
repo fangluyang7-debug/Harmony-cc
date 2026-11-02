@@ -23,6 +23,7 @@ import { RemoteEvaluationRunner } from './remote-evaluation';
 import { ReferencePack, builtinCpuPacks, builtinReferencePacks, cpuSchemas } from '@harmony/reference-capabilities';
 import { CpuJobs } from './cpu-jobs';
 import { TeamSpaces } from './spaces';
+import {TelemetryView} from './telemetry-view';
 import { AppRegistry } from './apps';
 import { SdkJobs } from './sdk';
 import type { ExecutorV2 } from '@harmony/scheduler-core';
@@ -176,7 +177,8 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
     const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>{events.changed(groupId);graphs.changed(groupId);},error=>options.onError?.(error));
     const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks,directTransfers),graphs=new WorkflowJobs(db,jobs,apps,artifacts,referencePacks),sdk=new SdkJobs(jobs,referencePacks,graphs);
-    const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk,groupId=>directTransfers.dashboard(groupId));
+    const telemetry=new TelemetryView(db,directory,traces,groupId=>directTransfers.dashboard(groupId));
+    const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk,groupId=>directTransfers.dashboard(groupId),telemetry);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
     auth.onRevoked(id=>channel.revoke(id));
     const configureCpuGroup=async(groupId:string)=>{
