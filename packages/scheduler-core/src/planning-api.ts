@@ -19,7 +19,7 @@ export function plan(snapshot:PlanningSnapshot,request:PlacementRequest,policy:P
     if(deviceIds.has(key))throw new Error('DEVICE_IDENTITY_AMBIGUOUS');deviceIds.add(key);
     return !!d.deviceId&&!!d.deviceInstanceId&&Number.isSafeInteger(d.ledgerEpoch)&&d.ledgerEpoch>0&&Number.isFinite(d.sampledAt)&&d.sampledAt<=clock.now&&Number.isFinite(d.ttlMs)&&d.ttlMs>0&&clock.now-d.sampledAt<=d.ttlMs;
   }).map(d=>d.deviceId+':'+(d.holderInstanceId??'')));
-  const candidates=snapshot.candidates.filter(c=>validDevices.has(c.deviceId+':'+(c.holderInstanceId??''))&&policy.allowedTargetIds.includes(c.targetId));
+  const candidates=snapshot.candidates.filter(c=>(c.appInstanceId===undefined||c.appInstanceId===request.appInstanceId)&&validDevices.has(c.deviceId+':'+(c.holderInstanceId??''))&&policy.allowedTargetIds.includes(c.targetId));
   const effective:PlacementRequest={...request,now:clock.now,domain:snapshot.domain,deviceResources:snapshot.resources,links:snapshot.links,
     nodes:request.nodes.map(node=>({...node,candidates:candidates.filter(c=>c.capability===node.capability&&(!node.allowedTargetIds||node.allowedTargetIds.includes(c.targetId)))}))};
   return {groupId:snapshot.groupId,domain:snapshot.domain,snapshotVersion:snapshot.version,policyVersion:policy.version,decision:new WorkflowPlacementPlanner(policy.limits,clock.monotonic).plan(effective)};

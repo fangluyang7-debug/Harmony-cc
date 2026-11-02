@@ -59,7 +59,9 @@ ArkTS 使用 `import {SchedulerSdk, HarmonySdkPort} from 'scheduler'`，先 `awa
 - 等价方案为 `{version:3,id,outputContract,qualityTarget,alternatives:[workflowA,workflowB]}`。本批支持同一能力、同一输入的单节点方案，可通过不同 `targetId` 约束比较；PlanningService 决定路径。输出契约或质量目标不一致直接拒绝。
 - 任务和接口均不接收调用方自报 `appId/principalId`。服务端从凭据取身份；旧 `/v2/jobs` 为同一服务实现的兼容入口，也要求注册 App。
 - 已知的无容量拒绝最多等待 15 秒；请求超时等投递不明的错误直接返回，不盲目重放。可选 `SdkPort.cancelled()` 用于关闭提交窗口，停止等待；已经登记但尚未派发的任务会取消。
-- **当前范围**：执行数据经协调者中继，结果返回来源；只支持单节点，跨能力等价路径和多节点返回明确的 S5 范围错误。SDK 宿主的来源本地执行、断网退回基础额度、固定服务节点及其他结果目的地尚未接入。`cancel()` 当前仅支持派发前取消；已派发且未结算返回 `CANCEL_REQUIRES_HOST`，继续保留配额，不伪造已停止状态。
+- **当前范围**：默认执行数据经协调者中继，结果返回来源；只支持单节点，跨能力等价路径和多节点返回明确的 S5 范围错误。PC App 宿主可用 `host.sdk()` 获取带沙箱适配器的 SDK，在 submit options 加 `inputLocation:'ORIGIN'`：先保存输入，规划选择自身 holder 时跳过上传，选择远端时上传中继。来源身份由凭据派生；同设备其他 holder 不能直接读取沙箱输入。输出目前仍经中继。原生 Harmony 宿主沙箱适配、断网退回基础额度、固定服务节点及其他结果目的地尚未接入。`cancel()` 当前仅支持派发前取消；已派发且未结算返回 `CANCEL_REQUIRES_HOST`，继续保留配额，不伪造已停止状态。
+
+PC 宿主使用已初始化的 App 独立账本，启动时从 `/v2/apps/me` 读取已批准策略。沙箱缓存位于账本目录下 `inputs/`，按内容哈希保存，最多 64 MiB；满后返回 `SDK_INPUT_CACHE_FULL`，目前没有自动清理。调用 `releaseInput` 仅释放 SDK 内存注册，不删除宿主持久缓存。恢复或未结算任务可能仍引用该输入，不应运行中手动清空。完整使用范例见协调者 `test/sdk-host.test.cjs`。
 
 ## 验证
 
@@ -74,3 +76,5 @@ npm run sdk:native:test
 原生测试只接受回环模拟器目标，安装/更新独立 `org.harmonycc.harprobe` 并停止它，保留 S2 探针数据；不重置整个模拟器，不使用真机。新建独立协调者、PC 代理和 App 注册，测试文本与向量两条 SDK 提交，并核对实际业务回执和原生日志。证据写入忽略目录 `.test/phase-b-*/sdk-report.json`；HDC 转发不能用于真机局域网性能结论。
 
 进度与剩余工作见项目唯一状态文件 `docs/scheduler-v2/STATUS.md`。
+
+修订 6.1：宿主可通过 SdkPort.connected 提供已知连接状态，明确断连时新规划返回 SDK_COORDINATOR_OFFLINE。SDK 不自动调用本地业务，也不将超时/未知投递转换为新本地执行。调用方仅对从未提交的新业务选择原有本地调度；已提交或投递不明的请求须先恢复核对。v2 账本在断连、额度到期或重启后未续额时拒绝所有新准入，包括具有历史基础预留的来源 App；旧记录、去重与结算继续保留。

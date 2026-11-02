@@ -3,8 +3,9 @@ const fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:
 async function main(){
 const root=path.resolve(__dirname,'..'),name=process.argv[2];
 if(!['harmony-agent','harmony-har-probe'].includes(name))throw Error('APP_NAME_REQUIRED');
-const studio=process.env.DEVECO_STUDIO_HOME||'D:/Users/17321/AppData/DevEco Studio',sdk=process.env.DEVECO_SDK_HOME||path.join(studio,'sdk');
+const studio=process.env.DEVECO_STUDIO_HOME||'E:/DevEco/DevEco Studio',sdk=process.env.DEVECO_SDK_HOME||path.join(studio,'sdk');
 const metadata=JSON.parse(fs.readFileSync(path.join(sdk,'default/sdk-pkg.json'))).data,sdkVersion=metadata.platformVersion+'('+metadata.apiVersion+')';
+if(String(metadata.apiVersion)!=='22'||metadata.platformVersion!=='6.0.2')throw Error('SDK_BASELINE_MISMATCH: require HarmonyOS 6.0.2 API 22; set DEVECO_STUDIO_HOME / DEVECO_SDK_HOME');
 const stage=path.join(root,'.test/s2-'+name),source=path.join(root,'apps',name);fs.mkdirSync(stage,{recursive:true});
 const filter=p=>!/[\\/](?:oh_modules|build|\.hvigor|node_modules)(?:[\\/]|$)/.test(p);
 fs.cpSync(source,stage,{recursive:true,filter});

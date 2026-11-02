@@ -5,11 +5,14 @@ import { ModelManifestV2, ResourceAmountV2, sameModelV2 } from './resources-v2';
 export interface QualityEvidence {
   metric: string; evaluationId: string; direction: 'higher' | 'lower'; value: number;
 }
-export interface PlacementReplica { deviceId: string; readMs: number | null; }
+export interface PlacementReplica { deviceId: string; readMs: number | null; holderInstanceId?:string; }
 export interface PlacementArtifact { id: string; bytes: number; replicas: PlacementReplica[]; }
 export interface PlacementLink { from: string; to: string; bytesPerSecond: number; fixedMs: number; effective: boolean; observedAt: number; ttlMs: number; source: 'REAL' | 'SIMULATED'; }
 export interface PlacementCandidate {
+  serviceId?:string;
   holderInstanceId?:string;
+  /** Bound by the authenticated directory, never by an executor profile. */
+  appInstanceId?:string;
   resourceDemand?:ResourceAmountV2[];
   modelManifest?:ModelManifestV2|null;
   requiredMemoryBytes?: number;
@@ -20,6 +23,7 @@ export interface PlacementCandidate {
   uncertaintyMs: number; publishMs: number; model?: ModelCompatibility;
 }
 export interface PlacementNode {
+  serviceId?:string;
   allowedTargetIds?: string[];
   modelManifest?:ModelManifestV2|null;
   qualityRequirements?: QualityEvidence[];
@@ -29,6 +33,10 @@ export interface PlacementNode {
   candidates: PlacementCandidate[];
 }
 export interface PlacementRequest {
+  originHolderId?:string;
+  localResultHolderId?:string;
+  inputRelayId?:string;
+  appInstanceId?:string;
   nodes: PlacementNode[]; artifacts: PlacementArtifact[]; links: PlacementLink[]; remainingBudgetMs: number;
   networkAllowed: boolean; privacy: 'LOCAL_ONLY' | 'AUTHORIZED_REMOTE'; localDeviceId: string;
   domain: 'REAL' | 'SIMULATED';
@@ -92,6 +100,7 @@ export class WorkflowPlacementPlanner {
   private reject(node:PlacementNode,c:PlacementCandidate,r:PlacementRequest):string|null {
     if(!c.trusted||!['REAL','SIMULATED'].includes(r.domain)||c.source!==r.domain)return 'UNTRUSTED_OR_WRONG_DOMAIN';
     if(c.capability!==node.capability)return 'CAPABILITY_UNSUPPORTED';
+    if(node.serviceId!==c.serviceId||node.serviceId!==undefined&&(r.originHolderId===undefined||r.appInstanceId===undefined||c.holderInstanceId!==r.originHolderId||c.appInstanceId!==r.appInstanceId))return 'SERVICE_PLACEMENT_FORBIDDEN';
     if(node.model&&(!c.model||!compatibleModel(node.model,c.model)))return 'MODEL_INDEX_MISMATCH';
     if(node.modelManifest!==undefined&&!sameModelV2(node.modelManifest,c.modelManifest??null))return 'MODEL_MANIFEST_MISMATCH';
     if(!Number.isFinite(c.ttlMs)||!Number.isFinite(c.observedAt)||c.observedAt>r.now||r.now-c.observedAt>c.ttlMs||c.ttlMs<=0)return 'OBSERVATION_EXPIRED';
@@ -122,12 +131,17 @@ export class WorkflowPlacementPlanner {
     if([c.computeMs,c.queueMs,c.coldMs,c.uncertaintyMs,c.publishMs].some(n=>n===null||!Number.isFinite(n)||n<0))return 'COST_UNKNOWN';
     return null;
   }
-  private transfer(artifact:PlacementArtifact,to:string,r:PlacementRequest):number|null {
+  private transfer(artifact:PlacementArtifact,to:string,r:PlacementRequest,holderInstanceId?:string):number|null {
     if(!Number.isSafeInteger(artifact.bytes)||artifact.bytes<0)return null;
     const choices=artifact.replicas.map(source=>{
       if(source.readMs===null||!Number.isFinite(source.readMs)||source.readMs<0)return Infinity;
-      if(source.deviceId===to)return source.readMs;
+      if(source.deviceId===to&&(!source.holderInstanceId||source.holderInstanceId===holderInstanceId))return source.readMs;
       if(!r.networkAllowed||r.privacy==='LOCAL_ONLY')return Infinity;
+      if(source.holderInstanceId&&r.inputRelayId){
+        const upload=this.transfer({id:artifact.id,bytes:artifact.bytes,replicas:[{deviceId:source.deviceId,readMs:source.readMs}]},r.inputRelayId,{...r,inputRelayId:undefined});
+        const download=this.transfer({id:artifact.id,bytes:artifact.bytes,replicas:[{deviceId:r.inputRelayId,readMs:0}]},to,{...r,inputRelayId:undefined});
+        return upload===null||download===null?Infinity:upload+download;
+      }
       const link=r.links.find(l=>l.from===source.deviceId&&l.to===to&&l.source===r.domain&&l.observedAt<=r.now&&r.now-l.observedAt<=l.ttlMs&&Number.isFinite(l.ttlMs)&&l.ttlMs>0&&
         Number.isFinite(l.bytesPerSecond)&&l.bytesPerSecond>0&&Number.isFinite(l.fixedMs)&&l.fixedMs>=0);
       return link?source.readMs+artifact.bytes/link.bytesPerSecond*1000+(link.effective?0:link.fixedMs):Infinity;
@@ -138,20 +152,23 @@ export class WorkflowPlacementPlanner {
     let transfer=0;
     const artifacts=new Map(state.artifacts);
 
-    for(const id of new Set(node.inputs)){const artifact=state.artifacts.get(id);if(!artifact)return null;const cost=this.transfer(artifact,c.deviceId,r);if(cost===null)return null;transfer+=cost;
+    for(const id of new Set(node.inputs)){const artifact=state.artifacts.get(id);if(!artifact)return null;const cost=this.transfer(artifact,c.deviceId,r,c.holderInstanceId);if(cost===null)return null;transfer+=cost;
       if(!r.materializeOutputsAt&&!artifact.replicas.some(replica=>replica.deviceId===c.deviceId)) artifacts.set(id,{...artifact,replicas:[...artifact.replicas,{deviceId:c.deviceId,readMs:0}]});
     }
     const output:PlacementArtifact={id:node.output.id,bytes:node.output.bytes,replicas:[{deviceId:c.deviceId,readMs:0}]};
-    const publication=r.materializeOutputsAt?this.transfer(output,r.materializeOutputsAt,r):0;
+    const localResult=r.localResultHolderId!==undefined&&c.holderInstanceId===r.localResultHolderId&&c.appInstanceId!==undefined&&c.appInstanceId===r.appInstanceId;
+    if(localResult)output.replicas[0].holderInstanceId=c.holderInstanceId;
+    const publication=r.materializeOutputsAt&&!localResult?this.transfer(output,r.materializeOutputsAt,r):0;
     if(publication===null)return null;
     const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs+publication;
     const cost=state.cost+transfer+execution+c.uncertaintyMs;if(cost>r.remainingBudgetMs)return null;
-    artifacts.set(node.output.id,r.materializeOutputsAt?{...output,replicas:[{deviceId:r.materializeOutputsAt,readMs:0}]}:output);
+    artifacts.set(node.output.id,r.materializeOutputsAt&&!localResult?{...output,replicas:[{deviceId:r.materializeOutputsAt,readMs:0}]}:output);
     return {cost,artifacts,assignments:[...state.assignments,{targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,inputTransferMs:transfer,executionMs:execution,uncertaintyMs:c.uncertaintyMs}]};
   }
   private finish(state:Beam|null,nodes:PlacementNode[],r:PlacementRequest):Beam|null {
     if(!state||!r.finalDestination||!nodes.length)return state;
     const output=state.artifacts.get(nodes[nodes.length-1].output.id)!;
+    if(r.localResultHolderId&&output.replicas.some(replica=>replica.holderInstanceId===r.localResultHolderId))return state;
     const transfer=this.transfer(output,r.finalDestination,r);return transfer===null||state.cost+transfer>r.remainingBudgetMs?null:{...state,cost:state.cost+transfer};
   }
 }

@@ -78,8 +78,9 @@ export function admitV2(state:LedgerStateV2,offer:DispatchOfferV2,context:Ledger
   if(!context.ownerIdle)throw Error('OWNER_ACTIVE');
   if(offer.dependencies.some(d=>!d.committed||d.planRevision!==task.planRevision))throw Error('DEPENDENCY_UNCOMMITTED');
   const online=context.online&&context.now<state.onlineUntil&&grant.ledgerEpoch===state.ledgerEpoch;
-  if(!online&&(state.appInstanceId===null||task.priority!=='ORIGIN_INTERACTIVE'))throw Error('OFFLINE_REMOTE_FORBIDDEN');
-  const quota=online?vectorSumV2(grant.base,grant.extra):grant.base;
+  // Revision 6.1: retained base capacity is not permission for new offline v2 work.
+  if(!online)throw Error('COORDINATOR_OFFLINE');
+  const quota=vectorSumV2(grant.base,grant.extra);
   const occupied=vectorSumV2(occupiedV2(state),offer.resources);
   // A draining pool blocks consumers of that pool, not independent resource queues.
   const required=occupied.filter(r=>offer.resources.some(d=>d.resourcePoolId===r.resourcePoolId&&d.amount>0));

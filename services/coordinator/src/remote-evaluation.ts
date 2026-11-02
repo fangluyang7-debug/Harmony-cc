@@ -36,7 +36,7 @@ export class RemoteEvaluationRunner implements EvaluationRunner {
       const row=await tx.evaluationDispatch.findUniqueOrThrow({where:{id}});
       if(row.state==='SETTLED')return;
       const work:EvaluationWork=JSON.parse(row.workJson);
-      await tx.evaluationDispatch.update({where:{id},data:row.state==='QUEUED'?{state:'SETTLED',resultJson:JSON.stringify({settled:true,output:'',durationMs:0,permitId:id,domain:work.permit.domain})}:{state:'CANCEL_REQUESTED'}});
+      await tx.evaluationDispatch.update({where:{id},data:row.state==='QUEUED'?{state:'SETTLED',resultJson:JSON.stringify({notRun:true,settled:true,output:'',durationMs:0,permitId:id,domain:work.permit.domain})}:{state:'CANCEL_REQUESTED'}});
     });
   }
   async reconcile(permit:EvaluationPermit):Promise<EvaluationResult|null>{
@@ -54,7 +54,7 @@ export class RemoteEvaluationRunner implements EvaluationRunner {
         if(row.state!=='QUEUED')return {...work,mode:'RECONCILE'};
         const profile=(await this.directory.profiles(peer.groupId,tx)).find(p=>p.holderInstanceId===peer.holderInstanceId&&p.deviceId===peer.deviceId);
         if(row.expiresAt<=Date.now()||row.epoch!==this.epoch()||!profile||profile.ledgerEpoch!==work.ledgerEpoch||profile.deviceInstanceId!==work.deviceInstanceId||!profile.executors.some(e=>executorIdentity(e)===work.permit.identity)){
-          await tx.evaluationDispatch.update({where:{id:row.id},data:{state:'SETTLED',resultJson:JSON.stringify({settled:true,output:'',durationMs:0,permitId:row.id,domain:work.permit.domain})}});continue;
+          await tx.evaluationDispatch.update({where:{id:row.id},data:{state:'SETTLED',resultJson:JSON.stringify({notRun:true,settled:true,output:'',durationMs:0,permitId:row.id,domain:work.permit.domain})}});continue;
         }
         await tx.evaluationDispatch.update({where:{id:row.id},data:{state:'CLAIMED'}});
         return work;

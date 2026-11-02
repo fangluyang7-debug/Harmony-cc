@@ -1,11 +1,14 @@
 import { common } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
 import { NativeTransport, TrustedCoordinator, bytes, text, hash } from '../platform/NativeTransport';
-import { SdkPort, SdkTicket } from './SchedulerSdk';
+import { SdkPort, SdkTicket, SdkInput } from './SchedulerSdk';
 interface AppExchange {credential:string;}
 interface AppCode {registrationId:string;code:string;}
 /** Native adapter shared by SDK consumers. It has no dependency on agent or its journal. */
 export class HarmonySdkPort implements SdkPort {
+ localRead?: (contentHash:string)=>Promise<Uint8Array|null>;
+ connected?:()=>boolean;
+ stageInput?: (input:SdkInput,data:Uint8Array)=>Promise<void>;
  private transport:NativeTransport;
  private constructor(transport:NativeTransport){this.transport=transport;}
  static async open(context:common.UIAbilityContext,trust:TrustedCoordinator,credential:string=''):Promise<HarmonySdkPort>{
@@ -22,7 +25,7 @@ export class HarmonySdkPort implements SdkPort {
   if(ticket.operation!=='WRITE'||data.byteLength!==ticket.bytes||hash(data)!==ticket.ref.contentHash)throw Error('SDK_INPUT_INTEGRITY');
   await this.transport.request(this.route(ticket),null,http.RequestMethod.PUT,this.headers(ticket),data.slice());
  }
- async read(ticket:SdkTicket):Promise<Uint8Array>{if(ticket.operation!=='READ')throw Error('SDK_TICKET_INVALID');return this.transport.request(this.route(ticket),null,http.RequestMethod.GET,this.headers(ticket));}
+ async read(ticket:SdkTicket):Promise<Uint8Array>{if(ticket.operation!=='READ')throw Error('SDK_TICKET_INVALID');const local=await this.localRead?.(ticket.ref.contentHash);if(local)return local;return this.transport.request(this.route(ticket),null,http.RequestMethod.GET,this.headers(ticket));}
  async digest(data:Uint8Array):Promise<string>{return hash(data);}
  now():number{return Date.now();}
  async wait(ms:number):Promise<void>{await new Promise<void>(resolve=>{setTimeout(resolve,ms);});}

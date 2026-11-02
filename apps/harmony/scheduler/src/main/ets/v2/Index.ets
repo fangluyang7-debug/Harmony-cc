@@ -9,3 +9,8 @@ export * from './client/SchedulerSdk';
 export * from './client/HarmonySdkPort';
 export * from './platform/NativeTransport';
 export * from './core/MicroQueueV2';
+export * from './platform/NativeInputStore';
+export { NativeAgent, NativeServiceAdapter, ReferenceCase, ReferencePack, EngineResult } from './host/NativeAgent';
+export { NativeDatabase, Bootstrap, Paired, Installation, Contribution, factory } from './host/NativePlatform';
+export { NativeTrace } from './host/NativeTrace';
+export { cropImage } from './host/ImageCrop';

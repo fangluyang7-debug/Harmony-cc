@@ -5,6 +5,7 @@ import { executeCpu } from './cpu-engine';
 import { ExecutionTrace } from './execution-trace';
 
 export interface ExecutionPorts {
+  fixedService?(offer:DispatchOfferV2,input:Buffer,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string}>;
   /** Trusted local gate checks current qualification, target identity, task authorization and owner policy. */
   authorize(offer:DispatchOfferV2):Promise<Omit<LedgerAdmissionV2,'now'|'executionDigest'|'leaseId'>>;
   read(ref:ArtifactRefV2,offer:DispatchOfferV2):Promise<Buffer>;
@@ -14,7 +15,7 @@ export class PcExecutionRuntime {
   private readonly active=new Map<string,{abort:AbortController;done:Promise<ExecutionReceiptV2>}>();
   constructor(private readonly ledger:DurableLedger,private readonly ports:ExecutionPorts,private readonly delivery:'BUSINESS'|'EVALUATION'='BUSINESS'){}
   async run(offer:DispatchOfferV2,selected:ExecutionConfigV2,hooks:{selected?:()=>void;admitted?:()=>void;trace?:ExecutionTrace;maxDurationMs?:number;message?:MessageEnvelopeV2}={}):Promise<ExecutionReceiptV2>{
-    if(offer.target.backend!=='CPU'||offer.task.contract.sideEffectPolicy!=='PURE'||offer.task.inputs.length!==1||!offer.allowedConfigs.some(c=>canonical(c)===canonical(selected)))throw Error('EXECUTION_UNSUPPORTED');
+    if((offer.target.backend!=='CPU'&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.ports.fixedService))||offer.task.contract.sideEffectPolicy!=='PURE'||offer.task.inputs.length!==1||!offer.allowedConfigs.some(c=>canonical(c)===canonical(selected)))throw Error('EXECUTION_UNSUPPORTED');
     const admit=async()=>{const context=await this.ports.authorize(offer);return this.ledger.admit(offer,context,hooks.message);};
     const entry=hooks.trace?await hooks.trace.segment('ADMIT',admit):await admit(),id=entry.record.attemptId;
     if(entry.record.receipt)return entry.record.receipt;
@@ -34,7 +35,12 @@ export class PcExecutionRuntime {
       if(createHash('sha256').update(bytes).digest('hex')!==task.inputs[0].contentHash)throw Error('INPUT_HASH');
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
       this.ledger.begin(task.attemptId); // Durable RUNNING always precedes the engine call.
-      const result=await segment('EXECUTE',()=>executeCpu(task.contract.capability,bytes,JSON.parse(task.parameters),config,abort.signal));
+      const result=await segment('EXECUTE',async()=>{
+        if(!task.contract.serviceId)return executeCpu(task.contract.capability,bytes,JSON.parse(task.parameters),config,abort.signal);
+        if(!this.ports.fixedService)throw Error('SERVICE_ADAPTER_REQUIRED');
+        const output=await this.ports.fixedService(offer,bytes,abort.signal);if(output.bytes.length<1||output.bytes.length>8388608)throw Error('SERVICE_OUTPUT_INVALID');
+        return {...output,hash:createHash('sha256').update(output.bytes).digest('hex')};
+      });
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
       const ref=await segment('PUBLISH',()=>this.ports.publish(result.bytes,result.schemaId,offer));
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');

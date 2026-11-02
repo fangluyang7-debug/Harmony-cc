@@ -18,7 +18,7 @@ import { TraceService } from './traces';
 import { QualificationService, TrustedPack, EvaluationRunner, EvaluationPolicy } from './qualification';
 import { QualificationLoop } from './qualification-loop';
 import { RemoteEvaluationRunner } from './remote-evaluation';
-import { builtinCpuPacks, builtinReferencePacks, cpuSchemas } from '@harmony/reference-capabilities';
+import { ReferencePack, builtinCpuPacks, builtinReferencePacks, cpuSchemas } from '@harmony/reference-capabilities';
 import { CpuJobs } from './cpu-jobs';
 import { TeamSpaces } from './spaces';
 import { AppRegistry } from './apps';
@@ -27,7 +27,7 @@ import type { ExecutorV2 } from '@harmony/scheduler-core';
 import { ArtifactChannel, ArtifactSchema } from '@harmony/resource-transport';
 import { validDeviceProfileV2, validResourceVectorV2, validAllotmentAckV2, protocolId } from '@harmony/scheduler-core';
 
-export async function createCoordinator(config:CoordinatorConfig, recover:(db:PrismaClient,epoch:number)=>Promise<void>=async()=>{},options:{authenticate?:(token:string)=>Promise<Peer>;artifactSchemas?:ReadonlyMap<string,ArtifactSchema>;cpuHost?:boolean}={}){
+export async function createCoordinator(config:CoordinatorConfig, recover:(db:PrismaClient,epoch:number)=>Promise<void>=async()=>{},options:{onError?:(error:unknown)=>void;authenticate?:(token:string)=>Promise<Peer>;artifactSchemas?:ReadonlyMap<string,ArtifactSchema>;cpuHost?:boolean;referencePacks?:ReferencePack[]}={}){
   const unlock=await acquireProcessLock(config.dataDir);
   const db=new PrismaClient({datasources:{db:{url:databaseUrl(config)}}});
   let ready=false;
@@ -35,7 +35,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     await db.$connect();
     if(!fs.existsSync(path.join(config.dataDir,'identity.json'))&&await db.coordinatorState.count()>0)throw new Error('COORDINATOR_IDENTITY_LOST');
     const identity=loadIdentity(config);
-    const referencePacks=options.cpuHost?await builtinReferencePacks():builtinCpuPacks();
+    const referencePacks=options.referencePacks??(options.cpuHost?await builtinReferencePacks():builtinCpuPacks());
     const store=new CoordinatorStore(db,identity.id);
     const events=new SpaceEvents();
     const auth=new PairingService(db,identity.cert,config.domain);
@@ -63,7 +63,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
         return {relayId:identity.id,padding:body.mode==='download'?'x'.repeat(body.bytes):''};
       }
       @Post('device-settings')async deviceSettings(@Headers('authorization') header:string){return this.jobResponse(async()=>({settings:await spaces.deviceSettings(await auth.authenticate(bearer(header)))}));}
-      private async jobResponse(work:()=>Promise<unknown>){if(!ready)throw new ServiceUnavailableException('RECOVERY_PENDING');try{return await work();}catch(error){const code=error instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(code==='NO_AVAILABLE_TARGET')throw new ConflictException(code);throw new BadRequestException(code);}}
+      private async jobResponse(work:()=>Promise<unknown>){if(!ready)throw new ServiceUnavailableException('RECOVERY_PENDING');try{return await work();}catch(error){options.onError?.(error);const code=error instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(code==='NO_AVAILABLE_TARGET')throw new ConflictException(code);throw new BadRequestException(code);}}
       @Get('devices')@Header('Cache-Control','no-store')async devices(@Headers('authorization') header:string){
         return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));return {profiles:await directory.profiles(peer.groupId)};});
       }
@@ -159,7 +159,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     await app.init();
     let epoch=0;
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
-    const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>events.changed(groupId));
+    const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>events.changed(groupId),error=>options.onError?.(error));
     const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks),sdk=new SdkJobs(jobs,referencePacks);
     const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});

@@ -3,16 +3,18 @@ export interface SdkInput {contentHash:string;bytes:number;schemaId:string;schem
 export interface SdkNode {id:string;capability:string;input:SdkInput;parameters:string;dependsOn:string[];targetId?:string;}
 export interface SdkWorkflow {version:3;id:string;outputContract:string;qualityTarget:string;nodes:SdkNode[];}
 export interface SdkAlternatives {version:3;id:string;outputContract:string;qualityTarget:string;alternatives:SdkWorkflow[];}
-export interface SubmitOptions {requestId:string;budgetMs:number;resultDestination:'ORIGIN';}
+export interface SubmitOptions {requestId:string;budgetMs:number;resultDestination:'ORIGIN';inputLocation?:'ORIGIN';}
 export interface SdkSubmission {workflow:SdkWorkflow|SdkAlternatives;options:SubmitOptions;}
 export interface SdkConfiguration {capacityWaitMs:number;}
 export interface SdkRef {artifactId:string;contentVersion:number;contentHash:string;schemaId:string;schemaVersion:number;}
 export interface SdkTicket {token:string;ref:SdkRef;bytes:number;expiresAt:number;operation:string;}
-export interface SdkPlan {jobId:string;targetId:string;deviceId:string;reason:string;inputTicket:SdkTicket;}
+export interface SdkPlan {jobId:string;targetId:string;deviceId:string;reason:string;inputTicket:SdkTicket;inputDelivery?:'LOCAL'|'RELAY';}
 export interface SdkStatus {jobId:string;state:string;targetId:string;deviceId:string;traceId:string;outputTicket:SdkTicket|null;}
 export interface SdkResult {jobId:string;output:Uint8Array;status:SdkStatus;}
 /** Platform adapter owns trust, authenticated requests, bytes and the clock. No agent dependency. */
 export interface SdkPort {
+ connected?():boolean;
+ stageInput?(input:SdkInput,bytes:Uint8Array):Promise<void>;
  cancelled?():boolean;
  request(route:string,body:string|null):Promise<string>;
  write(ticket:SdkTicket,bytes:Uint8Array):Promise<void>;
@@ -37,13 +39,16 @@ export class SdkTask {
   while(this.port.now()<deadline){
    const status=await this.status();
    if(status.outputTicket){const output=await this.port.read(status.outputTicket);if(output.byteLength!==status.outputTicket.bytes||await this.port.digest(output)!==status.outputTicket.ref.contentHash)throw Error('SDK_OUTPUT_INTEGRITY');return {jobId:this.id,output,status};}
-   if(['FAILED','REJECTED','CANCELLED','CANCELLED_SETTLED','SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING'].includes(status.state))throw Error('JOB_'+status.state);
+   if(['FAILED','REJECTED','CANCELLED','CANCELLED_SETTLED','SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING','BUDGET_EXHAUSTED'].includes(status.state))throw Error('JOB_'+status.state);
    await this.port.wait(250);
   }
   // A wait timeout never cancels work, releases capacity, or resubmits an attempt.
   throw Error('SDK_RESULT_WAIT_TIMEOUT');
  }
  onResult(success:(result:SdkResult)=>void,failure:(error:Error)=>void):void{void this.result().then(success,failure);}
+}
+function isAlternatives(value:SdkWorkflow|SdkAlternatives):boolean{
+ return (value as SdkAlternatives).alternatives!==undefined;
 }
 export class SchedulerSdk {
  private readonly inputs=new Map<string,Uint8Array>();
@@ -60,6 +65,7 @@ export class SchedulerSdk {
  async plan(workflow:SdkWorkflow|SdkAlternatives,options:SubmitOptions):Promise<SdkPlan>{
   const deadline=this.port.now()+this.capacityWaitMs,body=JSON.stringify({workflow,options});
   for(;;){
+   if(this.port.connected?.()===false)throw Error('SDK_COORDINATOR_OFFLINE');
    if(this.port.cancelled?.())throw Error('SDK_SUBMISSION_CANCELLED');
    try{const plan=JSON.parse(await this.port.request('/v2/sdk/jobs',body)) as SdkPlan;
     if(plan.jobId!==options.requestId||!plan.inputTicket||plan.inputTicket.operation!=='WRITE')throw Error('SDK_RESPONSE_INVALID');return plan;
@@ -71,13 +77,31 @@ export class SchedulerSdk {
   }
  }
  async submit(workflow:SdkWorkflow|SdkAlternatives,options:SubmitOptions):Promise<SdkTask>{
+  // Hold registered snapshots across asynchronous planning, even if the caller releases them.
+  const available=new Map<string,Uint8Array>();
+  const paths:SdkWorkflow[]=isAlternatives(workflow)?(workflow as SdkAlternatives).alternatives:[workflow as SdkWorkflow];
+  for(const path of paths)for(const node of path.nodes){
+   const input=node.input;if(input===undefined)throw Error('SDK_INPUT_REQUIRED');const bytes=this.inputs.get(input.contentHash);
+   if(!bytes||bytes.byteLength!==input.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');
+   available.set(input.contentHash,bytes);
+  }
   // Plan/refuse using metadata before reading any input into the transport.
-  const plan=await this.plan(workflow,options),bytes=this.inputs.get(plan.inputTicket.ref.contentHash);
+  if(options.inputLocation==='ORIGIN'){
+   if(!this.port.stageInput)throw Error('SDK_LOCAL_HOST_REQUIRED');
+   for(const path of paths)for(const node of path.nodes){if(node.input!==undefined)await this.port.stageInput(node.input,available.get(node.input.contentHash)!);}
+  }
+  const plan=await this.plan(workflow,options),bytes=available.get(plan.inputTicket.ref.contentHash);
   if(this.port.cancelled?.()){await this.resume(plan.jobId).cancel();throw Error('SDK_SUBMISSION_CANCELLED');}
   if(!bytes||bytes.byteLength!==plan.inputTicket.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');
-  await this.port.write(plan.inputTicket,bytes);
+  if(plan.inputDelivery!=='LOCAL')await this.port.write(plan.inputTicket,bytes);
   if(this.port.cancelled?.()){await this.resume(plan.jobId).cancel();throw Error('SDK_SUBMISSION_CANCELLED');}
-  await this.port.request('/v2/sdk/jobs/'+plan.jobId+'/start','{}');
+  try{await this.port.request('/v2/sdk/jobs/'+plan.jobId+'/start','{}');}
+  catch(error){
+   // An explicit pre-dispatch replan may now require relay bytes; never retry ambiguous delivery.
+   if(plan.inputDelivery!=='LOCAL'||(error as Error).message!=='INPUT_NOT_UPLOADED')throw error as Error;
+   await this.port.write(plan.inputTicket,bytes);
+   await this.port.request('/v2/sdk/jobs/'+plan.jobId+'/start','{}');
+  }
   return this.resume(plan.jobId);
  }
 }

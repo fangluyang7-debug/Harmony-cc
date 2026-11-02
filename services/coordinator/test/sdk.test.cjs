@@ -15,6 +15,7 @@ test('registered SDK, alternatives, shared quota, queued cancellation, callback 
   const policy={label:'SDK fixture',allowedContracts:['text.count.v1'],maxConcurrent:1,resources:capacity,offlineBase:[],onlineExtra:[]};
   const ownerFile=path.join(r.config.dataDir,'owner.json'),policyFile=path.join(r.config.dataDir,'policy.json'),appFile=path.join(r.config.dataDir,'app.json');fs.writeFileSync(ownerFile,JSON.stringify({connection}));fs.writeFileSync(policyFile,JSON.stringify(policy));
   await new Promise((resolve,reject)=>execFile(process.execPath,[path.join(root,'services/pc-agent/dist/app-register-main.js'),ownerFile,policyFile,appFile],{windowsHide:true,timeout:30000},e=>e?reject(e):resolve()));
+  const inviteFile=path.join(r.config.dataDir,'native-invitation.json');await new Promise((resolve,reject)=>execFile(process.execPath,[path.join(root,'services/pc-agent/dist/app-register-main.js'),ownerFile,policyFile,inviteFile,'--invite-only'],{windowsHide:true,timeout:30000},e=>e?reject(e):resolve()));const nativeInvite=JSON.parse(fs.readFileSync(inviteFile));assert.equal((await r.db.registeredInstallation.findUnique({where:{id:nativeInvite.registrationId}})).state,'INVITED');assert.equal(nativeInvite.credential,undefined);
   const config=JSON.parse(fs.readFileSync(appFile)),request=appRequest(config.connection),client=new SchedulerSdk(nodeSdkPort(config.connection));
   assert.notEqual(config.connection.credential,owner.credential);
   const bytes=Buffer.from('{"text":"Hello SDK"}'),input=await client.registerInput(bytes,'text.input');
@@ -25,7 +26,7 @@ test('registered SDK, alternatives, shared quota, queued cancellation, callback 
   await assert.rejects(client.plan({version:3,id:randomUUID(),outputContract:'text.counts',qualityTarget:'reference',alternatives:[one,two]},options()),/SDK_ALTERNATIVES_NOT_EQUIVALENT/);
   two.outputContract='text.counts';two.qualityTarget='different';
   await assert.rejects(client.plan({version:3,id:randomUUID(),outputContract:'text.counts',qualityTarget:'reference',alternatives:[one,two]},options()),/SDK_ALTERNATIVES_NOT_EQUIVALENT/);
-  const bad=make();bad.nodes.push({...bad.nodes[0],id:'two'});await assert.rejects(client.plan(bad,options()),/SDK_MULTI_NODE_REQUIRES_S5/);
+  const bad=make();bad.nodes.push({...bad.nodes[0],id:'two'});await assert.rejects(client.plan(bad,options()),/SDK_GRAPH_OUTPUT_INVALID/);
   const other=await r.apps.register(owner.peer,policy,r.url),otherApp=await r.apps.exchange({registrationId:other.registrationId,code:other.code}),otherClient=new SchedulerSdk(nodeSdkPort({...connection,credential:otherApp.credential}));
   const planned=await client.plan(make(),options());assert.equal(await r.db.attempt.count({where:{id:planned.jobId}}),0);
   await assert.rejects(otherClient.plan(make(),options()),/APP_QUOTA_EXCEEDED/);

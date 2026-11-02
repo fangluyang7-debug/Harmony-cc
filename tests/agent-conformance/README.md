@@ -26,3 +26,5 @@ npm run ledger:v2:parity
 覆盖配对/一次性邀请/撤销、画像与未知值、签名额度/续期/先缩后放、准入与拒绝、重复 attempt/冲突/外来 fence、执行/状态查询、所有者让出/结算、重连。重复投递还检查输出制品只上传一次；伪造额度签名不得得到持久化 ACK；业务追踪的快照版本必须与正式规划一致。未满足启动条件或检查失败时非零退出，不能作为通过报告。
 
 真机入口只准备、不在本轮执行，见 [S2a.md](../../docs/experiments/real-device/S2a.md)。使用 `--agent harmony-device` 时必须显式设置 `CONFORMANCE_MANUAL=1` 与局域网地址，手工用已签名的原生代理配对。该模式不自动安装/删除手机应用，不使用 PC 替身。
+
+来源 App 宿主的 S3 探针：在构建 HAR、agent、probe 并完成 coordinator/PC 构建后，运行 `npm run sdk:native:test -- --local-host`。该模式会卸载重装测试探针 org.harmonycc.harprobe，注册独立 App 并赋予在线额度，经正式规划器指定其本地目标，核对文本/向量 committed 回执和零输入传输计划。默认不带参数仍测试 App → PC。两者都不是自动成本择优 A/B 验收，也不代表离线执行通过。无设备时只记录构建结果，运行项保持待验。

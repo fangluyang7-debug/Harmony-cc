@@ -376,6 +376,11 @@
             }
           ],
           "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
+        },
+        "serviceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "description": "Optional fixed logical service. Only the authenticated origin App host may execute it; endpoints and credentials remain local."
         }
       },
       "required": [

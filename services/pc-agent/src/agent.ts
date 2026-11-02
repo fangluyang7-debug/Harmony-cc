@@ -22,6 +22,7 @@ export interface AgentOptions {
   onYield(notice:YieldNoticeV2):void;
   onError(error:unknown):void;
   onExecutionSettled?():void;
+  cancellationRequested?(offer:DispatchOfferV2):Promise<boolean>;
   allotments?:{policy:()=>AllotmentPolicy;renewEveryMs:number};
   resources?:{policy:ResourceMonitorPolicy;owner:()=>Promise<'IDLE'|'ACTIVE'|'UNKNOWN'>};
   calibration?:{executor:CalibrationExecutor;intervalMs?:number};
@@ -34,6 +35,7 @@ export class PcAgent {
   private readonly traces=new TraceBuffer();
   private readonly pending=new Map<string,{message:MessageEnvelopeV2;done:Promise<void>}>();
   private limits:ResourceAmountV2[]=[];private owner:'IDLE'|'ACTIVE'|'UNKNOWN'='UNKNOWN';
+  private checkingCancellation=false;
   private online=false;private epoch=0;private stopped=false;
   private timer:NodeJS.Timeout|undefined;
   private readonly allotments:AllotmentClient|undefined;
@@ -109,7 +111,7 @@ export class PcAgent {
     if(this.pending.size>=8){this.ledger.rejectDispatch(message,'AGENT_BACKPRESSURE');void this.client.flush();return;}
     const done=(async()=>{
       try{
-        if(offer.target.backend!=='CPU'||offer.task.contract.interruptibility!=='CANCEL_RESTART')throw Error('EXECUTOR_UNSUPPORTED');
+        if((offer.target.backend!=='CPU'&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.options.ports.fixedService))||offer.task.contract.interruptibility!=='CANCEL_RESTART')throw Error('EXECUTOR_UNSUPPORTED');
         const version=await this.options.snapshotVersion(offer);
         const trace=version===null?undefined:new ExecutionTrace(this.traces,{traceId:message.traceId,parentSpanId:null,snapshotVersion:version,deviceInstanceId:this.options.deviceInstanceId},offer);
         const endQueue=trace?.begin('QUEUE');
@@ -124,6 +126,13 @@ export class PcAgent {
     })();
     this.pending.set(id,{message:structuredClone(message),done});void done.finally(()=>this.pending.delete(id)).catch(this.options.onError);
   }
+  private async checkCancellation(){
+    if(this.checkingCancellation||!this.ready||!this.options.cancellationRequested)return;
+    this.checkingCancellation=true;
+    try{for(const [id,item]of this.pending){
+      if(await this.options.cancellationRequested(JSON.parse(item.message.payload) as DispatchOfferV2))this.scheduler.cancel(id);
+    }}finally{this.checkingCancellation=false;}
+  }
   async flush(){
     if(!this.stopped)await this.traces.flush(async spans=>{this.ledger.queueTrace(spans);});
     await this.client.flush();
@@ -133,7 +142,7 @@ export class PcAgent {
     if(this.allotments)this.allotments.start(this.options.allotments!.renewEveryMs);
     this.resourceMonitor?.start();
     this.calibration?.start(this.options.calibration?.intervalMs);
-    this.timer=setInterval(()=>{void this.flush().catch(this.options.onError);},250);this.timer.unref();
+    this.timer=setInterval(()=>{void this.flush().catch(this.options.onError);void this.checkCancellation().catch(this.options.onError);},250);this.timer.unref();
   }
   async close(){
     if(this.stopped)return;this.stopped=true;if(this.timer)clearInterval(this.timer);

@@ -16,6 +16,7 @@ export interface EvaluationRunner {
   reconcile(permit:EvaluationPermit):Promise<EvaluationResult|null>;
 }
 interface Job {
+  retryAt?:number;
   identity:string;packDigest:string;ledgerEpoch:number;generation:number;next:number;runs:number;durationMs:number;bytes:number;
   paused:boolean;cooldownUntil:number;expiresAt:number;quality:number|null;inFlight:EvaluationPermit|null;lastDurationMs:number|null;
 }
@@ -78,6 +79,7 @@ export class QualificationService {
         return this.publish(peer,targetId,job,'SUSPENDED','EVIDENCE_INVALIDATED');
       }
       if(!installed)return this.publish(peer,targetId,job,'SUSPENDED','TRUSTED_PACK_REQUIRED');
+      if((job.retryAt??0)>this.now())return job.quality!==null&&job.expiresAt>this.now()?'CANARY':'WAITING_RESOURCE';
       const pack=installed.pack;
       if(job.paused)return this.publish(peer,targetId,job,'WAITING_WINDOW','CALIBRATION_PAUSED');
       const gate=await this.gate(peer,executor);
@@ -113,6 +115,12 @@ export class QualificationService {
       const latest=await this.db.calibrationJob.findUniqueOrThrow({where:{id}});job.paused=JSON.parse(latest.metadataJson).paused;
       const current=(await this.directory.profiles(peer.groupId)).find(p=>p.holderInstanceId===peer.holderInstanceId);
       if(!current||current.ledgerEpoch!==profile.ledgerEpoch||!current.executors.some(e=>executorIdentity(e)===identity))return this.publish(peer,targetId,job,'SUSPENDED','EVIDENCE_INVALIDATED');
+      if(result.notRun===true){
+        if(result.output.length!==0||result.durationMs!==0)throw Error('EVALUATION_REPORT_INVALID');
+        job.runs--;job.durationMs-=permit.timeoutMs;job.bytes-=bytes;job.retryAt=this.now()+this.policy.cooldownMs;
+        const retained=job.quality!==null&&job.expiresAt>this.now()&&job.next>=Math.max(pack.cases.length,this.policy.canarySamples);
+        return this.publish(peer,targetId,job,retained?'CANARY':'WAITING_RESOURCE','EVALUATION_NOT_RUN');
+      }
       if(abort.signal.aborted||job.paused)return this.publish(peer,targetId,job,'WAITING_WINDOW','EVALUATION_INTERRUPTED');
       if(!sampleUsableV2(current.ownerActivity,this.now(),this.directory.domain)||current.ownerActivity.value!=='IDLE'||!sampleUsableV2(current.foreground,this.now(),this.directory.domain)||current.foreground.value!=='FOREGROUND')return this.publish(peer,targetId,job,'WAITING_WINDOW','OWNER_OR_HOST_NOT_AVAILABLE');
       const afterGate=await this.gate(peer,executor);if(afterGate)return this.publish(peer,targetId,job,'WAITING_'+afterGate,'EVALUATION_'+afterGate+'_REQUIRED');

@@ -19,7 +19,7 @@ export class ControlChannel {
   private readonly upgrade:(request:any,socket:any,head:Buffer)=>void;
   constructor(private readonly server:Server,private readonly db:PrismaClient,private readonly store:CoordinatorStore,
     private readonly ready:()=>boolean,private readonly epoch:()=>number,private readonly authenticate:(token:string)=>Promise<Peer>,
-    readonly limits={queuedMessages:64,bufferedBytes:1048576,inFlight:64},private readonly changed:(groupId:string)=>void=()=>{}){
+    readonly limits={queuedMessages:64,bufferedBytes:1048576,inFlight:64},private readonly changed:(groupId:string)=>void=()=>{},private readonly onError:(error:unknown)=>void=()=>{}){
     this.register('Hello',{validate:p=>validVersionHelloV2(p)&&negotiateVersionV2({versions:[2],extensions:[]},p)===2,handle:async()=>{}});
     this.register('RecoveryRequest',{validate:p=>exact(p,[]),handle:async peer=>store.requestStatus(peer.groupId,peer.holderInstanceId,epoch())});
     this.register('ProtocolError',{validate:validProtocolErrorV2,handle:async(peer,p)=>{
@@ -89,6 +89,7 @@ export class ControlChannel {
       if(session.queued>=this.limits.queuedMessages){socket.close(1013,'BACKPRESSURE');return;}
       session.queued++;
       session.work=session.work.then(()=>this.receive(session,bytes.toString())).catch(error=>{
+        this.onError(error);
         const code=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'CONTROL_INTERNAL_ERROR';
         console.warn('CONTROL_MESSAGE_REJECTED '+code);socket.close(1008,code);
       }).finally(()=>{session.queued--;});

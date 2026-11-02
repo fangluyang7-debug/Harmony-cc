@@ -61,3 +61,7 @@
 - 客户端校验来源 CA、主机名、证书固定值、协调者 ID/代次及 REAL/SIMULATED 域。身份不匹配不发送状态。旧代次待回复信封被 supersede，但本地 attempt/receipt 一直保留，等待新代次查询。
 - 每个本地 outbox 最多 64 条/1 MiB，inbox 最多 4096 个去重标识；满时保守停止写入新消息，不丢弃未确认消息或清空资源。尚未实现安全历史压缩。连接帧 256 KiB、输入队列 64 条；未确认发送超时断开后重连，不通过轮询领取任务。
 - `reconcileEngine` 仅接受本地受信引擎适配器。探测异常、仍运行或 UNKNOWN 不释放资源；SETTLED 必须通过账本的真实目标、配置、fence 和结算检查。未接入真实 CPU/GPU 引擎前，仅可用测试替身验证该接口。
+
+### 来源 App 固定服务（S3）
+
+TaskContractV2 的可选 serviceId 为可信参考包定义的逻辑服务标识，不是 URL。存在该字段时，规划候选必须匹配同一 serviceId、来源 App 安装和来源 holder；服务凭据与实际地址仅由 App 宿主适配器持有，不随工作流提交。当前适配器仅支持 PURE/CANCEL_RESTART，复用资格评测、准入、取消和独立资源结算。没有 serviceId 的原有契约保持兼容。

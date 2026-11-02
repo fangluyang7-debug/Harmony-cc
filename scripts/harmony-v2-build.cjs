@@ -1,9 +1,10 @@
 // Build in an ignored workspace so the frozen v1 product/signing configuration is untouched.
 const fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process');
 const root=path.resolve(__dirname,'..');
-const studio=process.env.DEVECO_STUDIO_HOME||'D:/Users/17321/AppData/DevEco Studio';
+const studio=process.env.DEVECO_STUDIO_HOME||'E:/DevEco/DevEco Studio';
 const sdk=process.env.DEVECO_SDK_HOME||path.join(studio,'sdk');
 const metadata=JSON.parse(fs.readFileSync(path.join(sdk,'default/sdk-pkg.json'))).data;
+if(String(metadata.apiVersion)!=='22'||metadata.platformVersion!=='6.0.2')throw Error('SDK_BASELINE_MISMATCH: require HarmonyOS 6.0.2 API 22; set DEVECO_STUDIO_HOME / DEVECO_SDK_HOME');
 const stage=path.join(root,'.test/s2-har');fs.mkdirSync(stage,{recursive:true});
 const copy=(from,to)=>fs.cpSync(path.join(root,from),path.join(stage,to),{recursive:true,filter:p=>!/[\\/](?:oh_modules|build|\.hvigor|node_modules)(?:[\\/]|$)/.test(p)});
 copy('apps/harmony/scheduler','scheduler');copy('apps/harmony/AppScope','AppScope');

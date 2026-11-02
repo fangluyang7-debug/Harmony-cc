@@ -118,3 +118,16 @@ test('coordinator owns calibration loop lifecycle and enumerates only active cre
   assert.ok(errors.every(e=>e==='GROUP_UNKNOWN'));
  }finally{await r.close();}
 });
+
+
+test('a proven pre-admission evaluation refusal preserves fresh CANARY quality without promotion',async()=>{
+ const r=await runtime();try{
+  let now=100,runs=0;const dir=new DeviceDirectory(r.db,'SIMULATED',()=>now),p=profile();await dir.ingest(peer,p);const pack=packFor(p);
+  const runner={run:async permit=>++runs===1?{settled:true,permitId:permit.id,domain:'SIMULATED',durationMs:1,output:Buffer.from('{"rows":[[0.6,0.8]]}')}:{notRun:true,settled:true,permitId:permit.id,domain:'SIMULATED',durationMs:0,output:Buffer.alloc(0)},reconcile:async()=>null};
+  const service=new QualificationService(r.db,dir,[pack],runner,policy,async()=>null,()=>now);
+  assert.equal(await service.advance(peer,'target1'),'CANARY');assert.equal(await service.advance(peer,'target1'),'CANARY');
+  const evidence=await dir.qualification(peer,'target1');assert.equal(evidence.admission.quality.value,1);assert.equal(evidence.admission.reasonCode,'EVALUATION_NOT_RUN');
+  assert.equal(await service.advance(peer,'target1'),'CANARY');assert.equal(runs,2,'resource refusal must back off');
+  now+=policy.evidenceTtlMs+1;assert.equal(await service.advance(peer,'target1'),'SUSPENDED','expired evidence is never retained');
+ }finally{await r.close();}
+});

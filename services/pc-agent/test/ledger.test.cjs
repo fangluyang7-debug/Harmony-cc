@@ -108,13 +108,18 @@ test('single writer across processes, corrupt snapshot and missing committed sna
  const filename=path.join(dir,'ledger.json'),backup=fs.readFileSync(filename);fs.writeFileSync(filename,'{}');await assert.rejects(DurableLedger.open(dir,identity,cert),/CHECKSUM/);
  fs.writeFileSync(filename,backup);fs.unlinkSync(filename);await assert.rejects(DurableLedger.open(dir,identity,cert),/UNCERTAIN/);
 });
-test('offline base includes all previous online occupancy and never creates an additional budget',async()=>{
+test('revision 6.1 rejects offline App admission but preserves occupancy, duplicate records and settlement',async()=>{
  const who={...identity,appInstanceId:fixture.task.app.appInstanceId},dir=directory();let now=0;const l=await DurableLedger.open(dir,who,cert,()=>now);
  try{
   l.requestGrant('request1');l.installGrant(signed(l,[{resourcePoolId:'memory1',amount:50}],1,'request1',[{resourcePoolId:'memory1',amount:100},{resourcePoolId:'cpu1',amount:2}]));
   const a=offer();a.task.priority='ORIGIN_INTERACTIVE';const entry=l.admit(a,context);now=101;
-  const next=offer('a2');next.task.priority='ORIGIN_INTERACTIVE';assert.throws(()=>l.admit(next,{...context,online:false}),/RESOURCE_UNAVAILABLE/);
-  l.settle(receipt(entry));assert.equal(l.admit(next,{...context,online:false}).record.state,'ACCEPTED');
+  const next=offer('a2');next.task.priority='ORIGIN_INTERACTIVE';assert.throws(()=>l.admit(next,{...context,online:false}),/COORDINATOR_OFFLINE/);
+  assert.equal(l.admit(a,{...context,online:false}).record.attemptId,entry.record.attemptId);
+  assert.ok(occupiedV2(l.snapshot()).length>0);
+  l.settle(receipt(entry));assert.equal(occupiedV2(l.snapshot()).length,0);
+  assert.throws(()=>l.admit(next,{...context,online:false}),/COORDINATOR_OFFLINE/);
+  assert.throws(()=>l.admit(next,context),/COORDINATOR_OFFLINE/);
+  assert.ok(l.snapshot().grant.base.length>0);
  }finally{await l.close();}
 });
 for(const point of ['before-engine','after-settlement'])test('abrupt child-process death '+point+' preserves the durable execution boundary',async()=>{

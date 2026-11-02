@@ -31,6 +31,47 @@ test('device epoch freshness and target authorization affect the decision',()=>{
   assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
 });
 
+test('App-bound candidates require the same authenticated installation even with an explicit target',()=>{
+ const service=new PlanningService(null),f=fixture();
+ f.snapshot.candidates[0].appInstanceId='installation-one';
+ f.request.nodes[0].allowedTargetIds=['target1'];
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
+ f.request.appInstanceId='installation-two';
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
+ f.request.appInstanceId='installation-one';
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'ready');
+ delete f.snapshot.candidates[0].appInstanceId;
+ f.request.appInstanceId='installation-two';
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'ready');
+});
+
+test('origin sandbox costs zero transfer only for its holder; another holder on the same device pays both relay hops',()=>{
+ const service=new PlanningService(null),f=fixture();
+ f.snapshot.devices[0].holderInstanceId='source';f.snapshot.candidates[0].holderInstanceId='source';
+ f.request.artifacts[0].replicas=[{deviceId:'d1',holderInstanceId:'source',readMs:0}];
+ f.request.inputRelayId='relay';f.request.networkAllowed=true;f.request.privacy='AUTHORIZED_REMOTE';
+ f.snapshot.links=[{from:'d1',to:'relay',bytesPerSecond:1000,fixedMs:2,effective:false,observedAt:100,ttlMs:1000,source:'SIMULATED'},{from:'relay',to:'d1',bytesPerSecond:1000,fixedMs:3,effective:false,observedAt:100,ttlMs:1000,source:'SIMULATED'}];
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0].inputTransferMs,0);
+ f.snapshot.devices[0].holderInstanceId='other';f.snapshot.candidates[0].holderInstanceId='other';
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0].inputTransferMs,25);
+ f.snapshot.links=[];assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
+});
+
+test('one planner chooses origin or remote according to compute plus measured relay cost',()=>{
+ const service=new PlanningService(null),f=fixture();
+ f.snapshot.devices[0].holderInstanceId='source';f.snapshot.candidates[0].holderInstanceId='source';
+ f.snapshot.devices.push({...f.snapshot.devices[0],deviceId:'remote',holderInstanceId:'worker'});
+ f.snapshot.resources.push({...f.snapshot.resources[0],deviceId:'remote'});
+ f.snapshot.candidates.push({...f.snapshot.candidates[0],targetId:'remote-target',deviceId:'remote',holderInstanceId:'worker',computeMs:1});
+ f.policy.allowedTargetIds.push('remote-target');
+ f.request.artifacts[0].replicas=[{deviceId:'d1',holderInstanceId:'source',readMs:0}];
+ f.request.inputRelayId='relay';f.request.networkAllowed=true;f.request.privacy='AUTHORIZED_REMOTE';delete f.request.finalDestination;
+ f.snapshot.links=[['d1','relay'],['relay','remote']].map(([from,to])=>({from,to,bytesPerSecond:1000,fixedMs:2,effective:false,observedAt:100,ttlMs:1000,source:'SIMULATED'}));
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0].targetId,'target1');
+ f.snapshot.candidates[0].computeMs=100;
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0].targetId,'remote-target');
+});
+
 test('explicit target is a planner constraint; qualified alternatives cannot bypass it',()=>{
   const service=new PlanningService(null),f=fixture();f.request.nodes[0].allowedTargetIds=['missing'];
   assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.reason,'NO_LEGAL_PLAN');
@@ -52,4 +93,23 @@ test('database projection is consistent and preflight rejects changed versions a
     await assert.rejects(new SnapshotBuilder(db,'REAL').build('g1'),/SNAPSHOT_CORRUPT/);
     await assert.rejects(views.build('unknown'),/GROUP_UNKNOWN/);
   }finally{await db.$disconnect();}
+});
+
+test('local result publication stays private only for the authenticated App holder',()=>{
+ const service=new PlanningService(null),f=fixture();
+ f.request.appInstanceId='app';f.request.localResultHolderId='source';f.request.materializeOutputsAt='relay';f.request.finalDestination='relay';
+ f.snapshot.devices[0].holderInstanceId='source';f.snapshot.candidates[0].holderInstanceId='source';f.snapshot.candidates[0].appInstanceId='app';
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0].executionMs,10);
+ f.snapshot.devices[0].holderInstanceId='other';f.snapshot.candidates[0].holderInstanceId='other';
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
+});
+
+test('fixed service placement requires the registered origin App holder and matching logical service',()=>{
+ const f=fixture(),service=new PlanningService(null),c=f.snapshot.candidates[0];
+ f.request.nodes[0].serviceId='catalog';c.serviceId='catalog';c.appInstanceId='app';c.holderInstanceId='origin';f.snapshot.devices[0].holderInstanceId='origin';
+ f.request.appInstanceId='app';f.request.originHolderId='origin';
+ assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'ready');
+ f.request.originHolderId='other';assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
+ f.request.originHolderId='origin';c.serviceId='different';assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
+ c.serviceId='catalog';delete c.appInstanceId;delete f.request.appInstanceId;assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
 });

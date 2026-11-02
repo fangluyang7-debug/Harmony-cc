@@ -1,6 +1,37 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),{createHash,randomUUID}=require('node:crypto');
 const {SchedulerSdk}=require('../dist');
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+test('local input avoids upload; only explicit pre-dispatch relay requirement permits upload and another start',async()=>{
+ for(const failure of [null,'INPUT_NOT_UPLOADED','SDK_REQUEST_TIMEOUT']){
+  const calls=[];let starts=0,input;
+  const sdk=new SchedulerSdk({stageInput:async()=>calls.push('stage'),request:async(route)=>{
+   if(route==='/v2/sdk/jobs')return JSON.stringify({jobId:'local',inputDelivery:'LOCAL',inputTicket:{operation:'WRITE',bytes:input.bytes,ref:{contentHash:input.contentHash}}});
+   calls.push('start');if(starts++===0&&failure)throw Error(failure);return '{}';
+  },write:async()=>calls.push('upload'),read:async()=>new Uint8Array(),digest:async bytes=>digest(bytes),now:Date.now,wait:async()=>{}});
+  input=await sdk.registerInput(Buffer.from('local'),'text.input');
+  const result=sdk.submit({nodes:[{input}]},{requestId:'local',inputLocation:'ORIGIN'});
+  if(failure==='SDK_REQUEST_TIMEOUT')await assert.rejects(result,/SDK_REQUEST_TIMEOUT/);else await result;
+  assert.deepEqual(calls,failure==='INPUT_NOT_UPLOADED'?['stage','start','upload','start']:['stage','start']);
+ }
+});
+test('missing input never reserves a server job; releasing input during planning preserves the in-flight snapshot',async()=>{
+ const calls=[],id='input-lifetime';let sdk,input;
+ const port={request:async(route)=>{
+  calls.push(route);
+  if(route==='/v2/sdk/jobs'){sdk.releaseInput(input);return JSON.stringify({jobId:id,inputTicket:{operation:'WRITE',ref:{contentHash:input.contentHash},bytes:input.bytes}});}
+  return '{}';
+ },write:async(_ticket,bytes)=>{assert.equal(Buffer.from(bytes).toString(),'hello');calls.push('write');},read:async()=>new Uint8Array(),digest:async bytes=>digest(bytes),now:Date.now,wait:async()=>{}};
+ sdk=new SchedulerSdk(port);input=await sdk.registerInput(Buffer.from('hello'),'text.input');
+ const workflow={nodes:[{input}]},options={requestId:id};
+ sdk.releaseInput(input);
+ await assert.rejects(sdk.submit(workflow,options),/SDK_INPUT_NOT_REGISTERED/);
+ assert.deepEqual(calls,[]);
+ input=await sdk.registerInput(Buffer.from('hello'),'text.input');
+ await sdk.submit(workflow,options);
+ assert.deepEqual(calls,['/v2/sdk/jobs','write','/v2/sdk/jobs/'+id+'/start']);
+ await assert.rejects(sdk.submit(workflow,options),/SDK_INPUT_NOT_REGISTERED/);
+ assert.equal(calls.length,3);
+});
 test('SDK plans before bytes, snapshots registered input, preserves one request ID, verifies output and invokes callback',async()=>{
  const calls=[],id=randomUUID(),output=Buffer.from('{"characters":5}');let sent;
  const port={request:async(route,body)=>{calls.push(route);if(route==='/v2/sdk/jobs'){const b=JSON.parse(body),input=b.workflow.nodes[0].input;assert.equal(b.options.requestId,id);return JSON.stringify({jobId:id,targetId:'target',deviceId:'device',reason:'PLAN',inputTicket:{operation:'WRITE',ref:{contentHash:input.contentHash},bytes:input.bytes}});}return JSON.stringify({jobId:id,state:'SUCCEEDED',outputTicket:{bytes:output.length,operation:'READ',ref:{contentHash:digest(output)}}});},write:async(_ticket,bytes)=>{calls.push('write');sent=bytes;},read:async()=>{calls.push('read');return output;},digest:async bytes=>digest(bytes),now:Date.now,wait:async()=>{}};
@@ -30,4 +61,10 @@ test('server compatibility gateways disable capacity wait so an HTTP caller owns
  let calls=0;
  const sdk=new SchedulerSdk({request:async()=>{calls++;throw Error('NO_LEGAL_PLAN');},write:async()=>{},read:async()=>new Uint8Array(),digest:async bytes=>digest(bytes),now:()=>0,wait:async()=>assert.fail('gateway must not wait')},{capacityWaitMs:0});
  await assert.rejects(sdk.plan({id:'no-capacity'},{requestId:'no-capacity'}),/NO_LEGAL_PLAN/);assert.equal(calls,1);
+});
+
+test('known disconnected host rejects new planning without transport or automatic local replay',async()=>{
+ const sdk=new SchedulerSdk({connected:()=>false,request:async()=>assert.fail('no metadata on disconnected host'),write:async()=>assert.fail('no upload'),read:async()=>assert.fail('no read'),digest:async bytes=>digest(bytes),now:Date.now,wait:async()=>assert.fail('no retry')});
+ const input=await sdk.registerInput(Buffer.from('new business'),'text.input');
+ await assert.rejects(sdk.submit({nodes:[{input}]},{requestId:'disconnected'}),/SDK_COORDINATOR_OFFLINE/);
 });

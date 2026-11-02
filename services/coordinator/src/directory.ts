@@ -84,9 +84,27 @@ export class DeviceDirectory {
       capacity.set(key,{deviceId:p.deviceId,poolId:pool.resourcePoolId,total:old?(old.total===total&&old.kind===pool.kind?total:null):total,
         occupied:!valid||old?.occupied===null?null:(old?.occupied??0)+pool.occupied.value!,sampledAt:Math.min(old?.sampledAt??now,pool.total.sampledAt,pool.occupied.sampledAt),ttlMs:Math.min(old?.ttlMs??Infinity,pool.total.ttlMs,pool.occupied.ttlMs),kind:pool.kind});
     }
+    // A process contribution is its own ceiling, not the capacity of the entire device.
+    // Use the owner-confirmed physical budget when multiple bound holders report one device.
+    const reservations=(await db.allotment.findMany()).filter(row=>row.id.startsWith('["allotment",')).map(row=>JSON.parse(row.metadataJson));
+    for(const deviceId of new Set(profiles.map(p=>p.deviceId))){
+      const row=await db.device.findUnique({where:{id:JSON.stringify(['budget',deviceId])}});if(!row)continue;
+      const budget=JSON.parse(row.metadataJson),members=profiles.filter(p=>p.deviceId===deviceId);
+      const unissued=(await db.registeredInstallation.findMany({where:{deviceId}})).filter(i=>!reservations.some(r=>r.grant.deviceId===deviceId&&r.grant.holderInstanceId===i.holderInstanceId));
+      for(const c of capacity.values())if(c.deviceId===deviceId){
+        const physical=budget.capacity.find((r:any)=>r.resourcePoolId===c.poolId)?.amount;
+        const pools=members.map(p=>p.pools.find(pool=>pool.resourcePoolId===c.poolId));
+        if(physical===undefined||members.some(p=>!budget.bindings.some((b:any)=>b.groupId===groupId&&b.holderInstanceId===p.holderInstanceId))||pools.some(pool=>!pool||!sampleUsableV2(pool.total,now,this.domain)||pool.kind!==c.kind)){c.total=null;continue;}
+        const hidden=reservations.filter(r=>r.grant.deviceId===deviceId&&!members.some(p=>r.grant.groupId===groupId&&r.grant.holderInstanceId===p.holderInstanceId)).reduce((sum,r)=>sum+(r.reserved.find((v:any)=>v.resourcePoolId===c.poolId)?.amount??0),0);
+        const base=unissued.reduce((sum,i)=>sum+(JSON.parse(i.offlineJson).find((v:any)=>v.resourcePoolId===c.poolId)?.amount??0),0);
+        c.total=Math.max(0,Math.min(physical,...pools.map(pool=>pool!.total.value!))-hidden-base);
+      }
+    }
     for(const c of capacity.values())resources.push({deviceId:c.deviceId,resourcePoolId:c.poolId,available:c.total===null||c.occupied===null?null:Math.max(0,c.total-c.occupied),availableMemoryBytes:null,availableSlots:null,observedAt:c.sampledAt,ttlMs:c.ttlMs});
     for(const p of profiles){
       if(this.reason(p,policy,now))continue;
+      const installation=await db.registeredInstallation.findFirst({where:{groupId,holderInstanceId:p.holderInstanceId}});
+      if(installation&&(installation.state!=='ACTIVE'||installation.deviceId!==p.deviceId))continue;
       for(const e of p.executors){
         const state=await db.capabilityState.findUnique({where:{id:JSON.stringify([groupId,p.holderInstanceId,e.target.targetId])}});
         const qualification=state?JSON.parse(state.metadataJson):null;
@@ -101,8 +119,9 @@ export class DeviceDirectory {
         const ram=e.resources.filter(r=>p.pools.some(pool=>pool.resourcePoolId===r.resourcePoolId&&pool.kind==='RAM_BYTES')).reduce((n,r)=>n+r.amount,0);
         const freeRam=p.pools.filter(pool=>pool.kind==='RAM_BYTES'&&e.resources.some(r=>r.resourcePoolId===pool.resourcePoolId)).reduce((n,pool)=>n+pool.admissionLimit.value!-pool.occupied.value!,0);
         candidates.push({targetId:e.target.targetId,deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,executorId:e.target.executorId,capability:e.contract.capability,
+          ...(installation?{appInstanceId:installation.id}:{}),
           resourcePoolIds:e.target.resourcePoolIds,resourceDemand:e.resources,modelManifest:e.model,requiredMemoryBytes:ram,
-          trusted:true,source:this.domain,observedAt:now,ttlMs:Math.max(0,Math.min(...times.map(s=>s.sampledAt+s.ttlMs))-now),availableSlots:p.credits.find(c=>c.priority===policy.priority)!.slots,
+          ...(e.contract.serviceId?{serviceId:e.contract.serviceId}:{}),trusted:true,source:this.domain,observedAt:now,ttlMs:Math.max(0,Math.min(...times.map(s=>s.sampledAt+s.ttlMs))-now),availableSlots:p.credits.find(c=>c.priority===policy.priority)!.slots,
           availableMemoryBytes:freeRam,quality:qualification.quality.value,computeMs:e.compute.value,queueMs:e.queue.value,coldMs:e.cold.value,publishMs:e.publish.value!,uncertaintyMs:e.uncertainty.value!});
       }
     }

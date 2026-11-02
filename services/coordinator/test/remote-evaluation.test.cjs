@@ -72,6 +72,7 @@ test('claimed delivery is reconciliation-only after restart; cancellation never 
   const report={settled:true,permitId:p.id,domain:'SIMULATED',durationMs:0,output:''};
   await assert.rejects(s.request('/v2/evaluations/'+p.id+'/report',{...report,domain:'REAL'}),/REJECTED/);
   await assert.rejects(s.request('/v2/evaluations/'+p.id+'/report',{...report,output:'not base64'}),/REJECTED/);
+  await assert.rejects(s.request('/v2/evaluations/'+p.id+'/report',{...report,notRun:true,output:'e30='}),/REJECTED/);
   await s.request('/v2/evaluations/'+p.id+'/report',report);assert.equal((await restarted.reconcile(p)).settled,true);
  }finally{abort.abort();await s.r.close();}
 });
@@ -80,7 +81,7 @@ test('unclaimed cancellation and stale queued installation have non-execution pr
  try{
   const p=s.permit(),abort=new AbortController(),running=s.r.remoteEvaluation.run(p,s.pack.cases[0],s.executor,abort.signal).catch(e=>e);
   await until(async()=>await s.r.db.evaluationDispatch.count()===1);abort.abort();await running;
-  assert.equal((await s.r.remoteEvaluation.reconcile(p)).output.length,0);assert.equal((await s.request('/v2/evaluations/claim',{})).work,null);
+  assert.equal((await s.r.remoteEvaluation.reconcile(p)).output.length,0);assert.equal((await s.r.remoteEvaluation.reconcile(p)).notRun,true);assert.equal((await s.request('/v2/evaluations/claim',{})).work,null);
   const p2=s.permit(),abort2=new AbortController(),running2=s.r.remoteEvaluation.run(p2,s.pack.cases[0],s.executor,abort2.signal).catch(e=>e);
   await until(async()=>await s.r.db.evaluationDispatch.count()===2);
   const restart=new RemoteEvaluationRunner(s.r.db,s.r.directory,()=>s.r.epoch+1);

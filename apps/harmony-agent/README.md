@@ -10,6 +10,6 @@ npm run harmony:v2:har
 npm run harmony:v2:agent
 ```
 
-构建结果在 `.test/s2-harmony-agent/entry/build/default/outputs/default/entry-default-unsigned.hap`。本机实际 SDK 为 API 24；脚本从安装元数据生成构建配置，不修改冻结的 v1 工程或签名配置。本地源码目录的跨工程引用在本机失败，因此工程使用实际生成的 `.har` 引用，见 [X7](../../docs/experiments/X7-跨工程引用HAR.md)。
+构建结果在 `.test/s2-harmony-agent/entry/build/default/outputs/default/entry-default-unsigned.hap`。统一 SDK 为 HarmonyOS 6.0.2 / API 22；脚本验证安装元数据符合基线后生成构建配置，不修改冻结的 v1 工程或签名配置。本地源码目录的跨工程引用在本机失败，因此工程使用实际生成的 `.har` 引用，见 [X7](../../docs/experiments/X7-跨工程引用HAR.md)。
 
 模拟器与黑盒测试说明见 [agent-conformance](../../tests/agent-conformance/README.md)。真机应由 DevEco 给这个独立 bundle 配置同一开发者签名，不能直接把模拟器未签名包当成真机交付。真机步骤见 [B9](../../docs/experiments/real-device/B9.md)。本轮未运行手机或 GPU 验收；扫码入口仍按 X4 待后续实验。

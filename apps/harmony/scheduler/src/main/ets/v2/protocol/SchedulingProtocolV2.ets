@@ -10,6 +10,7 @@ export interface AppIdentityV2 { groupId: string; principalId: string; appId: st
 export interface ArtifactRefV2 { artifactId: string; contentVersion: number; contentHash: string; schemaId: string; schemaVersion: number; }
 export interface ArtifactGrantV2 { ref: ArtifactRefV2; groupId: string; ownerPrincipalId: string; ownerAppId: string; allowedAppInstanceIds: string[]; operations: string[]; expiresAt: number; }
 export interface TaskContractV2 {
+  serviceId?: string;
   contractId: string; version: number; capability: string; inputSchemas: string[]; outputSchemas: string[];
   sideEffectPolicy: string; interruptibility: string; maxNonPreemptibleMs: number | null;
 }
@@ -96,7 +97,9 @@ export function allowsArtifactV2(grant: ArtifactGrantV2, caller: AppIdentityV2, 
     grant.allowedAppInstanceIds.indexOf(caller.appInstanceId)>=0&&grant.operations.indexOf(operation)>=0;
 }
 export function validTaskContractV2(v: TaskContractV2): boolean {
-  return exactV2(v,['contractId','version','capability','inputSchemas','outputSchemas','sideEffectPolicy','interruptibility','maxNonPreemptibleMs'])&&
+  const fields=['contractId','version','capability','inputSchemas','outputSchemas','sideEffectPolicy','interruptibility','maxNonPreemptibleMs'];
+  if(objectV2(v)&&Object.keys(v).indexOf('serviceId')>=0)fields.push('serviceId');
+  return exactV2(v,fields)&&(fields.indexOf('serviceId')<0||idV2(v.serviceId!))&&
     idV2(v.contractId)&&integerV2(v.version,1)&&idV2(v.capability)&&idsV2(v.inputSchemas,64)&&idsV2(v.outputSchemas,64)&&v.outputSchemas.length>0&&
     ['PURE','IDEMPOTENT_WRITE','TRANSACTIONAL','NO_REPLAY'].indexOf(v.sideEffectPolicy)>=0&&['CHECKPOINT','CANCEL_RESTART','NON_INTERRUPTIBLE'].indexOf(v.interruptibility)>=0&&
     (v.maxNonPreemptibleMs===null||timeV2(v.maxNonPreemptibleMs));

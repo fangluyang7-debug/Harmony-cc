@@ -1,6 +1,6 @@
-# CPU 软件宿主接口（S1 / S2，2026-11-01）
+# CPU 软件宿主接口（S1—S3，2026-11-01）
 
-用于当前可运行的单节点 CPU 子集，不代表 T2/T3 已冻结或鸿蒙 SDK 已实现。协调者须启用 `COORDINATOR_CPU_HOST=1`；所有下列请求携带配对所得 `Authorization: Bearer <设备凭证>`，使用配对时固定的 HTTPS 证书。
+用于当前可运行的单节点 CPU 子集，包含注册 App SDK 与来源宿主；多阶段和会话展示尚未实现。协调者须启用 `COORDINATOR_CPU_HOST=1`；设备端请求携带配对凭证，SDK 提交携带独立 App 注册凭证，均使用 `Authorization: Bearer <凭证>`，使用配对时固定的 HTTPS 证书。
 
 ## 提交与结果
 
@@ -30,7 +30,7 @@
 
 成功返回 `{ jobId, targetId, deviceId, reason, inputTicket }`。inputTicket 沿用既有 ArtifactTicket 格式。调用既有制品 HTTPS 上传方法传输数据，完成后调用 `POST /v2/jobs/:jobId/start`，正文 `{}`。未上传输入时返回 `INPUT_NOT_UPLOADED`；同任务重复 start 不创建新 attempt。
 
-`GET /v2/jobs/:jobId` 返回 `{ jobId, state, targetId, deviceId, traceId, decisionEvidence, rejection, dispatch, outputTicket }`。outputTicket 只有在成功回执已提交且输出仍在缓存中时提供；调用既有制品 HTTPS 下载方法读取。只有创建任务的 principal + holder 能查询结果。本版本没有按 App 独立颁发凭证，也没有远端取消接口。使用设备凭据调用 `GET /v2/traces/:traceId`，或使用网页会话调用 `GET /v2/spaces/:spaceId/jobs/:jobId/trace`，可查正式任务的 PLAN、OFFER、QUEUE、ADMIT、EXECUTE、PUBLISH 等跨度；无 SDK 根计时及完整跨端依赖时，分析仍为计量不完整。
+`GET /v2/jobs/:jobId` 返回 `{ jobId, state, targetId, deviceId, traceId, decisionEvidence, rejection, dispatch, outputTicket }`。outputTicket 只有在成功回执已提交且输出仍在缓存中时提供；调用既有制品 HTTPS 下载方法读取。只有创建任务的 principal + holder 能查询结果。S3 已使用独立 App 凭据；`POST /v2/sdk/jobs/:id/cancel` 持久化取消意图，执行方确认停止并结算前只返回 CANCEL_REQUESTED，不释放占用。使用设备凭据调用 `GET /v2/traces/:traceId`，或使用网页会话调用 `GET /v2/spaces/:spaceId/jobs/:jobId/trace`，可查正式任务的 PLAN、OFFER、QUEUE、ADMIT、EXECUTE、PUBLISH 等跨度；无 SDK 根计时及完整跨端依赖时，分析仍为计量不完整。
 
 文本输入：`{"text":"Hello Harmony\n资源协同"}`；输出：`{"characters":18,"words":3,"lines":2}`。characters 按 Unicode 码点计数，包含换行字符；words 按空白分隔，非中文分词；lines 支持 CRLF/CR/LF，空文本为 0 行。
 
@@ -44,7 +44,7 @@
 | --- | --- | --- |
 | `POST /v2/executions/:attemptId/authorize` | `{}` | `{ offer: DispatchOfferV2, snapshotVersion, inputTicket }`，比对任务、取得真实派发快照版本及输入读票据 |
 | `POST /v2/executions/:attemptId/input` | `{}` | `{ ticket: ArtifactTicket }`，READ |
-| `POST /v2/executions/:attemptId/output` | `{ bytes, contentHash, schemaId }` | `{ ticket: ArtifactTicket }`，WRITE |
+| `POST /v2/executions/:attemptId/output` | `{ bytes, contentHash, schemaId }` | `{ ticket: ArtifactTicket, delivery: "LOCAL" | "RELAY" }`，WRITE；LOCAL 由来源 App 宿主在私有缓存持久化，RELAY 按票据上传 |
 
 票据使用固定的协调者制品端点；输入任务不能自带任意网络地址。业务载荷存放于制品缓存，CpuJob 控制记录只保存引用和元数据。
 
@@ -57,3 +57,9 @@
 常见可见原因：`NO_AVAILABLE_TARGET`、`ALLOTMENT_UNAVAILABLE`、`INPUT_NOT_UPLOADED`、`JOB_CONFLICT`、`JOB_SCOPE`、`JOB_RECOVERY_REQUIRED`、`CAPABILITY_NOT_QUALIFIED`、`OUTPUT_CONFLICT`。HTTP 错误正文的 message 携带代码；客户端不会打印完整配置或凭证。
 
 当前结果等待超时只表示客户端不再等待，不表示任务已取消。已提交的 requestId 可继续查询，不应直接用新 ID 重复同一操作。完整 SDK 生命周期、DAG、传输规划、会话结果目的地和 App 配额在后续补齐。
+
+### S3 取消与来源本机结果
+
+`POST /v2/executions/:attemptId/control` 正文 `{}`，返回 `{cancel,settled}`；仅已认证的执行 holder/device 可以查询。控制状态查询不要求旧任务仍可新准入，以便旧占用恢复和取消结算。取消意图保存在 CpuJob，查询失败不能当成取消成功。PC 持久化请求并中止执行器，Harmony 在执行安全边界检查；两端都等实际执行退出后才结算，已经成功的结果可能先于取消生效。
+
+来源 App 在私有宿主执行且计划声明本机结果时，结果字节不上传协调者，输出清单与回执仍按原协议提交。SDK 使用同一安装私有缓存读取并验证哈希/长度；跨宿主任务继续通过中继。旧计划没有声明本机结果时保留中继行为。`decisionEvidence.resultDelivery=ORIGIN_LOCAL` 标记此路径；它不表示存储读写耗时已经实测。

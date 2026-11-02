@@ -8,10 +8,13 @@ import { AgentStoreV2, AgentPersistenceV2, AgentMessageFactoryV2, agentMessageV2
 import { runSdkProbe } from '../SdkProbe';
 interface Ack {messageId:string;}
 export default class EntryAbility extends UIAbility {
+  private foreground=false;
+  onForeground():void{this.foreground=true;}
+  onBackground():void{this.foreground=false;}
   async onCreate(want:Want):Promise<void> {
     try{
       const encoded=want.parameters?.['sdkInvitation'] as string|undefined;
-      const sdkResult=await runSdkProbe(this.context,encoded??null);if(sdkResult!==null){AppStorage.setOrCreate('probeResult',sdkResult);hilog.info(0x0001,'HarmonyProbe','%{public}s',sdkResult);return;}
+      const sdkResult=await runSdkProbe(this.context,encoded??null,()=>this.foreground);if(sdkResult!==null){AppStorage.setOrCreate('probeResult',sdkResult);hilog.info(0x0001,'HarmonyProbe','%{public}s',sdkResult);return;}
       const fixtures=util.TextDecoder.create('utf-8').decodeToString(await this.context.resourceManager.getRawFileContent('ledger-v2.json'));
       const count=runLedgerFixtures(fixtures);
       const db=await relationalStore.getRdbStore(this.context,{name:'probe.db',securityLevel:relationalStore.SecurityLevel.S1});

@@ -31,3 +31,22 @@ test('battery, temperature, foreground, power and owner signals change eligibili
   p.charging.value='CHARGING';assert.equal(dir.reason(p,policy,100),null);p.credits.forEach(c=>c.slots=0);assert.equal(dir.reason(p,policy,100),'NO_CREDIT');
  }finally{await r.close();}
 });
+
+
+test('same-device App contribution ceilings are not mistaken for the shared physical budget',async()=>{
+ const r=await runtime();try{
+  const dir=new DeviceDirectory(r.db,'SIMULATED',()=>100),a=fixture(),b=fixture();
+  const pool=a.pools[0],poolId=pool.resourcePoolId;
+  for(const p of [a,b]){p.pools[0].total.value=4;p.pools[0].ownerReserved=3;p.pools[0].contributionLimit=1;p.pools[0].admissionLimit.value=1;p.pools[0].occupied.value=0;}
+  a.pools[0].occupied.value=1;b.holderInstanceId='h2';b.deviceInstanceId='instance2';b.executors.forEach(e=>e.target.targetId+='-b');
+  await r.allotments.confirmDevice('device1',[{resourcePoolId:poolId,amount:2}],['h1','h2'].map(holderInstanceId=>({groupId:'g1',holderInstanceId,appInstanceId:null})));
+  await dir.ingest(peer,a);await dir.ingest({...peer,holderInstanceId:'h2'},b);
+  assert.equal((await dir.snapshot('g1','p1',1,policy)).resources.find(r=>r.resourcePoolId===poolId).available,1,'one occupied App leaves the other physical slot available');
+  b.sequence++;b.pools[0].occupied.value=1;await dir.ingest({...peer,holderInstanceId:'h2'},b);
+  assert.equal((await dir.snapshot('g1','p1',1,policy)).resources.find(r=>r.resourcePoolId===poolId).available,0,'two occupied holders exhaust the device');
+  const invite=await r.auth.invite('g2','p2','device1',r.url),other=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:'h3'});
+  await r.allotments.confirmDevice('device1',[{resourcePoolId:poolId,amount:3}],[{groupId:'g1',holderInstanceId:'h1',appInstanceId:null},{groupId:'g1',holderInstanceId:'h2',appInstanceId:null},{groupId:'g2',holderInstanceId:'h3',appInstanceId:null}]);
+  await r.allotments.issue(other.peer,{ledgerEpoch:1,leaseRequestId:'hidden',leaseMs:30000,base:[],extra:[{resourcePoolId:poolId,amount:1}]});
+  assert.equal((await dir.snapshot('g1','p1',1,policy)).resources.find(r=>r.resourcePoolId===poolId).available,0,'another group without a fresh profile retains its whole reservation');
+ }finally{await r.close();}
+});
