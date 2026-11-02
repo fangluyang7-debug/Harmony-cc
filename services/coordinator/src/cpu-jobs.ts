@@ -105,7 +105,7 @@ export class CpuJobs {
   }
   async graphOutput(peer:Peer,id:string){const data=await this.owned(peer,id),status=await this.status(peer,id);if(!status.outputTicket||!data.output)return null;return {descriptor:data.output,local:this.localOutput(peer,data)};}
   private upload(peer:Peer,id:string,d:JobData){const endpointId=d.plan.decision.suggestion?.[0]?.inputEndpointId;return {jobId:id,targetId:d.offer.target.targetId,deviceId:d.offer.target.deviceId,reason:d.offer.reasonCode,inputDelivery:this.localInput(peer,d)?'LOCAL':endpointId?'DIRECT':'RELAY',...(endpointId?{inputEndpointId:endpointId}:{}),inputTicket:this.artifacts.issue(d.input,peer,'WRITE')};}
-  private async inputReady(peer:Peer,d:JobData){return this.localInput(peer,d)||this.artifacts.available(d.input)||!!(d.plan.decision.suggestion?.[0]?.inputEndpointId&&await this.directTransfers?.hasInput(peer.groupId,d.holderId,d.offer.task.app.appInstanceId,d.input.ref));}
+  private async inputReady(peer:Peer,d:JobData){return this.localInput(peer,d)||this.artifacts.available(d.input)||!!await this.directTransfers?.hasInput(peer.groupId,d.holderId,d.offer.task.app.appInstanceId,d.input.ref);}
   private async owned(peer:Peer,id:string):Promise<JobData>{
     await this.apps.context(peer);
     const row=await this.db.cpuJob.findUnique({where:{id}});if(!row||row.groupId!==peer.groupId||row.principalId!==peer.principalId||row.sourceHolderId!==peer.holderInstanceId)throw Error('JOB_SCOPE');return JSON.parse(row.metadataJson);
@@ -118,6 +118,23 @@ export class CpuJobs {
     if(!await this.inputReady(peer,data))throw Error('INPUT_NOT_UPLOADED');
     if(row.state==='WAITING_INPUT'){
       if(!data.request||!Number.isFinite(data.deadlineAt))throw Error('JOB_REPLAN_REQUIRED');
+      const copies=new Map<string,boolean>();
+      for(const request of [data.request,...(data.choices??[]).map(c=>c.request)])for(const artifact of request.artifacts){
+        if(artifact.id!==data.input.ref.artifactId)continue;
+        for(const replica of artifact.replicas){
+          if(!replica.localOnly||!replica.holderInstanceId||replica.holderInstanceId===peer.holderInstanceId)continue;
+          if(!copies.has(replica.holderInstanceId))copies.set(replica.holderInstanceId,!!await this.directTransfers?.hasInput(peer.groupId,replica.holderInstanceId,data.offer.task.app.appInstanceId,data.input.ref));
+        }
+        artifact.replicas=artifact.replicas.filter(r=>!r.holderInstanceId||!copies.has(r.holderInstanceId)||copies.get(r.holderInstanceId));
+      }
+      // A verified direct upload is now an executor-local replica, regardless of
+      // whether the latest link model still prefers the original upload route.
+      if(await this.directTransfers?.hasInput(peer.groupId,data.holderId,data.offer.task.app.appInstanceId,data.input.ref)){
+        for(const request of [data.request,...(data.choices??[]).map(c=>c.request)]){
+          const artifact=request.artifacts.find(a=>a.id===data.input.ref.artifactId);
+          if(artifact&&!artifact.replicas.some(r=>r.holderInstanceId===data.holderId))artifact.replicas.push({deviceId:data.offer.target.deviceId,holderInstanceId:data.holderId,readMs:0,localOnly:true});
+        }
+      }
       // A completed relay fallback is an actual replica. Price the remaining
       // download, preserving source-local execution but not a second direct upload.
       if(this.artifacts.available(data.input))for(const request of [data.request,...(data.choices??[]).map(c=>c.request)]){
@@ -138,9 +155,13 @@ export class CpuJobs {
       data.offer.task.contract=p.executor.contract;data.offer.task.allowedTargetIds=[p.executor.target.targetId];data.offer.task.allowedConfigurations=p.executor.configurations.map(c=>c.id);
       data.offer.reasonCode=p.decision.decision.reason;
       if(this.localInput(peer,data))data.decisionEvidence!.resultDelivery='ORIGIN_LOCAL';
-      const directInput=!!(p.decision.decision.suggestion?.[0]?.inputEndpointId&&await this.directTransfers?.hasInput(peer.groupId,data.holderId,data.offer.task.app.appInstanceId,data.input.ref));
-      data.offer.transferPlan=this.localInput(peer,data)?[]:[{ref:data.input.ref,from:directInput?peer.deviceId:this.store.senderInstanceId,to:p.executor.target.deviceId,via:null}];
-      if(!await this.inputReady(peer,data))throw Error('INPUT_NOT_UPLOADED');
+      const directInput=!!await this.directTransfers?.hasInput(peer.groupId,data.holderId,data.offer.task.app.appInstanceId,data.input.ref);
+      data.offer.transferPlan=this.localInput(peer,data)||directInput?[]:[{ref:data.input.ref,from:this.store.senderInstanceId,to:p.executor.target.deviceId,via:null}];
+      if(!await this.inputReady(peer,data)){
+        // Publish the new input destination so graph polling can prepare it.
+        await this.db.cpuJob.updateMany({where:{id,state:'WAITING_INPUT'},data:{metadataJson:JSON.stringify(data)}});
+        throw Error('INPUT_NOT_UPLOADED');
+      }
       data.offer.allotmentVersion=p.grant.version;data.offer.allotmentId=p.grant.allotmentId;data.offer.task.coordinatorEpoch=this.epoch();
       data.offer.task.budget={remainingMs:Math.max(0,data.deadlineAt-Date.now()),deadlineAt:data.deadlineAt};
       data.offer.leaseMs=data.offer.task.budget.remainingMs;

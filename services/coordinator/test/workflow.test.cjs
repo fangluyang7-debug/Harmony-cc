@@ -25,9 +25,25 @@ test('SDK three-node graph moves a private source result to a remote worker and 
    {id:'count',capability:'text.count.v1',inputFrom:'collect',parameters:'{}',dependsOn:['collect'],targetId:remote.targetId},
    {id:'finish',capability:final.manifest.contract.capability,inputFrom:'count',parameters:'{}',dependsOn:['count']}
   ]};
+  let endpoint;
+  await until(async()=>{endpoint=(await r.directTransfers.list(source.peer)).find(e=>e.holderInstanceId===remote.holderInstanceId);return !!endpoint;});
+  for(const host of hosts){host.peerLinks.close();await host.networkPending;}
+  const network=await r.directTransfers.resetNetwork(source.peer);
+  await r.directTransfers.reportLink(source.peer,{epoch:network.epoch,endpointId:endpoint.id,endpointEpoch:endpoint.epoch,direction:'WRITE',reason:'REACHABLE',samples:[1024,8192,32768].map(bytes=>({bytes,durationMs:0.01+bytes/1000000}))});
+  await r.profiles.refresh(group);
+  // Deterministic regression: remove direct-link evidence after the verified copy
+  // arrives, before the downstream start re-plans. The received replica must win.
+  let uploaded=false,directUploads=0;const originalWrite=sdk.port.write,originalStart=r.jobs.start.bind(r.jobs);
+  r.jobs.start=async(peer,jobId,...rest)=>{const row=await r.db.cpuJob.findUnique({where:{id:jobId}}),task=row?JSON.parse(row.metadataJson).offer.task:null;if(task?.workflowId===id&&task.nodeId==='count'&&!uploaded)throw Error('INPUT_NOT_UPLOADED');return originalStart(peer,jobId,...rest);};
+  sdk.port.write=async(ticket,bytes)=>{
+   await originalWrite(ticket,bytes);if(!ticket.direct)return;directUploads++;
+   assert.equal(await r.directTransfers.hasInput(group,remote.holderInstanceId,source.peer.app.appInstanceId,ticket.ref),true);
+   await r.directTransfers.resetNetwork(source.peer);await r.profiles.refresh(group);uploaded=true;
+  };
   const invalid=structuredClone(workflow);invalid.nodes[1].inputFrom='missing';await assert.rejects(sdk.plan(invalid,{requestId:randomUUID(),budgetMs:30000,resultDestination:'ORIGIN'}),/SDK_GRAPH_EDGE_INVALID/);
   const task=await sdk.submit(workflow,{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'}),result=await task.result();
   assert.deepEqual(JSON.parse(Buffer.from(result.output)),JSON.parse(counts));assert.equal(result.status.state,'SUCCEEDED');
+  assert.equal(directUploads,1);r.jobs.start=originalStart;sdk.port.write=originalWrite;
   const attempts=await r.db.attempt.findMany({where:{workflowId:id}});assert.equal(attempts.length,3);assert.equal(new Set(attempts.map(a=>a.nodeId)).size,3);
   const trace=[];
   for(const a of attempts){assert.equal((await r.db.receipt.findUnique({where:{id:a.id}})).committed,true);const offer=JSON.parse(a.offerJson);trace.push([offer.task.nodeId,offer.target.backend,offer.task.workflowId]);}

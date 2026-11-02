@@ -2,7 +2,7 @@ const fs=require('node:fs'),path=require('node:path'),{execFile,fork}=require('n
 const command=(file,args)=>new Promise((resolve,reject)=>execFile(file,args,{windowsHide:true,timeout:60000},(e,out,err)=>e?reject(Error('ADAPTER_COMMAND_FAILED:'+String(e.code))):resolve(out)));
 exports.start=async(kind,options)=>{
  if(kind==='harmony-emulator'){
-  const hdc=process.env.HDC_PATH||'D:/Users/17321/AppData/DevEco Studio/sdk/default/openharmony/toolchains/hdc.exe',target=process.env.HDC_TARGET||'127.0.0.1:5555';
+  const hdc=process.env.HDC_PATH||path.join(process.env.DEVECO_SDK_HOME||path.join(process.env.DEVECO_STUDIO_HOME||'E:/DevEco/DevEco Studio','sdk'),'default/openharmony/toolchains/hdc.exe'),target=process.env.HDC_TARGET||'127.0.0.1:5555';
   if(!/^127\.0\.0\.1:\d+$/.test(target))throw Error('EMULATOR_TARGET_REQUIRED');
   const call=(...args)=>command(hdc,['-t',target,...args]),hap=process.env.HARMONY_AGENT_HAP||path.join(options.root,'.test/s2-harmony-agent/entry/build/default/outputs/default/entry-default-unsigned.hap');
   if(!fs.existsSync(hap))throw Error('NATIVE_HAP_BUILD_REQUIRED');

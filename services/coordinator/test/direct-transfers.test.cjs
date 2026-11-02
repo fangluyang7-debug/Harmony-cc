@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),path=require('node:path');
 const {fork}=require('node:child_process'),{randomUUID}=require('node:crypto');
-const {runtime}=require('./helpers.cjs'),{transferDigest}=require('@harmony/resource-transport');
+const {runtime}=require('./helpers.cjs'),{transferDigest,signTransfer}=require('@harmony/resource-transport');
 
 function processEndpoint(){
  const child=fork(path.join(__dirname,'direct-endpoint-child.cjs'),[],{stdio:['ignore','ignore','ignore','ipc'],windowsHide:true}),pending=new Map();
@@ -10,7 +10,7 @@ function processEndpoint(){
 }
 
 test('independent endpoint processes consume single-use scoped grants online and invalidate network epochs',async()=>{
- const r=await runtime({cpuHost:true}),source=processEndpoint(),target=processEndpoint();
+ const r=await runtime({cpuHost:true}),source=processEndpoint();let target=processEndpoint();
  try{
   const group=randomUUID(),principal=randomUUID();
   async function pair(device){const invite=await r.auth.invite(group,principal,device,r.url),paired=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:randomUUID()});return {paired,invite};}
@@ -32,6 +32,12 @@ test('independent endpoint processes consume single-use scoped grants online and
   await r.db.cpuJob.create({data:{id,groupId:group,principalId:principal,sourceHolderId:app.peer.holderInstanceId,state:'WAITING_INPUT',metadataJson:JSON.stringify(data)}});
   const issue=()=>r.directTransfers.issue(app.peer,{attemptId:id,endpointId:right.endpoint.id,operation:'WRITE'});
   const grant=await issue(),send=g=>source.request({action:'send',grant:g,bytes:bytes.toString('base64')});
+  assert.equal(await source.request({action:'long-term-header',grant,bytes:bytes.toString('base64')}),403);
+  const expired={...grant,signed:signTransfer({...grant.signed.authorization,issuedAt:Date.now()-3000,expiresAt:Date.now()-1},r.identity.key)};await assert.rejects(send(expired));
+  const wrongTls=structuredClone(grant.signed.authorization);wrongTls.endpoint.certificate=left.endpoint.certificate;wrongTls.endpoint.fingerprint=left.endpoint.fingerprint;
+  await assert.rejects(send({...grant,signed:signTransfer(wrongTls,r.identity.key)}));
+  const wrongDestination=structuredClone(grant.signed.authorization);wrongDestination.endpoint.address=left.endpoint.address;wrongDestination.endpoint.certificate=left.endpoint.certificate;wrongDestination.endpoint.fingerprint=left.endpoint.fingerprint;
+  await assert.rejects(send({...grant,signed:signTransfer(wrongDestination,r.identity.key)}));
   const changed=structuredClone(grant);changed.signed.authorization.appInstanceId='foreign';await assert.rejects(send(changed));
   assert.equal((await r.db.transferAuthorization.findUnique({where:{id:grant.signed.authorization.id}})).state,'ISSUED');
   const results=await Promise.allSettled([send(grant),send(grant)]);assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
@@ -63,8 +69,17 @@ test('independent endpoint processes consume single-use scoped grants online and
   await r.db.node.update({where:{id:parentNode},data:{currentAttemptId:id}});
   await r.db.cpuJob.update({where:{id:childId},data:{state:'CANCEL_REQUESTED'}});await assert.rejects(pull(),/TRANSFER_DEPENDENCY_SCOPE/);
   const oldNetwork=await issue();await r.directTransfers.resetNetwork(app.peer);await assert.rejects(send(oldNetwork));
-  const oldEndpoint=await issue();await target.request({action:'register'});await assert.rejects(send(oldEndpoint));
+  const oldEndpoint=await issue();target.close();target=processEndpoint();
+  const restartedEndpoint=await target.request({action:'open',directory:path.join(r.config.dataDir,'target'),connection:connection(worker.paired,worker.invite)}),replacement=restartedEndpoint.endpoint;
+  assert.notEqual(restartedEndpoint.pid,right.pid);assert.notEqual(replacement.epoch,right.endpoint.epoch);assert.equal(replacement.fingerprint,right.endpoint.fingerprint);
+  await assert.rejects(send(oldEndpoint));await assert.rejects(r.directTransfers.consume(worker.paired.peer,oldEndpoint));
   await assert.rejects(issue(),/TRANSFER_PLAN_CHANGED/);
-  await r.auth.revoke(app.peer.credentialId);await assert.rejects(issue(),/TRANSFER_CREDENTIAL_REVOKED/);
+  data.plan.decision.suggestion[0].inputEndpointEpoch=replacement.epoch;
+  await r.db.cpuJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
+  const revocable=await issue(),{DirectTransfers}=require('../dist/direct-transfers');
+  const nextCoordinatorEpoch=new DirectTransfers(r.db,r.identity.key,r.identity.cert,'SIMULATED',()=>r.epoch+1);
+  await assert.rejects(nextCoordinatorEpoch.consume(worker.paired.peer,revocable),/TRANSFER_PROOF_INVALID/);
+  await r.auth.revoke(app.peer.credentialId);
+  await assert.rejects(send(revocable));await assert.rejects(issue(),/TRANSFER_CREDENTIAL_REVOKED/);
  }finally{source.close();target.close();await r.close();}
 });
