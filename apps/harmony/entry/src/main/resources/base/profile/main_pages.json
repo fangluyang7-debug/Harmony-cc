@@ -3,6 +3,7 @@
     "pages/Index",
     "pages/SchedulerPanelPage",
     "pages/DualPhoneLabPage",
-    "pages/CloudPhoneDispatchPage"
+    "pages/CloudPhoneDispatchPage",
+    "pages/V2CropPage"
   ]
 }

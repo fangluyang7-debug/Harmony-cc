@@ -1,0 +1,23 @@
+{
+  "recordedAt": "2026-11-01",
+  "files": {
+    "packages/scheduler-core/src/admission.ts": "0bfd356d81a34989c1c05b0e8313270fc552ce8660f1a7f651d7717510ead024",
+    "packages/scheduler-core/src/capability-cost-model.ts": "64942de8656d7d550d0b86d102bfd3ed73a06167e31af8d9ef7d480c04fc27c3",
+    "packages/scheduler-core/src/cost.ts": "51c1747858df90b8ce0e26f9960d34362dff40495aa0347941e9c67339bf7e14",
+    "packages/scheduler-core/src/index.ts": "b24e66b0a148424f8e93ee01c715beaf4dbb9799a9ebc77384da4f4d82aedef0",
+    "packages/scheduler-core/src/ledger-v2.ts": "dfe6efb7ec07b83abcb45ad6d82cac383af06ea42166fe50aa95a4fa559a18a4",
+    "packages/scheduler-core/src/micro-queue.ts": "02ae17d6c9945fbf7366e317460dff18b2d8f9a7d642c68c1ce53a72d6994240",
+    "packages/scheduler-core/src/planner.ts": "c5fa587f002199dc06e1d8bb5178134bad6db9cf10d76d741d5edcd269fb0762",
+    "packages/scheduler-core/src/planning-api.ts": "353eac45d8efe07d00d3cf43a9b3339108a89885821c0c9a2adcbdc1e2c7f1cb",
+    "packages/scheduler-core/src/protocol-v1.ts": "ba0a27308214c0fdb874f594ff13d57a9e98e0550d2196b5fd731e6844952b78",
+    "packages/scheduler-core/src/protocol-v2.ts": "cebd081b355fc2a2ddb9c1cca3af76fdfd42336e7f8f7971ecc09fc793a4abc0",
+    "packages/scheduler-core/src/recovery.ts": "5dbdfffb6da029be8f63bb10499b5ece249f1c82a5e5ff4037875fcafc925971",
+    "packages/scheduler-core/src/resources-v2.ts": "1aa147c0f30e3b8f3fa8c9002b3e79ea7b385af3ca3a08ef9b2d706004b8c8c2",
+    "packages/scheduler-core/src/trace-analysis.ts": "3f4cdc1a7ac26cb737c02ca8aa05916cce9dc62ce547dfe4c6cc7478ab81ba4b",
+    "apps/harmony/scheduler/src/main/ets/v2/core/CanonicalV2.ets": "5a4a4720df30cf8dd97ed53d8ba587a5eddf9de67654297ba1d3eda3f446ed4b",
+    "apps/harmony/scheduler/src/main/ets/v2/core/LedgerV2.ets": "7409e8b4e301be6305bddd79a5c64d7d7795f7c40c826216c11ea65b878eedc0",
+    "apps/harmony/scheduler/src/main/ets/v2/core/MicroQueueV2.ets": "356a332163a19cc3afb1fb418a1b6b699059d547e410803f2ab2ea3d1e04beff",
+    "apps/harmony/scheduler/src/main/ets/v2/protocol/ResourcesV2.ets": "9c346d8a7c7db568d7a6e4751d789e2bd1ee720f990aaf99debb00da4266393f",
+    "apps/harmony/scheduler/src/main/ets/v2/protocol/SchedulingProtocolV2.ets": "cebd081b355fc2a2ddb9c1cca3af76fdfd42336e7f8f7971ecc09fc793a4abc0"
+  }
+}

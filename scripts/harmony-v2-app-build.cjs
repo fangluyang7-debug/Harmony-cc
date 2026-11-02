@@ -2,7 +2,7 @@
 const fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process');
 async function main(){
 const root=path.resolve(__dirname,'..'),name=process.argv[2];
-if(!['harmony-agent','harmony-har-probe'].includes(name))throw Error('APP_NAME_REQUIRED');
+if(!['harmony-agent','harmony-har-probe','harmony-indexer','harmony'].includes(name))throw Error('APP_NAME_REQUIRED');
 const studio=process.env.DEVECO_STUDIO_HOME||'E:/DevEco/DevEco Studio',sdk=process.env.DEVECO_SDK_HOME||path.join(studio,'sdk');
 const metadata=JSON.parse(fs.readFileSync(path.join(sdk,'default/sdk-pkg.json'))).data,sdkVersion=metadata.platformVersion+'('+metadata.apiVersion+')';
 if(String(metadata.apiVersion)!=='22'||metadata.platformVersion!=='6.0.2')throw Error('SDK_BASELINE_MISMATCH: require HarmonyOS 6.0.2 API 22; set DEVECO_STUDIO_HOME / DEVECO_SDK_HOME');

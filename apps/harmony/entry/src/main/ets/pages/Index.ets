@@ -491,6 +491,7 @@ struct Index {
   @Builder
   private Profile() {
     Column({ space: 20 }) {
+      Button('v2 裁剪验收').onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/V2CropPage' }).catch(() => this.notify('验收入口打开失败')); })
       Text('本机偏好').fontSize(24).fontWeight(FontWeight.Bold).width('100%')
       Row() {
         Text('参与本地体验反馈').fontSize(16).layoutWeight(1)

@@ -1,3 +1,4 @@
+import { indexer } from '../services/V2CropSession';
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CloudApiConfig } from '../services/CloudApiConfig';
@@ -29,6 +30,7 @@ export default class EntryAbility extends UIAbility {
   private appVisibility: AppVisibility = AppVisibility.FOREGROUND;
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+    indexer.initialize(this.context);
     this.destroyed = false;
     this.appVisibility = AppVisibility.FOREGROUND;
     try {
@@ -61,6 +63,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
+    void indexer.close();
     this.destroyed = true;
     this.monitorPublisher.stop();
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
@@ -88,6 +91,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onForeground(): void {
+    indexer.lifecycle(true);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onForeground');
     this.appVisibility = AppVisibility.FOREGROUND;
     this.monitorPublisher.setForeground(true);
@@ -100,6 +104,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onBackground(): void {
+    indexer.lifecycle(false);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
     this.appVisibility = AppVisibility.BACKGROUND;
     this.monitorPublisher.setForeground(false);

@@ -75,7 +75,10 @@
     "harmony:v2:har": "node scripts/harmony-v2-build.cjs",
     "harmony:v2:agent": "npm run references:build && node scripts/harmony-v2-app-build.cjs harmony-agent --har",
     "harmony:v2:probe": "npm run references:build && node scripts/harmony-v2-app-build.cjs harmony-har-probe --har",
-    "ledger:v2:parity": "npm run core:build && node scripts/test-ledger-parity-v2.mjs"
+    "ledger:v2:parity": "npm run core:build && node scripts/test-ledger-parity-v2.mjs",
+    "harmony:v2:indexer": "npm run references:build && node scripts/harmony-v2-app-build.cjs harmony-indexer --har",
+    "s4:core-check": "node scripts/check-s4-core-baseline.cjs",
+    "harmony:v2:soleai": "npm run references:build && node scripts/harmony-v2-app-build.cjs harmony --har"
   },
   "devDependencies": {
     "ajv": "8.20.0",
