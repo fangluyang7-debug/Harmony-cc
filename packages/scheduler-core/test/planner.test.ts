@@ -91,3 +91,25 @@ describe('application-independent placement requirements',()=>{
     expect(new WorkflowPlacementPlanner(limits,()=>0).plan(r).rejections.some(x=>x.code==='QUALITY_REQUIREMENT_UNMET')).toBe(true);
   });
 });
+
+
+describe('D4 DAG critical path and shared resource calendar',()=>{
+  function branches(slots:number):PlacementRequest {
+    const r=fixture();r.finalDestination=undefined;r.links=[];r.artifacts[0].replicas=[{deviceId:'pc',readMs:0}];
+    r.deviceResources=[{deviceId:'pc',resourcePoolId:'shared',availableMemoryBytes:100,availableSlots:slots,observedAt:now,ttlMs:3000}];
+    r.nodes=['a','b','join'].map((id,i)=>({id,capability:'crop',dependencies:i===2?['a','b']:[],inputs:i===2?['out-a','out-b']:['input'],output:{id:'out-'+id,bytes:10},baselineTargetId:id,memoryBytes:10,minimumQuality:1,candidates:[{...candidate('pc',i===2?20:100),targetId:id}]}));return r;
+  }
+  it('estimates independent branches by critical path rather than their sum',()=>{
+    const result=new WorkflowPlacementPlanner(limits,()=>0).plan(branches(2));
+    expect(result.suggestionMs).toBe(120);expect(result.suggestion?.map(a=>a.startMs)).toEqual([0,0,100]);
+  });
+  it('serializes branches when their shared device pool has one slot',()=>{
+    const result=new WorkflowPlacementPlanner(limits,()=>0).plan(branches(1));
+    expect(result.suggestionMs).toBe(220);expect(result.suggestion?.map(a=>a.startMs)).toEqual([0,100,200]);
+  });
+  it('shares RAM across distinct CPU/GPU targets and refuses an impossible deadline',()=>{
+    const r=branches(2);r.nodes.forEach(n=>n.candidates.forEach(c=>c.requiredMemoryBytes=60));r.remainingBudgetMs=150;
+    expect(new WorkflowPlacementPlanner(limits,()=>0).plan(r).status).toBe('blocked');
+    r.remainingBudgetMs=300;expect(new WorkflowPlacementPlanner(limits,()=>0).plan(r).suggestionMs).toBe(220);
+  });
+});

@@ -1,6 +1,6 @@
 /** Public submission data contains no identity claims. Credentials bind the App on the server. */
 export interface SdkInput {contentHash:string;bytes:number;schemaId:string;schemaVersion:number;}
-export interface SdkNode {id:string;capability:string;input:SdkInput;parameters:string;dependsOn:string[];targetId?:string;}
+export interface SdkNode {id:string;capability:string;input?:SdkInput;inputFrom?:string;parameters:string;dependsOn:string[];targetId?:string;}
 export interface SdkWorkflow {version:3;id:string;outputContract:string;qualityTarget:string;nodes:SdkNode[];}
 export interface SdkAlternatives {version:3;id:string;outputContract:string;qualityTarget:string;alternatives:SdkWorkflow[];}
 export interface SubmitOptions {requestId:string;budgetMs:number;resultDestination:'ORIGIN';inputLocation?:'ORIGIN';}
@@ -8,8 +8,9 @@ export interface SdkSubmission {workflow:SdkWorkflow|SdkAlternatives;options:Sub
 export interface SdkConfiguration {capacityWaitMs:number;}
 export interface SdkRef {artifactId:string;contentVersion:number;contentHash:string;schemaId:string;schemaVersion:number;}
 export interface SdkTicket {token:string;ref:SdkRef;bytes:number;expiresAt:number;operation:string;}
-export interface SdkPlan {jobId:string;targetId:string;deviceId:string;reason:string;inputTicket:SdkTicket;inputDelivery?:'LOCAL'|'RELAY';}
-export interface SdkStatus {jobId:string;state:string;targetId:string;deviceId:string;traceId:string;outputTicket:SdkTicket|null;}
+export interface SdkPlan {jobId:string;targetId:string;deviceId:string;reason:string;inputTicket:SdkTicket;inputDelivery?:'LOCAL'|'RELAY';inputTickets?:SdkTicket[];}
+export interface SdkInputTransfer {read:SdkTicket;write:SdkTicket;}
+export interface SdkStatus {inputTransfers?:SdkInputTransfer[];jobId:string;state:string;targetId:string;deviceId:string;traceId:string;outputTicket:SdkTicket|null;}
 export interface SdkResult {jobId:string;output:Uint8Array;status:SdkStatus;}
 /** Platform adapter owns trust, authenticated requests, bytes and the clock. No agent dependency. */
 export interface SdkPort {
@@ -38,6 +39,7 @@ export class SdkTask {
   const deadline=this.port.now()+timeoutMs;
   while(this.port.now()<deadline){
    const status=await this.status();
+   for(const transfer of status.inputTransfers??[]){const bytes=await this.port.read(transfer.read);if(bytes.byteLength!==transfer.write.bytes||await this.port.digest(bytes)!==transfer.write.ref.contentHash)throw Error('SDK_TRANSFER_INTEGRITY');await this.port.write(transfer.write,bytes);}
    if(status.outputTicket){const output=await this.port.read(status.outputTicket);if(output.byteLength!==status.outputTicket.bytes||await this.port.digest(output)!==status.outputTicket.ref.contentHash)throw Error('SDK_OUTPUT_INTEGRITY');return {jobId:this.id,output,status};}
    if(['FAILED','REJECTED','CANCELLED','CANCELLED_SETTLED','SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING','BUDGET_EXHAUSTED'].includes(status.state))throw Error('JOB_'+status.state);
    await this.port.wait(250);
@@ -81,6 +83,7 @@ export class SchedulerSdk {
   const available=new Map<string,Uint8Array>();
   const paths:SdkWorkflow[]=isAlternatives(workflow)?(workflow as SdkAlternatives).alternatives:[workflow as SdkWorkflow];
   for(const path of paths)for(const node of path.nodes){
+   if(node.inputFrom!==undefined)continue;
    const input=node.input;if(input===undefined)throw Error('SDK_INPUT_REQUIRED');const bytes=this.inputs.get(input.contentHash);
    if(!bytes||bytes.byteLength!==input.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');
    available.set(input.contentHash,bytes);
@@ -93,7 +96,7 @@ export class SchedulerSdk {
   const plan=await this.plan(workflow,options),bytes=available.get(plan.inputTicket.ref.contentHash);
   if(this.port.cancelled?.()){await this.resume(plan.jobId).cancel();throw Error('SDK_SUBMISSION_CANCELLED');}
   if(!bytes||bytes.byteLength!==plan.inputTicket.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');
-  if(plan.inputDelivery!=='LOCAL')await this.port.write(plan.inputTicket,bytes);
+  if(plan.inputDelivery!=='LOCAL')for(const ticket of plan.inputTickets??[plan.inputTicket]){const content=available.get(ticket.ref.contentHash);if(!content||content.byteLength!==ticket.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');await this.port.write(ticket,content);}
   if(this.port.cancelled?.()){await this.resume(plan.jobId).cancel();throw Error('SDK_SUBMISSION_CANCELLED');}
   try{await this.port.request('/v2/sdk/jobs/'+plan.jobId+'/start','{}');}
   catch(error){

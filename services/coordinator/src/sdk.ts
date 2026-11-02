@@ -1,3 +1,4 @@
+import {WorkflowJobs} from './workflow-jobs';
 import {createHash} from 'node:crypto';
 import {canonical,protocolId} from '@harmony/scheduler-core';
 import {builtinCpuPacks,ReferencePack} from '@harmony/reference-capabilities';
@@ -7,11 +8,12 @@ import {Peer} from './channel';
 const exact=(v:any,keys:string[],optional:string[]=[])=>v&&typeof v==='object'&&!Array.isArray(v)&&keys.every(k=>k in v)&&Object.keys(v).every(k=>[...keys,...optional].includes(k));
 /** C3 metadata adapter. CpuJobs is its one-node server implementation, never a second dispatcher. */
 export class SdkJobs {
- constructor(private readonly jobs:CpuJobs,private readonly packs:ReferencePack[]=builtinCpuPacks()){}
+ constructor(private readonly jobs:CpuJobs,private readonly packs:ReferencePack[]=builtinCpuPacks(),private readonly graphs?:WorkflowJobs){}
  contractIds(){return this.packs.map(p=>p.manifest.contract.contractId);}
  inputSchema(capability:string){const pack=this.packs.find(p=>p.manifest.contract.capability===capability);if(!pack)throw Error('CAPABILITY_UNSUPPORTED');return pack.manifest.contract.inputSchemas[0];}
  outputSchema(capability:string){const pack=this.packs.find(p=>p.manifest.contract.capability===capability);if(!pack)throw Error('CAPABILITY_UNSUPPORTED');return pack.manifest.contract.outputSchemas[0];}
  async submit(peer:Peer,body:SdkSubmission){
+  if(this.graphs&&body&&body.workflow&&'nodes' in body.workflow&&Array.isArray(body.workflow.nodes)&&body.workflow.nodes.length>1)return this.graphs.submit(peer,body);
   if(!exact(body,['workflow','options'])||!exact(body.options,['requestId','budgetMs','resultDestination'],['inputLocation'])||body.options.inputLocation!==undefined&&body.options.inputLocation!=='ORIGIN'||!protocolId(body.options.requestId)||body.options.requestId.length>100||!Number.isSafeInteger(body.options.budgetMs)||body.options.budgetMs<0||body.options.budgetMs>30000)throw Error('SDK_SUBMISSION_INVALID');
   if(body.options.resultDestination!=='ORIGIN')throw Error('SDK_RESULT_DESTINATION_UNSUPPORTED');
   const root=body.workflow;
@@ -37,7 +39,7 @@ export class SdkJobs {
   const fingerprint=createHash('sha256').update(canonical(body)).digest('hex');
   return this.jobs.submit(peer,{requestId:body.options.requestId,capability:node.capability,contentHash:node.input!.contentHash,bytes:node.input!.bytes,budgetMs:body.options.budgetMs,parameters:node.parameters,...(body.options.inputLocation?{inputLocation:body.options.inputLocation}:{})},workflows.map(w=>({parameters:w.nodes[0].parameters,...(w.nodes[0].targetId?{targetId:w.nodes[0].targetId}:{})})),fingerprint);
  }
- start(peer:Peer,id:string){return this.jobs.start(peer,id);}
- status(peer:Peer,id:string){return this.jobs.status(peer,id);}
- cancel(peer:Peer,id:string){return this.jobs.cancel(peer,id);}
+ async start(peer:Peer,id:string){return this.graphs&&await this.graphs.exists(id)?this.graphs.start(peer,id):this.jobs.start(peer,id);}
+ async status(peer:Peer,id:string){return this.graphs&&await this.graphs.exists(id)?this.graphs.status(peer,id):this.jobs.status(peer,id);}
+ async cancel(peer:Peer,id:string){return this.graphs&&await this.graphs.exists(id)?this.graphs.cancel(peer,id):this.jobs.cancel(peer,id);}
 }

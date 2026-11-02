@@ -283,3 +283,12 @@ model SpaceDevice {
   createdAt Float
   @@index([spaceId])
 }
+
+model SdkWorkflowJob {
+  id String @id
+  groupId String
+  sourceHolderId String
+  state String
+  metadataJson String
+  @@index([groupId, state])
+}

@@ -1,3 +1,4 @@
+import {WorkflowJobs} from './workflow-jobs';
 import { SpaceEvents } from './space-events';
 import 'reflect-metadata';
 import fs from 'node:fs';
@@ -159,8 +160,8 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     await app.init();
     let epoch=0;
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
-    const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>events.changed(groupId),error=>options.onError?.(error));
-    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks),sdk=new SdkJobs(jobs,referencePacks);
+    const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>{events.changed(groupId);graphs.changed(groupId);},error=>options.onError?.(error));
+    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks),graphs=new WorkflowJobs(db,jobs,apps,artifacts,referencePacks),sdk=new SdkJobs(jobs,referencePacks,graphs);
     const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
     auth.onRevoked(id=>channel.revoke(id));
@@ -209,6 +210,6 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       calibration.start();return service;
     };
     return {app,db,identity,store,snapshots,planning,channel,auth,apps,sdk,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
-      close:async()=>{if(closed)return;closed=true;ready=false;spaces.close();remoteEvaluation.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
+      close:async()=>{if(closed)return;closed=true;ready=false;spaces.close();remoteEvaluation.close();await graphs.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
   }catch(error){await db.$disconnect();await unlock();throw error;}
 }

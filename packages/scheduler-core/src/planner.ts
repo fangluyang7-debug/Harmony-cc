@@ -48,11 +48,13 @@ export interface PlacementRequest {
 }
 export interface PlannerLimits { maxCandidates: number; lookahead: number; beamWidth: number; planningBudgetMs: number; switchCostMs: number; hysteresisMs: number; }
 export interface DeviceResources { deviceId: string; resourcePoolId: string; availableMemoryBytes: number | null; availableSlots: number | null; available?:number|null; observedAt: number; ttlMs: number; }
-export interface PlannerAssignment { targetId: string; nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
+export interface PlannerAssignment { startMs?:number; finishMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
 export interface PlannerRejection { targetId: string; nodeId: string; deviceId: string; executorId: string; code: string; }
 export interface WorkflowPlacementDecision { status: 'ready' | 'blocked'; baseline: PlannerAssignment[] | null; suggestion: PlannerAssignment[] | null;
   baselineMs: number | null; suggestionMs: number | null; rejections: PlannerRejection[]; truncated: number; planningMs: number; reason: string; }
-interface Beam { assignments: PlannerAssignment[]; artifacts: Map<string, PlacementArtifact>; cost: number; }
+interface Occupancy {key:string;start:number;end:number;amount:number;}
+interface PoolDemand {key:string;amount:number;capacity:number;}
+interface Beam { assignments: PlannerAssignment[]; artifacts: Map<string, PlacementArtifact>; ready:Map<string,number>; completed:Map<string,number>; occupancy:Occupancy[]; cost: number; }
 
 export class WorkflowPlacementPlanner {
   constructor(private readonly limits: PlannerLimits, private readonly clock: () => number) {
@@ -70,7 +72,7 @@ export class WorkflowPlacementPlanner {
     const pending=request.nodes.filter(n=>!request.committedNodeIds.includes(n.id));
     const known=new Set(request.committedNodeIds);
     for(const node of pending){if(known.has(node.id)||node.dependencies.some(id=>!known.has(id)))return result(null,null,'DEPENDENCY_ORDER_INVALID');known.add(node.id);}
-    const initial:Beam={assignments:[],cost:0,artifacts:new Map([...request.artifacts,...request.committedArtifacts].map(a=>[a.id,a]))};
+    const initial:Beam={assignments:[],cost:0,ready:new Map(),completed:new Map(request.committedNodeIds.map(id=>[id,0])),occupancy:[],artifacts:new Map([...request.artifacts,...request.committedArtifacts].map(a=>[a.id,a]))};
     const legal=new Map<string,PlacementCandidate[]>();
     for(const node of pending){
       const candidates=node.candidates.filter(c=>{const code=this.reject(node,c,request);if(code)rejections.push({targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,code});return !code;})
@@ -148,28 +150,64 @@ export class WorkflowPlacementPlanner {
     });
     const value=Math.min(...choices);return Number.isFinite(value)?value:null;
   }
+  private demands(c:PlacementCandidate,node:PlacementNode,r:PlacementRequest):PoolDemand[] {
+    const result:PoolDemand[]=[{key:'target:'+c.targetId,amount:1,capacity:c.availableSlots}];
+    for(const poolId of c.resourcePoolIds){
+      const pool=r.deviceResources.find(p=>p.deviceId===c.deviceId&&p.resourcePoolId===poolId)!;
+      const key=c.deviceId+':'+poolId;
+      if(c.resourceDemand)result.push({key,amount:c.resourceDemand.find(d=>d.resourcePoolId===poolId)!.amount,capacity:pool.available!});
+      else result.push({key:key+':slots',amount:1,capacity:pool.availableSlots!},{key:key+':memory',amount:c.requiredMemoryBytes??node.memoryBytes,capacity:pool.availableMemoryBytes!});
+    }
+    return result;
+  }
+  /** Earliest feasible interval in this beam; no execution or reservation side effects. */
+  private earliest(occupancy:Occupancy[],demands:PoolDemand[],earliest:number,duration:number):number {
+    let start=earliest;
+    for(let i=0;i<=occupancy.length;i++){
+      let move=start;
+      for(const demand of demands){
+        const overlaps=occupancy.filter(o=>o.key===demand.key&&o.end>start&&o.start<start+duration);
+        for(const time of [start,...overlaps.map(o=>Math.max(start,o.start))]){
+          const active=overlaps.filter(o=>o.start<=time&&o.end>time);
+          if(active.reduce((sum,o)=>sum+o.amount,0)+demand.amount>demand.capacity)move=Math.max(move,Math.min(...active.map(o=>o.end)));
+        }
+      }
+      if(move===start)return start;start=move;
+    }
+    return Infinity;
+  }
   private extend(state:Beam,node:PlacementNode,c:PlacementCandidate,r:PlacementRequest):Beam|null {
-    let transfer=0;
+    let transfer=0,ready=Math.max(0,...node.dependencies.map(id=>state.completed.get(id)??0));
     const artifacts=new Map(state.artifacts);
-
-    for(const id of new Set(node.inputs)){const artifact=state.artifacts.get(id);if(!artifact)return null;const cost=this.transfer(artifact,c.deviceId,r,c.holderInstanceId);if(cost===null)return null;transfer+=cost;
-      if(!r.materializeOutputsAt&&!artifact.replicas.some(replica=>replica.deviceId===c.deviceId)) artifacts.set(id,{...artifact,replicas:[...artifact.replicas,{deviceId:c.deviceId,readMs:0}]});
+    for(const id of new Set(node.inputs)){
+      const artifact=state.artifacts.get(id);if(!artifact)return null;
+      const cost=this.transfer(artifact,c.deviceId,r,c.holderInstanceId);if(cost===null)return null;
+      transfer+=cost;ready=Math.max(ready,state.ready.get(id)??0);
     }
     const output:PlacementArtifact={id:node.output.id,bytes:node.output.bytes,replicas:[{deviceId:c.deviceId,readMs:0}]};
     const localResult=r.localResultHolderId!==undefined&&c.holderInstanceId===r.localResultHolderId&&c.appInstanceId!==undefined&&c.appInstanceId===r.appInstanceId;
     if(localResult)output.replicas[0].holderInstanceId=c.holderInstanceId;
     const publication=r.materializeOutputsAt&&!localResult?this.transfer(output,r.materializeOutputsAt,r):0;
     if(publication===null)return null;
-    const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs+publication;
-    const cost=state.cost+transfer+execution+c.uncertaintyMs;if(cost>r.remainingBudgetMs)return null;
+    const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs+publication,duration=execution+c.uncertaintyMs;
+    const demands=this.demands(c,node,r),start=this.earliest(state.occupancy,demands,ready+transfer,duration),end=start+duration;
+    const cost=Math.max(state.cost,end);if(cost>r.remainingBudgetMs)return null;
     artifacts.set(node.output.id,r.materializeOutputsAt&&!localResult?{...output,replicas:[{deviceId:r.materializeOutputsAt,readMs:0}]}:output);
-    return {cost,artifacts,assignments:[...state.assignments,{targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,inputTransferMs:transfer,executionMs:execution,uncertaintyMs:c.uncertaintyMs}]};
+    const completed=new Map(state.completed);completed.set(node.id,end);
+    const availability=new Map(state.ready);availability.set(node.output.id,end);
+    return {cost,artifacts,ready:availability,completed,occupancy:[...state.occupancy,...demands.map(d=>({key:d.key,start,end,amount:d.amount}))],
+      assignments:[...state.assignments,{targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,inputTransferMs:transfer,executionMs:execution,uncertaintyMs:c.uncertaintyMs,startMs:start,finishMs:end}]};
   }
   private finish(state:Beam|null,nodes:PlacementNode[],r:PlacementRequest):Beam|null {
     if(!state||!r.finalDestination||!nodes.length)return state;
-    const output=state.artifacts.get(nodes[nodes.length-1].output.id)!;
-    if(r.localResultHolderId&&output.replicas.some(replica=>replica.holderInstanceId===r.localResultHolderId))return state;
-    const transfer=this.transfer(output,r.finalDestination,r);return transfer===null||state.cost+transfer>r.remainingBudgetMs?null:{...state,cost:state.cost+transfer};
+    let cost=state.cost;
+    for(const node of nodes.filter(n=>!nodes.some(other=>other.dependencies.includes(n.id)))){
+      const output=state.artifacts.get(node.output.id)!;
+      if(r.localResultHolderId&&output.replicas.some(replica=>replica.holderInstanceId===r.localResultHolderId))continue;
+      const transfer=this.transfer(output,r.finalDestination,r);if(transfer===null)return null;
+      cost=Math.max(cost,(state.completed.get(node.id)??0)+transfer);
+    }
+    return cost>r.remainingBudgetMs?null:{...state,cost};
   }
 }
 
