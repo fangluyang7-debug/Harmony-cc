@@ -12,6 +12,7 @@ import { ProfileProjection } from './profile-projection';
 import { SnapshotBuilder, PlanningService } from './planning';
 import { TraceService } from './traces';
 import { AppRegistry } from './apps';
+import {DirectTransfers} from './direct-transfers';
 
 interface JobData {offer:DispatchOfferV2;holderId:string;input:ArtifactDescriptor;output:ArtifactDescriptor|null;traceId:string;
   budgetMs:number;deadlineAt:number;fingerprint?:string;choices?:{request:PlacementRequest;parameters:string}[];
@@ -22,7 +23,7 @@ export class CpuJobs {
   constructor(private readonly db:PrismaClient,private readonly directory:DeviceDirectory,private readonly profiles:ProfileProjection,
     private readonly snapshots:SnapshotBuilder,private readonly allotments:AllotmentIssuer,private readonly artifacts:ArtifactChannel,
     private readonly store:CoordinatorStore,private readonly epoch:()=>number,private readonly flush:()=>Promise<void>,
-    private readonly planning:PlanningService,private readonly traces:TraceService,private readonly apps:AppRegistry,private readonly packs:ReferencePack[]=builtinCpuPacks()){}
+    private readonly planning:PlanningService,private readonly traces:TraceService,private readonly apps:AppRegistry,private readonly packs:ReferencePack[]=builtinCpuPacks(),private readonly directTransfers?:DirectTransfers){}
   async submit(peer:Peer,input:any,variants?:{parameters:string;targetId?:string}[],fingerprint?:string,graph?:{workflowId:string;nodeId:string;deadlineAt:number;dependencies:string[]}){
     const app=await this.apps.context(peer);
     if(!input||!protocolId(input.requestId)||input.requestId.length>100||typeof input.capability!=='string'||typeof input.contentHash!=='string'||!/^[a-f0-9]{64}$/.test(input.contentHash)||
@@ -96,12 +97,15 @@ export class CpuJobs {
   relayId(){return this.store.senderInstanceId;}
   async graphInput(peer:Peer,id:string,source:ArtifactDescriptor){
     const data=await this.owned(peer,id);
-    if(this.localInput(peer,data)||this.artifacts.available(data.input))return null;
+    if(await this.inputReady(peer,data))return null;
+    const endpointId=data.plan.decision.suggestion?.[0]?.inputEndpointId;
+    if(endpointId)return {read:this.artifacts.issue(source,peer,'READ'),write:{...this.artifacts.issue(data.input,peer,'WRITE'),direct:{jobId:id,endpointId}}};
     if(this.artifacts.available(source)){await this.artifacts.writeForControl(data.input,await this.artifacts.readForControl(source));return null;}
     return {read:this.artifacts.issue(source,peer,'READ'),write:this.artifacts.issue(data.input,peer,'WRITE')};
   }
   async graphOutput(peer:Peer,id:string){const data=await this.owned(peer,id),status=await this.status(peer,id);if(!status.outputTicket||!data.output)return null;return {descriptor:data.output,local:this.localOutput(peer,data)};}
-  private upload(peer:Peer,id:string,d:JobData){return {jobId:id,targetId:d.offer.target.targetId,deviceId:d.offer.target.deviceId,reason:d.offer.reasonCode,inputDelivery:this.localInput(peer,d)?'LOCAL':'RELAY',inputTicket:this.artifacts.issue(d.input,peer,'WRITE')};}
+  private upload(peer:Peer,id:string,d:JobData){const endpointId=d.plan.decision.suggestion?.[0]?.inputEndpointId;return {jobId:id,targetId:d.offer.target.targetId,deviceId:d.offer.target.deviceId,reason:d.offer.reasonCode,inputDelivery:this.localInput(peer,d)?'LOCAL':endpointId?'DIRECT':'RELAY',...(endpointId?{inputEndpointId:endpointId}:{}),inputTicket:this.artifacts.issue(d.input,peer,'WRITE')};}
+  private async inputReady(peer:Peer,d:JobData){return this.localInput(peer,d)||this.artifacts.available(d.input)||!!(d.plan.decision.suggestion?.[0]?.inputEndpointId&&await this.directTransfers?.hasInput(peer.groupId,d.holderId,d.offer.task.app.appInstanceId,d.input.ref));}
   private async owned(peer:Peer,id:string):Promise<JobData>{
     await this.apps.context(peer);
     const row=await this.db.cpuJob.findUnique({where:{id}});if(!row||row.groupId!==peer.groupId||row.principalId!==peer.principalId||row.sourceHolderId!==peer.holderInstanceId)throw Error('JOB_SCOPE');return JSON.parse(row.metadataJson);
@@ -111,9 +115,18 @@ export class CpuJobs {
   async readOutput(peer:Peer,id:string){const data=await this.owned(peer,id),status=await this.status(peer,id);if(!status.outputTicket||!data.output)throw Error('OUTPUT_NOT_READY');return this.artifacts.readForControl(data.output);}
   async start(peer:Peer,id:string,replans=0):Promise<unknown>{
     let data=await this.owned(peer,id),row=await this.db.cpuJob.findUniqueOrThrow({where:{id}});
-    if(!this.localInput(peer,data)&&!this.artifacts.available(data.input))throw Error('INPUT_NOT_UPLOADED');
+    if(!await this.inputReady(peer,data))throw Error('INPUT_NOT_UPLOADED');
     if(row.state==='WAITING_INPUT'){
       if(!data.request||!Number.isFinite(data.deadlineAt))throw Error('JOB_REPLAN_REQUIRED');
+      // A completed relay fallback is an actual replica. Price the remaining
+      // download, preserving source-local execution but not a second direct upload.
+      if(this.artifacts.available(data.input))for(const request of [data.request,...(data.choices??[]).map(c=>c.request)]){
+        const artifact=request.artifacts.find(a=>a.id===data.input.ref.artifactId);
+        if(artifact){
+          for(const replica of artifact.replicas)if(replica.holderInstanceId)replica.localOnly=true;
+          if(!artifact.replicas.some(r=>r.deviceId===this.store.senderInstanceId))artifact.replicas.push({deviceId:this.store.senderInstanceId,readMs:0});
+        }
+      }
       data.request.remainingBudgetMs=Math.max(0,data.deadlineAt-Date.now());
       if(data.choices)for(const c of data.choices)c.request.remainingBudgetMs=data.request.remainingBudgetMs;
       let p:Awaited<ReturnType<CpuJobs['choose']>>;
@@ -125,8 +138,9 @@ export class CpuJobs {
       data.offer.task.contract=p.executor.contract;data.offer.task.allowedTargetIds=[p.executor.target.targetId];data.offer.task.allowedConfigurations=p.executor.configurations.map(c=>c.id);
       data.offer.reasonCode=p.decision.decision.reason;
       if(this.localInput(peer,data))data.decisionEvidence!.resultDelivery='ORIGIN_LOCAL';
-      data.offer.transferPlan=this.localInput(peer,data)?[]:[{ref:data.input.ref,from:this.store.senderInstanceId,to:p.executor.target.deviceId,via:null}];
-      if(!this.localInput(peer,data)&&!this.artifacts.available(data.input))throw Error('INPUT_NOT_UPLOADED');
+      const directInput=!!(p.decision.decision.suggestion?.[0]?.inputEndpointId&&await this.directTransfers?.hasInput(peer.groupId,data.holderId,data.offer.task.app.appInstanceId,data.input.ref));
+      data.offer.transferPlan=this.localInput(peer,data)?[]:[{ref:data.input.ref,from:directInput?peer.deviceId:this.store.senderInstanceId,to:p.executor.target.deviceId,via:null}];
+      if(!await this.inputReady(peer,data))throw Error('INPUT_NOT_UPLOADED');
       data.offer.allotmentVersion=p.grant.version;data.offer.allotmentId=p.grant.allotmentId;data.offer.task.coordinatorEpoch=this.epoch();
       data.offer.task.budget={remainingMs:Math.max(0,data.deadlineAt-Date.now()),deadlineAt:data.deadlineAt};
       data.offer.leaseMs=data.offer.task.budget.remainingMs;

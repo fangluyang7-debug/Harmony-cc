@@ -1,3 +1,4 @@
+import { NativePeerLinks } from '../platform/NativePeerLinks';
 import { HarmonySdkPort } from '../client/HarmonySdkPort';
 import { SchedulerSdk, SdkInput } from '../client/SchedulerSdk';
 import { NativeInputStore } from '../platform/NativeInputStore';
@@ -58,6 +59,7 @@ interface ExecutorDigest {target:TargetV2;contract:TaskContractV2;model:ModelMan
 function validContribution(p:Contribution):boolean {return !!p&&['dedicated','windows-idle','paused'].includes(p.ownerMode)&&Number.isSafeInteger(p.maxCpuThreads)&&p.maxCpuThreads>=1&&p.maxCpuThreads<=64&&Number.isSafeInteger(p.maxMemoryBytes)&&p.maxMemoryBytes>=67108864&&Number.isSafeInteger(p.reserveMemoryBytes)&&p.reserveMemoryBytes>=0;}
 export interface NativeServiceAdapter {pack:ReferencePack;execute(input:Uint8Array,parameters:string,cancelled:()=>boolean):Promise<EngineResult>;}
 export class NativeAgent {
+ private peerLinks:NativePeerLinks|null=null;
  private services:NativeServiceAdapter[]=[];
  private static starting=false;
  private policy:AppPolicy|null=null;
@@ -125,6 +127,7 @@ export class NativeAgent {
   for(const service of services){if(packs.some(p=>p.manifest.contract.capability===service.pack.manifest.contract.capability))throw Error('SERVICE_CAPABILITY_CONFLICT');packs.push(service.pack);}
   const agent=new NativeAgent(context,db,store,transport,installation,packs);agent.services=services;if(installation.appInstanceId){const policy=await transport.json('/v2/apps/me') as AppPolicy;if(policy.identity.appInstanceId!==installation.appInstanceId||policy.identity.groupId!==peer.groupId)throw Error('APP_HOST_IDENTITY_MISMATCH');agent.policy=policy;agent.packs=agent.packs.filter(p=>policy.identity.allowedContracts.includes(p.manifest.contract.contractId));if(agent.packs.length===0)throw Error('APP_HOST_CAPABILITIES_REQUIRED');agent.inputs=await NativeInputStore.open(context);}
   if(saved===null&&registered!==null)await db.put('identity',JSON.stringify(installation));
+  agent.peerLinks=new NativePeerLinks(context,transport,peer.deviceId);agent.peerLinks.start();
   agent.lifecycleForeground=lifecycleForeground;agent.foreground=lifecycleForeground();await agent.restorePreferences();agent.timer=setInterval(()=>{void agent.tick().catch((e:Error)=>agent.error(e as Error));},2000);await agent.tick();return agent;
  }
  isConnected():boolean{return this.ready&&!this.stopped;}
@@ -155,7 +158,7 @@ export class NativeAgent {
    await this.store.change(new HostChange(s=>{s.journal=bindAgentJournalV2(s.journal,info.coordinatorId,info.epoch);}));
    const socket=webSocket.createWebSocket();this.socket=socket;this.sent.clear();this.welcomed=false;
    socket.on('message',(_error,data)=>{if(typeof data!=='string'){void socket.close();return;}this.work=this.work.then(()=>this.message(JSON.parse(data) as MessageEnvelopeV2)).catch((e:Error)=>{this.error(e as Error);void socket.close();});});
-   socket.on('close',()=>{this.ready=false;if(this.socket===socket)this.socket=null;this.sent.clear();});
+   socket.on('close',()=>{this.peerLinks?.invalidate();this.ready=false;if(this.socket===socket)this.socket=null;this.sent.clear();});
    socket.on('error',()=>{this.ready=false;void socket.close();});
    await this.transport.connect(socket);
    await this.store.change(new HostChange(s=>{s.journal.outbox=s.journal.outbox.filter(x=>x.type!=='Hello');const m=this.enqueue(s,'Hello',helloPayload());this.helloId=m.messageId;}));await this.flush();
@@ -219,7 +222,7 @@ export class NativeAgent {
  }
  private async tick():Promise<void>{
   if(this.stopped||this.refreshing)return;if(this.foreground!==this.lifecycleForeground())this.setForeground(this.lifecycleForeground());this.refreshing=true;
-  try{try{const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;this.availableRam=Number(memory.availableMem)*1024;}catch(e){this.totalRam=null;this.availableRam=null;}try{const mode=power.getPowerMode();this.powerSaving=mode===power.DevicePowerMode.MODE_NORMAL||mode===power.DevicePowerMode.MODE_PERFORMANCE?'OFF':'ON';}catch(e){this.powerSaving=null;}await this.connect();if(!this.ready)return;const reply:Settings=this.policy===null?await this.transport.json('/v2/device-settings',{} as Record<string,Object>) as Settings:{settings:null};const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
+  try{try{const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;this.availableRam=Number(memory.availableMem)*1024;}catch(e){this.totalRam=null;this.availableRam=null;}try{const mode=power.getPowerMode();this.powerSaving=mode===power.DevicePowerMode.MODE_NORMAL||mode===power.DevicePowerMode.MODE_PERFORMANCE?'OFF':'ON';}catch(e){this.powerSaving=null;}await this.connect();if(!this.ready)return;void this.peerLinks?.sample().catch((e:Error)=>{this.peerLinks?.invalidate();this.error(e);});const reply:Settings=this.policy===null?await this.transport.json('/v2/device-settings',{} as Record<string,Object>) as Settings:{settings:null};const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
    await this.pollCancellation();this.pumpQueue();try{await this.renew();}catch(e){this.error(e as Error);}if(this.links.length===0||this.links[0].fixedMs.sampledAt+10000<this.transport.now())await this.probeLinks();await this.profile();this.pumpQueue();if(this.idle())void this.calibrate().catch((e:Error)=>this.error(e as Error));
   }finally{this.refreshing=false;}
  }
@@ -302,5 +305,5 @@ export class NativeAgent {
    if(report!==null)await this.transport.json('/v2/evaluations/'+permit.id+'/report',report);
   }finally{this.calibrating=false;}
  }
- async close():Promise<void>{this.stopped=true;clearInterval(this.timer);this.foreground=false;await this.yield();await this.socket?.close();await this.store.drained();NativeAgent.starting=false;}
+ async close():Promise<void>{this.stopped=true;await this.peerLinks?.close();clearInterval(this.timer);this.foreground=false;await this.yield();await this.socket?.close();await this.store.drained();NativeAgent.starting=false;}
 }

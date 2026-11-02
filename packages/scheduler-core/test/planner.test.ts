@@ -52,6 +52,44 @@ describe('bounded data-location planner',()=>{
   });
 });
 
+describe('direct input routing',()=>{
+  function directFixture(){
+    const r=fixture();r.nodes=r.nodes.slice(0,1);r.finalDestination=undefined;
+    r.originHolderId='source';r.inputRelayId='relay';
+    r.artifacts[0].replicas=[{deviceId:'cloud',holderInstanceId:'source',readMs:0}];
+    r.nodes[0].candidates[0].holderInstanceId='source';r.nodes[0].candidates[1].holderInstanceId='worker';
+    r.links=[
+      {from:'cloud',to:'relay',bytesPerSecond:1000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000},
+      {from:'relay',to:'pc',bytesPerSecond:1000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000},
+      {from:'cloud',to:'pc',bytesPerSecond:100000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000,endpointId:'ep',endpointEpoch:'epoch',fromHolderInstanceId:'source',toHolderInstanceId:'worker'}];
+    return r;
+  }
+  it('compares direct, relay and local using the same planner',()=>{
+    const r=directFixture(),planner=new WorkflowPlacementPlanner(limits,()=>0);
+    expect(planner.plan(r).suggestion?.[0].inputEndpointId).toBe('ep');
+    r.links[2].observedAt=0;
+    expect(planner.plan(r).suggestion?.[0].deviceId).toBe('cloud');
+    r.links[0].bytesPerSecond=r.links[1].bytesPerSecond=100000;
+    const selected=planner.plan(r).suggestion?.[0];
+    expect(selected?.deviceId).toBe('pc');expect(selected?.inputEndpointId).toBeUndefined();
+    expect(selected?.inputTransferMs).toBe(2);
+  });
+  it('prices a completed relay fallback from its actual replica',()=>{
+    const r=directFixture(),planner=new WorkflowPlacementPlanner(limits,()=>0);
+    r.artifacts[0].replicas[0].localOnly=true;
+    r.artifacts[0].replicas.push({deviceId:'relay',readMs:0});r.links[1].bytesPerSecond=100000;
+    const selected=planner.plan(r).suggestion?.[0];
+    expect(selected?.deviceId).toBe('pc');expect(selected?.inputEndpointId).toBeUndefined();
+    expect(selected?.inputTransferMs).toBe(1);
+  });
+  it('does not reuse another holder or direction evidence',()=>{
+    const r=directFixture();r.links[2].toHolderInstanceId='other';
+    expect(new WorkflowPlacementPlanner(limits,()=>0).plan(r).suggestion?.[0].deviceId).toBe('cloud');
+    r.links[2].toHolderInstanceId='worker';r.links[2].from='pc';r.links[2].to='cloud';
+    expect(new WorkflowPlacementPlanner(limits,()=>0).plan(r).suggestion?.[0].deviceId).toBe('cloud');
+  });
+});
+
 describe('application-independent placement requirements',()=>{
   it('uses one shared device pool for two independently identified targets',()=>{
     const r=fixture();r.links[1].bytesPerSecond=1000;

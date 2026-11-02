@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 export * from './evaluation-wire';
+export * from './signed-transfer';
+export * from './direct-client';
 import path from 'node:path';
 import https from 'node:https';
 import tls from 'node:tls';

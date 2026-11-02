@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 import { Prisma, PrismaClient } from '../generated/client';
 import { canonical, DeviceProfileV2, ExecutorV2, validDeviceProfileV2, sampleUsableV2, PlanningSnapshot, PlacementCandidate, DeviceResources, CapabilityAdmissionV2, validCapabilityAdmissionV2 } from '@harmony/scheduler-core';
 import { Peer } from './channel';
+import type {PlacementLink} from '@harmony/scheduler-core';
 
 export interface ContributionPolicy {minimumBattery:number|null;maximumTemperature:number|null;allowMetered:boolean;priority:'ORIGIN_INTERACTIVE'|'REMOTE_INTERACTIVE'|'REMOTE_BATCH';requireForeground:boolean;}
 export function executorIdentity(e:ExecutorV2):string{return createHash('sha256').update(canonical({target:e.target,contract:e.contract,model:e.model,resources:e.resources,configurations:e.configurations})).digest('hex');}
 export class DeviceDirectory {
-  constructor(private readonly db:PrismaClient,readonly domain:'REAL'|'SIMULATED',private readonly now:()=>number=Date.now){}
+  constructor(private readonly db:PrismaClient,readonly domain:'REAL'|'SIMULATED',private readonly now:()=>number=Date.now,
+    private readonly directLinks?:(db:Prisma.TransactionClient,groupId:string)=>Promise<PlacementLink[]>){}
   async ingest(peer:Peer,profile:DeviceProfileV2,transaction?:Prisma.TransactionClient){
     if(!validDeviceProfileV2(profile)||profile.domain!==this.domain||profile.deviceId!==peer.deviceId||profile.holderInstanceId!==peer.holderInstanceId)throw Error('PROFILE_INVALID');
     if(peer.app&&profile.executors.some(e=>!peer.app!.allowedContracts.includes(e.contract.contractId)))throw Error('APP_CONTRACT_FORBIDDEN');
@@ -131,6 +133,7 @@ export class DeviceDirectory {
       !reportedLinks.some(other=>other.from===l.from&&other.to===l.to&&other.networkEpoch!==l.networkEpoch))
       .filter((l,index,all)=>all.findIndex(other=>other.from===l.from&&other.to===l.to)===index)
       .map(l=>({from:l.from,to:l.to,bytesPerSecond:l.bytesPerSecond.value!,fixedMs:l.fixedMs.value!,effective:false,source:this.domain,observedAt:Math.min(l.fixedMs.sampledAt,l.bytesPerSecond.sampledAt),ttlMs:Math.min(l.fixedMs.ttlMs,l.bytesPerSecond.ttlMs)}));
+    if(policy.allowMetered&&this.directLinks)links.push(...await this.directLinks(db,groupId));
     return {groupId,policyVersion,version,domain:this.domain,capturedAt:now,devices:profiles.map(p=>({deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,deviceInstanceId:p.deviceInstanceId,ledgerEpoch:p.ledgerEpoch,sampledAt:p.ownerActivity.sampledAt,ttlMs:p.ownerActivity.ttlMs})),resources,candidates,links};
   }
 }

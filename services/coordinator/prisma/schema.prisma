@@ -292,3 +292,43 @@ model SdkWorkflowJob {
   metadataJson String
   @@index([groupId, state])
 }
+
+model DataEndpoint {
+  id String @id
+  groupId String
+  holderInstanceId String
+  credentialId String
+  coordinatorEpoch Int
+  metadataJson String
+  @@unique([groupId, holderInstanceId])
+}
+
+model TransferAuthorization {
+  id String @id
+  groupId String
+  attemptId String
+  endpointId String
+  requesterCredentialId String
+  state String
+  expiresAt Float
+  metadataJson String
+  @@index([groupId, attemptId])
+  @@index([expiresAt])
+}
+
+model DataReplica {
+  id String @id
+  groupId String
+  endpointId String
+  metadataJson String
+  @@index([groupId, endpointId])
+}
+
+model PeerNetwork {
+  id String @id
+  groupId String
+  holderInstanceId String
+  credentialId String
+  metadataJson String
+  @@unique([groupId, holderInstanceId])
+}

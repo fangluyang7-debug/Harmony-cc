@@ -23,6 +23,7 @@ export class NativeTransport {
  private caPath:string;
  credential='';
  offset=0;
+ endpointEpoch='';
  private key:cryptoFramework.PubKey|null=null;
  constructor(invitation:TrustedCoordinator,context:common.UIAbilityContext){
   this.address=invitation.address.replace(/\/$/,'');this.certificate=invitation.certificate;this.fingerprint=invitation.fingerprint;
@@ -39,13 +40,14 @@ export class NativeTransport {
   try{fileIo.writeSync(f.fd,this.certificate);}finally{fileIo.closeSync(f);}
  }
  async request(route:string,body:Object|null=null,method:http.RequestMethod=body===null?http.RequestMethod.GET:http.RequestMethod.POST,headers:Record<string,string>|null=null,binary:Uint8Array|null=null):Promise<Uint8Array>{
-  if(!/^\/v2\/[A-Za-z0-9_.:/-]+$/.test(route))throw Error('CONTROL_ROUTE_INVALID');
+  if(!/^\/v2\/[A-Za-z0-9_.:/-]+$/.test(route)&&!/^\/v2\/direct\/probe\?bytes=(1024|8192|32768)$/.test(route))throw Error('CONTROL_ROUTE_INVALID');
   const request=http.createHttp(),header:Record<string,string>=headers??{'Content-Type':'application/json','Authorization':'Bearer '+this.credential};
   try{
    const result=await request.request(this.address+route,{method,header,caPath:this.caPath,expectDataType:http.HttpDataType.ARRAY_BUFFER,connectTimeout:10000,readTimeout:10000,usingCache:false,extraData:binary===null?(body===null?'':JSON.stringify(body)):binary.buffer});
    const data=typeof result.result==='string'?bytes(result.result):new Uint8Array(result.result as ArrayBuffer);
    if(data.byteLength>8388608)throw Error('CONTROL_RESPONSE_TOO_LARGE');
    const date=(result.header as Record<string,string>)['date'];const serverTime=Date.parse(date??'');if(Number.isFinite(serverTime))this.offset=serverTime-Date.now();
+   this.endpointEpoch=(result.header as Record<string,string>)['x-endpoint-epoch']??'';
    if(result.responseCode!==200&&result.responseCode!==201){let code='HTTP_'+result.responseCode;try{const error=JSON.parse(text(data)) as Record<string,string>;if(/^[A-Z][A-Z0-9_]{0,99}$/.test(error['message']))code=error['message'];}catch(e){}throw Error(code);}
    return data;
   }catch(e){if((e as BusinessError).code===2300060)throw Error('TLS_CERTIFICATE_REJECTED');throw e as Error;}finally{request.destroy();}
@@ -58,7 +60,11 @@ export class NativeTransport {
  verify(grant:AllotmentGrantV2):boolean {
   if(this.key===null)throw Error('CERTIFICATE_NOT_INITIALIZED');
   const unsigned:UnsignedGrant={allotmentId:grant.allotmentId,groupId:grant.groupId,deviceId:grant.deviceId,holderInstanceId:grant.holderInstanceId,appInstanceId:grant.appInstanceId,ledgerEpoch:grant.ledgerEpoch,coordinatorEpoch:grant.coordinatorEpoch,version:grant.version,base:grant.base,extra:grant.extra,leaseRequestId:grant.leaseRequestId,leaseMs:grant.leaseMs};
-  const verify=cryptoFramework.createVerify('RSA3072|PKCS1|SHA256');verify.initSync(this.key);return verify.verifySync({data:bytes(canonical(unsigned))},{data:base64.decodeSync(grant.signature)});
+  return this.verifyPayload(unsigned,grant.signature);
+ }
+ verifyPayload(payload:Object,signature:string):boolean {
+  if(this.key===null||typeof signature!=='string'||signature.length>2048)return false;
+  try{const verify=cryptoFramework.createVerify('RSA3072|PKCS1|SHA256');verify.initSync(this.key);return verify.verifySync({data:bytes(canonical(payload))},{data:base64.decodeSync(signature)});}catch(e){return false;}
  }
  async ackSignature(ack:Object):Promise<string>{
   const key=await cryptoFramework.createSymKeyGenerator('HMAC|SHA256').convertKey({data:hashBytes(bytes(this.credential))});

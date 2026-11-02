@@ -38,7 +38,7 @@ function board(){if(!snapshot||!document.querySelector('#board'))return;const m=
   if(tab==='devices')html=`<section class="card panel"><div class="panel-head"><h2>空间中的设备</h2><span class="hint">${m.online} 台在线 / ${snapshot.devices.length} 台已登记</span></div>${deviceTable()}</section><p class="hint" style="margin-top:20px">暂停共享将在代理下一次同步后生效；设备离线时，设置将在重连后应用。设备的本地资源限制仍然有效。</p>`;
   if(tab==='members')html=`<div class="member-grid">${snapshot.members.map(u=>`<section class="card member"><span class="avatar">${esc(u.name.slice(0,1))}</span><div><strong>${esc(u.name)}${u.userId===me.id?' <small class="muted">(你)</small>':''}</strong><p>${roles[u.role]} · ${snapshot.devices.filter(d=>d.userId===u.userId).length} 台设备</p>${snapshot.me.role==='OWNER'&&u.role!=='OWNER'?`<button class="text-btn" data-act="role" data-id="${esc(u.userId)}">设为${u.role==='MEMBER'?'观察者':'协作成员'}</button>`:''}</div></section>`).join('')}</div><p class="hint" style="margin-top:22px">负责人管理邀请与成员权限；协作成员可接入设备、提交任务；观察者可查看空间状态。</p>`;
   if(tab==='tasks')html=`<section class="card panel"><div class="panel-head"><h2>团队任务</h2>${snapshot.me.role!=='VIEWER'?'<button class="primary-btn" data-act="task">＋ 发起任务</button>':''}</div>${jobTable()}</section><p class="hint" style="margin-top:20px">当前支持文本统计、向量归一化。任务由协调者选择可用设备，也可以手动指定目标。更多应用与 GPU 任务接口将继续接入。</p>`;
-  document.querySelector('#board').innerHTML=banner+html;
+  document.querySelector('#board').innerHTML=banner+(tab==='overview'||tab==='devices'?networkPanel():'')+html;
 }
 async function refresh(){if(refreshing){refreshAgain=true;return;}if(!spaceId||document.hidden)return;refreshing=true;const id=spaceId;try{const s=await api('/'+id);if(spaceId!==id)return;snapshot=s;lastError=false;board();const el=document.querySelector('#refresh-state');if(el){el.className='';el.textContent=roles[s.me.role]+' · '+new Date(s.updatedAt).toLocaleTimeString('zh-CN')+' 已同步';}}catch(e){lastError=true;const el=document.querySelector('#refresh-state');if(el){el.className='connection-error';el.textContent='连接中断，显示上次同步的数据 · 正在重试';}if(e.code==='LOGIN_REQUIRED'){clearInterval(refreshTimer);toast(e.message);await loadMe();home();}}finally{refreshing=false;if(refreshAgain){refreshAgain=false;void refresh();}}}
 function invite(){modal('邀请团队成员','邀请仅用于当前空间，有效期 24 小时。成员加入后可在不同设备上登录。','<label class="field">加入后的角色<select name="role"><option value="MEMBER">协作成员 · 接入设备与发起任务</option><option value="VIEWER">观察者 · 查看状态</option></select></label>','生成邀请',async data=>{const d=await api('/'+spaceId+'/invites',data),link=location.origin+'/#join='+encodeURIComponent(d.code);modal('邀请已准备好','将以下链接分享给你的团队成员。加入后即可看到这个协作空间。',`<label class="field">邀请链接<textarea readonly>${esc(link)}</textarea></label><p>有效期至 ${new Date(d.expiresAt).toLocaleString('zh-CN')}</p>`,null);});}
@@ -83,3 +83,15 @@ async function action(name,id){switch(name){case'home':await loadMe();home();bre
 document.addEventListener('click',e=>{const b=e.target.closest('[data-act]');if(b)void action(b.dataset.act,b.dataset.id).catch(e=>toast(e.message));});
 dialog.addEventListener('click',e=>{if(e.target===dialog&&e.clientX<dialog.getBoundingClientRect().left)dialog.close();});
 await loadMe();home();if(inviteCode)joinSpace();
+
+function networkPanel(){
+  const names=new Map(snapshot.devices.map(d=>[d.id,d.name]));
+  const name=id=>names.get(id)||('设备 '+String(id).slice(0,8));
+  const levels={L0:'直连可用',L1:'部分直连，其余走中继',L2:'使用中继',L3:'已退出协同或连接未确认'};
+  const reasons={PEER_UNREACHABLE:'设备间不可达',TLS_MISMATCH:'证书校验不符',TIMEOUT:'连接超时',EVIDENCE_MISSING:'等待链路探测',EVIDENCE_EXPIRED:'链路证据已过期',NO_DATA_ENDPOINT:'此方向使用中继'};
+  if(!snapshot.network?.length)return '<section class="card panel"><h2>网络路径</h2><p class="hint">等待设备上报链路证据。</p></section>';
+  return '<section class="card panel" style="margin-bottom:22px"><h2>网络路径</h2>'+snapshot.network.map(n=>
+    '<p><strong>'+esc(name(n.deviceId))+'</strong> · '+esc(n.level)+' '+esc(levels[n.level]||'待确认')+'</p>'+
+    n.pairs.filter(p=>p.reason!=='REACHABLE').map(p=>'<p class="hint">'+esc(name(p.from))+' → '+esc(name(p.to))+'：'+esc(reasons[p.reason]||p.reason)+'</p>').join('')+
+    n.suggestions.map(s=>'<p class="hint">'+esc(s)+'</p>').join('')).join('')+'</section>';
+}

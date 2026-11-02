@@ -7,14 +7,16 @@ export interface SubmitOptions {requestId:string;budgetMs:number;resultDestinati
 export interface SdkSubmission {workflow:SdkWorkflow|SdkAlternatives;options:SubmitOptions;}
 export interface SdkConfiguration {capacityWaitMs:number;}
 export interface SdkRef {artifactId:string;contentVersion:number;contentHash:string;schemaId:string;schemaVersion:number;}
-export interface SdkTicket {token:string;ref:SdkRef;bytes:number;expiresAt:number;operation:string;}
-export interface SdkPlan {jobId:string;targetId:string;deviceId:string;reason:string;inputTicket:SdkTicket;inputDelivery?:'LOCAL'|'RELAY';inputTickets?:SdkTicket[];}
+export interface SdkDirectRoute {jobId:string;endpointId:string;}
+export interface SdkTicket {direct?:SdkDirectRoute;token:string;ref:SdkRef;bytes:number;expiresAt:number;operation:string;}
+export interface SdkPlan {jobId:string;targetId:string;deviceId:string;reason:string;inputTicket:SdkTicket;inputDelivery?:'LOCAL'|'RELAY'|'DIRECT';inputEndpointId?:string;inputTickets?:SdkTicket[];}
 export interface SdkInputTransfer {read:SdkTicket;write:SdkTicket;}
 export interface SdkStatus {inputTransfers?:SdkInputTransfer[];jobId:string;state:string;targetId:string;deviceId:string;traceId:string;outputTicket:SdkTicket|null;}
 export interface SdkResult {jobId:string;output:Uint8Array;status:SdkStatus;}
 /** Platform adapter owns trust, authenticated requests, bytes and the clock. No agent dependency. */
 export interface SdkPort {
  connected?():boolean;
+ writeDirect?(jobId:string,endpointId:string,ticket:SdkTicket,bytes:Uint8Array):Promise<void>;
  stageInput?(input:SdkInput,bytes:Uint8Array):Promise<void>;
  cancelled?():boolean;
  request(route:string,body:string|null):Promise<string>;
@@ -96,12 +98,15 @@ export class SchedulerSdk {
   const plan=await this.plan(workflow,options),bytes=available.get(plan.inputTicket.ref.contentHash);
   if(this.port.cancelled?.()){await this.resume(plan.jobId).cancel();throw Error('SDK_SUBMISSION_CANCELLED');}
   if(!bytes||bytes.byteLength!==plan.inputTicket.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');
-  if(plan.inputDelivery!=='LOCAL')for(const ticket of plan.inputTickets??[plan.inputTicket]){const content=available.get(ticket.ref.contentHash);if(!content||content.byteLength!==ticket.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');await this.port.write(ticket,content);}
+  if(plan.inputDelivery==='DIRECT'){
+   if(!plan.inputEndpointId||!this.port.writeDirect)throw Error('SDK_DIRECT_PORT_REQUIRED');
+   await this.port.writeDirect(plan.jobId,plan.inputEndpointId,plan.inputTicket,bytes);
+  }else if(plan.inputDelivery!=='LOCAL')for(const ticket of plan.inputTickets??[plan.inputTicket]){const content=available.get(ticket.ref.contentHash);if(!content||content.byteLength!==ticket.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');await this.port.write(ticket,content);}
   if(this.port.cancelled?.()){await this.resume(plan.jobId).cancel();throw Error('SDK_SUBMISSION_CANCELLED');}
   try{await this.port.request('/v2/sdk/jobs/'+plan.jobId+'/start','{}');}
   catch(error){
    // An explicit pre-dispatch replan may now require relay bytes; never retry ambiguous delivery.
-   if(plan.inputDelivery!=='LOCAL'||(error as Error).message!=='INPUT_NOT_UPLOADED')throw error as Error;
+   if(!['LOCAL','DIRECT'].includes(plan.inputDelivery??'')||(error as Error).message!=='INPUT_NOT_UPLOADED')throw error as Error;
    await this.port.write(plan.inputTicket,bytes);
    await this.port.request('/v2/sdk/jobs/'+plan.jobId+'/start','{}');
   }

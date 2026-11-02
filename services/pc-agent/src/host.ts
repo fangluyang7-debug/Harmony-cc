@@ -13,9 +13,14 @@ import { collectSystemResources, windowsOwnerActivity } from './system-resources
 import { RelayLinks } from './relay-links';
 import { appRequest, nodeSdkPort } from '@harmony/scheduler-client/dist/node';
 import { SchedulerSdk, SdkInput } from '@harmony/scheduler-client';
+import {openDataHost,discoverDataHost,DataHostConfig} from './data-host';
+import {networkInterfaces} from 'node:os';
+import {PeerLinks} from './peer-links';
+import {cpuSchemas} from '@harmony/reference-capabilities';
 
 export interface FixedServiceAdapter {pack:ReferencePack;execute(input:Buffer,parameters:string,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string}>;}
 export interface CpuHostConfig {
+  dataEndpoint?:DataHostConfig|false;
   fixedServices?:FixedServiceAdapter[];
   controlIntervalMs?:number;
   directory:string;identity:{groupId:string;deviceId:string;holderInstanceId:string;appInstanceId:string|null};connection:RecoveryConnection;
@@ -30,6 +35,12 @@ export class CpuHost {
   private readonly costs=new Map<string,{value:number;at:number}>();
   private clockOffset=0;
   private readonly relayLinks:RelayLinks;
+  private readonly peerLinks:PeerLinks;
+  private dataHost:Awaited<ReturnType<typeof openDataHost>>|undefined;
+  private networkPending:Promise<void>|undefined;
+  private endpointCoordinatorEpoch=0;
+  private endpointNetwork='';
+  private endpointRetryAt=0;
   private appPolicy:{offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];identity:AppIdentityV2}|undefined;
   readonly agent:PcAgent;
   /** App-private, content-addressed input storage; registration never sends these bytes. */
@@ -59,6 +70,7 @@ export class CpuHost {
     if(new Set(this.packs.map(p=>p.manifest.contract.capability)).size!==this.packs.length)throw Error('SERVICE_CAPABILITY_CONFLICT');
     const request=allotmentTransport(config.connection),packs=this.packs,installed=new Map(packs.flatMap(p=>p.cases.map(c=>[packDigest(p)+':'+c.id,c] as const)));
     this.relayLinks=new RelayLinks(config.identity.deviceId,config.connection.domain,request);
+    this.peerLinks=new PeerLinks(config.identity.deviceId,request);
     const context=async()=>{
       if(!this.agent.ready||this.owner!=='IDLE')throw Error('HOST_NOT_AVAILABLE');
       return {coordinatorEpoch:this.agent.coordinatorEpoch,online:true,ownerIdle:true,admissionLimit:this.limits};
@@ -107,6 +119,8 @@ export class CpuHost {
         const t=reply.ticket;if(reply.delivery!=='LOCAL'||t.operation!=='WRITE'||t.bytes!==bytes.length||t.ref.contentHash!==digest(bytes)||t.ref.schemaId!==schemaId)throw Error('ARTIFACT_ROUTE_SCOPE');
         await this.stageInput({contentHash:t.ref.contentHash,bytes:bytes.length,schemaId,schemaVersion:1},bytes);return t.ref;
       },read:async(ref,offer)=>{
+        const cached=this.dataHost?.channel.lookup(offer.task.groupId,ref);
+        if(cached&&cached.ownerPrincipalId===offer.task.app.principalId&&this.dataHost!.channel.available(cached))return this.dataHost!.channel.readForControl(cached);
         if(offer.transferPlan.length===0&&this.appPolicy){
           if(offer.task.app.appInstanceId!==config.identity.appInstanceId||offer.task.originDeviceId!==config.identity.deviceId||!/^[a-f0-9]{64}$/.test(ref.contentHash))throw Error('LOCAL_INPUT_SCOPE');
           inputTickets.delete(offer.task.attemptId);
@@ -187,7 +201,22 @@ export class CpuHost {
       await this.agent.publishProfile(profile);
     }catch(error){this.onError(error);this.owner='UNKNOWN';this.limits=[];await this.agent.updateResources([],'UNKNOWN');}
   }
-  tick(syncSettings=true){if(!this.pending&&!this.stopped)this.pending=this.sample(syncSettings).finally(()=>{this.pending=undefined;});return this.pending??Promise.resolve();}
+  private async network(){
+    if(!this.agent.ready){this.peerLinks.invalidate();return;}
+    const epoch=this.ledger.snapshot().grant?.coordinatorEpoch??0;
+    const network=canonical(networkInterfaces());
+    if(this.config.dataEndpoint!==false&&network!==this.endpointNetwork&&Date.now()>=this.endpointRetryAt){
+      await this.dataHost?.close();this.dataHost=undefined;this.endpointRetryAt=Date.now()+30000;
+      try{this.dataHost=await openDataHost(this.config.directory,this.config.connection,this.config.dataEndpoint??await discoverDataHost(this.config.connection),cpuSchemas);this.endpointNetwork=network;this.endpointCoordinatorEpoch=epoch;}
+      catch(error){this.onError(error);}this.peerLinks.invalidate();
+    }
+    if(this.dataHost&&epoch!==this.endpointCoordinatorEpoch){await this.dataHost.register();this.endpointCoordinatorEpoch=epoch;this.peerLinks.invalidate();}
+    await this.peerLinks.sample();
+  }
+  tick(syncSettings=true){
+    if(!this.networkPending&&!this.stopped)this.networkPending=this.network().catch(error=>{this.peerLinks.invalidate();this.onError(error);}).finally(()=>{this.networkPending=undefined;});
+    if(!this.pending&&!this.stopped)this.pending=this.sample(syncSettings).finally(()=>{this.pending=undefined;});return this.pending??Promise.resolve();
+  }
   start(){if(this.timer||this.stopped)throw Error('HOST_STARTED');this.agent.start();this.timer=setInterval(()=>{void this.tick().catch(this.onError);},2000);void this.tick().catch(this.onError);}
-  async close(){if(this.stopped)return;this.stopped=true;if(this.timer)clearInterval(this.timer);await this.agent.close();await this.pending;await this.ledger.close();}
+  async close(){if(this.stopped)return;this.stopped=true;this.peerLinks.close();if(this.timer)clearInterval(this.timer);await this.agent.close();await this.pending;await this.networkPending;await this.dataHost?.close();await this.ledger.close();}
 }

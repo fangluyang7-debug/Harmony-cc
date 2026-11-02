@@ -28,7 +28,7 @@ export class TeamSpaces {
   private readonly authAttempts=new Map<string,{count:number;until:number}>();
   constructor(private readonly db:PrismaClient,private readonly auth:PairingService,private readonly allotments:AllotmentIssuer,
     private readonly directory:DeviceDirectory,private readonly jobs:CpuJobs,private readonly artifacts:ArtifactChannel,
-    private readonly config:CoordinatorConfig,private readonly status:()=>{ready:boolean;epoch:number},private readonly snapshots:SnapshotBuilder,private readonly events:SpaceEvents,private readonly apps:AppRegistry,private readonly sdk:SdkJobs){}
+    private readonly config:CoordinatorConfig,private readonly status:()=>{ready:boolean;epoch:number},private readonly snapshots:SnapshotBuilder,private readonly events:SpaceEvents,private readonly apps:AppRegistry,private readonly sdk:SdkJobs,private readonly networkView?:(groupId:string)=>Promise<unknown>){}
   async session(cookie:string|undefined){
     const token=/(?:^|;\s*)harmony_session=([A-Za-z0-9_-]{43})(?:;|$)/.exec(cookie??'')?.[1];
     const session=token?await this.db.spaceSession.findUnique({where:{id:hash(token)}}):null;
@@ -54,7 +54,7 @@ export class TeamSpaces {
       return {id:d.id,name:d.name,userId:d.userId,online,lastSeen:sample?.sampledAt??null,settings:JSON.parse(d.settingsJson),profile:p??null,
         capabilities:(p?.executors??[]).map(e=>{const state=JSON.parse(states.find(s=>s.id===JSON.stringify([spaceId,p!.holderInstanceId,e.target.targetId]))?.metadataJson??'{"state":"DISCOVERED"}').state;
           return {capability:e.contract.capability,targetId:e.target.targetId,backend:e.target.backend,available:online&&available.includes(e.target.targetId)&&['ACTIVE','CANARY'].includes(state),state};})};});
-    return {space,me,members:members.map(m=>({...m,name:users.find(u=>u.id===m.userId)?.name??'成员'})),devices,
+    return {space,me,members:members.map(m=>({...m,name:users.find(u=>u.id===m.userId)?.name??'成员'})),devices,network:await this.networkView?.(spaceId)??[],
       jobs:rows.map(r=>{const d=JSON.parse(r.metadataJson);return {id:r.id,userId:r.principalId,state:attempts.find(a=>a.id===r.id)?.state??r.state,deviceId:d.offer.target.deviceId,capability:d.offer.task.contract.capability,reason:d.offer.reasonCode,rejection:attempts.find(a=>a.id===r.id)?.rejectionJson?JSON.parse(attempts.find(a=>a.id===r.id)!.rejectionJson!):null};}),
       coordinator:{...this.status(),location:this.config.proxy&&this.config.publicUrl&&!['localhost','127.0.0.1','[::1]'].includes(new URL(this.config.publicUrl).hostname)?'CLOUD':'LOCAL_DEVELOPMENT',domain:this.config.domain,address:this.config.publicUrl??null},updatedAt:now};
   }

@@ -1,4 +1,5 @@
 import {WorkflowJobs} from './workflow-jobs';
+import {DirectTransfers} from './direct-transfers';
 import { SpaceEvents } from './space-events';
 import 'reflect-metadata';
 import fs from 'node:fs';
@@ -43,10 +44,12 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const apps=new AppRegistry(db,auth,identity.cert,config.domain);
     const artifacts=new ArtifactChannel(path.join(config.dataDir,'artifact-cache'),config.domain,token=>auth.authenticate(token),options.artifactSchemas??(options.cpuHost?cpuSchemas:new Map()));
     artifacts.sweep();
-    const directory=new DeviceDirectory(db,config.domain);
+    const directTransfers=new DirectTransfers(db,identity.key,identity.cert,config.domain,()=>epoch);
+    const directory=new DeviceDirectory(db,config.domain,Date.now,(tx,groupId)=>directTransfers.links(tx,groupId));
     const bearer=(value:string)=>{if(!value?.startsWith('Bearer '))throw new UnauthorizedException();return value.slice(7);};
     const snapshots=new SnapshotBuilder(db,config.domain),planning=new PlanningService(snapshots);
     const profiles=new ProfileProjection(db,directory,snapshots);
+    const refreshNetwork=async(groupId:string)=>{const row=await db.group.findUnique({where:{id:groupId}});if(row&&JSON.parse(row.metadataJson).contributionPolicy)await profiles.refresh(groupId);events.changed(groupId);};
     const traces=new TraceService(db);
     const remoteEvaluation=new RemoteEvaluationRunner(db,directory,()=>epoch);
     @Controller('/v2/health')
@@ -56,6 +59,16 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     }
     @Controller('/v2')
     class Pairing {
+      @Post('data/endpoints/challenge')async endpointChallenge(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.challenge(await auth.authenticate(bearer(header)),body));}
+      @Post('data/endpoints/register')async endpointRegister(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.register(peer,body);await refreshNetwork(peer.groupId);return result;});}
+      @Get('data/endpoints')async endpoints(@Headers('authorization') header:string){return this.jobResponse(async()=>directTransfers.list(await auth.authenticate(bearer(header))));}
+      @Post('data/authorizations')async transferAuthorization(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.issue(await auth.authenticate(bearer(header)),body));}
+      @Post('data/consume')async transferConsume(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.consume(await auth.authenticate(bearer(header)),body));}
+      @Post('data/receipts')async transferReceipt(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.receipt(await auth.authenticate(bearer(header)),body));}
+      @Post('data/network/reset')async networkReset(@Headers('authorization') header:string){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.resetNetwork(peer);await refreshNetwork(peer.groupId);return result;});}
+      @Post('data/network/report')async networkReport(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.reportLink(peer,body);await refreshNetwork(peer.groupId);return result;});}
+      @Get('data/network')async networkStatus(@Headers('authorization') header:string){return this.jobResponse(async()=>directTransfers.network(await auth.authenticate(bearer(header))));}
+      @Post('data/network/failure')async networkFailure(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.failedLink(peer,body);await refreshNetwork(peer.groupId);return result;});}
       @Post('link-probe')async probe(@Headers('authorization') header:string,@Body() body:any){
         try{await auth.authenticate(bearer(header));}catch{throw new UnauthorizedException('CREDENTIAL_REJECTED');}
         if(!body||!['upload','download'].includes(body.mode)||!Number.isSafeInteger(body.bytes)||body.bytes<1||body.bytes>32768||
@@ -161,8 +174,8 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     let epoch=0;
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
     const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>{events.changed(groupId);graphs.changed(groupId);},error=>options.onError?.(error));
-    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks),graphs=new WorkflowJobs(db,jobs,apps,artifacts,referencePacks),sdk=new SdkJobs(jobs,referencePacks,graphs);
-    const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk);
+    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks,directTransfers),graphs=new WorkflowJobs(db,jobs,apps,artifacts,referencePacks),sdk=new SdkJobs(jobs,referencePacks,graphs);
+    const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk,groupId=>directTransfers.dashboard(groupId));
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
     auth.onRevoked(id=>channel.revoke(id));
     const configureCpuGroup=async(groupId:string)=>{
@@ -209,7 +222,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       },onError:input.onError},input.intervalMs);
       calibration.start();return service;
     };
-    return {app,db,identity,store,snapshots,planning,channel,auth,apps,sdk,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
+    return {app,db,identity,store,snapshots,planning,channel,auth,apps,sdk,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,directTransfers,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
       close:async()=>{if(closed)return;closed=true;ready=false;spaces.close();remoteEvaluation.close();await graphs.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
   }catch(error){await db.$disconnect();await unlock();throw error;}
 }

@@ -1,7 +1,7 @@
 import https from 'node:https';
 import tls from 'node:tls';
 import {createHash,X509Certificate} from 'node:crypto';
-import {transfer} from '@harmony/resource-transport';
+import {transfer,directTransfer} from '@harmony/resource-transport';
 import {SdkPort,SdkTicket} from './index';
 export interface AppConnection {address:string;certificate:string;fingerprint:string;credential:string;tlsMode?:'pinned'|'public';domain:'REAL'|'SIMULATED';}
 /** HTTPS control transport, also used by the owner-confirmed registration command. */
@@ -10,7 +10,7 @@ export function appRequest(connection:AppConnection){
  const publicTls=connection.tlsMode==='public';
  if(!publicTls&&new X509Certificate(connection.certificate).fingerprint256.replaceAll(':','').toLowerCase()!==connection.fingerprint)throw Error('CERTIFICATE_PIN_MISMATCH');
  return (route:string,body:string|null)=>new Promise<string>((resolve,reject)=>{
-  if(!/^\/v2\/(?:apps\/(?:registrations(?:\/[A-Za-z0-9_.:-]+\/revoke)?|exchange|me)|sdk\/jobs(?:\/[A-Za-z0-9_.:-]+(?:\/(?:start|cancel))?)?)$/.test(route)){reject(Error('SDK_ROUTE_INVALID'));return;}
+  if(!/^\/v2\/(?:data\/(?:authorizations|receipts|network\/(?:reset|failure))|apps\/(?:registrations(?:\/[A-Za-z0-9_.:-]+\/revoke)?|exchange|me)|sdk\/jobs(?:\/[A-Za-z0-9_.:-]+(?:\/(?:start|cancel))?)?)$/.test(route)){reject(Error('SDK_ROUTE_INVALID'));return;}
   const bytes=body===null?null:Buffer.from(body);if(bytes&&bytes.length>100000){reject(Error('SDK_REQUEST_TOO_LARGE'));return;}
   const request=https.request(new URL(route,base),{method:bytes?'POST':'GET',...(publicTls?{}:{ca:connection.certificate,checkServerIdentity:(host:string,cert:tls.PeerCertificate)=>tls.checkServerIdentity(host,cert)??(cert.fingerprint256?.replaceAll(':','').toLowerCase()===connection.fingerprint?undefined:Error('CERTIFICATE_PIN_MISMATCH'))}),headers:{Authorization:'Bearer '+connection.credential,...(bytes?{'Content-Type':'application/json','Content-Length':bytes.length}:{})}},response=>{
    const chunks:Buffer[]=[];let count=0;
@@ -21,7 +21,22 @@ export function appRequest(connection:AppConnection){
 }
 export function nodeSdkPort(connection:AppConnection):SdkPort{return {
  request:appRequest(connection),
- write:async(ticket:SdkTicket,bytes:Uint8Array)=>{await transfer(connection,ticket as Parameters<typeof transfer>[1],connection.credential,Buffer.from(bytes));},
+ writeDirect:async(jobId,endpointId,ticket,bytes)=>{
+  const request=appRequest(connection);let endpointEpoch='';
+  try{
+   const grant=JSON.parse(await request('/v2/data/authorizations',JSON.stringify({attemptId:jobId,endpointId,operation:'WRITE'}))) as Parameters<typeof directTransfer>[0];
+   const a=grant.signed.authorization;if(a.attemptId!==jobId||a.endpoint.id!==endpointId||a.operation!=='WRITE'||a.ref.contentHash!==ticket.ref.contentHash||a.ref.artifactId!==ticket.ref.artifactId||a.bytes!==ticket.bytes)throw Error('SDK_DIRECT_SCOPE');
+   endpointEpoch=a.endpoint.epoch;
+   await directTransfer(grant,connection.certificate,connection.domain,Buffer.from(bytes));
+  }catch(error){
+   // Discard direct evidence before re-planning; fallback uploads data, never duplicates execution.
+   const code=(error as NodeJS.ErrnoException).code??(error as Error).message;
+   const reason=/TLS|CERT|SELF_SIGNED/.test(code)?'TLS_MISMATCH':/TIMEOUT|TIMEDOUT/.test(code)?'TIMEOUT':'PEER_UNREACHABLE';
+   if(endpointEpoch){try{await request('/v2/data/network/failure',JSON.stringify({endpointId,endpointEpoch,reason}));}catch{await request('/v2/data/network/reset','{}');}}else await request('/v2/data/network/reset','{}');
+   await transfer(connection,ticket as Parameters<typeof transfer>[1],connection.credential,Buffer.from(bytes));
+  }
+ },
+ write:async(ticket:SdkTicket,bytes:Uint8Array)=>{if(ticket.direct){await nodeSdkPort(connection).writeDirect!(ticket.direct.jobId,ticket.direct.endpointId,ticket,bytes);return;}await transfer(connection,ticket as Parameters<typeof transfer>[1],connection.credential,Buffer.from(bytes));},
  read:async(ticket:SdkTicket)=>(await transfer(connection,ticket as Parameters<typeof transfer>[1],connection.credential)).bytes,
  digest:async bytes=>createHash('sha256').update(bytes).digest('hex'),now:Date.now,wait:ms=>new Promise(resolve=>setTimeout(resolve,ms))
 };}
