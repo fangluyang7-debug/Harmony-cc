@@ -7,7 +7,7 @@ export interface DataEndpointIdentity {
   address:string; certificate:string; fingerprint:string;
 }
 export interface TransferAuthorization {
-  version:1; id:string; domain:'REAL'|'SIMULATED'; coordinatorEpoch:number;
+  version:1; id:string; domain:'REAL'|'SIMULATED'; coordinatorEpoch:number; networkEpoch:string;
   workflowId:string; attemptId:string; appInstanceId:string; groupId:string; ownerPrincipalId:string;
   requesterHolderId:string; senderHolderId:string; receiverHolderId:string;
   endpoint:DataEndpointIdentity; ref:ArtifactRefV2; bytes:number; operation:'READ'|'WRITE';
@@ -31,10 +31,10 @@ export function validDataEndpoint(e:DataEndpointIdentity):boolean {
   }catch{return false;}
 }
 export function validTransferAuthorization(a:TransferAuthorization):boolean {
-  return exact(a,['version','id','domain','coordinatorEpoch','workflowId','attemptId','appInstanceId','groupId','ownerPrincipalId',
+  return exact(a,['version','id','domain','coordinatorEpoch','networkEpoch','workflowId','attemptId','appInstanceId','groupId','ownerPrincipalId',
     'requesterHolderId','senderHolderId','receiverHolderId','endpoint','ref','bytes','operation','proofHash','issuedAt','expiresAt'])&&
     a.version===1&&['REAL','SIMULATED'].includes(a.domain)&&integer(a.coordinatorEpoch)&&
-    [a.id,a.workflowId,a.attemptId,a.appInstanceId,a.groupId,a.ownerPrincipalId,a.requesterHolderId,a.senderHolderId,a.receiverHolderId].every(protocolId)&&
+    [a.id,a.networkEpoch,a.workflowId,a.attemptId,a.appInstanceId,a.groupId,a.ownerPrincipalId,a.requesterHolderId,a.senderHolderId,a.receiverHolderId].every(protocolId)&&
     validDataEndpoint(a.endpoint)&&a.endpoint.groupId===a.groupId&&validArtifactRefV2(a.ref)&&integer(a.bytes)&&a.bytes<=8388608&&
     ['READ','WRITE'].includes(a.operation)&&a.requesterHolderId!==a.endpoint.holderInstanceId&&
     a.senderHolderId===(a.operation==='WRITE'?a.requesterHolderId:a.endpoint.holderInstanceId)&&

@@ -61,7 +61,7 @@ describe('direct input routing',()=>{
     r.links=[
       {from:'cloud',to:'relay',bytesPerSecond:1000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000},
       {from:'relay',to:'pc',bytesPerSecond:1000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000},
-      {from:'cloud',to:'pc',bytesPerSecond:100000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000,endpointId:'ep',endpointEpoch:'epoch',fromHolderInstanceId:'source',toHolderInstanceId:'worker'}];
+      {from:'cloud',to:'pc',bytesPerSecond:100000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000,endpointId:'ep',endpointEpoch:'epoch',endpointOperation:'WRITE',fromHolderInstanceId:'source',toHolderInstanceId:'worker'}];
     return r;
   }
   it('compares direct, relay and local using the same planner',()=>{
@@ -87,6 +87,15 @@ describe('direct input routing',()=>{
     expect(new WorkflowPlacementPlanner(limits,()=>0).plan(r).suggestion?.[0].deviceId).toBe('cloud');
     r.links[2].toHolderInstanceId='worker';r.links[2].from='pc';r.links[2].to='cloud';
     expect(new WorkflowPlacementPlanner(limits,()=>0).plan(r).suggestion?.[0].deviceId).toBe('cloud');
+  });
+  it('does not use a source GET endpoint as the destination of an upload',()=>{
+    const r=directFixture();r.links[2].endpointOperation='READ';
+    expect(new WorkflowPlacementPlanner(limits,()=>0).plan(r).suggestion?.[0].deviceId).toBe('cloud');
+  });
+  it('selects source GET evidence for an explicitly pullable committed replica',()=>{
+    const r=directFixture();r.artifacts[0].replicas[0].transferOperation='READ';r.links[2].endpointOperation='READ';
+    const selected=new WorkflowPlacementPlanner(limits,()=>0).plan(r).suggestion?.[0];
+    expect(selected?.deviceId).toBe('pc');expect(selected?.inputEndpointOperation).toBe('READ');
   });
 });
 

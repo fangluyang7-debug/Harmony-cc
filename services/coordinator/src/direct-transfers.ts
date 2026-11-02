@@ -33,6 +33,7 @@ export class DirectTransfers {
     this.challenges.delete(id);
     await this.db.$transaction(async tx=>{
       await this.active(tx,peer.credentialId);
+      if(!await tx.dataEndpoint.findUnique({where:{id}})&&await tx.dataEndpoint.count({where:{groupId:peer.groupId}})>=64)throw Error('ENDPOINT_DIRECTORY_CAPACITY');
       await tx.dataEndpoint.upsert({where:{id},create:{id,groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,credentialId:peer.credentialId,coordinatorEpoch:this.epoch(),metadataJson:JSON.stringify(pending.endpoint)},
         update:{credentialId:peer.credentialId,coordinatorEpoch:this.epoch(),metadataJson:JSON.stringify(pending.endpoint)}});
       await tx.transferAuthorization.updateMany({where:{endpointId:id,state:'ISSUED'},data:{state:'REVOKED'}});
@@ -82,7 +83,7 @@ export class DirectTransfers {
       if(input.reason==='REACHABLE'&&!estimate)throw Error('PEER_COST_UNKNOWN');
       data.links=data.links.filter((l:any)=>l.endpointId!==endpoint.id||l.direction!==input.direction);
       if(data.links.length>=128)throw Error('PEER_LINK_CAPACITY');
-      data.links.push({endpointId:endpoint.id,endpointEpoch:endpoint.epoch,direction:input.direction,reason:input.reason,observedAt:now,expiresAt:now+30000,estimate});
+      data.links.push({endpointId:endpoint.id,endpointEpoch:endpoint.epoch,direction:input.direction,reason:input.reason,observedAt:now,expiresAt:now+30000,estimate,samples:input.samples.map((s:any)=>({...s,observedAt:now})),observedIds:[]});
       await tx.peerNetwork.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
     });return {recorded:true};
   }
@@ -91,6 +92,26 @@ export class DirectTransfers {
     const row=await this.db.peerNetwork.findUnique({where:{id:transferDigest(canonical([peer.groupId,peer.holderInstanceId]))}});
     if(!row)return this.resetNetwork(peer);
     return this.reportLink(peer,{epoch:JSON.parse(row.metadataJson).epoch,...input,direction:'WRITE',samples:[]});
+  }
+  /** Full HTTP duration includes online grant consumption and the receiver receipt. */
+  async observe(peer:Peer,input:{authorizationId:string;durationMs:number}){
+    if(!exact(input,['authorizationId','durationMs'])||!protocolId(input.authorizationId)||!Number.isFinite(input.durationMs)||input.durationMs<=0||input.durationMs>10000)throw Error('TRANSFER_OBSERVATION_INVALID');
+    return this.db.$transaction(async tx=>{
+      const grant=await tx.transferAuthorization.findUnique({where:{id:input.authorizationId}});
+      if(!grant||grant.groupId!==peer.groupId||grant.requesterCredentialId!==peer.credentialId||grant.state!=='COMPLETED')throw Error('TRANSFER_OBSERVATION_SCOPE');
+      await this.active(tx,peer.credentialId);
+      const a=verifyTransfer(JSON.parse(grant.metadataJson),this.certificate,this.domain,this.now()),endpoint=await this.endpoint(tx,a.endpoint.id,peer.groupId);
+      const id=transferDigest(canonical([peer.groupId,peer.holderInstanceId])),row=await tx.peerNetwork.findUnique({where:{id}}),data=row?JSON.parse(row.metadataJson):null;
+      if(a.coordinatorEpoch!==this.epoch()||canonical(endpoint)!==canonical(a.endpoint)||!data||data.epoch!==a.networkEpoch||data.coordinatorEpoch!==a.coordinatorEpoch)throw Error('PEER_NETWORK_CHANGED');
+      const link=data.links.find((l:any)=>l.endpointId===endpoint.id&&l.endpointEpoch===endpoint.epoch&&l.direction===a.operation);
+      // A late observation must not revive failed or refreshed evidence.
+      if(!link||link.reason!=='REACHABLE'||link.observedAt>a.issuedAt||link.expiresAt<=this.now())return {recorded:false};
+      if((link.observedIds??[]).includes(a.id))return {recorded:false};
+      const now=this.now(),samples=[...(link.samples??[]).filter((s:any)=>s.observedAt+30000>now),{bytes:a.bytes,durationMs:input.durationMs,observedAt:now}].slice(-8);
+      const estimate=fitLink(samples,30000);if(!estimate)return {recorded:false};
+      link.samples=samples;link.estimate=estimate;link.observedIds=[...(link.observedIds??[]),a.id].slice(-32);link.observedAt=now;link.expiresAt=now+30000;
+      await tx.peerNetwork.update({where:{id},data:{metadataJson:JSON.stringify(data)}});return {recorded:true};
+    });
   }
   async links(tx:Db,groupId:string):Promise<PlacementLink[]>{
     const rows=await tx.peerNetwork.findMany({where:{groupId}}),links:PlacementLink[]=[],now=this.now();
@@ -103,7 +124,7 @@ export class DirectTransfers {
         if(endpoint.epoch!==l.endpointEpoch)continue;
         links.push({from:l.direction==='WRITE'?data.deviceId:endpoint.deviceId,to:l.direction==='READ'?data.deviceId:endpoint.deviceId,
           fromHolderInstanceId:l.direction==='WRITE'?row.holderInstanceId:endpoint.holderInstanceId,toHolderInstanceId:l.direction==='READ'?row.holderInstanceId:endpoint.holderInstanceId,
-          endpointId:endpoint.id,endpointEpoch:endpoint.epoch,bytesPerSecond:l.estimate.bytesPerSecond,fixedMs:l.estimate.fixedMs,effective:false,observedAt:l.observedAt,ttlMs:l.expiresAt-l.observedAt,source:this.domain});
+          endpointId:endpoint.id,endpointEpoch:endpoint.epoch,endpointOperation:l.direction,bytesPerSecond:l.estimate.bytesPerSecond,fixedMs:l.estimate.fixedMs,effective:false,observedAt:l.observedAt,ttlMs:l.expiresAt-l.observedAt,source:this.domain});
       }
     }return links;
   }
@@ -145,6 +166,28 @@ export class DirectTransfers {
   /** Source App may transfer only its own job input to, or committed output from, the selected host. */
   private async scope(tx:Db,peer:Peer,id:string,operation:'READ'|'WRITE',endpoint:DataEndpointIdentity){
     const row=await tx.cpuJob.findUnique({where:{id}}),d=row?JSON.parse(row.metadataJson):null;
+    if(operation==='READ'&&row?.groupId===peer.groupId&&d?.sourceAttemptId&&d.holderId===peer.holderInstanceId){
+      // A selected downstream holder may read only its declared, committed input.
+      // It does not acquire the originating App's credentials or general read access.
+      const attempt=await tx.attempt.findUnique({where:{id}}),parent=await tx.cpuJob.findUnique({where:{id:d.sourceAttemptId}});
+      const p=parent?JSON.parse(parent.metadataJson):null,receipt=await tx.receipt.findUnique({where:{id:d.sourceAttemptId}}),result=receipt?JSON.parse(receipt.recordJson):null;
+      const installation=await tx.registeredInstallation.findUnique({where:{id:d.offer.task.app.appInstanceId}});
+      const app=installation?await tx.registeredApp.findUnique({where:{id:installation.appId}}):null;
+      const parentNode=p?await tx.node.findUnique({where:{id:JSON.stringify([p.offer.task.workflowId,p.offer.task.nodeId])}}):null;
+      if(!attempt||attempt.holderInstanceId!==peer.holderInstanceId||!['OFFERED','ACCEPTED','RUNNING'].includes(attempt.state)||row.state==='CANCEL_REQUESTED'||
+        d.offer.target.deviceId!==peer.deviceId||d.offer.task.coordinatorEpoch!==this.epoch()||d.deadlineAt<=this.now()||
+        !installation||installation.state!=='ACTIVE'||installation.groupId!==peer.groupId||installation.principalId!==row.principalId||installation.holderInstanceId!==row.sourceHolderId||
+        !app||app.id!==d.offer.task.app.appId||!JSON.parse(app.contractsJson).includes(d.offer.task.contract.contractId)||
+        !parent||parent.groupId!==row.groupId||parent.principalId!==row.principalId||parent.sourceHolderId!==row.sourceHolderId||
+        p.offer.task.workflowId!==d.offer.task.workflowId||p.offer.task.app.appInstanceId!==d.offer.task.app.appInstanceId||
+        p.holderId!==endpoint.holderInstanceId||p.offer.target.deviceId!==endpoint.deviceId||
+        !d.offer.dependencies.some((dependency:any)=>dependency.nodeId===p.offer.task.nodeId&&dependency.committed===true)||
+        parentNode?.currentAttemptId!==d.sourceAttemptId||parentNode?.state!=='COMMITTED'||!receipt?.committed||result?.state!=='SUCCEEDED'||!p.output||!result.outputs.some((ref:any)=>canonical(ref)===canonical(p.output.ref))||
+        canonical(d.input.ref)!==canonical(p.output.ref)||d.input.bytes!==p.output.bytes)throw Error('TRANSFER_DEPENDENCY_SCOPE');
+      const chosen=d.plan?.decision?.suggestion?.[0];
+      if(chosen?.inputEndpointId!==endpoint.id||chosen?.inputEndpointEpoch!==endpoint.epoch||chosen?.inputEndpointOperation!=='READ')throw Error('TRANSFER_PLAN_CHANGED');
+      return {offer:d.offer,descriptor:p.output};
+    }
     if(!row||row.groupId!==peer.groupId||row.principalId!==peer.principalId||row.sourceHolderId!==peer.holderInstanceId||
       !peer.app||d.offer.task.app.appInstanceId!==peer.app.appInstanceId||d.holderId!==endpoint.holderInstanceId||d.offer.target.deviceId!==endpoint.deviceId||d.offer.task.coordinatorEpoch!==this.epoch())throw Error('TRANSFER_JOB_SCOPE');
     if(operation==='WRITE'){
@@ -161,9 +204,14 @@ export class DirectTransfers {
     if(!exact(input,['attemptId','endpointId','operation'])||![input.attemptId,input.endpointId].every(protocolId)||!['READ','WRITE'].includes(input.operation))throw Error('TRANSFER_REQUEST_INVALID');
     return this.db.$transaction(async tx=>{
       const requester=await this.active(tx,peer.credentialId),endpoint=await this.endpoint(tx,input.endpointId,peer.groupId);
+      await tx.transferAuthorization.deleteMany({where:{groupId:peer.groupId,expiresAt:{lt:this.now()-3600000}}});
+      if(await tx.transferAuthorization.count({where:{requesterCredentialId:peer.credentialId,state:'ISSUED',expiresAt:{gt:this.now()}}})>=128||
+        await tx.transferAuthorization.count({where:{groupId:peer.groupId}})>=16384)throw Error('TRANSFER_AUTHORIZATION_CAPACITY');
       const {offer,descriptor}=await this.scope(tx,requester,input.attemptId,input.operation,endpoint),proof=randomBytes(32).toString('base64url'),now=this.now();
-      const authorization:TransferAuthorization={version:1,id:randomUUID(),domain:this.domain,coordinatorEpoch:this.epoch(),workflowId:offer.task.workflowId,attemptId:input.attemptId,
-        appInstanceId:offer.task.app.appInstanceId,groupId:peer.groupId,ownerPrincipalId:peer.principalId,requesterHolderId:peer.holderInstanceId,
+      const networkRow=await tx.peerNetwork.findUnique({where:{id:transferDigest(canonical([peer.groupId,peer.holderInstanceId]))}}),network=networkRow?JSON.parse(networkRow.metadataJson):null;
+      if(!network||network.coordinatorEpoch!==this.epoch())throw Error('PEER_NETWORK_CHANGED');
+      const authorization:TransferAuthorization={version:1,id:randomUUID(),domain:this.domain,coordinatorEpoch:this.epoch(),networkEpoch:network.epoch,workflowId:offer.task.workflowId,attemptId:input.attemptId,
+        appInstanceId:offer.task.app.appInstanceId,groupId:peer.groupId,ownerPrincipalId:descriptor.ownerPrincipalId,requesterHolderId:peer.holderInstanceId,
         senderHolderId:input.operation==='WRITE'?peer.holderInstanceId:endpoint.holderInstanceId,receiverHolderId:input.operation==='READ'?peer.holderInstanceId:endpoint.holderInstanceId,
         endpoint,ref:descriptor.ref,bytes:descriptor.bytes,operation:input.operation,proofHash:transferDigest(proof),issuedAt:now,expiresAt:Math.min(now+30000,descriptor.expiresAt)};
       const signed=signTransfer(authorization,this.key);
@@ -181,6 +229,8 @@ export class DirectTransfers {
       const row=await tx.transferAuthorization.findUnique({where:{id:a.id}});
       if(!row||row.state!=='ISSUED'||row.expiresAt<=this.now()||canonical(JSON.parse(row.metadataJson))!==canonical(input.signed))throw Error('TRANSFER_ALREADY_USED');
       const requester=await this.active(tx,row.requesterCredentialId);
+      const networkRow=await tx.peerNetwork.findUnique({where:{id:transferDigest(canonical([a.groupId,a.requesterHolderId]))}}),network=networkRow?JSON.parse(networkRow.metadataJson):null;
+      if(!network||network.epoch!==a.networkEpoch||network.coordinatorEpoch!==a.coordinatorEpoch)throw Error('PEER_NETWORK_CHANGED');
       const scope=await this.scope(tx,requester,a.attemptId,a.operation,endpoint);
       if(canonical(scope.descriptor.ref)!==canonical(a.ref)||scope.descriptor.bytes!==a.bytes)throw Error('TRANSFER_JOB_SCOPE');
       const changed=await tx.transferAuthorization.updateMany({where:{id:a.id,state:'ISSUED'},data:{state:'CONSUMED'}});

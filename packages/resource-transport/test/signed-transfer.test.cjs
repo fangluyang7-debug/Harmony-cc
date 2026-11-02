@@ -12,7 +12,7 @@ test('signed grants bind endpoint, app, attempt, content, direction and lifetime
   return {key:fs.readFileSync(key,'utf8'),certificate:fs.readFileSync(cert,'utf8')};
  }
  const coordinator=identity('coordinator'),endpoint=identity('endpoint'),now=Date.now();
- const a={version:1,id:'grant',domain:'SIMULATED',coordinatorEpoch:1,workflowId:'workflow',attemptId:'attempt',appInstanceId:'app',groupId:'group',ownerPrincipalId:'owner',requesterHolderId:'phone',senderHolderId:'phone',receiverHolderId:'pc',
+ const a={version:1,id:'grant',domain:'SIMULATED',coordinatorEpoch:1,networkEpoch:'network',workflowId:'workflow',attemptId:'attempt',appInstanceId:'app',groupId:'group',ownerPrincipalId:'owner',requesterHolderId:'phone',senderHolderId:'phone',receiverHolderId:'pc',
   endpoint:{id:'endpoint',groupId:'group',holderInstanceId:'pc',deviceId:'pc-device',epoch:'epoch',address:'https://localhost:1234/',certificate:endpoint.certificate,fingerprint:new X509Certificate(endpoint.certificate).fingerprint256.replaceAll(':','').toLowerCase()},
   ref:{artifactId:'input',contentVersion:1,contentHash:transferDigest('bytes'),schemaId:'text',schemaVersion:1},bytes:5,operation:'WRITE',proofHash:transferDigest('proof'),issuedAt:now,expiresAt:now+30000};
  const signed=signTransfer(a,coordinator.key);

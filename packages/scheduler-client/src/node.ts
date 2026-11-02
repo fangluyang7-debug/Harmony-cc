@@ -10,7 +10,7 @@ export function appRequest(connection:AppConnection){
  const publicTls=connection.tlsMode==='public';
  if(!publicTls&&new X509Certificate(connection.certificate).fingerprint256.replaceAll(':','').toLowerCase()!==connection.fingerprint)throw Error('CERTIFICATE_PIN_MISMATCH');
  return (route:string,body:string|null)=>new Promise<string>((resolve,reject)=>{
-  if(!/^\/v2\/(?:data\/(?:authorizations|receipts|network\/(?:reset|failure))|apps\/(?:registrations(?:\/[A-Za-z0-9_.:-]+\/revoke)?|exchange|me)|sdk\/jobs(?:\/[A-Za-z0-9_.:-]+(?:\/(?:start|cancel))?)?)$/.test(route)){reject(Error('SDK_ROUTE_INVALID'));return;}
+  if(!/^\/v2\/(?:data\/(?:authorizations|receipts|observations|network\/(?:reset|failure))|apps\/(?:registrations(?:\/[A-Za-z0-9_.:-]+\/revoke)?|exchange|me)|sdk\/jobs(?:\/[A-Za-z0-9_.:-]+(?:\/(?:start|cancel))?)?)$/.test(route)){reject(Error('SDK_ROUTE_INVALID'));return;}
   const bytes=body===null?null:Buffer.from(body);if(bytes&&bytes.length>100000){reject(Error('SDK_REQUEST_TOO_LARGE'));return;}
   const request=https.request(new URL(route,base),{method:bytes?'POST':'GET',...(publicTls?{}:{ca:connection.certificate,checkServerIdentity:(host:string,cert:tls.PeerCertificate)=>tls.checkServerIdentity(host,cert)??(cert.fingerprint256?.replaceAll(':','').toLowerCase()===connection.fingerprint?undefined:Error('CERTIFICATE_PIN_MISMATCH'))}),headers:{Authorization:'Bearer '+connection.credential,...(bytes?{'Content-Type':'application/json','Content-Length':bytes.length}:{})}},response=>{
    const chunks:Buffer[]=[];let count=0;
@@ -25,9 +25,10 @@ export function nodeSdkPort(connection:AppConnection):SdkPort{return {
   const request=appRequest(connection);let endpointEpoch='';
   try{
    const grant=JSON.parse(await request('/v2/data/authorizations',JSON.stringify({attemptId:jobId,endpointId,operation:'WRITE'}))) as Parameters<typeof directTransfer>[0];
-   const a=grant.signed.authorization;if(a.attemptId!==jobId||a.endpoint.id!==endpointId||a.operation!=='WRITE'||a.ref.contentHash!==ticket.ref.contentHash||a.ref.artifactId!==ticket.ref.artifactId||a.bytes!==ticket.bytes)throw Error('SDK_DIRECT_SCOPE');
+   const a=grant.signed.authorization;if(a.attemptId!==jobId||a.endpoint.id!==endpointId||a.operation!=='WRITE'||a.ref.contentHash!==ticket.ref.contentHash||a.ref.artifactId!==ticket.ref.artifactId||a.ref.contentVersion!==ticket.ref.contentVersion||a.ref.schemaId!==ticket.ref.schemaId||a.ref.schemaVersion!==ticket.ref.schemaVersion||a.bytes!==ticket.bytes)throw Error('SDK_DIRECT_SCOPE');
    endpointEpoch=a.endpoint.epoch;
-   await directTransfer(grant,connection.certificate,connection.domain,Buffer.from(bytes));
+   const observation=await directTransfer(grant,connection.certificate,connection.domain,Buffer.from(bytes));
+   try{await request('/v2/data/observations',JSON.stringify({authorizationId:a.id,durationMs:observation.durationMs}));}catch{/* Measurement delivery does not undo a verified transfer. */}
   }catch(error){
    // Discard direct evidence before re-planning; fallback uploads data, never duplicates execution.
    const code=(error as NodeJS.ErrnoException).code??(error as Error).message;
@@ -37,6 +38,22 @@ export function nodeSdkPort(connection:AppConnection):SdkPort{return {
   }
  },
  write:async(ticket:SdkTicket,bytes:Uint8Array)=>{if(ticket.direct){await nodeSdkPort(connection).writeDirect!(ticket.direct.jobId,ticket.direct.endpointId,ticket,bytes);return;}await transfer(connection,ticket as Parameters<typeof transfer>[1],connection.credential,Buffer.from(bytes));},
- read:async(ticket:SdkTicket)=>(await transfer(connection,ticket as Parameters<typeof transfer>[1],connection.credential)).bytes,
+ read:async(ticket:SdkTicket)=>{
+  if(ticket.direct){
+   const request=appRequest(connection);
+   try{
+    const grant=JSON.parse(await request('/v2/data/authorizations',JSON.stringify({attemptId:ticket.direct.jobId,endpointId:ticket.direct.endpointId,operation:'READ'}))) as Parameters<typeof directTransfer>[0];
+    const a=grant.signed.authorization;
+    if(a.attemptId!==ticket.direct.jobId||a.endpoint.id!==ticket.direct.endpointId||a.operation!=='READ'||a.ref.contentHash!==ticket.ref.contentHash||a.ref.artifactId!==ticket.ref.artifactId||a.ref.contentVersion!==ticket.ref.contentVersion||a.ref.schemaId!==ticket.ref.schemaId||a.ref.schemaVersion!==ticket.ref.schemaVersion||a.bytes!==ticket.bytes)throw Error('SDK_DIRECT_SCOPE');
+    const result=await directTransfer(grant,connection.certificate,connection.domain);
+    await request('/v2/data/receipts',JSON.stringify({authorizationId:a.id,contentHash:a.ref.contentHash,bytes:a.bytes}));
+    try{await request('/v2/data/observations',JSON.stringify({authorizationId:a.id,durationMs:result.durationMs}));}catch{/* Best effort telemetry. */}
+    return result.bytes;
+   }catch{
+    await request('/v2/data/network/reset','{}');
+   }
+  }
+  return (await transfer(connection,ticket as Parameters<typeof transfer>[1],connection.credential)).bytes;
+ },
  digest:async bytes=>createHash('sha256').update(bytes).digest('hex'),now:Date.now,wait:ms=>new Promise(resolve=>setTimeout(resolve,ms))
 };}

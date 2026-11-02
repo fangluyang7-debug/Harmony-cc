@@ -13,7 +13,7 @@ export function allotmentTransport(connection:RecoveryConnection,onServerTime?:(
     const read=/^\/v2\/qualification\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(route)||/^\/v2\/evaluations\/[a-f0-9-]{36}$/.test(route)||/^\/v2\/jobs\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(route)||route==='/v2/devices'||route==='/v2/data/endpoints';
     const report=/^\/v2\/evaluations\/[a-f0-9-]{36}\/report$/.test(route)||['/v2/data/network/reset','/v2/data/network/report'].includes(route);
     const jobAction=/^\/v2\/(?:jobs\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}\/start|executions\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}\/(?:authorize|input|output|control))$/.test(route);
-    if(!read&&!report&&!jobAction&&!['/v2/allotments/request','/v2/allotments/ack','/v2/evaluations/claim','/v2/jobs','/v2/device-settings','/v2/link-probe','/v2/data/endpoints/challenge','/v2/data/endpoints/register','/v2/data/authorizations','/v2/data/consume','/v2/data/receipts'].includes(route)){reject(Error('CONTROL_ROUTE_INVALID'));return;}
+    if(!read&&!report&&!jobAction&&!['/v2/allotments/request','/v2/allotments/ack','/v2/evaluations/claim','/v2/jobs','/v2/device-settings','/v2/link-probe','/v2/data/endpoints/challenge','/v2/data/endpoints/register','/v2/data/authorizations','/v2/data/consume','/v2/data/receipts','/v2/data/observations'].includes(route)){reject(Error('CONTROL_ROUTE_INVALID'));return;}
     const data=Buffer.from(JSON.stringify(body));
     if(data.length>100000){reject(Error('CONTROL_REQUEST_TOO_LARGE'));return;}
     const request=https.request(new URL(route,connection.address),{...pinned(connection),method:read?'GET':'POST',headers:{

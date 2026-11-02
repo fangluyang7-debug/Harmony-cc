@@ -10,6 +10,15 @@ import {allotmentTransport} from './allotment-client';
 import {createSignedDataEndpoint} from './signed-data-endpoint';
 
 export interface DataHostConfig {listenHost:string;advertisedHost:string;port?:number;openssl?:string;}
+function opensslExecutable(explicit?:string){
+  if(explicit||process.env.PC_AGENT_OPENSSL||process.env.COORDINATOR_OPENSSL)return explicit??process.env.PC_AGENT_OPENSSL??process.env.COORDINATOR_OPENSSL!;
+  if(process.platform==='win32')for(const directory of (process.env.PATH??'').split(path.delimiter).filter(Boolean)){
+    const direct=path.join(directory,'openssl.exe');if(fs.existsSync(direct))return direct;
+    // Git for Windows normally exposes cmd/git.exe, not usr/bin/openssl.exe, on PATH.
+    if(fs.existsSync(path.join(directory,'git.exe'))){const bundled=path.resolve(directory,'..','usr','bin','openssl.exe');if(fs.existsSync(bundled))return bundled;}
+  }
+  return 'openssl';
+}
 /** Let the OS route to the paired coordinator, then advertise that interface; reachability still requires a peer probe. */
 export function discoverDataHost(connection:RecoveryConnection):Promise<DataHostConfig>{
   const address=new URL(connection.address);
@@ -29,7 +38,7 @@ export async function openDataHost(directory:string,connection:RecoveryConnectio
   else{
     const staging=fs.mkdtempSync(path.join(storage,'key-')),keyFile=path.join(staging,'key.pem'),certificateFile=path.join(staging,'cert.pem');
     try{
-      execFileSync(options.openssl??'openssl',['req','-x509','-newkey','rsa:3072','-sha256','-nodes','-days','365','-subj','/CN='+options.advertisedHost,
+      execFileSync(opensslExecutable(options.openssl),['req','-x509','-newkey','rsa:3072','-sha256','-nodes','-days','365','-subj','/CN='+options.advertisedHost,
         '-addext','subjectAltName='+(isIP(options.advertisedHost)?'IP:':'DNS:')+options.advertisedHost,'-keyout',keyFile,'-out',certificateFile],{stdio:'ignore',windowsHide:true});
       identity={host:options.advertisedHost,key:fs.readFileSync(keyFile,'utf8'),certificate:fs.readFileSync(certificateFile,'utf8')};
       const temporary=path.join(staging,'identity.json'),fd=fs.openSync(temporary,'wx',0o600);
