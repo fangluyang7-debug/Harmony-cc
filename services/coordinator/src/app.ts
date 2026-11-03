@@ -47,7 +47,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const artifacts=new ArtifactChannel(path.join(config.dataDir,'artifact-cache'),config.domain,token=>auth.authenticate(token),options.artifactSchemas??(options.cpuHost?cpuSchemas:new Map()));
     artifacts.sweep();
     const directTransfers=new DirectTransfers(db,identity.key,identity.cert,config.domain,()=>epoch);
-    const directory=new DeviceDirectory(db,config.domain,Date.now,(tx,groupId)=>directTransfers.links(tx,groupId));
+    const directory=new DeviceDirectory(db,config.domain,Date.now,(tx,groupId)=>directTransfers.links(tx,groupId),(tx,groupId)=>directTransfers.list({groupId},tx));
     const bearer=(value:string)=>{if(!value?.startsWith('Bearer '))throw new UnauthorizedException();return value.slice(7);};
     const snapshots=new SnapshotBuilder(db,config.domain),planning=new PlanningService(snapshots);
     const profiles=new ProfileProjection(db,directory,snapshots);
@@ -64,6 +64,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       @Post('data/endpoints/challenge')async endpointChallenge(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.challenge(await auth.authenticate(bearer(header)),body));}
       @Post('data/endpoints/register')async endpointRegister(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.register(peer,body);await refreshNetwork(peer.groupId);return result;});}
       @Get('data/endpoints')async endpoints(@Headers('authorization') header:string){return this.jobResponse(async()=>directTransfers.list(await auth.authenticate(bearer(header))));}
+      @Get('data/deliveries')async pendingDeliveries(@Headers('authorization') header:string){return this.jobResponse(async()=>directTransfers.pendingDeliveries(await auth.authenticate(bearer(header))));}
       @Post('data/authorizations')async transferAuthorization(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.issue(await auth.authenticate(bearer(header)),body));}
       @Post('data/consume')async transferConsume(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.consume(await auth.authenticate(bearer(header)),body));}
       @Post('data/observations')async transferObservation(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.observe(peer,body);if(result.recorded)await refreshNetwork(peer.groupId);return result;});}

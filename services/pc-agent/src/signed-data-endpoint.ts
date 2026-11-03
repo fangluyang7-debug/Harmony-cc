@@ -45,7 +45,7 @@ export function createSignedDataEndpoint(config:{directory:string;domain:'REAL'|
         // A stable cache descriptor is separate from the single-use authorization lifetime.
         const cached=channel.lookup(a.groupId,a.ref);
         if(cached){if(cached.ownerPrincipalId!==a.ownerPrincipalId||cached.bytes!==a.bytes)throw Error('TRANSFER_CACHE_SCOPE');}
-        else channel.register({...descriptor,expiresAt:now()+3600000});
+        else channel.register({...descriptor,expiresAt:a.artifactExpiresAt??now()+3600000});
         await channel.writeForControl(cached??channel.lookup(a.groupId,a.ref)!,bytes);
         await config.receipt(a.id,a.ref.contentHash,a.bytes);
         response.writeHead(201,{'Cache-Control':'no-store'}).end();

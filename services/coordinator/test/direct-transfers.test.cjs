@@ -76,6 +76,22 @@ test('independent endpoint processes consume single-use scoped grants online and
   await assert.rejects(r.directTransfers.consume(worker.paired.peer,delegated),/TRANSFER_DEPENDENCY_SCOPE/);
   await r.db.node.update({where:{id:parentNode},data:{currentAttemptId:id}});
   await r.db.cpuJob.update({where:{id:childId},data:{state:'CANCEL_REQUESTED'}});await assert.rejects(pull(),/TRANSFER_DEPENDENCY_SCOPE/);
+  // A settled producer can push a committed output before the consumer has an attempt.
+  const pushId=randomUUID(),deliveryId=randomUUID();
+  const pushData={...childData,holderId:app.peer.holderInstanceId,sourceNodeId:'parent',
+    delivery:{id:deliveryId,senderHolderId:worker.paired.peer.holderInstanceId,senderEndpointId:right.endpoint.id,senderEpoch:right.endpoint.epoch},
+    offer:{...childData.offer,target:{deviceId:app.peer.deviceId},task:{...childData.offer.task,nodeId:'push-child'}},
+    plan:{decision:{suggestion:[{inputEndpointId:left.endpoint.id,inputEndpointEpoch:left.endpoint.epoch,inputEndpointOperation:'WRITE'}]}}};
+  await r.db.sdkWorkflowJob.create({data:{id,groupId:group,sourceHolderId:app.peer.holderInstanceId,state:'ACTIVE',metadataJson:JSON.stringify({workflow:{nodes:[{id:'push-child',inputFrom:'parent',dependsOn:['parent']}]}})}});
+  await r.db.cpuJob.create({data:{id:pushId,groupId:group,principalId:principal,sourceHolderId:app.peer.holderInstanceId,state:'WAITING_INPUT',metadataJson:JSON.stringify(pushData)}});
+  await r.directTransfers.resetNetwork(worker.paired.peer);
+  const issuePush=()=>r.directTransfers.issue(worker.paired.peer,{attemptId:pushId,endpointId:left.endpoint.id,deliveryId,operation:'WRITE'});
+  const push=await issuePush();assert.equal(push.signed.authorization.producerAttemptId,id);
+  await target.request({action:'send',grant:push,bytes:bytes.toString('base64')});
+  assert.equal(await source.request({action:'read-cache',groupId:group,ref}),bytes.toString('base64'));
+  assert.equal(await r.db.attempt.count({where:{id:pushId}}),0);
+  const invalidated=await issuePush();await r.db.sdkWorkflowJob.update({where:{id},data:{state:'CANCEL_REQUESTED'}});
+  await assert.rejects(r.directTransfers.consume(app.peer,invalidated),/DELIVERY_SCOPE/);
   const oldNetwork=await issue();await r.directTransfers.resetNetwork(app.peer);await assert.rejects(send(oldNetwork));
   const oldEndpoint=await issue();target.close();target=processEndpoint();
   const restartedEndpoint=await target.request({action:'open',directory:path.join(r.config.dataDir,'target'),connection:connection(worker.paired,worker.invite)}),replacement=restartedEndpoint.endpoint;

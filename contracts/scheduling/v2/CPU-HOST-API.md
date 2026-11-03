@@ -63,3 +63,9 @@
 `POST /v2/executions/:attemptId/control` 正文 `{}`，返回 `{cancel,settled}`；仅已认证的执行 holder/device 可以查询。控制状态查询不要求旧任务仍可新准入，以便旧占用恢复和取消结算。取消意图保存在 CpuJob，查询失败不能当成取消成功。PC 持久化请求并中止执行器，Harmony 在执行安全边界检查；两端都等实际执行退出后才结算，已经成功的结果可能先于取消生效。
 
 来源 App 在私有宿主执行且计划声明本机结果时，结果字节不上传协调者，输出清单与回执仍按原协议提交。SDK 使用同一安装私有缓存读取并验证哈希/长度；跨宿主任务继续通过中继。旧计划没有声明本机结果时保留中继行为。`decisionEvidence.resultDelivery=ORIGIN_LOCAL` 标记此路径；它不表示存储读写耗时已经实测。
+
+### S5 已提交中间结果的 PC 推送
+
+`POST /v2/executions/:attemptId/output` 在保留输出时返回 `{delivery:"RETAINED",descriptor,endpoint}`。在执行回执提交前，生产宿主保存并校验字节，通过 `POST /v2/executions/:attemptId/retained` 发送完整描述。该接口沿用执行宿主身份和活动 attempt 的限制。
+
+`GET /v2/data/deliveries` 使用宿主控制通道凭据，返回当前 holder 和端点代次的待交付项。每项包含 `deliveryId`、作为下游 jobId 的 `attemptId`、`producerAttemptId`、接收端 `endpointId`、`ref` 和 `bytes`。宿主调用 `POST /v2/data/authorizations`，提交 `{deliveryId,attemptId,endpointId,operation:"WRITE"}`。v2 签名另含生产 attempt、交付事项和制品原始硬期限 `artifactExpiresAt`。签发与在线核销均按工作流声明的数据边、父节点当前已提交回执、双方端点、安装实例与下游目的地复核。接收方完整校验后调用既有 receipts 接口。重复确认沿用首次记录的期限。普通来源输入继续使用 v1 授权。

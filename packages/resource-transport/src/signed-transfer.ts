@@ -7,7 +7,7 @@ export interface DataEndpointIdentity {
   address:string; certificate:string; fingerprint:string;
 }
 export interface TransferAuthorization {
-  version:1|2; producerAttemptId?:string; deliveryId?:string; id:string; domain:'REAL'|'SIMULATED'; coordinatorEpoch:number; networkEpoch:string;
+  version:1|2; producerAttemptId?:string; deliveryId?:string; artifactExpiresAt?:number; id:string; domain:'REAL'|'SIMULATED'; coordinatorEpoch:number; networkEpoch:string;
   workflowId:string; attemptId:string; appInstanceId:string; groupId:string; ownerPrincipalId:string;
   requesterHolderId:string; senderHolderId:string; receiverHolderId:string;
   endpoint:DataEndpointIdentity; ref:ArtifactRefV2; bytes:number; operation:'READ'|'WRITE';
@@ -32,8 +32,8 @@ export function validDataEndpoint(e:DataEndpointIdentity):boolean {
 }
 export function validTransferAuthorization(a:TransferAuthorization):boolean {
   return exact(a,['version','id','domain','coordinatorEpoch','networkEpoch','workflowId','attemptId','appInstanceId','groupId','ownerPrincipalId',
-    'requesterHolderId','senderHolderId','receiverHolderId','endpoint','ref','bytes','operation','proofHash','issuedAt','expiresAt',...(a?.version===2?['producerAttemptId','deliveryId']:[])])&&
-    (a.version===1||a.version===2&&a.operation==='WRITE'&&typeof a.producerAttemptId==='string'&&protocolId(a.producerAttemptId)&&typeof a.deliveryId==='string'&&protocolId(a.deliveryId)&&a.producerAttemptId!==a.attemptId)&&['REAL','SIMULATED'].includes(a.domain)&&integer(a.coordinatorEpoch)&&
+    'requesterHolderId','senderHolderId','receiverHolderId','endpoint','ref','bytes','operation','proofHash','issuedAt','expiresAt',...(a?.version===2?['producerAttemptId','deliveryId','artifactExpiresAt']:[])])&&
+    (a.version===1||a.version===2&&integer(a.artifactExpiresAt)&&a.artifactExpiresAt!>=a.expiresAt&&a.operation==='WRITE'&&typeof a.producerAttemptId==='string'&&protocolId(a.producerAttemptId)&&typeof a.deliveryId==='string'&&protocolId(a.deliveryId)&&a.producerAttemptId!==a.attemptId)&&['REAL','SIMULATED'].includes(a.domain)&&integer(a.coordinatorEpoch)&&
     [a.id,a.networkEpoch,a.workflowId,a.attemptId,a.appInstanceId,a.groupId,a.ownerPrincipalId,a.requesterHolderId,a.senderHolderId,a.receiverHolderId].every(protocolId)&&
     validDataEndpoint(a.endpoint)&&a.endpoint.groupId===a.groupId&&validArtifactRefV2(a.ref)&&integer(a.bytes)&&a.bytes<=8388608&&
     ['READ','WRITE'].includes(a.operation)&&a.requesterHolderId!==a.endpoint.holderInstanceId&&

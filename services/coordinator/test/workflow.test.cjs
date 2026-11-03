@@ -9,12 +9,12 @@ test('SDK three-node graph moves a private source result to a remote worker and 
  const r=await runtime({cpuHost:true,referencePacks:[...builtinCpuPacks(),collect,final]}),hosts=[],errors=[];
  try{
   const group=randomUUID(),capacity=[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:268435456}];
-  let source;
+  let source,producer;
   for(const isApp of [true,false]){
    const device=randomUUID(),holder=randomUUID(),invite=await r.auth.invite(group,randomUUID(),device,r.url),owner=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:holder});
    await r.allotments.confirmDevice(device,capacity,[{groupId:group,holderInstanceId:holder,appInstanceId:null}]);
    let paired=owner;
-   if(isApp){const invitation=await r.apps.register(owner.peer,{label:'Graph source',allowedContracts:['text.count.v1',collect.manifest.contract.contractId,final.manifest.contract.contractId],maxConcurrent:2,resources:capacity,offlineBase:capacity,onlineExtra:[]},r.url);paired=await r.apps.exchange({registrationId:invitation.registrationId,code:invitation.code});source=paired;}
+   if(isApp){const invitation=await r.apps.register(owner.peer,{label:'Graph source',allowedContracts:['text.count.v1',collect.manifest.contract.contractId,final.manifest.contract.contractId],maxConcurrent:2,resources:capacity,offlineBase:capacity,onlineExtra:[]},r.url);paired=await r.apps.exchange({registrationId:invitation.registrationId,code:invitation.code});source=paired;}else producer=paired;
    const identity={groupId:group,deviceId:device,holderInstanceId:paired.peer.holderInstanceId,appInstanceId:paired.peer.app?.appInstanceId??null},directory=path.join(r.config.dataDir,identity.holderInstanceId),ledger=await DurableLedger.open(directory,identity,invite.certificate);await ledger.close();
    const host=await CpuHost.open({directory,identity,connection:{address:r.url,certificate:invite.certificate,fingerprint:invite.fingerprint,credential:paired.credential,domain:'SIMULATED'},controlIntervalMs:1500,contribution:{ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:268435456,reserveMemoryBytes:0},...(isApp?{fixedServices:[collect,final].map(pack=>({pack,execute:async input=>({bytes:input,schemaId:pack.manifest.contract.outputSchemas[0]})}))}:{})},e=>errors.push(String(e)));hosts.push(host);host.start();
   }
@@ -30,6 +30,8 @@ test('SDK three-node graph moves a private source result to a remote worker and 
   for(const host of hosts){host.peerLinks.close();await host.networkPending;}
   const network=await r.directTransfers.resetNetwork(source.peer);
   await r.directTransfers.reportLink(source.peer,{epoch:network.epoch,endpointId:endpoint.id,endpointEpoch:endpoint.epoch,direction:'WRITE',reason:'REACHABLE',samples:[1024,8192,32768].map(bytes=>({bytes,durationMs:0.01+bytes/1000000}))});
+  const receiver=hosts[0].dataHost.identity(),back=await r.directTransfers.resetNetwork(producer.peer);
+  await r.directTransfers.reportLink(producer.peer,{epoch:back.epoch,endpointId:receiver.id,endpointEpoch:receiver.epoch,direction:'WRITE',reason:'REACHABLE',samples:[1024,8192,32768].map(bytes=>({bytes,durationMs:0.01+bytes/1000000}))});
   await r.profiles.refresh(group);
   // Deterministic regression: remove direct-link evidence after the verified copy
   // arrives, before the downstream start re-plans. The received replica must win.
@@ -51,6 +53,10 @@ test('SDK three-node graph moves a private source result to a remote worker and 
   for(const child of workflow.nodes.filter(n=>n.inputFrom)){
     const jobFor=async node=>JSON.parse((await r.db.cpuJob.findUniqueOrThrow({where:{id:attempts.find(a=>JSON.parse(a.taskJson).nodeId===node).id}})).metadataJson);
     const produced=await jobFor(child.inputFrom),consumed=await jobFor(child.id);
+    if(child.id==='finish'){
+      assert.ok(produced.retainOutput);assert.equal(r.artifacts.available(produced.output),false);
+      assert.ok(consumed.delivery);assert.ok(await r.directTransfers.hasInput(group,source.peer.holderInstanceId,source.peer.app.appInstanceId,produced.output.ref));
+    }
     assert.deepEqual(consumed.input,produced.output);
     assert.equal(consumed.sourceAttemptId,produced.offer.task.attemptId);
   }

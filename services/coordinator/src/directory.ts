@@ -8,7 +8,7 @@ export interface ContributionPolicy {minimumBattery:number|null;maximumTemperatu
 export function executorIdentity(e:ExecutorV2):string{return createHash('sha256').update(canonical({target:e.target,contract:e.contract,model:e.model,resources:e.resources,configurations:e.configurations})).digest('hex');}
 export class DeviceDirectory {
   constructor(private readonly db:PrismaClient,readonly domain:'REAL'|'SIMULATED',private readonly now:()=>number=Date.now,
-    private readonly directLinks?:(db:Prisma.TransactionClient,groupId:string)=>Promise<PlacementLink[]>){}
+    private readonly directLinks?:(db:Prisma.TransactionClient,groupId:string)=>Promise<PlacementLink[]>,private readonly registeredEndpoints?:(db:Prisma.TransactionClient,groupId:string)=>Promise<{id:string;epoch:string;holderInstanceId:string}[]>){}
   async ingest(peer:Peer,profile:DeviceProfileV2,transaction?:Prisma.TransactionClient){
     if(!validDeviceProfileV2(profile)||profile.domain!==this.domain||profile.deviceId!==peer.deviceId||profile.holderInstanceId!==peer.holderInstanceId)throw Error('PROFILE_INVALID');
     if(peer.app&&profile.executors.some(e=>!peer.app!.allowedContracts.includes(e.contract.contractId)))throw Error('APP_CONTRACT_FORBIDDEN');
@@ -134,9 +134,10 @@ export class DeviceDirectory {
       .filter((l,index,all)=>all.findIndex(other=>other.from===l.from&&other.to===l.to)===index)
       .map(l=>({from:l.from,to:l.to,bytesPerSecond:l.bytesPerSecond.value!,fixedMs:l.fixedMs.value!,effective:false,source:this.domain,observedAt:Math.min(l.fixedMs.sampledAt,l.bytesPerSecond.sampledAt),ttlMs:Math.min(l.fixedMs.ttlMs,l.bytesPerSecond.ttlMs)}));
     if(policy.allowMetered&&this.directLinks)links.push(...await this.directLinks(db,groupId));
+    const endpoints=await this.registeredEndpoints?.(db,groupId)??[];
     for(const candidate of candidates){
-      const link=links.find(l=>l.endpointId&&l.endpointEpoch&&(l.endpointOperation==='WRITE'?l.toHolderInstanceId:l.fromHolderInstanceId)===candidate.holderInstanceId);
-      if(link)candidate.dataEndpoint={id:link.endpointId!,epoch:link.endpointEpoch!};
+      const endpoint=endpoints.find(e=>e.holderInstanceId===candidate.holderInstanceId);
+      if(endpoint)candidate.dataEndpoint={id:endpoint.id,epoch:endpoint.epoch};
     }
     return {groupId,policyVersion,version,domain:this.domain,capturedAt:now,devices:profiles.map(p=>({deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,deviceInstanceId:p.deviceInstanceId,ledgerEpoch:p.ledgerEpoch,sampledAt:p.ownerActivity.sampledAt,ttlMs:p.ownerActivity.ttlMs})),resources,candidates,links};
   }

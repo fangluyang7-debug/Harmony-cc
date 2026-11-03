@@ -1,4 +1,4 @@
-import {ArtifactDescriptor,transfer} from '@harmony/resource-transport';
+import {ArtifactDescriptor,directTransfer,SignedTransfer,transfer} from '@harmony/resource-transport';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -223,7 +223,20 @@ export class CpuHost {
       catch(error){this.onError(error);}this.peerLinks.invalidate();
     }
     if(this.dataHost&&epoch!==this.endpointCoordinatorEpoch){await this.dataHost.register();this.endpointCoordinatorEpoch=epoch;this.peerLinks.invalidate();}
-    await this.peerLinks.sample();
+    await this.peerLinks.sample();await this.deliver();
+  }
+  private async deliver(){
+    const host=this.dataHost,identity=host?.identity();if(!host||!identity)return;
+    const connection=this.config.connection,request=allotmentTransport(connection);
+    const pending=await request('/v2/data/deliveries',null) as {attemptId:string;deliveryId:string;producerAttemptId:string;endpointId:string;ref:ArtifactDescriptor['ref'];bytes:number}[];
+    for(const item of pending){
+      const cached=host.channel.lookup(identity.groupId,item.ref);if(!cached||cached.bytes!==item.bytes)continue;
+      const grant=await request('/v2/data/authorizations',{attemptId:item.attemptId,deliveryId:item.deliveryId,endpointId:item.endpointId,operation:'WRITE'}) as {signed:SignedTransfer;proof:string};
+      const a=grant.signed.authorization;
+      if(a.version!==2||a.operation!=='WRITE'||a.producerAttemptId!==item.producerAttemptId||a.attemptId!==item.attemptId||a.deliveryId!==item.deliveryId||a.endpoint.id!==item.endpointId||a.senderHolderId!==identity.holderInstanceId||a.ownerPrincipalId!==cached.ownerPrincipalId||canonical(a.ref)!==canonical(cached.ref)||a.bytes!==cached.bytes)throw Error('DELIVERY_SCOPE');
+      const observation=await directTransfer(grant,connection.certificate,connection.domain,await host.channel.readForControl(cached));
+      await request('/v2/data/observations',{authorizationId:a.id,durationMs:observation.durationMs});
+    }
   }
   tick(syncSettings=true){
     if(!this.networkPending&&!this.stopped)this.networkPending=this.network().catch(error=>{this.peerLinks.invalidate();this.onError(error);}).finally(()=>{this.networkPending=undefined;});
