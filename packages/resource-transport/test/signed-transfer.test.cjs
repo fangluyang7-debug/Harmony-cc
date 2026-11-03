@@ -15,6 +15,14 @@ test('signed grants bind endpoint, app, attempt, content, direction and lifetime
  const a={version:1,id:'grant',domain:'SIMULATED',coordinatorEpoch:1,networkEpoch:'network',workflowId:'workflow',attemptId:'attempt',appInstanceId:'app',groupId:'group',ownerPrincipalId:'owner',requesterHolderId:'phone',senderHolderId:'phone',receiverHolderId:'pc',
   endpoint:{id:'endpoint',groupId:'group',holderInstanceId:'pc',deviceId:'pc-device',epoch:'epoch',address:'https://localhost:1234/',certificate:endpoint.certificate,fingerprint:new X509Certificate(endpoint.certificate).fingerprint256.replaceAll(':','').toLowerCase()},
   ref:{artifactId:'input',contentVersion:1,contentHash:transferDigest('bytes'),schemaId:'text',schemaVersion:1},bytes:5,operation:'WRITE',proofHash:transferDigest('proof'),issuedAt:now,expiresAt:now+30000};
+ const delivery={...a,version:2,producerAttemptId:'producer',deliveryId:'delivery'};
+ const push=signTransfer(delivery,coordinator.key);
+ assert.deepEqual(verifyTransfer(push,coordinator.certificate,'SIMULATED',now),delivery);
+ for(const field of ['producerAttemptId','deliveryId','attemptId']){
+  const tampered=structuredClone(push);tampered.authorization[field]='replacement';assert.throws(()=>verifyTransfer(tampered,coordinator.certificate,'SIMULATED',now));
+ }
+ assert.throws(()=>signTransfer({...delivery,producerAttemptId:a.attemptId},coordinator.key));
+ assert.throws(()=>signTransfer({...delivery,version:1},coordinator.key));
  const signed=signTransfer(a,coordinator.key);
  assert.deepEqual(verifyTransfer(signed,coordinator.certificate,'SIMULATED',now),a);
  for(const change of [v=>v.appInstanceId='other',v=>v.attemptId='other',v=>v.coordinatorEpoch++,v=>v.ref.contentHash=transferDigest('other'),v=>v.bytes++,v=>v.endpoint.epoch='other',v=>v.endpoint.fingerprint='0'.repeat(64),v=>v.receiverHolderId='other',v=>v.operation='READ']){

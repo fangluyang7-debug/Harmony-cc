@@ -199,7 +199,7 @@ export class WorkflowPlacementPlanner {
     const output:PlacementArtifact={id:node.output.id,bytes:node.output.bytes,replicas:[{deviceId:c.deviceId,readMs:0}]};
     const localResult=r.localResultHolderId!==undefined&&c.holderInstanceId===r.localResultHolderId&&c.appInstanceId!==undefined&&c.appInstanceId===r.appInstanceId;
     const retained=!!(node.output.retainAtExecutor&&c.dataEndpoint&&c.holderInstanceId&&!localResult);
-    if(retained)output.replicas[0]={deviceId:c.deviceId,holderInstanceId:c.holderInstanceId,readMs:0,transferOperation:'READ'};
+    if(retained)output.replicas[0]={deviceId:c.deviceId,holderInstanceId:c.holderInstanceId,readMs:0,transferOperation:'WRITE'};
     if(localResult)output.replicas[0].holderInstanceId=c.holderInstanceId;
     const publication=r.materializeOutputsAt&&!localResult&&!retained?this.transfer(output,r.materializeOutputsAt,r):0;
     if(publication===null)return null;

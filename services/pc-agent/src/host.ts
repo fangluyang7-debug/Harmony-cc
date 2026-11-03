@@ -1,3 +1,4 @@
+import {ArtifactDescriptor,transfer} from '@harmony/resource-transport';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -113,9 +114,20 @@ export class CpuHost {
         return Number.isSafeInteger(reply.snapshotVersion)&&reply.snapshotVersion!>0?reply.snapshotVersion!:null;
       },
       ports:{...remotePorts,fixedService:(offer,input,signal)=>this.executeService(offer,input,signal),publish:async(bytes,schemaId,offer)=>{
-        if(!this.appPolicy)return remotePorts.publish(bytes,schemaId,offer);
-        const reply=await request('/v2/executions/'+offer.task.attemptId+'/output',{bytes:bytes.length,contentHash:digest(bytes),schemaId}) as {ticket:{operation:string;bytes:number;ref:any};delivery:string};
-        if(reply.delivery==='RELAY')return remotePorts.publish(bytes,schemaId,offer);
+        const reply=await request('/v2/executions/'+offer.task.attemptId+'/output',{bytes:bytes.length,contentHash:digest(bytes),schemaId}) as {ticket:Parameters<typeof transfer>[1];delivery:string;descriptor?:ArtifactDescriptor;endpoint?:{id:string;epoch:string}};
+        if(reply.delivery==='RETAINED'){
+          const host=this.dataHost,endpoint=host?.identity(),descriptor=reply.descriptor;
+          if(!host||!endpoint||endpoint.id!==reply.endpoint?.id||endpoint.epoch!==reply.endpoint?.epoch||!descriptor||
+            descriptor.groupId!==offer.task.groupId||descriptor.ownerPrincipalId!==offer.task.app.principalId||descriptor.bytes!==bytes.length||
+            descriptor.ref.schemaId!==schemaId||descriptor.ref.contentHash!==digest(bytes)||descriptor.ref.artifactId!=='out-'+offer.task.attemptId)throw Error('ARTIFACT_ROUTE_SCOPE');
+          host.channel.register(descriptor);await host.channel.writeForControl(descriptor,bytes);
+          await request('/v2/executions/'+offer.task.attemptId+'/retained',descriptor);return descriptor.ref;
+        }
+        if(reply.delivery==='RELAY'){
+          const ticket=reply.ticket;
+          if(ticket.operation!=='WRITE'||ticket.bytes!==bytes.length||ticket.ref.schemaId!==schemaId||ticket.ref.contentHash!==digest(bytes))throw Error('ARTIFACT_ROUTE_SCOPE');
+          await transfer(config.connection,ticket,config.connection.credential,bytes);return ticket.ref;
+        }
         const t=reply.ticket;if(reply.delivery!=='LOCAL'||t.operation!=='WRITE'||t.bytes!==bytes.length||t.ref.contentHash!==digest(bytes)||t.ref.schemaId!==schemaId)throw Error('ARTIFACT_ROUTE_SCOPE');
         await this.stageInput({contentHash:t.ref.contentHash,bytes:bytes.length,schemaId,schemaVersion:1},bytes);return t.ref;
       },read:async(ref,offer)=>{

@@ -53,7 +53,7 @@ describe('bounded data-location planner',()=>{
 });
 
 describe('direct input routing',()=>{
-  it('prices retained intermediate outputs through the producer endpoint',()=>{
+  it('prices retained intermediate outputs using the receiver WRITE endpoint',()=>{
     const r=fixture();r.finalDestination=undefined;r.inputRelayId='cloud';r.materializeOutputsAt='cloud';
     r.nodes[0].baselineTargetId='pc';r.nodes[0].allowedTargetIds=['pc'];r.nodes[1].allowedTargetIds=['cloud'];
     for(const node of r.nodes){node.candidates[0].holderInstanceId='source';node.candidates[1].holderInstanceId='worker';node.candidates[1].dataEndpoint={id:'producer',epoch:'epoch'};}
@@ -64,10 +64,13 @@ describe('direct input routing',()=>{
     const planner=new WorkflowPlacementPlanner(limits,()=>0);
     expect(planner.plan(r).status).toBe('blocked'); // Mandatory relay publication exceeds the budget.
     r.nodes[0].output.retainAtExecutor=true;
+    expect(planner.plan(r).status).toBe('blocked'); // A reverse pull cannot authorize a push.
+    r.links.push({...r.links[r.links.length-1],endpointOperation:'WRITE',endpointId:'receiver',endpointEpoch:'receiver-epoch'});
     const result=planner.plan(r);
     expect(result.suggestionMs).toBe(211);
     expect(result.suggestion?.[0].outputEndpointId).toBe('producer');
-    expect(result.suggestion?.[1].inputEndpointOperation).toBe('READ');
+    expect(result.suggestion?.[1].inputEndpointOperation).toBe('WRITE');
+    expect(result.suggestion?.[1].inputEndpointId).toBe('receiver');
     r.nodes[0].candidates[0].dataEndpoint=undefined;
     expect(planner.plan(r).status).toBe('blocked');
   });

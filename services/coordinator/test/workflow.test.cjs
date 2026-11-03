@@ -48,6 +48,12 @@ test('SDK three-node graph moves a private source result to a remote worker and 
   const trace=[];
   for(const a of attempts){assert.equal((await r.db.receipt.findUnique({where:{id:a.id}})).committed,true);const offer=JSON.parse(a.offerJson);trace.push([offer.task.nodeId,offer.target.backend,offer.task.workflowId]);}
   assert.equal(trace.find(x=>x[0]==='count')[1],'CPU');assert.equal(trace.find(x=>x[0]==='finish')[1],'SERVICE');
+  for(const child of workflow.nodes.filter(n=>n.inputFrom)){
+    const jobFor=async node=>JSON.parse((await r.db.cpuJob.findUniqueOrThrow({where:{id:attempts.find(a=>JSON.parse(a.taskJson).nodeId===node).id}})).metadataJson);
+    const produced=await jobFor(child.inputFrom),consumed=await jobFor(child.id);
+    assert.deepEqual(consumed.input,produced.output);
+    assert.equal(consumed.sourceAttemptId,produced.offer.task.attemptId);
+  }
   const finalJob=await r.db.cpuJob.findUnique({where:{id:attempts.find(a=>JSON.parse(a.taskJson).nodeId==='finish').id}});assert.equal(r.artifacts.available(JSON.parse(finalJob.metadataJson).output),false);
   const graphTrace=await r.traces.read(source.peer,id);assert.equal(graphTrace.traceId,id);assert.equal(new Set(graphTrace.spans.map(s=>s.nodeId)).size,3);
   await task.status();assert.equal(await r.db.attempt.count({where:{workflowId:id}}),3,'status must not replay committed nodes');

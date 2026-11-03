@@ -72,7 +72,7 @@ export class WorkflowJobs {
    try{
     if(state.state==='PENDING'){
      const assignment=data.plan.decision.suggestion!.find(a=>a.nodeId===n.id)!;
-     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId);else await this.jobs.submit(data.peer,{requestId:state.jobId,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:assignment.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{workflowId:id,nodeId:n.id,deadlineAt:data.deadlineAt,dependencies:n.dependsOn});
+     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId);else await this.jobs.submit(data.peer,{requestId:state.jobId,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:assignment.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{workflowId:id,nodeId:n.id,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
      state.state='SUBMITTED';await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
     }
     if(await this.jobs.graphInput(data.peer,state.jobId,source))continue;
