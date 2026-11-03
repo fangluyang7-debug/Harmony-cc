@@ -113,10 +113,18 @@ export class CpuJobs {
   async trace(peer:Peer,id:string){const data=await this.owned(peer,id);return this.traces.read(peer,data.traceId);}
   async writeInput(peer:Peer,id:string,bytes:Buffer){const data=await this.owned(peer,id);await this.artifacts.writeForControl(data.input,bytes);}
   async readOutput(peer:Peer,id:string){const data=await this.owned(peer,id),status=await this.status(peer,id);if(!status.outputTicket||!data.output)throw Error('OUTPUT_NOT_READY');return this.artifacts.readForControl(data.output);}
+  /** No durable dispatch evidence may be erased by a planning retry. */
+  private async resetUndispatched(id:string):Promise<boolean>{
+    return this.db.$transaction(async tx=>{
+      if(await tx.attempt.findUnique({where:{id}})||await tx.outbox.count({where:{attemptId:id}}))return false;
+      return (await tx.cpuJob.updateMany({where:{id,state:'DISPATCHING'},data:{state:'WAITING_INPUT'}})).count===1;
+    });
+  }
   async start(peer:Peer,id:string,replans=0):Promise<unknown>{
     let data=await this.owned(peer,id),row=await this.db.cpuJob.findUniqueOrThrow({where:{id}});
     if(!await this.inputReady(peer,data))throw Error('INPUT_NOT_UPLOADED');
     if(row.state==='WAITING_INPUT'){
+      if(await this.db.attempt.findUnique({where:{id}})||await this.db.outbox.count({where:{attemptId:id}}))throw Error('JOB_RECOVERY_REQUIRED');
       if(!data.request||!Number.isFinite(data.deadlineAt))throw Error('JOB_REPLAN_REQUIRED');
       const copies=new Map<string,boolean>();
       for(const request of [data.request,...(data.choices??[]).map(c=>c.request)])for(const artifact of request.artifacts){
@@ -170,15 +178,12 @@ export class CpuJobs {
     }
     if(row.state==='DISPATCHING'){
       if(data.offer.task.coordinatorEpoch!==this.epoch()){
-        const reset=await this.db.$transaction(async tx=>{
-          if(await tx.attempt.findUnique({where:{id}})||await tx.outbox.count({where:{attemptId:id}}))return false;
-          return (await tx.cpuJob.updateMany({where:{id,state:'DISPATCHING'},data:{state:'WAITING_INPUT'}})).count===1;
-        });
+        const reset=await this.resetUndispatched(id);
         if(reset&&replans<2)return this.start(peer,id,replans+1);throw Error('JOB_RECOVERY_REQUIRED');
       }
       if(data.deadlineAt<=Date.now())throw Error('BUDGET_EXHAUSTED');
       if(!data.plan||!await this.planning.preflight(peer.groupId,data.plan,data.request,{now:Date.now(),monotonic:()=>performance.now()})){
-        await this.db.cpuJob.updateMany({where:{id,state:'DISPATCHING'},data:{state:'WAITING_INPUT'}});
+        if(!await this.resetUndispatched(id))throw Error('JOB_RECOVERY_REQUIRED');
         if(replans<8)return this.start(peer,id,replans+1);throw Error('PLAN_STALE');
       }
       const offerStart=performance.now();
@@ -195,7 +200,7 @@ export class CpuJobs {
           if(!reservation||reservation.grant.version!==data.offer.allotmentVersion||reservation.ack?.version!==reservation.grant.version)throw Error('PLAN_STALE');
         });}catch(error){
           if(error instanceof Error&&error.message==='PLAN_STALE'){
-            await this.db.cpuJob.updateMany({where:{id,state:'DISPATCHING'},data:{state:'WAITING_INPUT'}});
+            if(!await this.resetUndispatched(id))throw Error('JOB_RECOVERY_REQUIRED');
             if(replans<8)return this.start(peer,id,replans+1);
           }throw error;
         }
