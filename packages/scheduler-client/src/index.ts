@@ -80,6 +80,17 @@ export class SchedulerSdk {
    }
   }
  }
+ private async startJob(jobId:string,deadline:number):Promise<void>{
+  for(;;){
+   if(this.port.cancelled?.())throw Error('SDK_SUBMISSION_CANCELLED');
+   try{await this.port.request('/v2/sdk/jobs/'+jobId+'/start','{}');return;}
+   catch(error){
+    const code=(error as Error).message;
+    if(!['ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','PLAN_STALE','START_BUSY','SDK_REQUEST_TIMEOUT'].includes(code)||this.port.now()>=deadline)throw error as Error;
+    await this.port.wait(Math.min(250,Math.max(0,deadline-this.port.now())));
+   }
+  }
+ }
  async submit(workflow:SdkWorkflow|SdkAlternatives,options:SubmitOptions):Promise<SdkTask>{
   // Hold registered snapshots across asynchronous planning, even if the caller releases them.
   const available=new Map<string,Uint8Array>();
@@ -103,12 +114,13 @@ export class SchedulerSdk {
    await this.port.writeDirect(plan.jobId,plan.inputEndpointId,plan.inputTicket,bytes);
   }else if(plan.inputDelivery!=='LOCAL')for(const ticket of plan.inputTickets??[plan.inputTicket]){const content=available.get(ticket.ref.contentHash);if(!content||content.byteLength!==ticket.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');await this.port.write(ticket,content);}
   if(this.port.cancelled?.()){await this.resume(plan.jobId).cancel();throw Error('SDK_SUBMISSION_CANCELLED');}
-  try{await this.port.request('/v2/sdk/jobs/'+plan.jobId+'/start','{}');}
+  const startDeadline=this.port.now()+Math.min(this.capacityWaitMs,options.budgetMs??30000);
+  try{await this.startJob(plan.jobId,startDeadline);}
   catch(error){
    // An explicit pre-dispatch replan may now require relay bytes; never retry ambiguous delivery.
    if(!['LOCAL','DIRECT'].includes(plan.inputDelivery??'')||(error as Error).message!=='INPUT_NOT_UPLOADED')throw error as Error;
    await this.port.write(plan.inputTicket,bytes);
-   await this.port.request('/v2/sdk/jobs/'+plan.jobId+'/start','{}');
+   await this.startJob(plan.jobId,startDeadline);
   }
   return this.resume(plan.jobId);
  }

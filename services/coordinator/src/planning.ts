@@ -1,3 +1,4 @@
+import {dispatchDiagnostics} from './dispatch-diagnostics';
 import { Prisma, PrismaClient } from '../generated/client';
 import { PlanningSnapshot, PlanningPolicy, PlacementRequest, PlanningClock, SnapshotDecision, plan } from '@harmony/scheduler-core';
 import type { ContributionPolicy } from './directory';
@@ -54,8 +55,9 @@ export class PlanningService {
     return {selected,decision:decisions[selected<0?0:selected]};
   }
   /** Last check before an offer; the executing holder must still perform atomic admission. */
-  async preflight(groupId:string,expected:SnapshotDecision,request:PlacementRequest,clock:PlanningClock):Promise<boolean>{
+  async preflight(groupId:string,expected:SnapshotDecision,request:PlacementRequest,clock:PlanningClock,jobId?:string):Promise<boolean>{
     const {snapshot,policy}=await this.snapshots.build(groupId);
+    dispatchDiagnostics.record({at:Date.now(),kind:"PREFLIGHT",groupId,jobId,version:expected.snapshotVersion,snapshotVersion:snapshot.version});
     if(expected.groupId!==groupId||expected.domain!==snapshot.domain||snapshot.version!==expected.snapshotVersion||policy.version!==expected.policyVersion||policy.revoked||!expected.decision.suggestion)return false;
     const current=this.plan(snapshot,request,policy,clock);
     return !!current.decision.suggestion&&JSON.stringify(current.decision.suggestion)===JSON.stringify(expected.decision.suggestion);

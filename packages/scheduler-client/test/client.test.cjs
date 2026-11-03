@@ -10,8 +10,8 @@ test('local input avoids upload; only explicit pre-dispatch relay requirement pe
   },write:async()=>calls.push('upload'),read:async()=>new Uint8Array(),digest:async bytes=>digest(bytes),now:Date.now,wait:async()=>{}});
   input=await sdk.registerInput(Buffer.from('local'),'text.input');
   const result=sdk.submit({nodes:[{input}]},{requestId:'local',inputLocation:'ORIGIN'});
-  if(failure==='SDK_REQUEST_TIMEOUT')await assert.rejects(result,/SDK_REQUEST_TIMEOUT/);else await result;
-  assert.deepEqual(calls,failure==='INPUT_NOT_UPLOADED'?['stage','start','upload','start']:['stage','start']);
+  await result;
+  assert.deepEqual(calls,failure==='INPUT_NOT_UPLOADED'?['stage','start','upload','start']:failure==='SDK_REQUEST_TIMEOUT'?['stage','start','start']:['stage','start']);
  }
 });
 test('missing input never reserves a server job; releasing input during planning preserves the in-flight snapshot',async()=>{
@@ -67,4 +67,12 @@ test('known disconnected host rejects new planning without transport or automati
  const sdk=new SchedulerSdk({connected:()=>false,request:async()=>assert.fail('no metadata on disconnected host'),write:async()=>assert.fail('no upload'),read:async()=>assert.fail('no read'),digest:async bytes=>digest(bytes),now:Date.now,wait:async()=>assert.fail('no retry')});
  const input=await sdk.registerInput(Buffer.from('new business'),'text.input');
  await assert.rejects(sdk.submit({nodes:[{input}]},{requestId:'disconnected'}),/SDK_COORDINATOR_OFFLINE/);
+});
+
+test('start retries keep the same job, obey the wait bound, and preserve permanent refusals',async()=>{
+ for(const code of ['ALLOTMENT_ACK_PENDING','START_BUSY','APP_CONTRACT_FORBIDDEN']){
+  let now=0,starts=0;const sdk=new SchedulerSdk({now:()=>now,wait:async ms=>{now+=ms;},request:async route=>{assert.equal(route,'/v2/sdk/jobs/same/start');starts++;throw Error(code);}});
+  await assert.rejects(sdk.startJob('same',500),new RegExp(code));
+  assert.equal(starts,code==='APP_CONTRACT_FORBIDDEN'?1:3);assert.ok(now<=500);
+ }
 });

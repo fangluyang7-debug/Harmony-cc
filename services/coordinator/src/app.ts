@@ -1,3 +1,4 @@
+import {retryableJobError} from './job-errors';
 import {WorkflowJobs} from './workflow-jobs';
 import {DirectTransfers} from './direct-transfers';
 import { SpaceEvents } from './space-events';
@@ -50,7 +51,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const bearer=(value:string)=>{if(!value?.startsWith('Bearer '))throw new UnauthorizedException();return value.slice(7);};
     const snapshots=new SnapshotBuilder(db,config.domain),planning=new PlanningService(snapshots);
     const profiles=new ProfileProjection(db,directory,snapshots);
-    const refreshNetwork=async(groupId:string)=>{const row=await db.group.findUnique({where:{id:groupId}});if(row&&JSON.parse(row.metadataJson).contributionPolicy)await profiles.refresh(groupId);events.changed(groupId);};
+    const refreshNetwork=async(groupId:string)=>{const row=await db.group.findUnique({where:{id:groupId}});if(row&&JSON.parse(row.metadataJson).contributionPolicy)await profiles.refresh(groupId,"NETWORK");events.changed(groupId);};
     const traces=new TraceService(db);
     const remoteEvaluation=new RemoteEvaluationRunner(db,directory,()=>epoch);
     @Controller('/v2/health')
@@ -79,7 +80,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
         return {relayId:identity.id,padding:body.mode==='download'?'x'.repeat(body.bytes):''};
       }
       @Post('device-settings')async deviceSettings(@Headers('authorization') header:string){return this.jobResponse(async()=>({settings:await spaces.deviceSettings(await auth.authenticate(bearer(header)))}));}
-      private async jobResponse(work:()=>Promise<unknown>){if(!ready)throw new ServiceUnavailableException('RECOVERY_PENDING');try{return await work();}catch(error){options.onError?.(error);const code=error instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(code==='NO_AVAILABLE_TARGET')throw new ConflictException(code);throw new BadRequestException(code);}}
+      private async jobResponse(work:()=>Promise<unknown>){if(!ready)throw new ServiceUnavailableException('RECOVERY_PENDING');try{return await work();}catch(error){options.onError?.(error);const code=error instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(retryableJobError(code))throw new ConflictException({message:code,error:code,retryable:true});throw new BadRequestException({message:code,error:code,retryable:false});}}
       @Get('devices')@Header('Cache-Control','no-store')async devices(@Headers('authorization') header:string){
         return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));return {profiles:await directory.profiles(peer.groupId)};});
       }

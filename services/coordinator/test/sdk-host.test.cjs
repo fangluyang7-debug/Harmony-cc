@@ -34,6 +34,13 @@ test('registered App host qualifies and executes SDK work through the shared pla
   assert.deepEqual(data.offer.transferPlan,[]);assert.equal(r.artifacts.available(data.input),false);assert.equal(r.artifacts.available(data.output),false);
   assert.equal((await r.db.receipt.findUnique({where:{id}})).committed,true);
   assert.equal(host.ledger.snapshot().grant.appInstanceId,identity.appInstanceId);
+  for(const state of ['DISPATCHING','WAITING_INPUT']){
+    await r.db.cpuJob.update({where:{id},data:{state}});
+    await r.sdk.start(peer,id);
+    assert.equal(await r.db.attempt.count({where:{id}}),1);
+    assert.equal((await r.db.cpuJob.findUnique({where:{id}})).metadataJson,job.metadataJson);
+  }
+
   // A crash before atomic attempt/outbox creation has positive non-delivery evidence.
   const recoveryId=randomUUID(),recoveryWorkflow={version:3,id:recoveryId,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]};
   await sdk.plan(recoveryWorkflow,{requestId:recoveryId,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
@@ -42,7 +49,7 @@ test('registered App host qualifies and executes SDK work through the shared pla
   await r.db.cpuJob.update({where:{id:recoveryId},data:{state:'DISPATCHING',metadataJson:JSON.stringify(pendingData)}});
   assert.equal(await r.db.attempt.count({where:{id:recoveryId}}),0);
   assert.equal(await r.db.outbox.count({where:{attemptId:recoveryId}}),0);
-  await r.sdk.start(peer,recoveryId);
+  await Promise.all([r.sdk.start(peer,recoveryId),r.sdk.start(peer,recoveryId)]);
   const recovered=await sdk.resume(recoveryId).result();assert.equal(JSON.parse(Buffer.from(recovered.output)).characters,8);
   assert.equal(await r.db.attempt.count({where:{id:recoveryId}}),1);
   // Hold an admitted transfer so cancellation cannot race a tiny CPU job to completion.

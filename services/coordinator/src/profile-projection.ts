@@ -1,3 +1,4 @@
+import {dispatchDiagnostics} from './dispatch-diagnostics';
 import { Prisma, PrismaClient } from '../generated/client';
 import { DeviceProfileV2, PlanningPolicy, protocolId, WorkflowPlacementPlanner } from '@harmony/scheduler-core';
 import { ContributionPolicy, DeviceDirectory } from './directory';
@@ -32,7 +33,7 @@ export class ProfileProjection {
     });
   }
   async ingest(peer:Peer,profile:DeviceProfileV2):Promise<void>{
-    await this.db.$transaction(async tx=>{
+    const version=await this.db.$transaction(async tx=>{
       const changed=await this.directory.ingest(peer,profile,tx);
       if(!changed)return;
       const row=await tx.group.findUnique({where:{id:peer.groupId}});
@@ -40,17 +41,22 @@ export class ProfileProjection {
       const saved=JSON.parse(row.metadataJson);
       if(!saved.contributionPolicy)return; // A-stage snapshots are not silently opted in.
       await this.publish(tx,peer.groupId,saved.policy,saved.contributionPolicy);
+      return (await tx.group.findUniqueOrThrow({where:{id:peer.groupId}})).revision;
     });
+    if(version!==undefined)dispatchDiagnostics.record({at:Date.now(),kind:"SNAPSHOT_REFRESH",groupId:peer.groupId,holderId:peer.holderInstanceId,source:"PROFILE",snapshotVersion:version});
   }
   /** Called by a future trusted evidence service after a qualification change; never accepts device self-approval. */
-  async refresh(groupId:string):Promise<void>{
-    await this.db.$transaction(async tx=>{
+  async refresh(groupId:string,source="EVIDENCE",jobId?:string):Promise<void>{
+    const version=await this.db.$transaction(async tx=>{
       const row=await tx.group.findUnique({where:{id:groupId}});
       if(!row)throw Error('GROUP_UNKNOWN');
       const saved=JSON.parse(row.metadataJson);
       if(!saved.contributionPolicy)throw Error('PROFILE_POLICY_REQUIRED');
       await this.publish(tx,groupId,saved.policy,saved.contributionPolicy);
+      const rowAfter=await tx.group.findUniqueOrThrow({where:{id:groupId}});
+      return rowAfter.revision;
     });
+    dispatchDiagnostics.record({at:Date.now(),kind:"SNAPSHOT_REFRESH",groupId,source,jobId,snapshotVersion:version});
   }
   private async publish(tx:Prisma.TransactionClient,groupId:string,policy:PlanningPolicy,contribution:ContributionPolicy){
     const snapshot=await this.directory.snapshot(groupId,policy.version,1,contribution,tx);

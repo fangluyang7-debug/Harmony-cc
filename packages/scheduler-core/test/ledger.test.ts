@@ -31,3 +31,10 @@ test('restarted monotonic origin cannot extend a prior online grant or accept a 
  expect(()=>installGrantV2(restored,{...grant,leaseRequestId:'request2',version:2},true,1)).toThrow('UNAUTHORIZED');
  expect(()=>installGrantV2(state,grant,true,NaN)).toThrow('CLOCK_INVALID');
 });
+
+test('a renewed grant rejects an older offer without reserving resources',()=>{
+ let {state,grant,offer,context}=setup();
+ state=requestGrantV2(state,'renew',2);state=installGrantV2(state,{...grant,version:grant.version+1,leaseRequestId:'renew'},true,2);
+ expect(()=>admitV2(state,offer,{...context,now:3})).toThrow('ALLOTMENT_MISMATCH');
+ expect(occupiedV2(state)).toEqual([]);
+});

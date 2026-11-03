@@ -1,3 +1,4 @@
+import {dispatchDiagnostics} from './dispatch-diagnostics';
 import { createHmac, sign, timingSafeEqual } from 'node:crypto';
 import { PrismaClient } from '../generated/client';
 import { AllotmentGrantV2, AllotmentAckV2, ResourceAmountV2, canonical, protocolId, validAllotmentGrantV2, validAllotmentAckV2, validResourceVectorV2, vectorSumV2, vectorFitsV2 } from '@harmony/scheduler-core';
@@ -14,6 +15,13 @@ function maximum(a:ResourceAmountV2[],b:ResourceAmountV2[]):ResourceAmountV2[]{
 export function allotmentAckSignature(ack:AllotmentAckV2,tokenHash:string):string{return createHmac('sha256',Buffer.from(tokenHash,'hex')).update(canonical(ack)).digest('base64');}
 /** Trusted local policy API. There is deliberately no unauthenticated device-binding endpoint. */
 export class AllotmentIssuer {
+  private readonly issuedAt=new Map<string,number>();
+  private readonly confirmations=new Map<string,Set<()=>void>>();
+  watch(groupId:string,holderId:string,notify:()=>void):()=>void{
+    const key=rowId(groupId,holderId),listeners=this.confirmations.get(key)??new Set<()=>void>();
+    listeners.add(notify);this.confirmations.set(key,listeners);
+    return ()=>{listeners.delete(notify);if(!listeners.size)this.confirmations.delete(key);};
+  }
   constructor(private readonly db:PrismaClient,private readonly privateKey:string,private readonly epoch:()=>number){}
   async confirmDevice(deviceId:string,capacity:ResourceAmountV2[],bindings:Binding[]){
     if(!protocolId(deviceId)||!validResourceVectorV2(capacity)||!capacity.length||!bindings.length||bindings.some(b=>!protocolId(b.groupId)||!protocolId(b.holderInstanceId)||b.appInstanceId!==null&&!protocolId(b.appInstanceId))||new Set(bindings.map(b=>b.holderInstanceId)).size!==bindings.length||new Set(bindings.filter(b=>b.appInstanceId!==null).map(b=>b.appInstanceId)).size!==bindings.filter(b=>b.appInstanceId!==null).length)throw Error('BUDGET_INVALID');
@@ -29,7 +37,7 @@ export class AllotmentIssuer {
   }
   async issue(peer:Peer,input:{ledgerEpoch:number;leaseRequestId:string;leaseMs:number;base:ResourceAmountV2[];extra:ResourceAmountV2[]}):Promise<AllotmentGrantV2>{
     if(!validResourceVectorV2(input.base)||!validResourceVectorV2(input.extra))throw Error('RESOURCE_VECTOR_INVALID');
-    return this.db.$transaction(async tx=>{
+    const issued=await this.db.$transaction(async tx=>{
       const device=await tx.device.findUnique({where:{id:key(peer.deviceId)}}),budget:Budget|null=device?JSON.parse(device.metadataJson):null;
       const binding=budget?.bindings.find(b=>b.groupId===peer.groupId&&b.holderInstanceId===peer.holderInstanceId);
       if(!budget||!binding)throw Error('IDENTITY_UNRESOLVED');
@@ -57,6 +65,11 @@ export class AllotmentIssuer {
       await tx.allotment.upsert({where:{id},create:{id,groupId:peer.groupId,revision:grant.version,metadataJson},update:{revision:grant.version,metadataJson}});
       return grant;
     });
+    const now=Date.now(),diagnosticKey=JSON.stringify([peer.groupId,peer.holderInstanceId,issued.coordinatorEpoch,issued.version]);
+    for(const [id,at] of this.issuedAt)if(at+300000<=now)this.issuedAt.delete(id);
+    if(!this.issuedAt.has(diagnosticKey))this.issuedAt.set(diagnosticKey,now);
+    while(this.issuedAt.size>512)this.issuedAt.delete(this.issuedAt.keys().next().value!);
+    return issued;
   }
   /** Authenticated persisted acknowledgement. Expiry alone never calls this release path. */
   async acknowledge(peer:Peer,ack:AllotmentAckV2,signature:string){
@@ -74,6 +87,9 @@ export class AllotmentIssuer {
       state.ack=ack;state.reserved=maximum(vectorSumV2(g.base,g.extra),ack.occupied);
       await tx.allotment.update({where:{id},data:{metadataJson:JSON.stringify(state)}});
     });
+    const key=JSON.stringify([peer.groupId,peer.holderInstanceId,ack.coordinatorEpoch,ack.version]),at=this.issuedAt.get(key);
+    if(at!==undefined){dispatchDiagnostics.record({at:Date.now(),kind:'GRANT_CONFIRMED',groupId:peer.groupId,holderId:peer.holderInstanceId,version:ack.version,durationMs:Date.now()-at});this.issuedAt.delete(key);}
+    for(const notify of this.confirmations.get(rowId(peer.groupId,peer.holderInstanceId))??[])notify();
   }
   async reservations(deviceId:string):Promise<Reservation[]>{return (await this.db.allotment.findMany()).filter(r=>r.id.startsWith('["allotment",')).map(r=>JSON.parse(r.metadataJson) as Reservation).filter(r=>r.grant.deviceId===deviceId);}
 }
