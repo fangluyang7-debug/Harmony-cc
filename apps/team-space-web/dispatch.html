@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#111316"><title>Harmony · 跨设备调度盘</title>
+  <link rel="stylesheet" href="/dispatch.css">
+</head>
+<body>
+<a class="skip-link" href="#main">跳至主要内容</a>
+<header class="masthead">
+  <a class="brand" href="/" aria-label="返回 Harmony 控制台"><b class="brand-mark" aria-hidden="true">H<span>↗</span></b><span>HARMONY<small>跨设备协同运行时</small></span></a>
+  <div class="mast-controls">
+    <span class="readonly"><i class="led"></i>只读观测</span>
+    <label class="sr-only" for="space">协作空间</label><select id="space"><option value="">选择协作空间</option></select>
+    <button id="refresh" type="button" title="重新读取协调者快照">刷新 <span aria-hidden="true">↻</span></button>
+    <button id="present" type="button" aria-pressed="false">大字展示</button>
+    <button id="fullscreen" type="button" aria-label="进入全屏" title="全屏展示；Esc 退出"><span aria-hidden="true">⛶</span></button>
+  </div>
+</header>
+<div class="app-shell">
+  <aside class="sidebar">
+    <p class="nav-caption">调度观测 / OBSERVE</p>
+    <nav aria-label="调度盘视图">
+      <a href="#overview" data-view="overview" aria-current="page"><span class="nav-glyph" aria-hidden="true">◈</span><span>运行总览<small>Overview</small></span><b>01</b></a>
+      <a href="#resources" data-view="resources"><span class="nav-glyph" aria-hidden="true">▤</span><span>设备资源<small>Resources</small></span><b>02</b></a>
+      <a href="#tasks" data-view="tasks"><span class="nav-glyph" aria-hidden="true">≋</span><span>任务追踪<small>Task traces</small></span><b>03</b></a>
+      <a href="#network" data-view="network"><span class="nav-glyph" aria-hidden="true">⇄</span><span>网络链路<small>Connectivity</small></span><b>04</b></a>
+      <a href="#recovery" data-view="recovery"><span class="nav-glyph" aria-hidden="true">⌁</span><span>异常记录<small>Recovery</small></span><b>05</b></a>
+    </nav>
+    <div class="sidebar-note"><span class="eyebrow">ONE RUNTIME.</span><p>多端资源<br>统一协调<span>.</span></p><div class="legend-item"><i class="led good-dot"></i>有效证据</div><div class="legend-item"><i class="led warn-dot"></i>降级 / 待核验</div><div class="legend-item"><i class="led unknown-dot"></i>未知 / 尚未采集</div><a href="/" class="console-link">返回控制台 <span>↗</span></a></div>
+  </aside>
+  <main id="main" tabindex="-1">
+    <div class="page-title"><div><p class="eyebrow" id="view-eyebrow">01 / RUNTIME OVERVIEW</p><h1 id="view-title">协同运行总览<span class="title-dot">.</span></h1><p class="subtitle" id="view-description">从设备接入到任务执行，让每一次协同清晰可见。</p></div><div class="live-status"><span id="connection" class="tag neutral"><i class="led"></i>等待连接</span><span id="updated" class="mono muted">尚未取得快照</span></div></div>
+    <div class="evidence-bar"><span id="domain" class="tag neutral">UNKNOWN</span><div id="notice" class="notice" role="status">正在读取登录状态与协调者快照…</div></div>
+    <p id="display-message" class="display-message" role="status" hidden></p>
+    <div class="view" id="overview" data-panel="overview">
+      <section id="metrics" class="metrics" aria-label="当前空间统计"></section>
+      <div class="top-grid">
+        <section class="panel orchestration"><div class="panel-heading"><div><p class="eyebrow">COORDINATION MAP</p><h2>设备协同拓扑</h2></div><span class="panel-kicker">统一规划 · 终端执行</span></div><div id="topology" class="topology"><div class="empty">等待设备画像</div></div><div class="panel-foot"><span class="line-key" aria-hidden="true"></span>连线表示画像关联，不表示设备间直连已建立。</div></section>
+        <section class="panel network-summary"><div class="panel-heading"><div><p class="eyebrow">NETWORK EVIDENCE</p><h2>网络与降级</h2></div><a class="text-link" href="#network">详情 ↗</a></div><div id="network-summary"></div><div class="panel-foot">按宿主与方向证据分级，未知状态不推定可达。</div></section>
+      </div>
+      <section class="panel activity-panel"><div class="panel-heading"><div><p class="eyebrow">RECENT EXECUTIONS</p><h2>最近执行</h2></div><a class="text-link" href="#tasks">查看调度与追踪 ↗</a></div><div id="recent-jobs"></div></section>
+    </div>
+    <div class="view" id="resources" data-panel="resources" hidden>
+      <div class="section-intro"><span>资源以终端实际声明为准</span><span class="muted">按设备与宿主分别展示 · 不重复合计物理总量</span></div>
+      <section id="devices" class="device-grid" aria-label="终端资源与执行目标"></section>
+    </div>
+    <div class="view" id="tasks" data-panel="tasks" hidden>
+      <div class="work-grid">
+        <div class="task-context"><section class="panel jobs-panel"><div class="panel-heading"><div><p class="eyebrow">EXECUTION RECORDS</p><h2>任务与调度决策</h2></div><span id="job-count" class="tag neutral">UNKNOWN</span></div><div id="workflows"></div><div id="jobs"></div><div class="panel-foot">选择一条任务，查看对应的决策与阶段证据。</div></section>
+        <section class="panel detail-panel"><div class="panel-heading"><div><p class="eyebrow">DECISION & TRACE</p><h2>为什么在这里执行</h2></div><span class="mini-icon" aria-hidden="true">⌁</span></div><div id="decision"></div></section></div><section class="panel trace-panel"><div class="panel-heading"><div><p class="eyebrow">MEASURED INTERVALS</p><h2>阶段区间与执行追踪</h2></div><span class="mini-icon" aria-hidden="true">≋</span></div><div id="trace" aria-live="polite"></div></section>
+      </div>
+    </div>
+    <div class="view" id="network" data-panel="network" hidden>
+      <section class="panel"><div class="panel-heading"><div><p class="eyebrow">DIRECTIONAL LINKS</p><h2>链路证据与直传记录</h2></div><span class="panel-kicker">时延含 HTTP 控制开销</span></div><div id="links"></div><div class="panel-foot">固定开销和带宽为链路估计；实际传输路径以任务计划及端点回执为准。</div></section>
+    </div>
+    <div class="view" id="recovery" data-panel="recovery" hidden>
+      <section class="panel"><div class="panel-heading"><div><p class="eyebrow">FAILURE & RECOVERY</p><h2>异常与恢复记录</h2></div><span class="tag neutral">以已记录事件为准</span></div><div id="faults"></div></section>
+    </div>
+    <footer><span>HARMONY <b>/</b> OBSERVATION PLANE</span><span id="footer-state">实测、估计分别标注 · 未采集显示 UNKNOWN</span></footer>
+  </main>
+</div>
+<noscript><p class="notice">请启用 JavaScript 读取协调者实时数据。</p></noscript>
+<script type="module" src="/dispatch.js"></script>
+</body>
+</html>

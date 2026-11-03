@@ -12,6 +12,7 @@ import { SnapshotBuilder } from './planning';
 import {AppRegistry} from './apps';
 import {SdkJobs} from './sdk';
 import {SchedulerSdk,SdkPort} from '@harmony/scheduler-client';
+import {TelemetryView} from './telemetry-view';
 
 const hash=(s:string|Buffer)=>createHash('sha256').update(s).digest('hex');
 const passwordHash=(password:string,salt:string)=>new Promise<Buffer>((resolve,reject)=>scrypt(password,salt,64,(e,v)=>e?reject(e):resolve(v)));
@@ -28,7 +29,7 @@ export class TeamSpaces {
   private readonly authAttempts=new Map<string,{count:number;until:number}>();
   constructor(private readonly db:PrismaClient,private readonly auth:PairingService,private readonly allotments:AllotmentIssuer,
     private readonly directory:DeviceDirectory,private readonly jobs:CpuJobs,private readonly artifacts:ArtifactChannel,
-    private readonly config:CoordinatorConfig,private readonly status:()=>{ready:boolean;epoch:number},private readonly snapshots:SnapshotBuilder,private readonly events:SpaceEvents,private readonly apps:AppRegistry,private readonly sdk:SdkJobs,private readonly networkView?:(groupId:string)=>Promise<unknown>){}
+    private readonly config:CoordinatorConfig,private readonly status:()=>{ready:boolean;epoch:number},private readonly snapshots:SnapshotBuilder,private readonly events:SpaceEvents,private readonly apps:AppRegistry,private readonly sdk:SdkJobs,private readonly networkView?:(groupId:string)=>Promise<unknown>,private readonly telemetry?:TelemetryView){}
   async session(cookie:string|undefined){
     const token=/(?:^|;\s*)harmony_session=([A-Za-z0-9_-]{43})(?:;|$)/.exec(cookie??'')?.[1];
     const session=token?await this.db.spaceSession.findUnique({where:{id:hash(token)}}):null;
@@ -115,6 +116,10 @@ export class TeamSpaces {
       const parts=route.split('/').filter(Boolean),[spaceId,action,id]=parts;
       const member=await this.member(user.id,spaceId);
       if(action==='events'&&parts.length===2&&method==='GET'){this.stream(req,res,spaceId,session.id);return;}
+      if(action==='telemetry'&&this.telemetry&&method==='GET'){
+        if(parts.length===2){res.json({...await this.telemetry.snapshot(spaceId,user.id),coordinator:{...this.status(),domain:this.config.domain,address:this.config.publicUrl??null}});return;}
+        if(parts.length===4&&parts[2]==='traces'){res.json(await this.telemetry.trace(this.peer(user.id,spaceId),parts[3]));return;}
+      }
       if(parts.length===1&&method==='GET'){res.json(await this.dashboard(user.id,spaceId));return;}
       if(action==='invites'&&method==='POST'){
         await this.member(user.id,spaceId,['OWNER']);if(!['MEMBER','VIEWER'].includes(body.role))throw Error('ROLE_INVALID');

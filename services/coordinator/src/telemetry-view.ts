@@ -1,0 +1,73 @@
+import {PrismaClient} from '../generated/client';
+import {DeviceDirectory} from './directory';
+import {TraceService} from './traces';
+import {Peer} from './channel';
+import {protocolId} from '@harmony/scheduler-core';
+
+const parsed=(value:string|null|undefined)=>value?JSON.parse(value):null;
+const finite=(value:unknown):number|null=>typeof value==='number'&&Number.isFinite(value)?value:null;
+/** Member-authorized read projection. Never plans, registers Apps, issues tickets, or mutates state. */
+export class TelemetryView {
+  constructor(private db:PrismaClient,private directory:DeviceDirectory,
+    private traces:TraceService,private networkView?:(groupId:string)=>Promise<unknown>){}
+
+  async snapshot(groupId:string,principalId:string){
+    const now=Date.now();
+    const [space,registered,profiles,qualifications,rows,attempts,graphs,network,peerNetworks,authorizations,endpoints,grantRows]=await Promise.all([
+      this.db.teamSpace.findUniqueOrThrow({where:{id:groupId}}),this.db.spaceDevice.findMany({where:{spaceId:groupId}}),
+      this.directory.profiles(groupId),this.db.capabilityState.findMany({where:{groupId}}),this.db.cpuJob.findMany({where:{groupId}}),
+      this.db.attempt.findMany({where:{groupId}}),this.db.sdkWorkflowJob.findMany({where:{groupId}}),this.networkView?.(groupId)??[],this.db.peerNetwork.findMany({where:{groupId}}),
+      this.db.transferAuthorization.findMany({where:{groupId}}),this.db.dataEndpoint.findMany({where:{groupId}}),this.db.allotment.findMany({where:{groupId}})
+    ]);
+    const ids=[...new Set([...registered.map(d=>d.id),...profiles.map(p=>p.deviceId)])];
+    const grants=grantRows.filter(r=>r.id.startsWith('["allotment",')).map(r=>parsed(r.metadataJson));
+    const devices=ids.map(id=>{
+      const registration=registered.find(d=>d.id===id),holders=profiles.filter(p=>p.deviceId===id);
+      const reservations=grants.filter(r=>r.grant.deviceId===id&&r.grant.groupId===groupId);
+      return {id,name:registration?.name??id,holders:holders.map(profile=>({profile,
+        evidenceFresh:profile.ownerActivity.sampledAt<=now&&profile.ownerActivity.sampledAt+profile.ownerActivity.ttlMs>now,
+        qualification:profile.executors.map(e=>({targetId:e.target.targetId,...parsed(qualifications.find(q=>q.id===JSON.stringify([groupId,profile.holderInstanceId,e.target.targetId]))?.metadataJson)}))})),
+        allotments:reservations.map(r=>({holderInstanceId:r.grant.holderInstanceId,appInstanceId:r.grant.appInstanceId,version:r.grant.version,coordinatorEpoch:r.grant.coordinatorEpoch,
+          base:r.grant.base,extra:r.grant.extra,reserved:r.reserved,ack:r.ack?{version:r.ack.version,occupied:r.ack.occupied,settlementSeq:r.ack.settlementSeq}:null}))};
+    });
+    const attemptById=new Map(attempts.map(a=>[a.id,a]));
+    const jobs=rows.map(row=>{
+      const data=parsed(row.metadataJson),offer=data.offer,attempt=attemptById.get(row.id),record=parsed(attempt?.recordJson),rejection=parsed(attempt?.rejectionJson),yielded=parsed(attempt?.yieldJson);
+      const decision=data.plan?.decision;
+      return {id:row.id,workflowId:offer.task.workflowId,nodeId:offer.task.nodeId,capability:offer.task.contract.capability,
+        state:attempt?.state??row.state,targetId:offer.target.targetId,deviceId:offer.target.deviceId,holderInstanceId:data.holderId,originDeviceId:offer.task.originDeviceId,
+        createdAt:finite(data.request?.now),traceId:data.traceId,traceOwner:row.principalId===principalId,
+        reason:offer.reasonCode,resourcesSettled:record?.resourcesSettled??null,
+        rejection:rejection?{reasonCode:rejection.reasonCode??rejection.reply?.reasonCode??'UNKNOWN',receivedAt:finite(rejection.receivedAt)}:null,
+        yield:yielded?{reasonCode:yielded.notice?.reasonCode??'UNKNOWN',receivedAt:finite(yielded.receivedAt)}:null,
+        plan:data.plan?{snapshotVersion:data.plan.snapshotVersion,policyVersion:data.plan.policyVersion,
+          status:decision?.status??'UNKNOWN',reason:decision?.reason??'UNKNOWN',baselineMs:finite(decision?.baselineMs),suggestionMs:finite(decision?.suggestionMs),
+          baseline:decision?.baseline??null,suggestion:decision?.suggestion??null,rejections:decision?.rejections??[],planningMs:finite(decision?.planningMs)}:null,
+        resultDelivery:data.decisionEvidence?.resultDelivery??'UNKNOWN',
+        transfers:offer.transferPlan.map((hop:any)=>({from:hop.from,to:hop.to,via:hop.via})),
+        selectedInputEndpoint:decision?.suggestion?.[0]?.inputEndpointId??null};
+    }).sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||a.id.localeCompare(b.id));
+    const links=peerNetworks.flatMap(row=>{
+      const data=parsed(row.metadataJson);
+      return (data.links??[]).map((link:any)=>({deviceId:data.deviceId,holderInstanceId:row.holderInstanceId,endpointId:link.endpointId,endpointDeviceId:parsed(endpoints.find(e=>e.id===link.endpointId)?.metadataJson)?.deviceId??null,direction:link.direction,reason:link.reason,
+        observedAt:finite(link.observedAt),expiresAt:finite(link.expiresAt),estimate:link.estimate?{fixedMs:finite(link.estimate.fixedMs),bytesPerSecond:finite(link.estimate.bytesPerSecond)}:null}));
+    });
+    const transfers=authorizations.map(row=>{const a=parsed(row.metadataJson).authorization;return {id:row.id,jobId:row.attemptId,state:row.state,operation:a.operation,bytes:a.bytes,
+      endpointDeviceId:a.endpoint.deviceId,requesterHolderId:a.requesterHolderId,issuedAt:a.issuedAt};}).sort((a,b)=>b.issuedAt-a.issuedAt).slice(0,100);
+    return {version:1,space:{id:space.id,name:space.name},updatedAt:now,domain:this.directory.domain,devices,network,links,transfers,
+      jobs:jobs.slice(0,100),jobWindow:100,jobCount:jobs.length,
+      workflows:graphs.map(row=>{const d=parsed(row.metadataJson);return {id:row.id,state:row.state,nodes:d.nodes.map((n:any)=>({id:n.id,jobId:n.jobId,state:n.state}))};}),
+      features:{hedging:'NOT_IMPLEMENTED_S6',reassignment:'NOT_IMPLEMENTED_S6',candidateCosts:'PERSISTED_BASELINE_AND_SELECTED_ONLY',traceAccess:'EXISTING_PRINCIPAL_READERS',readOnly:true}};
+  }
+
+  async trace(peer:Peer,jobId:string){
+    if(!protocolId(jobId))throw Error('JOB_INPUT_INVALID');
+    const row=await this.db.cpuJob.findUnique({where:{id:jobId}});if(!row||row.groupId!==peer.groupId)throw Error('TRACE_FORBIDDEN');
+    const data=parsed(row.metadataJson),rows=await this.db.traceSpan.findMany({where:{groupId:peer.groupId}});
+    const coverage={sourceSdkRoot:false,reasonCode:'SOURCE_SDK_ROOT_NOT_RECORDED'};
+    if(!rows.some(r=>parsed(r.metadataJson).span.traceId===data.traceId))return {traceId:data.traceId,spans:[],analysis:null,state:'WAITING_FOR_EVIDENCE',coverage};
+    // Current ingestion authenticates executor/control spans, not a source SDK end-to-end root.
+    // A structurally complete single PLAN span is not evidence of submit-to-result latency.
+    try{return {...await this.traces.read(peer,data.traceId),state:'RECORDED',coverage};}catch(error){if(error instanceof Error&&error.message==='TRACE_UNAUTHORIZED')throw Error('TRACE_FORBIDDEN');throw error;}
+  }
+}

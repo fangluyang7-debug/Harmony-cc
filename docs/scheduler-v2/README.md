@@ -24,6 +24,7 @@ SDK 的 TS/ArkTS 源码一致性测试只验证同步，不验证 ArkTS 语法�
 | [STATUS.md](STATUS.md) | 现行 | 唯一的进度记录，每次提交后更新 |
 | [HANDOFF-S3-20261101.md](HANDOFF-S3-20261101.md) | 交接快照 | 应用户明确要求整理，记录 `447904f` 代码基线、复现与接手步骤；后续状态仍查 STATUS |
 | [LOCAL-COORDINATOR-20261031.md](LOCAL-COORDINATOR-20261031.md) | 现行 | 局域网协调者的启动与验收操作说明 |
+| [TELEMETRY-DASHBOARD.md](TELEMETRY-DASHBOARD.md) | 现行 | E2 最小只读调度盘入口、数据来源、部署方式与 PC-A/PC-B 计划拓扑；不代表 E2 完整验收 |
 | [T2-FIELD-CONSUMERS.md](T2-FIELD-CONSUMERS.md) | 参考 | T2 字段与消费者对照；与规格冲突时以规格为准 |
 | [specification-r5.md](specification-r5.md) | 已被取代 | 修订 5，仅供对照 |
 | 除上述 S3 快照外的 `HANDOFF-*.md`、[DESIGN-GAP-AND-CPU-HOST-20261031.md](DESIGN-GAP-AND-CPU-HOST-20261031.md) | 历史记录 | 各轮实现过程记录；其中的“下一步”与优先级已由规格 §10.0 和 `STATUS.md` 取代 |
