@@ -1,5 +1,24 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),https=require('node:https'),fs=require('node:fs'),path=require('node:path'),{randomUUID}=require('node:crypto');
 const {runtime}=require('./helpers.cjs');
+test('dashboard chart scales preserve unknowns, real zero, over-capacity and independent clocks',async()=>{
+ const {capacity,clockLanes,costScale,networkLevels}=await import('../../../apps/team-space-web/dispatch-charts.mjs');
+ assert.equal(capacity(null,8),null);assert.equal(capacity(0,0),null);assert.equal(capacity(-1,8),null);
+ assert.deepEqual(capacity(0,8),{percent:0,fill:0,exceeded:false});
+ assert.deepEqual(capacity(3,2),{percent:150,fill:100,exceeded:true});
+ assert.deepEqual(costScale([null,20]),[null,100]);assert.deepEqual(costScale([0,0]),[0,0]);
+ assert.deepEqual(costScale([10,20]),[50,100]);assert.deepEqual(costScale([-1,NaN]),[null,null]);
+ const lanes=clockLanes([
+  {spanId:'later',clockDomainId:'a',startMono:130,durationMs:10},
+  {spanId:'first',clockDomainId:'a',startMono:100,durationMs:20},
+  {spanId:'other-clock',clockDomainId:'b',startMono:999999,durationMs:5},
+  {spanId:'point',clockDomainId:'z',startMono:50,durationMs:0}
+ ]);
+ assert.equal(lanes[0].extent,40);assert.deepEqual(lanes[0].rows.map(r=>[r.offset,r.left,r.width]),[[0,0,50],[30,75,25]]);
+ assert.equal(lanes[1].extent,5);assert.deepEqual([lanes[1].rows[0].offset,lanes[1].rows[0].left,lanes[1].rows[0].width],[0,0,100]);
+ assert.equal(lanes[2].extent,0);assert.equal(lanes[2].rows[0].width,0);
+ assert.deepEqual(networkLevels([{level:'L2'},{level:'L0'},{level:'missing'}]),{L0:1,L1:0,L2:1,L3:0,UNKNOWN:1});
+ assert.deepEqual(networkLevels([]),{L0:0,L1:0,L2:0,L3:0,UNKNOWN:0});
+});
 function browser(r){let cookie='';return async(route,body)=>new Promise((resolve,reject)=>{const data=body===undefined?null:Buffer.from(JSON.stringify(body));const request=https.request(r.url+route,{ca:r.identity.cert,method:data?'POST':'GET',headers:{Cookie:cookie,...(data?{'Content-Type':'application/json'}:{})}},response=>{if(response.headers['set-cookie'])cookie=response.headers['set-cookie'][0].split(';')[0];let text='';response.on('data',b=>text+=b);response.on('end',()=>{let body;try{body=JSON.parse(text);}catch{body=text;}resolve({status:response.statusCode,body,headers:response.headers});});});request.setTimeout(10000,()=>request.destroy(Error('HTTP_TIMEOUT')));request.on('error',reject);request.end(data);});}
 test('read-only dashboard uses scoped persisted evidence, keeps UNKNOWN and trace readers, and never registers or dispatches',async()=>{
  const r=await runtime({}, {COORDINATOR_WEB_DIR:path.resolve('../../apps/team-space-web')}),owner=browser(r),viewer=browser(r),outsider=browser(r);
