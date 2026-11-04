@@ -63,6 +63,6 @@ export function analyzeTrace(spans:readonly TraceSpanV2[]){
   if(residual!==null&&residual<-.001)issues.add('NEGATIVE_RESIDUAL');
   return {status:issues.size?'MEASUREMENT_INCOMPLETE':'COMPLETE',issues:[...issues].sort(),endToEndMs:root?.durationMs??null,
     work:totals,criticalPathMs:critical.finish,criticalSpanIds:critical.chain,measuredCriticalMs:critical.measured,
-    predictionErrors:leaves.filter(s=>!excluded.has(s.spanId)&&s.predictedMs!==null).map(s=>({spanId:s.spanId,phase:s.phase,targetId:s.targetId,snapshotVersion:s.snapshotVersion,predictedMs:s.predictedMs!,measuredMs:s.durationMs,errorMs:s.durationMs-s.predictedMs!})),
+    predictionErrors:[...byId.values()].filter(s=>s!==root&&!excluded.has(s.spanId)&&s.predictedMs!==null).map(s=>({spanId:s.spanId,phase:s.phase,targetId:s.targetId,snapshotVersion:s.snapshotVersion,predictedMs:s.predictedMs!,measuredMs:s.durationMs,errorMs:s.durationMs-s.predictedMs!})),
     unexplainedMs:issues.size?null:residual,negativeResidualMs:residual!==null&&residual<0?residual:null};
 }

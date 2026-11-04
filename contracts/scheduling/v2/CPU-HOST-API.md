@@ -123,3 +123,7 @@ SDK 结果重复读取和回调复用该任务对象已校验的字节。可用�
 `causality.complete` 描述当前因果投影所需记录是否齐备；完整计量由 `analysis.status` 和 `coverage.criticalPathPending` 共同判断。跨时钟未知间隙、部分传输边界或旧 LOAD/PUBLISH 中未拆开的数据传输仍阻止完整关键路径及残差结论。协调者保存规划区间的时钟域，重启后不会把旧进程的单调时间绑定到新进程。
 
 规划时保存对应快照的 EXECUTE、QUEUE、PUBLISH 分段估计；PUBLISH 包含该计划的结果发布传输。读取时仅对快照版本和目标一致的跨度关联该估计。`analysis.predictionErrors` 按段返回 `{spanId,phase,targetId,snapshotVersion,predictedMs,measuredMs,errorMs}`，`errorMs=measuredMs-predictedMs`，保留负值；没有对齐估计的段不补零。LOAD、冷启动和旧传输的完整分解、在途剩余时间仍待后续，不用这些单段误差代替端到端收益。
+
+PC 旧制品 HTTP 路径现在在 LOAD/PUBLISH 内上报传输子跨度：下载为 `TRANSFER_RECV / FULL_TRANSFER / RECEIVER`，上传为 `TRANSFER_SEND / FULL_TRANSFER / SENDER`，成功原因 `RELAY_HTTP_ROUND_TRIP`。区间覆盖本次调用的请求、响应及传输层完整性检查；每次实际请求生成独立 transferId，不复用票据或制品哈希，不记录凭据。输入哈希与输出引用校验仍包含在外层 LOAD/PUBLISH；请求失败同时记录失败子跨度和失败阶段，不改变结算行为。
+
+这些跨度复用已认证的执行追踪批次；与 `/v2/data/traces` 的授权绑定两端跨度分别记录。累计工作量只计算叶子跨度，外层发布阶段的预测误差仍按完整 PUBLISH 区间对照，不因新增子跨度而消失。尚未完成的跨域关联、外层阶段中未拆分的控制/本地处理区间以及资源等待继续保留计量缺口；不能将本次细分标为完整关键路径。当前仅接通 PC，鸿蒙对应细分待实现。

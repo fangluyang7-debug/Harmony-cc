@@ -8,8 +8,8 @@ export interface ExecutionPorts {
   fixedService?(offer:DispatchOfferV2,input:Buffer,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string}>;
   /** Trusted local gate checks current qualification, target identity, task authorization and owner policy. */
   authorize(offer:DispatchOfferV2):Promise<Omit<LedgerAdmissionV2,'now'|'executionDigest'|'leaseId'>>;
-  read(ref:ArtifactRefV2,offer:DispatchOfferV2):Promise<Buffer>;
-  publish(bytes:Buffer,schemaId:string,offer:DispatchOfferV2):Promise<ArtifactRefV2>;
+  read(ref:ArtifactRefV2,offer:DispatchOfferV2,trace?:ExecutionTrace):Promise<Buffer>;
+  publish(bytes:Buffer,schemaId:string,offer:DispatchOfferV2,trace?:ExecutionTrace):Promise<ArtifactRefV2>;
 }
 export class PcExecutionRuntime {
   private readonly active=new Map<string,{abort:AbortController;done:Promise<ExecutionReceiptV2>}>();
@@ -31,8 +31,11 @@ export class PcExecutionRuntime {
     const segment=<T>(phase:string,work:()=>Promise<T>)=>trace?trace.segment(phase,work):work();
     const deadline=setTimeout(()=>abort.abort(),Math.min(offer.leaseMs,task.budget.remainingMs,maxDurationMs));
     try{
-      const bytes=await segment('LOAD',()=>this.ports.read(task.inputs[0],offer));
-      if(createHash('sha256').update(bytes).digest('hex')!==task.inputs[0].contentHash)throw Error('INPUT_HASH');
+      const bytes=await segment('LOAD',async()=>{
+        const input=await this.ports.read(task.inputs[0],offer,trace);
+        if(createHash('sha256').update(input).digest('hex')!==task.inputs[0].contentHash)throw Error('INPUT_HASH');
+        return input;
+      });
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
       this.ledger.begin(task.attemptId); // Durable RUNNING always precedes the engine call.
       const result=await segment('EXECUTE',async()=>{
@@ -42,9 +45,13 @@ export class PcExecutionRuntime {
         return {...output,hash:createHash('sha256').update(output.bytes).digest('hex')};
       });
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
-      const ref=await segment('PUBLISH',()=>this.ports.publish(result.bytes,result.schemaId,offer));
+      const ref=await segment('PUBLISH',async()=>{
+        const output=await this.ports.publish(result.bytes,result.schemaId,offer,trace);
+        if(output.contentHash!==result.hash||!task.contract.outputSchemas.includes(output.schemaId))throw Error('OUTPUT_SCOPE');
+        return output;
+      });
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
-      if(ref.contentHash!==result.hash||!task.contract.outputSchemas.includes(ref.schemaId))throw Error('OUTPUT_SCOPE');outputs=[ref];state='SUCCEEDED';
+      outputs=[ref];state='SUCCEEDED';
     }catch(error){errorCode=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'EXECUTION_FAILED';if(abort.signal.aborted||errorCode==='CANCELLED_SETTLED')state='CANCELLED_SETTLED';}
     finally{clearTimeout(deadline);}
     const receipt:ExecutionReceiptV2={attemptId:task.attemptId,coordinatorEpoch:task.coordinatorEpoch,planRevision:task.planRevision,fence,state,resourcesSettled:true,outputs,

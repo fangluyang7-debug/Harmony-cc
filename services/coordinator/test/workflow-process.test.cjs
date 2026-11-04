@@ -31,6 +31,14 @@ test('formal SDK graph crosses independent host processes: direct, relay isolati
    assert.ok(measured.causality.links.some(l=>l.reason==='COMMITTED_DEPENDENCY'));assert.ok(measured.causality.links.some(l=>l.reason==='VERIFIED_INPUT_BEFORE_DISPATCH'));
    assert.equal(measured.spans.filter(s=>s.parentSpanId===null).length,1,'the SDK root contains phases without counting its duration as work');
    if(mode!=='drop-reply'){const paired=await until(async()=>{const t=await r.traces.read(peers[0],id);return edgeGrants.every(a=>t.spans.some(s=>s.transferId===a.id&&s.phase==='TRANSFER_SEND'))&&t;});assert.ok(paired.analysis.work.transferMs>0);}
+   if(mode==='producer-full'){
+    const traced=await until(async()=>{const t=await r.traces.read(peers[0],id);return t.spans.some(s=>s.attemptId===parent.id&&s.reasonCode==='RELAY_HTTP_ROUND_TRIP'&&s.phase==='TRANSFER_SEND')&&t;});
+    const sent=traced.spans.find(s=>s.attemptId===parent.id&&s.reasonCode==='RELAY_HTTP_ROUND_TRIP'&&s.phase==='TRANSFER_SEND');
+    const publication=traced.spans.find(s=>s.spanId===sent.parentSpanId);
+    assert.equal(publication.phase,'PUBLISH');assert.equal(sent.measurementScope,'FULL_TRANSFER');
+    assert.equal(sent.clockDomainId,publication.clockDomainId);assert.ok(sent.startMono>=publication.startMono&&sent.endMono<=publication.endMono);
+    assert.ok(traced.analysis.predictionErrors.some(row=>row.spanId===publication.spanId));
+   }
    assert.equal(measured.coverage.criticalPathPending,true,'cross-clock gaps still prevent a complete critical-path claim');
    assert.ok(measured.analysis.predictionErrors.some(row=>row.phase==='EXECUTE'&&Number.isFinite(row.errorMs)&&row.snapshotVersion>0));
    await until(async()=>!await hosts[1].request({action:'ref',groupId:group,ref:p.output.ref}));

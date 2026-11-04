@@ -43,3 +43,53 @@ test('real execution emits local phase spans; failed telemetry flush retries wit
   for(let i=0;i<300;i++)buffer.emit({...batch[0],spanId:'span'+i});assert.equal(buffer.dropped,44);
  }finally{await runtime.close();await x.ledger.close();}
 });
+
+test('data integrity failures are attributed to LOAD or PUBLISH before settlement',async()=>{
+ for(const phase of ['LOAD','PUBLISH']){
+  const x=await setup(),buffer=new TraceBuffer();
+  const ports={...x.ports,...(phase==='LOAD'?{read:async()=>Buffer.from('corrupt')}:{publish:async(bytes,schema)=>({...await x.ports.publish(bytes,schema),contentHash:'0'.repeat(64)})})};
+  const runtime=new PcExecutionRuntime(x.ledger,ports);
+  try{
+   const trace=new ExecutionTrace(buffer,{traceId:'trace1',parentSpanId:null,snapshotVersion:1,deviceInstanceId:'instance1'},x.offer);
+   const receipt=await runtime.run(x.offer,x.offer.allowedConfigs[0],{trace});
+   assert.equal(receipt.state,'FAILED');assert.equal(receipt.errorCode,phase==='LOAD'?'INPUT_HASH':'OUTPUT_SCOPE');
+   assert.equal(receipt.resourcesSettled,true);assert.deepEqual(receipt.outputs,[]);
+   let batch;await buffer.flush(async spans=>{batch=spans;});
+   assert.equal(batch.at(-1).phase,phase);assert.equal(batch.at(-1).reasonCode,'PHASE_FAILED');
+   if(phase==='LOAD')assert.ok(!batch.some(s=>s.phase==='EXECUTE'));
+   assert.ok(batch.every(validTraceSpanV2));assert.deepEqual(occupiedV2(x.ledger.snapshot()),[]);
+  }finally{await runtime.close();await x.ledger.close();}
+ }
+});
+
+test('relay HTTP spans remain inside data phases and do not replace execution dependencies',async()=>{
+ const x=await setup(),buffer=new TraceBuffer();
+ const runtime=new PcExecutionRuntime(x.ledger,{...x.ports,
+  read:async(ref,offer,trace)=>trace.transfer('READ',()=>x.ports.read(ref,offer)),
+  publish:async(bytes,schema,offer,trace)=>trace.transfer('WRITE',()=>x.ports.publish(bytes,schema,offer))});
+ try{
+  const trace=new ExecutionTrace(buffer,{traceId:'trace1',parentSpanId:null,snapshotVersion:1,deviceInstanceId:'instance1'},x.offer);
+  assert.equal((await runtime.run(x.offer,x.offer.allowedConfigs[0],{trace})).state,'SUCCEEDED');
+  let spans;await buffer.flush(async batch=>{spans=batch;});
+  const load=spans.find(s=>s.phase==='LOAD'),publish=spans.find(s=>s.phase==='PUBLISH'),execute=spans.find(s=>s.phase==='EXECUTE');
+  const transfers=spans.filter(s=>s.transferId);assert.equal(transfers.length,2);
+  for(const s of transfers){const parent=s.phase==='TRANSFER_RECV'?load:publish;
+   assert.equal(s.parentSpanId,parent.spanId);assert.equal(s.clockDomainId,parent.clockDomainId);
+   assert.ok(s.startMono>=parent.startMono&&s.endMono<=parent.endMono);assert.equal(s.measurementScope,'FULL_TRANSFER');
+   assert.equal(s.authoritativeSide,s.phase==='TRANSFER_RECV'?'RECEIVER':'SENDER');
+  }
+  assert.deepEqual(execute.dependsOn,[load.spanId]);assert.deepEqual(publish.dependsOn,[execute.spanId]);
+  assert.ok(spans.every(validTraceSpanV2));assert.equal(new Set(transfers.map(s=>s.transferId)).size,2);
+ }finally{await runtime.close();await x.ledger.close();}
+});
+
+test('failed relay request preserves its error and emits a failed nested interval',async()=>{
+ const x=await setup(),buffer=new TraceBuffer(),failure=Error('TRANSFER_HASH');
+ const trace=new ExecutionTrace(buffer,{traceId:'trace1',parentSpanId:null,snapshotVersion:1,deviceInstanceId:'instance1'},x.offer);
+ try{
+  await assert.rejects(trace.segment('LOAD',()=>trace.transfer('READ',async()=>{throw failure;})),e=>e===failure);
+  let spans;await buffer.flush(async batch=>{spans=batch;});
+  assert.equal(spans.length,2);assert.ok(spans.every(s=>s.reasonCode==='PHASE_FAILED'));
+  assert.equal(spans[0].parentSpanId,spans[1].spanId);assert.ok(spans.every(validTraceSpanV2));
+ }finally{await x.ledger.close();}
+});

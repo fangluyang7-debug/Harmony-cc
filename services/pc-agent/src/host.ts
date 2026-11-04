@@ -116,7 +116,7 @@ export class CpuHost {
         const reply=await authorize(offer);if(authorizations.size>=8)authorizations.delete(authorizations.keys().next().value!);authorizations.set(offer.task.attemptId,reply.offer);
         return Number.isSafeInteger(reply.snapshotVersion)&&reply.snapshotVersion!>0?reply.snapshotVersion!:null;
       },
-      ports:{...remotePorts,fixedService:(offer,input,signal)=>this.executeService(offer,input,signal),publish:async(bytes,schemaId,offer)=>{
+      ports:{...remotePorts,fixedService:(offer,input,signal)=>this.executeService(offer,input,signal),publish:async(bytes,schemaId,offer,trace)=>{
         const reply=await request('/v2/executions/'+offer.task.attemptId+'/output',{bytes:bytes.length,contentHash:digest(bytes),schemaId}) as {ticket:Parameters<typeof transfer>[1];delivery:string;descriptor?:ArtifactDescriptor;endpoint?:{id:string;epoch:string}};
         if(reply.delivery==='RETAINED'){
           const host=this.dataHost,endpoint=host?.identity(),descriptor=reply.descriptor;
@@ -128,18 +128,18 @@ export class CpuHost {
             if(!(error instanceof Error)||error.message!=='ARTIFACT_CACHE_FULL')throw error;
             const fallback=await request('/v2/executions/'+offer.task.attemptId+'/output',{bytes:bytes.length,contentHash:digest(bytes),schemaId,retentionFailure:'ARTIFACT_CACHE_FULL'}).catch(()=>{throw Error('ARTIFACT_CACHE_FULL');}) as {delivery:string;ticket:Parameters<typeof transfer>[1]};
             if(fallback.delivery!=='RELAY'||fallback.ticket.operation!=='WRITE'||canonical(fallback.ticket.ref)!==canonical(descriptor.ref)||fallback.ticket.bytes!==bytes.length)throw Error('ARTIFACT_ROUTE_SCOPE');
-            await transfer(config.connection,fallback.ticket,config.connection.credential,bytes);host.channel.forget(descriptor);return descriptor.ref;
+            const send=()=>transfer(config.connection,fallback.ticket,config.connection.credential,bytes);await (trace?trace.transfer('WRITE',send):send());host.channel.forget(descriptor);return descriptor.ref;
           }
           await request('/v2/executions/'+offer.task.attemptId+'/retained',descriptor);return descriptor.ref;
         }
         if(reply.delivery==='RELAY'){
           const ticket=reply.ticket;
           if(ticket.operation!=='WRITE'||ticket.bytes!==bytes.length||ticket.ref.schemaId!==schemaId||ticket.ref.contentHash!==digest(bytes))throw Error('ARTIFACT_ROUTE_SCOPE');
-          await transfer(config.connection,ticket,config.connection.credential,bytes);return ticket.ref;
+          const send=()=>transfer(config.connection,ticket,config.connection.credential,bytes);await (trace?trace.transfer('WRITE',send):send());return ticket.ref;
         }
         const t=reply.ticket;if(reply.delivery!=='LOCAL'||t.operation!=='WRITE'||t.bytes!==bytes.length||t.ref.contentHash!==digest(bytes)||t.ref.schemaId!==schemaId)throw Error('ARTIFACT_ROUTE_SCOPE');
         await this.stageInput({contentHash:t.ref.contentHash,bytes:bytes.length,schemaId,schemaVersion:1},bytes);return t.ref;
-      },read:async(ref,offer)=>{
+      },read:async(ref,offer,trace)=>{
         const cached=this.dataHost?.channel.lookup(offer.task.groupId,ref);
         if(cached&&cached.ownerPrincipalId===offer.task.app.principalId&&this.dataHost!.channel.available(cached))return this.dataHost!.channel.readForControl(cached);
         if(offer.transferPlan.length===0&&this.appPolicy){
@@ -147,7 +147,7 @@ export class CpuHost {
           inputTickets.delete(offer.task.attemptId);
           return fs.promises.readFile(path.join(config.directory,'inputs',ref.contentHash));
         }
-        return remotePorts.read(ref,offer);
+        return remotePorts.read(ref,offer,trace);
       },
         authorize:async offer=>{
           const id=offer.task.attemptId,cached=authorizations.get(id);authorizations.delete(id);

@@ -34,3 +34,11 @@ test('receiver readiness is not replaced by the later sender response; partial m
  const io=analyzeTrace([span('root',0,20),{...span('io',0,10),phase:'LOAD'}]);expect(io.work.computeMs).toBe(0);expect(io.work.otherMs).toBe(10);
  const predicted=analyzeTrace([span('root',0,20),{...span('compute',0,10),predictedMs:50}]);expect(predicted.predictionErrors[0].errorMs).toBe(-40);expect(predicted.predictionErrors[0].snapshotVersion).toBe(1);
 });
+
+test('nested transfer excludes its container from work but preserves the phase prediction comparison',()=>{
+ const publication={...span('publish',0,20),phase:'PUBLISH',predictedMs:25};
+ const http={...span('http',2,18),parentSpanId:'publish',phase:'TRANSFER_SEND',transferId:'http',measurementScope:'FULL_TRANSFER',authoritativeSide:'SENDER'};
+ const result=analyzeTrace([span('root',0,30),publication,http]);
+ expect(result.work.transferMs).toBe(16);expect(result.work.otherMs).toBe(0);
+ expect(result.predictionErrors).toEqual([{spanId:'publish',phase:'PUBLISH',targetId:publication.targetId,snapshotVersion:publication.snapshotVersion,predictedMs:25,measuredMs:20,errorMs:-5}]);
+});
