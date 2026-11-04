@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 export * from './evaluation-wire';
 export * from './signed-transfer';
+export * from './signed-endpoint';
 export * from './direct-client';
 import path from 'node:path';
 import https from 'node:https';
@@ -24,6 +25,7 @@ export class ArtifactChannel {
   private readonly tickets=new Map<string,{descriptor:ArtifactDescriptor;peer:ArtifactPeer;operation:'READ'|'WRITE';expiresAt:number}>();
   private readonly busy=new Set<string>();
   private active=0;
+  private generation=0;
   constructor(private readonly directory:string,readonly domain:'REAL'|'SIMULATED',private readonly authenticate:(credential:string)=>Promise<ArtifactPeer>,
     private readonly schemas:ReadonlyMap<string,ArtifactSchema>,private readonly now:()=>number=Date.now,
     readonly limits={objectBytes:8388608,cacheBytes:134217728,concurrent:4,maxTokens:1024}){
@@ -43,7 +45,7 @@ export class ArtifactChannel {
     this.sweep();
     this.validate(d);if(d.expiresAt<=this.now())throw Error('ARTIFACT_EXPIRED');const id=key(d),old=this.objects.get(id);
     if(old&&canonical(old)!==canonical(d))throw Error('ARTIFACT_IDENTITY_CONFLICT');
-    if(!old){if(this.objects.size>=4096)throw Error('ARTIFACT_METADATA_FULL');save(path.join(this.directory,id+'.json'),d);this.objects.set(id,structuredClone(d));}
+    if(!old){this.generation++;if(this.objects.size>=4096)throw Error('ARTIFACT_METADATA_FULL');save(path.join(this.directory,id+'.json'),d);this.objects.set(id,structuredClone(d));}
   }
   /** Local control-plane lookup; callers still enforce task and data ownership before issuing a ticket. */
   lookup(groupId:string,ref:ArtifactRefV2):ArtifactDescriptor|null {
@@ -59,7 +61,7 @@ export class ArtifactChannel {
     if(fs.existsSync(filename)){if(hash(fs.readFileSync(filename))!==d.ref.contentHash)throw Error('ARTIFACT_CORRUPT');return;}
     const used=fs.readdirSync(this.directory).filter(n=>n.endsWith('.blob')).reduce((n,f)=>n+fs.statSync(path.join(this.directory,f)).size,0);
     if(used+bytes.length>this.limits.cacheBytes)throw Error('ARTIFACT_CACHE_FULL');
-    const temporary=filename+'.'+randomUUID()+'.part';fs.writeFileSync(temporary,bytes,{flag:'wx',mode:0o600});fs.renameSync(temporary,filename);
+    const temporary=filename+'.'+randomUUID()+'.part';fs.writeFileSync(temporary,bytes,{flag:'wx',mode:0o600});fs.renameSync(temporary,filename);this.generation++;
   }
   async readForControl(d:ArtifactDescriptor){if(!this.available(d))throw Error('ARTIFACT_EXPIRED');const bytes=fs.readFileSync(path.join(this.directory,key(d)+'.blob'));await this.check(d,bytes);return bytes;}
   /** Caller must have already checked task/App/data-owner permission. Peer binding is checked again at transfer time. */
@@ -81,8 +83,24 @@ export class ArtifactChannel {
     if(request.url!==route||request.method!==(grant.operation==='READ'?'GET':'PUT'))throw Error('ARTIFACT_FORBIDDEN');
     return grant;
   }
+  snapshot(groupId?:string){return {generation:this.generation,objects:[...this.objects.values()].filter(d=>!groupId||d.groupId===groupId).map(d=>structuredClone(d))};}
+  /** Owner-authorized exact-object removal; an in-flight transfer or changed snapshot defers it. */
+  forget(d:ArtifactDescriptor,generation=this.generation){
+    const id=key(d);if(generation!==this.generation||this.active||this.busy.has(id)||canonical(this.objects.get(id))!==canonical(d))return false;
+    for(const suffix of ['.blob','.json']){const file=path.join(this.directory,id+suffix);if(fs.existsSync(file))fs.unlinkSync(file);}
+    this.objects.delete(id);this.generation++;return true;
+  }
+  get availableTransferSlots(){return Math.max(0,this.limits.concurrent-this.active);}
+  get availableCacheBytes(){
+    const used=fs.readdirSync(this.directory).filter(n=>n.endsWith('.blob')||n.endsWith('.part')).reduce((n,f)=>n+fs.statSync(path.join(this.directory,f)).size,0);
+    return Math.max(0,this.limits.cacheBytes-used);
+  }
+  acquireTransferSlot():null|(()=>void){
+    if(this.active>=this.limits.concurrent)return null;
+    this.active++;let held=true;return ()=>{if(held){held=false;this.active--;}};
+  }
   async handle(request:IncomingMessage,response:ServerResponse){
-    if(this.active>=this.limits.concurrent){response.writeHead(429).end();return;}this.active++;
+    const release=this.acquireTransferSlot();if(!release){response.writeHead(429).end();return;}
     let locked:string|undefined;
     try{
       const grant=await this.authorize(request),d=grant.descriptor,id=key(d),filename=path.join(this.directory,id+'.blob');
@@ -102,10 +120,10 @@ export class ArtifactChannel {
       const used=fs.readdirSync(this.directory).filter(n=>n.endsWith('.blob')||n.endsWith('.part')).reduce((n,f)=>n+fs.statSync(path.join(this.directory,f)).size,0);
       if(used+bytes.length>this.limits.cacheBytes)throw Error('ARTIFACT_CACHE_FULL');
       const temporary=filename+'.'+randomUUID()+'.part',fd=fs.openSync(temporary,'wx',0o600);
-      try{fs.writeFileSync(fd,bytes);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(temporary,filename);
+      try{fs.writeFileSync(fd,bytes);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(temporary,filename);this.generation++;
       response.writeHead(201).end();
     }catch{if(!response.headersSent)response.writeHead(403);response.end();}
-    finally{if(locked)this.busy.delete(locked);this.active--;}
+    finally{if(locked)this.busy.delete(locked);release();}
   }
   private async check(d:ArtifactDescriptor,bytes:Buffer){
     if(bytes.length!==d.bytes||hash(bytes)!==d.ref.contentHash||!await this.schemas.get(d.ref.schemaId+':'+d.ref.schemaVersion)!(bytes))throw Error('ARTIFACT_CONTENT_INVALID');

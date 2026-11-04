@@ -13,6 +13,9 @@ process.on('message',async message=>{
   }else if(message.action==='send'){
    const result=await directTransfer(message.grant,connection.certificate,connection.domain,Buffer.from(message.bytes,'base64'));
    value={durationMs:result.durationMs};
+  }else if(message.action==='partial'){
+   const a=message.grant.signed.authorization,data=Buffer.from(message.bytes,'base64');
+   await new Promise(resolve=>{const request=https.request(new URL('/v2/direct/'+a.id,a.endpoint.address),{...pinOptions(a.endpoint),method:'PUT',headers:{Authorization:'Transfer '+Buffer.from(JSON.stringify(message.grant.signed)).toString('base64url'),'X-Transfer-Proof':message.grant.proof,'Content-Type':'application/octet-stream','Content-Length':a.bytes}},res=>res.resume());request.on('error',()=>resolve());request.write(data.subarray(0,Math.max(1,Math.floor(data.length/2))));setTimeout(()=>{request.destroy();resolve();},1000);});value=true;
   }else if(message.action==='long-term-header'){
    const a=message.grant.signed.authorization;
    value=await new Promise((resolve,reject)=>{

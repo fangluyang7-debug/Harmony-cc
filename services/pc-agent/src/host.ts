@@ -18,6 +18,8 @@ import {openDataHost,discoverDataHost,DataHostConfig} from './data-host';
 import {networkInterfaces} from 'node:os';
 import {PeerLinks} from './peer-links';
 import {cpuSchemas} from '@harmony/reference-capabilities';
+import {performance} from 'node:perf_hooks';
+import {pcTraceClockDomainId} from './execution-trace';
 
 export interface FixedServiceAdapter {pack:ReferencePack;execute(input:Buffer,parameters:string,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string}>;}
 export interface CpuHostConfig {
@@ -39,6 +41,7 @@ export class CpuHost {
   private readonly peerLinks:PeerLinks;
   private dataHost:Awaited<ReturnType<typeof openDataHost>>|undefined;
   private networkPending:Promise<void>|undefined;
+  private readonly transferTelemetry=new Set<Promise<unknown>>();
   private endpointCoordinatorEpoch=0;
   private endpointNetwork='';
   private endpointRetryAt=0;
@@ -120,7 +123,13 @@ export class CpuHost {
           if(!host||!endpoint||endpoint.id!==reply.endpoint?.id||endpoint.epoch!==reply.endpoint?.epoch||!descriptor||
             descriptor.groupId!==offer.task.groupId||descriptor.ownerPrincipalId!==offer.task.app.principalId||descriptor.bytes!==bytes.length||
             descriptor.ref.schemaId!==schemaId||descriptor.ref.contentHash!==digest(bytes)||descriptor.ref.artifactId!=='out-'+offer.task.attemptId)throw Error('ARTIFACT_ROUTE_SCOPE');
-          host.channel.register(descriptor);await host.channel.writeForControl(descriptor,bytes);
+          host.channel.register(descriptor);
+          try{await host.channel.writeForControl(descriptor,bytes);}catch(error){
+            if(!(error instanceof Error)||error.message!=='ARTIFACT_CACHE_FULL')throw error;
+            const fallback=await request('/v2/executions/'+offer.task.attemptId+'/output',{bytes:bytes.length,contentHash:digest(bytes),schemaId,retentionFailure:'ARTIFACT_CACHE_FULL'}).catch(()=>{throw Error('ARTIFACT_CACHE_FULL');}) as {delivery:string;ticket:Parameters<typeof transfer>[1]};
+            if(fallback.delivery!=='RELAY'||fallback.ticket.operation!=='WRITE'||canonical(fallback.ticket.ref)!==canonical(descriptor.ref)||fallback.ticket.bytes!==bytes.length)throw Error('ARTIFACT_ROUTE_SCOPE');
+            await transfer(config.connection,fallback.ticket,config.connection.credential,bytes);host.channel.forget(descriptor);return descriptor.ref;
+          }
           await request('/v2/executions/'+offer.task.attemptId+'/retained',descriptor);return descriptor.ref;
         }
         if(reply.delivery==='RELAY'){
@@ -223,19 +232,38 @@ export class CpuHost {
       catch(error){this.onError(error);}this.peerLinks.invalidate();
     }
     if(this.dataHost&&epoch!==this.endpointCoordinatorEpoch){await this.dataHost.register();this.endpointCoordinatorEpoch=epoch;this.peerLinks.invalidate();}
-    await this.peerLinks.sample();await this.deliver();
+    await this.peerLinks.sample();await this.collectReleased();await this.deliver();
+  }
+  private async collectReleased(){
+    const host=this.dataHost,endpoint=host?.identity();if(!host||!endpoint)return;
+    host.channel.sweep();const before=host.channel.snapshot(endpoint.groupId),request=allotmentTransport(this.config.connection);
+    for(let offset=0;offset<before.objects.length;offset+=64)await request('/v2/data/cache/inventory',{epoch:endpoint.epoch,objects:before.objects.slice(offset,offset+64).map(d=>({ref:d.ref,bytes:d.bytes,expiresAt:d.expiresAt}))});
+    const plan=await request('/v2/data/retention',null) as {endpointId:string;epoch:string;release:{id:string;ref:ArtifactDescriptor['ref'];epoch:string}[]};
+    if(plan.endpointId!==endpoint.id||plan.epoch!==endpoint.epoch)throw Error('RELEASE_SCOPE');
+    let generation=before.generation;
+    for(const item of plan.release){
+      const cached=before.objects.find(d=>canonical(d.ref)===canonical(item.ref));
+      if(cached&&!host.channel.forget(cached,generation))continue;
+      if(cached)generation++;
+      await request('/v2/data/releases',item);
+    }
   }
   private async deliver(){
     const host=this.dataHost,identity=host?.identity();if(!host||!identity)return;
     const connection=this.config.connection,request=allotmentTransport(connection);
     const pending=await request('/v2/data/deliveries',null) as {attemptId:string;deliveryId:string;producerAttemptId:string;endpointId:string;ref:ArtifactDescriptor['ref'];bytes:number}[];
     for(const item of pending){
-      const cached=host.channel.lookup(identity.groupId,item.ref);if(!cached||cached.bytes!==item.bytes)continue;
+      const cached=host.channel.lookup(identity.groupId,item.ref);if(!cached||cached.bytes!==item.bytes||!host.channel.available(cached)){await request('/v2/data/deliveries/missing',{attemptId:item.attemptId,deliveryId:item.deliveryId,ref:item.ref});continue;}
       const grant=await request('/v2/data/authorizations',{attemptId:item.attemptId,deliveryId:item.deliveryId,endpointId:item.endpointId,operation:'WRITE'}) as {signed:SignedTransfer;proof:string};
       const a=grant.signed.authorization;
       if(a.version!==2||a.operation!=='WRITE'||a.producerAttemptId!==item.producerAttemptId||a.attemptId!==item.attemptId||a.deliveryId!==item.deliveryId||a.endpoint.id!==item.endpointId||a.senderHolderId!==identity.holderInstanceId||a.ownerPrincipalId!==cached.ownerPrincipalId||canonical(a.ref)!==canonical(cached.ref)||a.bytes!==cached.bytes)throw Error('DELIVERY_SCOPE');
-      const observation=await directTransfer(grant,connection.certificate,connection.domain,await host.channel.readForControl(cached));
-      await request('/v2/data/observations',{authorizationId:a.id,durationMs:observation.durationMs});
+      try{
+        const bytes=await host.channel.readForControl(cached),startMono=performance.now();
+        const observation=await directTransfer(grant,connection.certificate,connection.domain,bytes),endMono=performance.now();
+        if(this.transferTelemetry.size<16){const report=request('/v2/data/traces',{authorizationId:a.id,side:'SENDER',interval:{clockDomainId:pcTraceClockDomainId,startMono,endMono}}).catch(()=>{}).finally(()=>this.transferTelemetry.delete(report));this.transferTelemetry.add(report);}
+        await request('/v2/data/observations',{authorizationId:a.id,durationMs:observation.durationMs});
+      }catch(error){await request('/v2/data/deliveries/failed',{authorizationId:a.id});this.onError(error);}
+
     }
   }
   tick(syncSettings=true){
@@ -243,5 +271,5 @@ export class CpuHost {
     if(!this.pending&&!this.stopped)this.pending=this.sample(syncSettings).finally(()=>{this.pending=undefined;});return this.pending??Promise.resolve();
   }
   start(){if(this.timer||this.stopped)throw Error('HOST_STARTED');this.agent.start();this.timer=setInterval(()=>{void this.tick().catch(this.onError);},2000);void this.tick().catch(this.onError);}
-  async close(){if(this.stopped)return;this.stopped=true;this.peerLinks.close();if(this.timer)clearInterval(this.timer);await this.agent.close();await this.pending;await this.networkPending;await this.dataHost?.close();await this.ledger.close();}
+  async close(){if(this.stopped)return;this.stopped=true;this.peerLinks.close();if(this.timer)clearInterval(this.timer);await this.agent.close();await this.pending;await this.networkPending;await Promise.allSettled(this.transferTelemetry);await this.dataHost?.close();await this.ledger.close();}
 }

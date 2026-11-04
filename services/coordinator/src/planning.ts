@@ -1,6 +1,6 @@
 import {dispatchDiagnostics} from './dispatch-diagnostics';
 import { Prisma, PrismaClient } from '../generated/client';
-import { PlanningSnapshot, PlanningPolicy, PlacementRequest, PlanningClock, SnapshotDecision, plan } from '@harmony/scheduler-core';
+import { PlanningSnapshot, PlanningPolicy, PlacementRequest, PlanningClock, SnapshotDecision, plan,WorkflowPlacementPlanner,PlacementArtifact } from '@harmony/scheduler-core';
 import type { ContributionPolicy } from './directory';
 
 /** Internal projections only. B3 adapters must validate protocol input before calling replace. */
@@ -53,6 +53,12 @@ export class PlanningService {
     let selected=-1;
     for(let i=0;i<decisions.length;i++)if(decisions[i].decision.suggestion&&(selected<0||decisions[i].decision.suggestionMs!<decisions[selected].decision.suggestionMs!))selected=i;
     return {selected,decision:decisions[selected<0?0:selected]};
+  }
+  publication(snapshot:PlanningSnapshot,request:PlacementRequest,artifact:PlacementArtifact,to:string,policy:PlanningPolicy,clock:PlanningClock){
+    if(policy.revoked||snapshot.policyVersion!==policy.version||snapshot.domain!==request.domain)throw Error('PLAN_STALE');
+    const capacity=request.relayCapacity;if(capacity?.deviceId===to&&capacity.availableBytes!==undefined&&(!Number.isFinite(capacity.availableBytes)||capacity.availableBytes<artifact.bytes))throw Error('ARTIFACT_CACHE_FULL');
+    const cost=new WorkflowPlacementPlanner(policy.limits,clock.monotonic).publication(artifact,to,{...request,now:clock.now,links:snapshot.links,inputRelayId:undefined});
+    if(cost===null)throw Error('PUBLICATION_PATH_UNAVAILABLE');if(cost>request.remainingBudgetMs)throw Error('BUDGET_EXHAUSTED');return cost;
   }
   /** Last check before an offer; the executing holder must still perform atomic admission. */
   async preflight(groupId:string,expected:SnapshotDecision,request:PlacementRequest,clock:PlanningClock,jobId?:string):Promise<boolean>{

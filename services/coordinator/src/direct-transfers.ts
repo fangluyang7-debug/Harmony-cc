@@ -9,6 +9,10 @@ interface Challenge {endpoint:DataEndpointIdentity; nonce:string; expiresAt:numb
 const exact=(v:any,keys:string[])=>v&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join('|')===[...keys].sort().join('|');
 /** Control-plane metadata only. Byte traffic and endpoint private keys never enter this service. */
 export class DirectTransfers {
+  private relay: {endpoint:(groupId:string)=>DataEndpointIdentity;available:(descriptor:ArtifactDescriptor)=>boolean;slots:()=>number;bytes?:()=>number}|undefined;
+  configureRelay(value:NonNullable<DirectTransfers['relay']>){this.relay=value;}
+  relaySlots(){return this.relay?.slots()??0;}
+  relayBytes(){return this.relay?.bytes?.();}
   private readonly challenges=new Map<string,Challenge>();
   constructor(private readonly db:PrismaClient,private readonly key:string,private readonly certificate:string,
     private readonly domain:'REAL'|'SIMULATED',private readonly epoch:()=>number,private readonly now=Date.now){}
@@ -53,6 +57,7 @@ export class DirectTransfers {
     return peer;
   }
   private async endpoint(tx:Db,id:string,groupId:string){
+    const relay=this.relay?.endpoint(groupId);if(relay&&id===relay.id)return relay;
     const row=await tx.dataEndpoint.findUnique({where:{id}});
     if(!row||row.groupId!==groupId||row.coordinatorEpoch!==this.epoch())throw Error('ENDPOINT_UNAVAILABLE');
     const peer=await this.active(tx,row.credentialId),endpoint:DataEndpointIdentity=JSON.parse(row.metadataJson);
@@ -157,7 +162,7 @@ export class DirectTransfers {
     try{
       const id=transferDigest(canonical([groupId,holderInstanceId])),endpoint=await this.endpoint(this.db,id,groupId);
       const key=transferDigest(canonical([groupId,ref,endpoint.id,endpoint.epoch])),row=await this.db.dataReplica.findUnique({where:{id:key}});
-      if(!row)return false;const data=JSON.parse(row.metadataJson);
+      if(!row)return false;const data=JSON.parse(row.metadataJson);if(data.missing||data.releaseIntent)return false;
       if(data.appInstanceId!==appInstanceId||data.expiresAt<=this.now()||canonical(data.ref)!==canonical(ref)||canonical(data.endpoint)!==canonical(endpoint))return false;
       if(data.kind==='OUTPUT'){
         await this.active(this.db,data.producerCredentialId);
@@ -171,8 +176,84 @@ export class DirectTransfers {
           receipt?.committed&&result?.state==='SUCCEEDED'&&result.outputs.some((r:any)=>canonical(r)===canonical(ref)));
       }
       const authorization=await this.db.transferAuthorization.findUnique({where:{id:data.authorizationId}});
-      if(!authorization||authorization.state!=='COMPLETED')return false;await this.active(this.db,authorization.requesterCredentialId);return true;
+      if(!authorization||authorization.state!=='COMPLETED')return false;
+      if(data.producerAttemptId){
+        const parent=await this.db.cpuJob.findUnique({where:{id:data.producerAttemptId}}),p=parent&&JSON.parse(parent.metadataJson);
+        const receipt=await this.db.receipt.findUnique({where:{id:data.producerAttemptId}}),result=receipt&&JSON.parse(receipt.recordJson);
+        const node=p&&await this.db.node.findUnique({where:{id:JSON.stringify([p.offer.task.workflowId,p.offer.task.nodeId])}});
+        const installation=await this.db.registeredInstallation.findUnique({where:{id:appInstanceId}});
+        return !!(p&&installation?.state==='ACTIVE'&&installation.groupId===groupId&&p.offer.task.app.appInstanceId===appInstanceId&&canonical(p.output?.ref)===canonical(ref)&&node?.currentAttemptId===parent!.id&&node.state==='COMMITTED'&&receipt?.committed&&result.state==='SUCCEEDED');
+      }
+      await this.active(this.db,authorization.requesterCredentialId);return true;
     }catch{return false;}
+  }
+  /** Complete, App-scoped copies only; local-only copies remain usable on their own holder. */
+  async inputCopies(groupId:string,appInstanceId:string,ref:TransferAuthorization['ref'],producerAttemptId:string){
+    const rows=await this.db.dataReplica.findMany({where:{groupId}}),copies=[];
+    for(const row of rows){
+      const r=JSON.parse(row.metadataJson);
+      if(r.appInstanceId!==appInstanceId||canonical(r.ref)!==canonical(ref)||r.expiresAt<=this.now()||
+        (r.kind==='OUTPUT'?r.attemptId!==producerAttemptId:r.producerAttemptId!==producerAttemptId))continue;
+      if(!await this.hasInput(groupId,r.endpoint.holderInstanceId,appInstanceId,ref))continue;
+      copies.push({deviceId:r.endpoint.deviceId,holderInstanceId:r.endpoint.holderInstanceId,endpointId:r.endpoint.id,endpointEpoch:r.endpoint.epoch,readMs:0,transferOperation:'WRITE' as const,localOnly:r.kind!=='OUTPUT'&&r.servable!==true});
+    }
+    return copies;
+  }
+  async sourceProblem(groupId:string,appInstanceId:string,ref:TransferAuthorization['ref'],producerAttemptId:string){
+    if((await this.inputCopies(groupId,appInstanceId,ref,producerAttemptId)).length)return null;
+    const parent=await this.db.cpuJob.findUnique({where:{id:producerAttemptId}}),p=parent&&JSON.parse(parent.metadataJson);
+    if(!p||p.output?.expiresAt<=this.now())return 'ARTIFACT_EXPIRED';
+    const rows=await this.db.dataReplica.findMany({where:{groupId}});
+    const matching=rows.map(row=>JSON.parse(row.metadataJson)).filter(r=>r.appInstanceId===appInstanceId&&canonical(r.ref)===canonical(ref));
+    if(matching.length&&matching.every(r=>r.missing))return 'CONFIRMED_MISSING';
+    if(p.retainOutput){
+      const endpoint=await this.db.dataEndpoint.findUnique({where:{id:p.retainOutput.id}});
+      if(endpoint&&JSON.parse(endpoint.metadataJson).epoch!==p.retainOutput.epoch)return 'ENDPOINT_CHANGED';
+    }
+    return null; // A timeout or absent observation cannot prove bytes are gone.
+  }
+  private async markMissing(tx:Db,groupId:string,endpoint:DataEndpointIdentity,ref:TransferAuthorization['ref']){
+    const key=transferDigest(canonical([groupId,ref,endpoint.id,endpoint.epoch])),row=await tx.dataReplica.findUnique({where:{id:key}});
+    if(row){const r=JSON.parse(row.metadataJson);r.missing={at:this.now(),reason:'AUTHENTICATED_CACHE_MISSING'};await tx.dataReplica.update({where:{id:key},data:{metadataJson:JSON.stringify(r)}});}
+  }
+  async transferRejected(peer:Peer,input:{authorizationId:string;code:string}){
+    if(!exact(input,['authorizationId','code'])||!protocolId(input.authorizationId)||input.code!=='ARTIFACT_CACHE_FULL')throw Error('TRANSFER_RECEIPT_SCOPE');
+    return this.db.$transaction(async tx=>{
+      await this.active(tx,peer.credentialId);return this.rejectTransfer(tx,peer,input);
+    });
+  }
+  private async rejectTransfer(tx:Db,peer:Peer,input:{authorizationId:string;code:string}){
+      const row=await tx.transferAuthorization.findUnique({where:{id:input.authorizationId}});
+      if(!row||row.groupId!==peer.groupId||row.state!=='CONSUMED')throw Error('TRANSFER_RECEIPT_SCOPE');
+      const a=verifyTransfer(JSON.parse(row.metadataJson),this.certificate,this.domain,this.now()),endpoint=await this.endpoint(tx,a.endpoint.id,peer.groupId);
+      if(a.operation!=='WRITE'||a.receiverHolderId!==peer.holderInstanceId||canonical(endpoint)!==canonical(a.endpoint))throw Error('TRANSFER_RECEIPT_SCOPE');
+      const child=await tx.cpuJob.findUniqueOrThrow({where:{id:a.attemptId}}),c=JSON.parse(child.metadataJson);
+      c.transferRejections=[...(c.transferRejections??[]),{authorizationId:a.id,code:input.code,at:this.now()}].slice(-8);
+      if(a.version===2&&c.delivery?.id===a.deliveryId)c.delivery.failure={authorizationId:a.id,endpointId:endpoint.id,endpointEpoch:endpoint.epoch,at:this.now(),reason:input.code};
+      await tx.cpuJob.update({where:{id:child.id},data:{metadataJson:JSON.stringify(c)}});
+      await tx.transferAuthorization.update({where:{id:a.id},data:{state:'REJECTED'}});return {recorded:true};
+  }
+  async deliveryMissing(peer:Peer,input:{attemptId:string;deliveryId:string;ref:TransferAuthorization['ref']}){
+    if(!exact(input,['attemptId','deliveryId','ref'])||![input.attemptId,input.deliveryId].every(protocolId))throw Error('DELIVERY_SCOPE');
+    await this.db.$transaction(async tx=>{
+      await this.active(tx,peer.credentialId);
+      const row=await tx.cpuJob.findUnique({where:{id:input.attemptId}}),d=row&&JSON.parse(row.metadataJson),edge=d?.delivery;
+      const endpoint=await this.endpoint(tx,transferDigest(canonical([peer.groupId,peer.holderInstanceId])),peer.groupId);
+      if(!row||row.groupId!==peer.groupId||row.state!=='WAITING_INPUT'||edge?.id!==input.deliveryId||edge.senderHolderId!==peer.holderInstanceId||edge.senderEndpointId!==endpoint.id||edge.senderEpoch!==endpoint.epoch||canonical(d.input.ref)!==canonical(input.ref))throw Error('DELIVERY_SCOPE');
+      await this.markMissing(tx,peer.groupId,endpoint,d.input.ref);
+      edge.failure={endpointId:endpoint.id,endpointEpoch:endpoint.epoch,at:this.now(),reason:'AUTHENTICATED_CACHE_MISSING'};
+      await tx.cpuJob.update({where:{id:row.id},data:{metadataJson:JSON.stringify(d)}});
+    });return {recorded:true};
+  }
+  async readMissing(peer:Peer,input:{authorizationId:string}){
+    if(!exact(input,['authorizationId'])||!protocolId(input.authorizationId))throw Error('TRANSFER_RECEIPT_SCOPE');
+    await this.db.$transaction(async tx=>{
+      await this.active(tx,peer.credentialId);const row=await tx.transferAuthorization.findUnique({where:{id:input.authorizationId}});
+      if(!row||row.groupId!==peer.groupId||row.state!=='CONSUMED')throw Error('TRANSFER_RECEIPT_SCOPE');
+      const a=verifyTransfer(JSON.parse(row.metadataJson),this.certificate,this.domain,this.now()),endpoint=await this.endpoint(tx,a.endpoint.id,peer.groupId);
+      if(a.operation!=='READ'||a.senderHolderId!==peer.holderInstanceId||canonical(endpoint)!==canonical(a.endpoint))throw Error('TRANSFER_RECEIPT_SCOPE');
+      await this.markMissing(tx,peer.groupId,endpoint,a.ref);
+    });return {recorded:true};
   }
   async ownedEndpoint(peer:Peer){return this.endpoint(this.db,transferDigest(canonical([peer.groupId,peer.holderInstanceId])),peer.groupId);}
   /** Producer has already atomically stored and verified bytes; execution receipt still gates consumption. */
@@ -196,11 +277,12 @@ export class DirectTransfers {
     const endpoint=await this.ownedEndpoint(peer),items=[];
     for(const row of await this.db.cpuJob.findMany({where:{groupId:peer.groupId,state:'WAITING_INPUT'}})){
       const child=JSON.parse(row.metadataJson),edge=child.delivery,plan=child.plan?.decision?.suggestion?.[0];
-      if(!edge||edge.senderHolderId!==peer.holderInstanceId||edge.senderEpoch!==endpoint.epoch||edge.senderEndpointId!==endpoint.id||child.deadlineAt<=this.now()||plan?.inputEndpointOperation!=='WRITE')continue;
+      if(!edge||edge.senderHolderId!==peer.holderInstanceId||edge.senderEpoch!==endpoint.epoch||edge.senderEndpointId!==endpoint.id||child.deadlineAt<=this.now()||(!edge.relay&&plan?.inputEndpointOperation!=='WRITE'))continue;
+      if(edge.relay&&this.relay?.available(child.input)&&await this.relayConfirmed(row.id,edge.id))continue;
       if(await this.hasInput(peer.groupId,child.holderId,child.offer.task.app.appInstanceId,child.input.ref))continue;
       const graph=await this.db.sdkWorkflowJob.findUnique({where:{id:child.offer.task.workflowId}});
       if(graph?.state!=='ACTIVE')continue;
-      items.push({attemptId:row.id,deliveryId:edge.id,producerAttemptId:child.sourceAttemptId,endpointId:plan.inputEndpointId,ref:child.input.ref,bytes:child.input.bytes});
+      items.push({attemptId:row.id,deliveryId:edge.id,producerAttemptId:child.sourceAttemptId,endpointId:edge.relay?this.relay?.endpoint(peer.groupId).id:plan.inputEndpointId,ref:child.input.ref,bytes:child.input.bytes});
       if(items.length===8)break;
     }
     return items;
@@ -215,7 +297,10 @@ export class DirectTransfers {
     const graph=await tx.sdkWorkflowJob.findUnique({where:{id:c.offer.task.workflowId}});
     if(!graph||graph.state!=='ACTIVE'||graph.groupId!==child.groupId||graph.sourceHolderId!==child.sourceHolderId)throw Error('DELIVERY_SCOPE');
     const plan=c.plan?.decision?.suggestion?.[0];
-    if(plan?.inputEndpointOperation!=='WRITE'||plan.inputEndpointId!==endpoint.id||plan.inputEndpointEpoch!==endpoint.epoch||
+    if(edge.relay){
+      const relay=this.relay?.endpoint(peer.groupId);
+      if(!relay||canonical(relay)!==canonical(endpoint)||plan?.inputEndpointId||plan?.inputRelayId!==relay.deviceId)throw Error('TRANSFER_PLAN_CHANGED');
+    }else if(plan?.inputEndpointOperation!=='WRITE'||plan.inputEndpointId!==endpoint.id||plan.inputEndpointEpoch!==endpoint.epoch||
       c.holderId!==endpoint.holderInstanceId||c.offer.target.deviceId!==endpoint.deviceId)throw Error('TRANSFER_PLAN_CHANGED');
     const parent=await tx.cpuJob.findUnique({where:{id:c.sourceAttemptId}});
     if(!parent||parent.groupId!==child.groupId||parent.principalId!==child.principalId||parent.sourceHolderId!==child.sourceHolderId)throw Error('DELIVERY_SCOPE');
@@ -234,8 +319,9 @@ export class DirectTransfers {
     if(sender.epoch!==edge.senderEpoch||sender.holderInstanceId!==peer.holderInstanceId||sender.deviceId!==peer.deviceId)throw Error('DELIVERY_SOURCE_CHANGED');
     const key=transferDigest(canonical([peer.groupId,c.input.ref,sender.id,sender.epoch]));
     const replica=await tx.dataReplica.findUnique({where:{id:key}}),r=replica&&JSON.parse(replica.metadataJson);
-    if(!r||r.kind!=='OUTPUT'||r.attemptId!==parent.id||r.appInstanceId!==installation.id||r.expiresAt<=this.now()||r.bytes!==c.input.bytes||canonical(r.ref)!==canonical(c.input.ref)||canonical(r.endpoint)!==canonical(sender))throw Error('DELIVERY_SOURCE_CHANGED');
-    await this.active(tx,r.producerCredentialId);
+    if(!r||r.missing||r.releaseIntent||(r.kind==='OUTPUT'?r.attemptId!==parent.id:r.producerAttemptId!==parent.id||r.servable!==true)||r.appInstanceId!==installation.id||r.expiresAt<=this.now()||r.bytes!==c.input.bytes||canonical(r.ref)!==canonical(c.input.ref)||canonical(r.endpoint)!==canonical(sender))throw Error('DELIVERY_SOURCE_CHANGED');
+    if(r.kind==='OUTPUT')await this.active(tx,r.producerCredentialId);
+    else{const grant=await tx.transferAuthorization.findUnique({where:{id:r.authorizationId}});if(grant?.state!=='COMPLETED')throw Error('DELIVERY_SOURCE_CHANGED');}
     return {offer:c.offer,descriptor:c.input,producerAttemptId:parent.id,deadlineAt:c.deadlineAt};
   }
   /** Source App may transfer only its own job input to, or committed output from, the selected host. */
@@ -275,6 +361,49 @@ export class DirectTransfers {
     }
     return {offer:d.offer,descriptor:operation==='WRITE'?d.input:d.output};
   }
+  async relayConfirmed(attemptId:string,deliveryId?:string){
+    const rows=await this.db.transferAuthorization.findMany({where:{attemptId,state:'COMPLETED'}});
+    return rows.some(row=>{const a=JSON.parse(row.metadataJson).authorization;return a.version===2&&(!deliveryId||a.deliveryId===deliveryId)&&a.endpoint.id===this.relay?.endpoint(a.groupId).id;});
+  }
+  async deliveryFailed(peer:Peer,input:{authorizationId:string}){
+    if(!exact(input,['authorizationId'])||!protocolId(input.authorizationId))throw Error('DELIVERY_FAILURE_INVALID');
+    await this.db.$transaction(async tx=>{
+      await this.active(tx,peer.credentialId);
+      const row=await tx.transferAuthorization.findUnique({where:{id:input.authorizationId}});
+      if(!row||row.groupId!==peer.groupId||row.requesterCredentialId!==peer.credentialId)throw Error('DELIVERY_SCOPE');
+      const a=JSON.parse(row.metadataJson).authorization;
+      if(a.version!==2)throw Error('DELIVERY_SCOPE');
+      if(row.state==='COMPLETED')return; // Confirmed copy wins an ambiguous sender response.
+      const child=await tx.cpuJob.findUnique({where:{id:a.attemptId}}),c=child&&JSON.parse(child.metadataJson);
+      if(child?.state!=='WAITING_INPUT'||c.delivery?.id!==a.deliveryId)return;
+      if(c.delivery.failure?.authorizationId===a.id&&c.delivery.failure.reason==='ARTIFACT_CACHE_FULL')return;
+      c.delivery.failure={authorizationId:a.id,endpointId:a.endpoint.id,endpointEpoch:a.endpoint.epoch,at:this.now(),reason:'TRANSFER_FAILED'};
+      await tx.cpuJob.update({where:{id:child.id},data:{metadataJson:JSON.stringify(c)}});
+      await tx.transferAuthorization.updateMany({where:{id:a.id,state:'ISSUED'},data:{state:'REVOKED'}});
+    });
+    return {recorded:true};
+  }
+  private relayPeer(groupId:string):Peer{
+    const endpoint=this.relay?.endpoint(groupId);if(!endpoint)throw Error('RELAY_UNAVAILABLE');
+    return {groupId,deviceId:endpoint.deviceId,holderInstanceId:endpoint.holderInstanceId,principalId:endpoint.holderInstanceId,credentialId:endpoint.id};
+  }
+  async relayConsume(signed:SignedTransfer,proof:string){
+    if(signed.authorization.version!==2||signed.authorization.operation!=='WRITE')throw Error('DELIVERY_SCOPE');
+    return this.consume(this.relayPeer(signed.authorization.groupId),{signed,proof});
+  }
+  async relayReceipt(authorizationId:string,contentHash:string,bytes:number){
+    const row=await this.db.transferAuthorization.findUniqueOrThrow({where:{id:authorizationId}});
+    return this.receipt(this.relayPeer(row.groupId),{authorizationId,contentHash,bytes});
+  }
+  /** Called only by the local signed handler after a consumed relay WRITE failed to store. */
+  async relayRejected(authorizationId:string,code:string){
+    if(!protocolId(authorizationId)||code!=='ARTIFACT_CACHE_FULL')throw Error('TRANSFER_RECEIPT_SCOPE');
+    return this.db.$transaction(async tx=>{
+      const row=await tx.transferAuthorization.findUniqueOrThrow({where:{id:authorizationId}}),peer=this.relayPeer(row.groupId);
+      if(row.endpointId!==peer.holderInstanceId)throw Error('TRANSFER_RECEIPT_SCOPE');
+      return this.rejectTransfer(tx,peer,{authorizationId,code});
+    });
+  }
   async issue(peer:Peer,input:{attemptId:string;endpointId:string;operation:'READ'|'WRITE';deliveryId?:string}){
     if(!exact(input,['attemptId','endpointId','operation',...(input?.deliveryId!==undefined?['deliveryId']:[])])||input.deliveryId!==undefined&&(!protocolId(input.deliveryId)||input.operation!=='WRITE')||![input.attemptId,input.endpointId].every(protocolId)||!['READ','WRITE'].includes(input.operation))throw Error('TRANSFER_REQUEST_INVALID');
     return this.db.$transaction(async tx=>{
@@ -290,6 +419,10 @@ export class DirectTransfers {
         appInstanceId:offer.task.app.appInstanceId,groupId:peer.groupId,ownerPrincipalId:descriptor.ownerPrincipalId,requesterHolderId:peer.holderInstanceId,
         senderHolderId:input.operation==='WRITE'?peer.holderInstanceId:endpoint.holderInstanceId,receiverHolderId:input.operation==='READ'?peer.holderInstanceId:endpoint.holderInstanceId,
         endpoint,ref:descriptor.ref,bytes:descriptor.bytes,operation:input.operation,proofHash:transferDigest(proof),issuedAt:now,expiresAt:Math.min(now+30000,descriptor.expiresAt,delivery?.deadlineAt??Infinity)};
+      if(endpoint.id===this.relay?.endpoint(peer.groupId).id){
+        const pending=await tx.transferAuthorization.count({where:{endpointId:endpoint.id,state:{in:['ISSUED','CONSUMED']},expiresAt:{gt:now}}});
+        if(pending>=4||this.relaySlots()<1)throw Error('RELAY_BUSY');
+      }
       const signed=signTransfer(authorization,this.key);
       await tx.transferAuthorization.create({data:{id:authorization.id,groupId:peer.groupId,attemptId:input.attemptId,endpointId:endpoint.id,requesterCredentialId:peer.credentialId,state:'ISSUED',expiresAt:authorization.expiresAt,metadataJson:JSON.stringify(signed)}});
       return {signed,proof};
@@ -327,10 +460,16 @@ export class DirectTransfers {
         const edge=await this.deliveryScope(tx,requester,a.attemptId,a.deliveryId!,endpoint);
         if(edge.producerAttemptId!==a.producerAttemptId||canonical(edge.descriptor.ref)!==canonical(a.ref)||edge.descriptor.expiresAt!==a.artifactExpiresAt)throw Error('DELIVERY_SCOPE');
       }
-      if(a.operation==='WRITE'){
+      if(a.operation==='WRITE'&&endpoint.id!==this.relay?.endpoint(a.groupId).id){
         const id=transferDigest(canonical([a.groupId,a.ref,endpoint.id,endpoint.epoch]));
-        const metadataJson=JSON.stringify({ref:a.ref,bytes:a.bytes,endpoint,appInstanceId:a.appInstanceId,authorizationId:a.id,verifiedAt:this.now(),expiresAt:Math.min(this.now()+30000,a.artifactExpiresAt??Infinity)});
+        const metadataJson=JSON.stringify({...(a.version===2?{producerAttemptId:a.producerAttemptId,servable:true}:{}),ref:a.ref,bytes:a.bytes,endpoint,appInstanceId:a.appInstanceId,authorizationId:a.id,verifiedAt:this.now(),expiresAt:Math.min(this.now()+30000,a.artifactExpiresAt??Infinity)});
         await tx.dataReplica.upsert({where:{id},create:{id,groupId:a.groupId,endpointId:endpoint.id,metadataJson},update:{metadataJson}});
+      }
+      if(endpoint.id===this.relay?.endpoint(a.groupId).id){
+        const child=await tx.cpuJob.findUniqueOrThrow({where:{id:a.attemptId}}),c=JSON.parse(child.metadataJson);
+        if(!this.relay!.available(c.input))throw Error('DELIVERY_NOT_VERIFIED');
+        c.delivery.received={authorizationId:a.id,bytes:a.bytes,at:this.now(),remainingMs:c.deadlineAt-this.now()};
+        await tx.cpuJob.update({where:{id:child.id},data:{metadataJson:JSON.stringify(c)}});
       }
       await tx.transferAuthorization.update({where:{id:a.id},data:{state:'COMPLETED'}});return {committed:true};
     });

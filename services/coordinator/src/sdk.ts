@@ -1,3 +1,4 @@
+import {ArtifactRetention} from './retention';
 import {WorkflowJobs} from './workflow-jobs';
 import {createHash} from 'node:crypto';
 import {canonical,protocolId} from '@harmony/scheduler-core';
@@ -8,7 +9,7 @@ import {Peer} from './channel';
 const exact=(v:any,keys:string[],optional:string[]=[])=>v&&typeof v==='object'&&!Array.isArray(v)&&keys.every(k=>k in v)&&Object.keys(v).every(k=>[...keys,...optional].includes(k));
 /** C3 metadata adapter. CpuJobs is its one-node server implementation, never a second dispatcher. */
 export class SdkJobs {
- constructor(private readonly jobs:CpuJobs,private readonly packs:ReferencePack[]=builtinCpuPacks(),private readonly graphs?:WorkflowJobs){}
+ constructor(private readonly jobs:CpuJobs,private readonly packs:ReferencePack[]=builtinCpuPacks(),private readonly graphs?:WorkflowJobs,private readonly retention?:ArtifactRetention){}
  contractIds(){return this.packs.map(p=>p.manifest.contract.contractId);}
  inputSchema(capability:string){const pack=this.packs.find(p=>p.manifest.contract.capability===capability);if(!pack)throw Error('CAPABILITY_UNSUPPORTED');return pack.manifest.contract.inputSchemas[0];}
  outputSchema(capability:string){const pack=this.packs.find(p=>p.manifest.contract.capability===capability);if(!pack)throw Error('CAPABILITY_UNSUPPORTED');return pack.manifest.contract.outputSchemas[0];}
@@ -40,6 +41,7 @@ export class SdkJobs {
   return this.jobs.submit(peer,{requestId:body.options.requestId,capability:node.capability,contentHash:node.input!.contentHash,bytes:node.input!.bytes,budgetMs:body.options.budgetMs,parameters:node.parameters,...(body.options.inputLocation?{inputLocation:body.options.inputLocation}:{})},workflows.map(w=>({parameters:w.nodes[0].parameters,...(w.nodes[0].targetId?{targetId:w.nodes[0].targetId}:{})})),fingerprint);
  }
  async start(peer:Peer,id:string){return this.graphs&&await this.graphs.exists(id)?this.graphs.start(peer,id):this.jobs.start(peer,id);}
+ async received(peer:Peer,id:string,body:unknown){if(await this.graphs?.exists(id))return this.graphs!.received(peer,id,body);const result=await this.jobs.received(peer,id,body);await this.retention?.sweepRelay();return result;}
  async status(peer:Peer,id:string){return this.graphs&&await this.graphs.exists(id)?this.graphs.status(peer,id):this.jobs.status(peer,id);}
  async cancel(peer:Peer,id:string){return this.graphs&&await this.graphs.exists(id)?this.graphs.cancel(peer,id):this.jobs.cancel(peer,id);}
 }

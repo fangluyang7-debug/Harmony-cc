@@ -44,7 +44,7 @@
 | --- | --- | --- |
 | `POST /v2/executions/:attemptId/authorize` | `{}` | `{ offer: DispatchOfferV2, snapshotVersion, inputTicket }`，比对任务、取得真实派发快照版本及输入读票据 |
 | `POST /v2/executions/:attemptId/input` | `{}` | `{ ticket: ArtifactTicket }`，READ |
-| `POST /v2/executions/:attemptId/output` | `{ bytes, contentHash, schemaId }` | `{ ticket: ArtifactTicket, delivery: "LOCAL" | "RELAY" }`，WRITE；LOCAL 由来源 App 宿主在私有缓存持久化，RELAY 按票据上传 |
+| `POST /v2/executions/:attemptId/output` | `{ bytes, contentHash, schemaId, retentionFailure?: "ARTIFACT_CACHE_FULL" }` | LOCAL / RELAY 返回 `{ ticket: ArtifactTicket, delivery }`；RETAINED 返回 `{ descriptor, endpoint, delivery }`；详见下文 |
 
 票据使用固定的协调者制品端点；输入任务不能自带任意网络地址。业务载荷存放于制品缓存，CpuJob 控制记录只保存引用和元数据。
 
@@ -56,16 +56,70 @@
 
 常见可见原因：`NO_AVAILABLE_TARGET`、`ALLOTMENT_UNAVAILABLE`、`INPUT_NOT_UPLOADED`、`JOB_CONFLICT`、`JOB_SCOPE`、`JOB_RECOVERY_REQUIRED`、`CAPABILITY_NOT_QUALIFIED`、`OUTPUT_CONFLICT`。HTTP 错误正文的 message 携带代码；客户端不会打印完整配置或凭证。
 
-当前结果等待超时只表示客户端不再等待，不表示任务已取消。已提交的 requestId 可继续查询，不应直接用新 ID 重复同一操作。完整 SDK 生命周期、DAG、传输规划、会话结果目的地和 App 配额在后续补齐。
+当前结果等待超时只表示客户端不再等待，不表示任务已取消。已提交的 requestId 可继续查询，不应直接用新 ID 重复同一操作。SDK、DAG、传输规划和 App 配额的当前范围以 STATUS 为准；会话结果目的地仍待后续。
 
 ### S3 取消与来源本机结果
 
 `POST /v2/executions/:attemptId/control` 正文 `{}`，返回 `{cancel,settled}`；仅已认证的执行 holder/device 可以查询。控制状态查询不要求旧任务仍可新准入，以便旧占用恢复和取消结算。取消意图保存在 CpuJob，查询失败不能当成取消成功。PC 持久化请求并中止执行器，Harmony 在执行安全边界检查；两端都等实际执行退出后才结算，已经成功的结果可能先于取消生效。
 
-来源 App 在私有宿主执行且计划声明本机结果时，结果字节不上传协调者，输出清单与回执仍按原协议提交。SDK 使用同一安装私有缓存读取并验证哈希/长度；跨宿主任务继续通过中继。旧计划没有声明本机结果时保留中继行为。`decisionEvidence.resultDelivery=ORIGIN_LOCAL` 标记此路径；它不表示存储读写耗时已经实测。
+来源 App 在私有宿主执行且计划声明本机结果时，结果字节不上传协调者，输出清单与回执仍按原协议提交。SDK 使用同一安装私有缓存读取并验证哈希/长度；单节点跨宿主结果及未声明 S5 保留/直传的计划沿用中继。S5 图内中间结果按下文交付已提交输出。`decisionEvidence.resultDelivery=ORIGIN_LOCAL` 标记来源本机路径；它不表示存储读写耗时已经实测。
 
 ### S5 已提交中间结果的 PC 推送
 
 `POST /v2/executions/:attemptId/output` 在保留输出时返回 `{delivery:"RETAINED",descriptor,endpoint}`。在执行回执提交前，生产宿主保存并校验字节，通过 `POST /v2/executions/:attemptId/retained` 发送完整描述。该接口沿用执行宿主身份和活动 attempt 的限制。
 
 `GET /v2/data/deliveries` 使用宿主控制通道凭据，返回当前 holder 和端点代次的待交付项。每项包含 `deliveryId`、作为下游 jobId 的 `attemptId`、`producerAttemptId`、接收端 `endpointId`、`ref` 和 `bytes`。宿主调用 `POST /v2/data/authorizations`，提交 `{deliveryId,attemptId,endpointId,operation:"WRITE"}`。v2 签名另含生产 attempt、交付事项和制品原始硬期限 `artifactExpiresAt`。签发与在线核销均按工作流声明的数据边、父节点当前已提交回执、双方端点、安装实例与下游目的地复核。接收方完整校验后调用既有 receipts 接口。重复确认沿用首次记录的期限。普通来源输入继续使用 v1 授权。
+
+
+### S5 交付失败与按需中继（PC）
+
+`POST /v2/data/deliveries/failed` 正文 `{authorizationId}`，仅授权的申请宿主可报告。已完成回执优先：响应丢失时保留已确认副本；其余失败只记录本次交付失败，不删除原件，也不重开计算 attempt。
+
+尚未派发的下游在输入准备阶段调用同一 `PlanningService`，按原工作流截止时间排除已失败的直传目的地并比较合法路径。中继方案保存两跳估计和可用并发；变更目的地时更新交付 ID、撤销旧的未使用授权。输入确认前继续拒绝启动计算。
+
+中继交付使用同一 `/v2/data/authorizations` v2 签名。`endpointId` 是协调者身份派生的认证中继，绑定原生产回执、完整 ref、App、下游交付 ID 和协调者代次。业务 PUT 发往签名端点的 `/v2/direct/:authorizationId`，只携带一次性授权与 proof。中继与 PC 复用同一签名传输处理器，在线原子核销并校验全部字节，回执完成后输入才可派发；终态 `/executions/:id/output` 保护继续生效。中继签名路径用于局域网原生 TLS，代理 TLS 模式暂不启用。
+
+中继签名接收与既有制品上传/下载共享 4 个 HTTP 并发槽位；签发另限制最多 4 项未过期的中继上传授权。规划使用可用槽位与两跳成本，实际传输仍在服务端限流。中继验收回执幂等，不延长制品硬期限或业务预算。下游沿原执行输入读取接口从中继下载并校验哈希，复用 LOAD 区间；中继接收增加带传输授权 ID 的 TRANSFER_RECV 区间。不同域区间不直接相加冒充完整端到端。
+
+### S5 精确缺失、容量拒绝与预派发改派
+
+以下接口均使用已有宿主控制凭据；业务传输端点仍只接收一次性授权和 proof：
+
+| 请求 | 正文 | 范围与结果 |
+| --- | --- | --- |
+| `POST /v2/data/deliveries/missing` | `{attemptId,deliveryId,ref}` | 当前待交付项的发送宿主报告本地缺失；绑定完整 ref 与当前端点代次，返回 `{recorded:true}` |
+| `POST /v2/data/missing` | `{authorizationId}` | 仅已核销 READ 的实际数据端点报告缺失，精确标记该副本，返回 `{recorded:true}` |
+| `POST /v2/data/rejections` | `{authorizationId,code:"ARTIFACT_CACHE_FULL"}` | 仅已核销 WRITE 的接收端报告缓存不足；授权变为 REJECTED，记录交付失败，返回 `{recorded:true}` |
+
+普通超时或通用 403 只影响路径判断，不证明文件消失。准备步骤先复查已确认副本，再经过同一规划器改派或换路；已有 attempt/outbox 不被覆盖。可对外服务的 C 副本必须来自已确认 v2 收货，沿用 B 已提交回执的数据血缘；本地专用和普通 v1 上传副本不被升级。无可行来源且端点换代、全部认证确认缺失、硬期限到期或剩余预算不足时，图返回 FAILED，并在 `rejection` 中给出 `ARTIFACT_UNAVAILABLE` 及原因，不重算已提交的 B。
+
+生产端仍持有完整输出字节、但 RETAINED 落盘返回缓存满时，可在活动 attempt 上再次调用 output，附 `retentionFailure`。服务端经同一规划器核对固定生产者的中继发布成本及剩余后续预算，成功才返回 RELAY 写票据；不会重新选执行器或创建计算 attempt。接收端缓存满可改为从中继读取到内存消费，仍须由规划器判定可行。终态 attempt 不能调用该接口。
+
+中继的实际剩余缓存字节数进入输入准备的内部容量快照；空间不足时不选择需要新增中继副本的路径。已确认的中继副本仍可下载，合法直传也继续参与比较。该快照不是磁盘预留：并发传输仍以实际写入时的容量检查为准。核销后发生中继缓存满时，由协调者本地签名接收处理器关联同一授权登记 REJECTED 和 `ARTIFACT_CACHE_FULL`，发送者的通用失败报告不覆盖它；不会由发送者任意声明中继容量。无可行输入路径且中继空间不足时，图返回 FAILED，`rejection.code=ARTIFACT_CACHE_FULL`、`reason=NO_FEASIBLE_INPUT_PATH`，不等待原预算耗尽或重新计算已提交节点。
+
+### S5 保留、释放和结果领取确认
+
+| 请求 | 正文 | 返回 |
+| --- | --- | --- |
+| `POST /v2/data/cache/inventory` | `{epoch,objects:[{ref,bytes,expiresAt}]}`，每批最多 64 项 | `{recorded:true}`；当前端点仅登记待清理清单，不生成可读或可服务证明 |
+| `GET /v2/data/retention` | 无 | `{endpointId,epoch,release:[{id,ref,epoch}]}`；按持久化图、实际结算和在途授权生成释放意图 |
+| `POST /v2/data/releases` | `{id,epoch,ref}` | `{released:true}`；实际删除文件后确认，重复确认幂等 |
+| `POST /v2/sdk/jobs/:id/received` | `{ref,bytes,sourceInterval?:{clockDomainId,startMono,endMono}}` | `{received:true}`；仅任务来源 App，对成功输出的完整 ref 和长度确认 |
+
+中间结果保留至全部依赖消费者提交，并保护未结算执行与有效传输。释放意图使副本不再供新选路；宿主在无传输、缓存快照未变化时删除精确描述和字节文件，再确认。离线或端点换代后使用清单补清理，清单不恢复旧副本权限。最终输出保留到 SDK 完整校验后确认领取，或原任务截止后五分钟与制品硬期限中较早者；下载票据本身不是领取确认。
+
+SDK 结果重复读取和回调复用该任务对象已校验的字节。可用时，来源 SDK 用一次原始提交到完整校验的同域单调区间上报；恢复对象、时钟换代或缺少测量端口时不拼接起点。追踪 `coverage` 提供 `sourceSdkRoot`、`sourceDurationMs`、`criticalPathPending` 和 `reasonCode`；来源耗时已实测也不等于完整跨域关键路径已建立。计量上报失败不改变已校验的业务结果。
+
+### S5 传输追踪、因果投影和分段估计
+
+`POST /v2/data/traces` 使用宿主控制凭据，正文严格为 `{authorizationId,side:"SENDER"|"RECEIVER",interval:{clockDomainId,startMono,endMono}}`。仅接受已 COMPLETED 的 v2 WRITE：发送方绑定该授权的申请凭据和 sender holder，接收方绑定 receiver holder/device；服务端从授权和下游记录核对完整 ref、字节数及生产 attempt。响应 `{recorded:true}`，同一授权/侧的重复报告保留首次记录。制品内容、proof 和长期凭据不进入追踪。
+
+- 发送方记录完整 HTTP 请求区间，`TRANSFER_SEND / FULL_TRANSFER / SENDER`；接收方记录从接收处理到完整校验落盘的区间，`TRANSFER_RECV / PARTIAL_TRANSFER / SENDER`，在回执 RPC 前结束。PC 与中继共用该边界。
+- 接收方校验完成可能早于发送方收到 HTTP 响应。因果分析保留接收方就绪节点，不能把它替换成发送方完整区间的结束点。累计传输工作量按唯一权威完整区间计一次；缺失/冲突时标记计量不完整，不取两端最大值。局部接收区间进入已测因果链时仍标明边界不完整。
+- 计时上报异步、有界；接收响应和传输槽位释放不等待追踪消费者，失败不改变已完成传输。普通 v1 来源上传没有升级为此范围。
+
+`GET /v2/traces/:traceId` 继续使用既有 reader 权限，增加 `causality:{complete,links:[{beforeSpanId,afterSpanId,reason}],missing}`。读取时把已认证的来源根、持久化的已提交前置、实际派发和已完成收货连接起来，保留原始跨度记录。C 转交给 D 的关联同时要求同一 App 完整 ref、生产血缘和同一进程时钟上先收到后转发；重启或证据不足会登记缺失。查询不执行规划或派发。
+
+`causality.complete` 描述当前因果投影所需记录是否齐备；完整计量由 `analysis.status` 和 `coverage.criticalPathPending` 共同判断。跨时钟未知间隙、部分传输边界或旧 LOAD/PUBLISH 中未拆开的数据传输仍阻止完整关键路径及残差结论。协调者保存规划区间的时钟域，重启后不会把旧进程的单调时间绑定到新进程。
+
+规划时保存对应快照的 EXECUTE、QUEUE、PUBLISH 分段估计；PUBLISH 包含该计划的结果发布传输。读取时仅对快照版本和目标一致的跨度关联该估计。`analysis.predictionErrors` 按段返回 `{spanId,phase,targetId,snapshotVersion,predictedMs,measuredMs,errorMs}`，`errorMs=measuredMs-predictedMs`，保留负值；没有对齐估计的段不补零。LOAD、冷启动和旧传输的完整分解、在途剩余时间仍待后续，不用这些单段误差代替端到端收益。

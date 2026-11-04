@@ -22,3 +22,15 @@ test('a transfer counts its declared full authoritative interval once, never the
  expect(analyzeTrace([span('root',0,25),tx]).issues).toContain('TRANSFER_MEASUREMENT_INCOMPLETE');
  expect(analyzeTrace([span('root',0,25),{...tx,authoritativeSide:'SENDER'},rx]).issues).toContain('TRANSFER_MEASUREMENT_INCOMPLETE');
 });
+
+test('receiver readiness is not replaced by the later sender response; partial milestones do not inflate work',()=>{
+ const tx={...span('tx',0,20),phase:'TRANSFER_SEND',transferId:'transfer1',measurementScope:'FULL_TRANSFER',authoritativeSide:'SENDER'};
+ const rx={...span('rx',0,10),phase:'TRANSFER_RECV',transferId:'transfer1',measurementScope:'PARTIAL_TRANSFER',authoritativeSide:'SENDER'};
+ const r=analyzeTrace([span('root',0,35),tx,rx,span('compute',10,30,['rx'])]);
+ expect(r.work.transferMs).toBe(20);expect(r.work.computeMs).toBe(20);expect(r.criticalPathMs).toBe(30);
+ expect(r.criticalSpanIds).toEqual(['rx','compute']);expect(r.issues).not.toContain('CAUSAL_OVERLAP');expect(r.issues).toContain('CRITICAL_TRANSFER_BOUNDARY_PARTIAL');expect(r.unexplainedMs).toBeNull();
+ const conflict=analyzeTrace([span('root',0,35),tx,{...rx,measurementScope:'FULL_TRANSFER',authoritativeSide:'RECEIVER'}]);
+ expect(conflict.work.transferMs).toBe(0);expect(conflict.issues).toContain('TRANSFER_MEASUREMENT_INCOMPLETE');
+ const io=analyzeTrace([span('root',0,20),{...span('io',0,10),phase:'LOAD'}]);expect(io.work.computeMs).toBe(0);expect(io.work.otherMs).toBe(10);
+ const predicted=analyzeTrace([span('root',0,20),{...span('compute',0,10),predictedMs:50}]);expect(predicted.predictionErrors[0].errorMs).toBe(-40);expect(predicted.predictionErrors[0].snapshotVersion).toBe(1);
+});

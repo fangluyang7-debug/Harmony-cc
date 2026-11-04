@@ -3,9 +3,10 @@ const {runtime}=require('./helpers.cjs'),{builtinCpuPacks,cpuConfiguration}=requ
 const {CpuHost}=require('../../pc-agent/dist/host'),{DurableLedger}=require('../../pc-agent/dist/durable-ledger');
 const base=builtinCpuPacks()[0],raw=Buffer.from('{"text":"graph"}'),counts=Buffer.from('{"characters":5,"words":1,"lines":1}');
 function identityPack(id,schema,bytes){return {...base,maxOutputBytes:4096,manifest:{...base.manifest,packId:id,contract:{...base.manifest.contract,contractId:id,capability:id,serviceId:id,inputSchemas:[schema],outputSchemas:[schema]}},cases:[{id:'identity',input:bytes,parameters:'{}',config:cpuConfiguration,maxOutputBytes:4096}],evaluate:async(_c,out)=>out.equals(bytes)?1:0};}
+const isolateBC=process.env.HARMONY_TEST_BLOCK_BC==='1';
 const collect=identityPack('source.collect.v1','text.input',raw),final=identityPack('source.finish.v1','text.counts',counts);
 async function until(fn){const end=Date.now()+60000;while(Date.now()<end){if(await fn())return;await new Promise(r=>setTimeout(r,150));}throw Error('GRAPH_HOST_TIMEOUT');}
-test('SDK three-node graph moves a private source result to a remote worker and returns to the fixed source service',async()=>{
+test(isolateBC?'S5 relay isolation: committed B output crosses relay to C without recomputation':'SDK three-node graph moves a private source result to a remote worker and returns to the fixed source service',async()=>{
  const r=await runtime({cpuHost:true,referencePacks:[...builtinCpuPacks(),collect,final]}),hosts=[],errors=[];
  try{
   const group=randomUUID(),capacity=[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:268435456}];
@@ -37,15 +38,60 @@ test('SDK three-node graph moves a private source result to a remote worker and 
   // arrives, before the downstream start re-plans. The received replica must win.
   let uploaded=false,directUploads=0;const originalWrite=sdk.port.write,originalStart=r.jobs.start.bind(r.jobs);
   r.jobs.start=async(peer,jobId,...rest)=>{const row=await r.db.cpuJob.findUnique({where:{id:jobId}}),task=row?JSON.parse(row.metadataJson).offer.task:null;if(task?.workflowId===id&&task.nodeId==='count'&&!uploaded)throw Error('INPUT_NOT_UPLOADED');return originalStart(peer,jobId,...rest);};
-  sdk.port.write=async(ticket,bytes)=>{
-   await originalWrite(ticket,bytes);if(!ticket.direct)return;directUploads++;
-   assert.equal(await r.directTransfers.hasInput(group,remote.holderInstanceId,source.peer.app.appInstanceId,ticket.ref),true);
-   await r.directTransfers.resetNetwork(source.peer);await r.profiles.refresh(group);uploaded=true;
+  const originalReceipt=r.directTransfers.receipt.bind(r.directTransfers);
+  r.directTransfers.receipt=async(peer,receipt)=>{
+   const reply=await originalReceipt(peer,receipt),grant=await r.db.transferAuthorization.findUniqueOrThrow({where:{id:receipt.authorizationId}}),authorization=JSON.parse(grant.metadataJson).authorization;
+   const job=await r.db.cpuJob.findUnique({where:{id:authorization.attemptId}}),d=job&&JSON.parse(job.metadataJson);
+   if(d?.offer.task.workflowId===id&&d.offer.task.nodeId==='count'&&!uploaded){
+    directUploads++;assert.equal(await r.directTransfers.hasInput(group,remote.holderInstanceId,source.peer.app.appInstanceId,authorization.ref),true);
+    await r.directTransfers.resetNetwork(source.peer);await r.profiles.refresh(group);uploaded=true;
+   }return reply;
   };
   const invalid=structuredClone(workflow);invalid.nodes[1].inputFrom='missing';await assert.rejects(sdk.plan(invalid,{requestId:randomUUID(),budgetMs:30000,resultDestination:'ORIGIN'}),/SDK_GRAPH_EDGE_INVALID/);
-  const task=await sdk.submit(workflow,{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'}),result=await task.result();
+  let blockedWrites=0,relayDownloads=0;
+  if(isolateBC){
+   const read=hosts[0].agent.runtime.ports.read;hosts[0].agent.runtime.ports.read=async(ref,offer)=>{
+    if(offer.task.workflowId===id&&offer.task.nodeId==='finish'){
+      const row=await r.db.cpuJob.findUniqueOrThrow({where:{id:offer.task.attemptId}}),d=JSON.parse(row.metadataJson);
+      assert.equal(d.delivery.relay,true);assert.equal(await r.directTransfers.relayConfirmed(row.id,d.delivery.id),true);
+      assert.ok(offer.transferPlan.some(p=>p.from===r.store.senderInstanceId));
+      const bytes=await read(ref,offer);assert.deepEqual(bytes,counts);relayDownloads++;return bytes;
+    }return read(ref,offer);
+   };
+  }
+  if(isolateBC){
+   // Break only incoming direct business transfers at C. Both hosts keep their
+   // authenticated coordinator connections and relay transport untouched.
+   const server=hosts[0].dataHost.server,handlers=server.listeners('request');
+   server.removeAllListeners('request');server.on('request',(req,res)=>{
+    if(req.method==='PUT'&&req.url.startsWith('/v2/direct/')&&!req.url.startsWith('/v2/direct/probe')){blockedWrites++;req.destroy();return;}
+    for(const handler of handlers)handler.call(server,req,res);
+   });
+  }
+  const task=await sdk.submit(workflow,{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
+  let result;
+  try{result=await task.result();}finally{
+   if(isolateBC){
+    const graph=await r.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}}),g=JSON.parse(graph.metadataJson);
+    const rows=await r.db.cpuJob.findMany({where:{groupId:group}}),jobs=rows.map(row=>({row,data:JSON.parse(row.metadataJson)})).filter(x=>x.data.offer.task.workflowId===id);
+    const attempts=await r.db.attempt.findMany({where:{workflowId:id}});
+    console.log('RELAY_ISOLATION_EVIDENCE '+JSON.stringify({state:graph.state,blockedWrites,deadlineAt:g.deadlineAt,remainingMs:g.deadlineAt-Date.now(),
+     attempts:attempts.map(a=>({nodeId:JSON.parse(a.taskJson).nodeId,state:a.state})),jobs:jobs.map(({row,data:d})=>({nodeId:d.offer.task.nodeId,state:row.state,retained:!!d.retainOutput,delivery:!!d.delivery,preparation:d.delivery?.preparation,received:d.delivery?.received,relayAvailable:d.output?r.artifacts.available(d.output):null,inputRelayAvailable:r.artifacts.available(d.input),deadlineAt:d.deadlineAt,plan:d.plan.decision.suggestion})),
+     relayLinks:(await r.snapshots.build(group)).snapshot.links.filter(l=>!l.endpointId).map(l=>({from:l.from,to:l.to,observedAt:l.observedAt,ttlMs:l.ttlMs})),errors:[...new Set(errors)]}));
+    assert.equal(attempts.filter(a=>JSON.parse(a.taskJson).nodeId==='count').length,1,'transport failures must not recompute B');
+    assert.ok(blockedWrites>0,'the fault must interrupt a real B-to-C business upload');
+    assert.equal(relayDownloads,1,'C reads and verifies the relay bytes once');
+    assert.ok(g.deadlineAt>Date.now(),'completion must fit the original budget');
+    const child=jobs.find(x=>x.data.offer.task.nodeId==='finish').data;
+    assert.ok(child.delivery.preparation.uploadMs>0&&child.delivery.preparation.downloadMs>0);
+    assert.ok(child.delivery.preparation.estimatedMs<=child.delivery.preparation.remainingMs);
+    assert.equal(child.delivery.received.bytes,counts.length);assert.ok(child.delivery.received.remainingMs>0);
+    assert.ok(jobs.every(({data:d})=>d.deadlineAt===g.deadlineAt),'all nodes keep the original workflow deadline');
+   }
+  }
+
   assert.deepEqual(JSON.parse(Buffer.from(result.output)),JSON.parse(counts));assert.equal(result.status.state,'SUCCEEDED');
-  assert.equal(directUploads,1);r.jobs.start=originalStart;sdk.port.write=originalWrite;
+  assert.equal(directUploads,1);r.jobs.start=originalStart;sdk.port.write=originalWrite;r.directTransfers.receipt=originalReceipt;
   const attempts=await r.db.attempt.findMany({where:{workflowId:id}});assert.equal(attempts.length,3);assert.equal(new Set(attempts.map(a=>a.nodeId)).size,3);
   const trace=[];
   for(const a of attempts){assert.equal((await r.db.receipt.findUnique({where:{id:a.id}})).committed,true);const offer=JSON.parse(a.offerJson);trace.push([offer.task.nodeId,offer.target.backend,offer.task.workflowId]);}
@@ -55,13 +101,13 @@ test('SDK three-node graph moves a private source result to a remote worker and 
     const produced=await jobFor(child.inputFrom),consumed=await jobFor(child.id);
     if(child.id==='finish'){
       assert.ok(produced.retainOutput);assert.equal(r.artifacts.available(produced.output),false);
-      assert.ok(consumed.delivery);assert.ok(await r.directTransfers.hasInput(group,source.peer.holderInstanceId,source.peer.app.appInstanceId,produced.output.ref));
+      assert.ok(consumed.delivery);if(!isolateBC)assert.ok((await r.db.transferAuthorization.findMany({where:{attemptId:consumed.offer.task.attemptId,state:'COMPLETED'}})).length,'direct receipt remains durable after cache release');
     }
     assert.deepEqual(consumed.input,produced.output);
     assert.equal(consumed.sourceAttemptId,produced.offer.task.attemptId);
   }
   const finalJob=await r.db.cpuJob.findUnique({where:{id:attempts.find(a=>JSON.parse(a.taskJson).nodeId==='finish').id}});assert.equal(r.artifacts.available(JSON.parse(finalJob.metadataJson).output),false);
-  const graphTrace=await r.traces.read(source.peer,id);assert.equal(graphTrace.traceId,id);assert.equal(new Set(graphTrace.spans.map(s=>s.nodeId)).size,3);
+  const graphTrace=await r.traces.read(source.peer,id);assert.equal(graphTrace.traceId,id);assert.equal(graphTrace.coverage.sourceSdkRoot,true);assert.ok(graphTrace.coverage.sourceDurationMs>0);assert.equal(graphTrace.coverage.criticalPathPending,true);assert.equal(new Set(graphTrace.spans.map(s=>s.nodeId)).size,3);if(isolateBC){assert.ok(graphTrace.spans.some(s=>s.nodeId==='finish'&&s.phase==='TRANSFER_RECV'));assert.ok(graphTrace.spans.some(s=>s.nodeId==='finish'&&s.phase==='LOAD'));}
   await task.status();assert.equal(await r.db.attempt.count({where:{workflowId:id}}),3,'status must not replay committed nodes');
   const cancelId=randomUUID(),cancelWorkflow=structuredClone(workflow);cancelWorkflow.id=cancelId;
   const runtime=hosts[0].agent.runtime,read=runtime.ports.read;let release,entered;

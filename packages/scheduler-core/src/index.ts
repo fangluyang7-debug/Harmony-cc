@@ -10,4 +10,5 @@ export * from './resources-v2';
 export * from './ledger-v2';
 export * from './micro-queue';
 export * from './trace-analysis';
+export * from './trace-causality';
 export * from './network-state';

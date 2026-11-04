@@ -4,7 +4,7 @@ const {execFileSync}=require('node:child_process');
 const {X509Certificate}=require('node:crypto');
 const {signTransfer,verifyTransfer,transferDigest}=require('../dist');
 
-test('signed grants bind endpoint, app, attempt, content, direction and lifetime',t=>{
+test('signed grants bind endpoint, app, attempt, content, direction and lifetime',async t=>{
  const dir=fs.mkdtempSync(path.join(os.tmpdir(),'transfer-grant-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
  function identity(name){
   const key=path.join(dir,name+'.key'),cert=path.join(dir,name+'.crt');
@@ -33,4 +33,16 @@ test('signed grants bind endpoint, app, attempt, content, direction and lifetime
  assert.throws(()=>verifyTransfer(signed,coordinator.certificate,'REAL',now));
  for(const time of [now-1,now+30000,NaN,Infinity])assert.throws(()=>verifyTransfer(signed,coordinator.certificate,'SIMULATED',time));
  assert.throws(()=>signTransfer({...a,expiresAt:now+60001},coordinator.key));
+ // An unavailable telemetry consumer cannot hold a completed byte transfer or
+ // its transfer slot. This handler fixture does not replace online scope tests.
+ const https=require('node:https'),{createSignedDataHandler,directTransfer}=require('../dist');let current,release,started=false,finished=false,timer;
+ const blocked=new Promise(resolve=>release=resolve),handler=createSignedDataHandler({directory:path.join(dir,'cache'),domain:'SIMULATED',...endpoint,coordinatorCertificate:coordinator.certificate,
+   endpoint:()=>current,schemas:new Map([['text:1',()=>true]]),consume:async()=>{},receipt:async()=>{},onReceived:async()=>{started=true;await blocked;finished=true;}});
+ const server=https.createServer({key:endpoint.key,cert:endpoint.certificate},handler.handle);
+ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));current={...a.endpoint,address:'https://localhost:'+server.address().port+'/'};
+ try{
+  const proof='p'.repeat(43),grant={signed:signTransfer({...a,endpoint:current,proofHash:transferDigest(proof),issuedAt:Date.now(),expiresAt:Date.now()+30000},coordinator.key),proof};
+  await Promise.race([directTransfer(grant,coordinator.certificate,'SIMULATED',Buffer.from('bytes')),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('TELEMETRY_BLOCKED_TRANSFER')),5000);})]);
+  assert.equal(started,true);assert.equal(finished,false);assert.equal(handler.channel.availableTransferSlots,4);
+ }finally{clearTimeout(timer);release();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
 });

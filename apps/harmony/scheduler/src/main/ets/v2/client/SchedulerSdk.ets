@@ -14,7 +14,11 @@ export interface SdkInputTransfer {read:SdkTicket;write:SdkTicket;}
 export interface SdkStatus {inputTransfers?:SdkInputTransfer[];jobId:string;state:string;targetId:string;deviceId:string;traceId:string;outputTicket:SdkTicket|null;}
 export interface SdkResult {jobId:string;output:Uint8Array;status:SdkStatus;}
 /** Platform adapter owns trust, authenticated requests, bytes and the clock. No agent dependency. */
+export interface SdkSourceInterval {clockDomainId:string;startMono:number;endMono:number;}
+export interface SdkReceived {ref:SdkRef;bytes:number;sourceInterval?:SdkSourceInterval;}
+export interface SdkClock {clockDomainId:string;milliseconds:number;}
 export interface SdkPort {
+ measure?():SdkClock;
  connected?():boolean;
  writeDirect?(jobId:string,endpointId:string,ticket:SdkTicket,bytes:Uint8Array):Promise<void>;
  stageInput?(input:SdkInput,bytes:Uint8Array):Promise<void>;
@@ -26,15 +30,22 @@ export interface SdkPort {
  now():number;
  wait(ms:number):Promise<void>;
 }
+function sourceClock(port:SdkPort):SdkClock|undefined{
+ try{const clock=port.measure?.();if(clock&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(clock.clockDomainId)&&Number.isFinite(clock.milliseconds)&&clock.milliseconds>=0)return clock;}catch{}
+ return undefined;
+}
 export class SdkTask {
  private waiting:Promise<SdkResult>|undefined;
+ private completed:SdkResult|undefined;
  readonly id:string;
  private readonly port:SdkPort;
- constructor(id:string,port:SdkPort){this.id=id;this.port=port;}
+ private readonly sourceStart:SdkClock|undefined;
+ constructor(id:string,port:SdkPort,sourceStart?:SdkClock){this.id=id;this.port=port;this.sourceStart=sourceStart;}
  async status():Promise<SdkStatus>{const status=JSON.parse(await this.port.request('/v2/sdk/jobs/'+this.id,null)) as SdkStatus;if(status.jobId!==this.id||typeof status.state!=='string')throw Error('SDK_RESPONSE_INVALID');return status;}
  async cancel():Promise<string>{return this.port.request('/v2/sdk/jobs/'+this.id+'/cancel','{}');}
  result(timeoutMs=60000):Promise<SdkResult>{
   if(!Number.isFinite(timeoutMs)||timeoutMs<1||timeoutMs>300000)return Promise.reject(Error('SDK_WAIT_INVALID'));
+  if(this.completed)return Promise.resolve(this.completed);
   if(!this.waiting)this.waiting=this.poll(timeoutMs).finally(()=>{this.waiting=undefined;});return this.waiting;
  }
  private async poll(timeoutMs:number):Promise<SdkResult>{
@@ -42,7 +53,7 @@ export class SdkTask {
   while(this.port.now()<deadline){
    const status=await this.status();
    for(const transfer of status.inputTransfers??[]){const bytes=await this.port.read(transfer.read);if(bytes.byteLength!==transfer.write.bytes||await this.port.digest(bytes)!==transfer.write.ref.contentHash)throw Error('SDK_TRANSFER_INTEGRITY');await this.port.write(transfer.write,bytes);}
-   if(status.outputTicket){const output=await this.port.read(status.outputTicket);if(output.byteLength!==status.outputTicket.bytes||await this.port.digest(output)!==status.outputTicket.ref.contentHash)throw Error('SDK_OUTPUT_INTEGRITY');return {jobId:this.id,output,status};}
+   if(status.outputTicket){const output=await this.port.read(status.outputTicket);if(output.byteLength!==status.outputTicket.bytes||await this.port.digest(output)!==status.outputTicket.ref.contentHash)throw Error('SDK_OUTPUT_INTEGRITY');const result:SdkResult={jobId:this.id,output,status};this.completed=result;try{const end=sourceClock(this.port),start=this.sourceStart;const received:SdkReceived={ref:status.outputTicket.ref,bytes:output.byteLength};if(start&&end&&start.clockDomainId===end.clockDomainId){const interval:SdkSourceInterval={clockDomainId:start.clockDomainId,startMono:start.milliseconds,endMono:end.milliseconds};received.sourceInterval=interval;}await this.port.request('/v2/sdk/jobs/'+this.id+'/received',JSON.stringify(received));}catch{/* Retention expires conservatively if the acknowledgment is lost. */}return result;}
    if(['FAILED','REJECTED','CANCELLED','CANCELLED_SETTLED','SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING','BUDGET_EXHAUSTED'].includes(status.state))throw Error('JOB_'+status.state);
    await this.port.wait(250);
   }
@@ -92,6 +103,7 @@ export class SchedulerSdk {
   }
  }
  async submit(workflow:SdkWorkflow|SdkAlternatives,options:SubmitOptions):Promise<SdkTask>{
+  const sourceStart=sourceClock(this.port);
   // Hold registered snapshots across asynchronous planning, even if the caller releases them.
   const available=new Map<string,Uint8Array>();
   const paths:SdkWorkflow[]=isAlternatives(workflow)?(workflow as SdkAlternatives).alternatives:[workflow as SdkWorkflow];
@@ -122,6 +134,6 @@ export class SchedulerSdk {
    await this.port.write(plan.inputTicket,bytes);
    await this.startJob(plan.jobId,startDeadline);
   }
-  return this.resume(plan.jobId);
+  return new SdkTask(plan.jobId,this.port,sourceStart);
  }
 }

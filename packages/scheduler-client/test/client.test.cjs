@@ -39,7 +39,7 @@ test('SDK plans before bytes, snapshots registered input, preserves one request 
  const task=await client.submit({version:3,id,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:id,budgetMs:30000,resultDestination:'ORIGIN'});
  assert.equal(Buffer.from(sent).toString(),'hello');assert.deepEqual(calls.slice(0,3),['/v2/sdk/jobs','write','/v2/sdk/jobs/'+id+'/start']);
  const result=await new Promise((resolve,reject)=>task.onResult(resolve,reject));assert.equal(result.jobId,id);assert.deepEqual(result.output,output);
- port.read=async()=>Buffer.from('wrong');await assert.rejects(task.result(),/SDK_OUTPUT_INTEGRITY/);
+ const acknowledgments=calls.filter(route=>route.endsWith('/received')).length;assert.equal(acknowledgments,1);port.read=async()=>Buffer.from('wrong');assert.equal((await task.result()).jobId,id,'completed task reuses the verified result');await assert.rejects(client.resume(id).result(),/SDK_OUTPUT_INTEGRITY/);assert.equal(calls.filter(route=>route.endsWith('/received')).length,acknowledgments,'invalid bytes must not acknowledge delivery');
 });
 test('refused or ambiguous plans never send bytes, dispatch, or retry; timeout does not cancel a live job',async()=>{
  let requests=0,writes=0,time=0;
@@ -75,4 +75,14 @@ test('start retries keep the same job, obey the wait bound, and preserve permane
   await assert.rejects(sdk.startJob('same',500),new RegExp(code));
   assert.equal(starts,code==='APP_CONTRACT_FORBIDDEN'?1:3);assert.ok(now<=500);
  }
+});
+
+test('SDK measures only an original submission with one monotonic clock and acknowledges verified bytes',async()=>{
+ const events=[],output=Buffer.from('ok');let tick=0;
+ const port={measure:()=>({clockDomainId:'clock',milliseconds:++tick}),now:Date.now,wait:async()=>{},digest:async bytes=>digest(bytes),write:async()=>{},read:async()=>output,request:async(route,body)=>{
+  if(route==='/v2/sdk/jobs')return JSON.stringify({jobId:'measured',inputTicket:{operation:'WRITE',bytes:1,ref:{contentHash:digest(Buffer.from('x'))}}});
+  if(route.endsWith('/received')){events.push(JSON.parse(body));return '{}';}
+  return JSON.stringify({jobId:'measured',state:'SUCCEEDED',outputTicket:{bytes:2,ref:{contentHash:digest(output)}}});
+ }};
+ const sdk=new SchedulerSdk(port),input=await sdk.registerInput(Buffer.from('x'),'input');const task=await sdk.submit({nodes:[{input}]},{requestId:'measured'});await task.result();assert.deepEqual(events[0].sourceInterval,{clockDomainId:'clock',startMono:1,endMono:2});await assert.rejects(task.result(-1),/SDK_WAIT_INVALID/);await sdk.resume('measured').result();assert.equal(events[1].sourceInterval,undefined,'resume cannot reconstruct an unknown submission origin');port.measure=()=>{throw Error('CLOCK_UNAVAILABLE');};const retry=await sdk.submit({nodes:[{input}]},{requestId:'measured'});await retry.result();assert.equal(events[2].sourceInterval,undefined,'missing measurement must not block submission or acknowledgment');
 });

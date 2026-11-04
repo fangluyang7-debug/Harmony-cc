@@ -1,7 +1,7 @@
 import https from 'node:https';
 import tls from 'node:tls';
 import { certificateFingerprint, Invitation } from './auth';
-import { protocolId, validAppIdentityV2, validResourceVectorV2, validAllotmentGrantV2, validTraceSpanV2, analyzeTrace, canonical, validExecutorV2, validCapabilityAdmissionV2 } from '@harmony/scheduler-core';
+import { protocolId, validAppIdentityV2, validResourceVectorV2, validAllotmentGrantV2, validTraceSpanV2, analyzeTrace, canonical, validExecutorV2, validCapabilityAdmissionV2, validTraceCausality } from '@harmony/scheduler-core';
 
 const exact=(v:any,keys:string[])=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join('|')===[...keys].sort().join('|');
 function validResponse(route:string,value:any):boolean {
@@ -17,8 +17,8 @@ function validResponse(route:string,value:any):boolean {
   if(route==='/v2/allotments/ack')return exact(value,['acknowledged'])&&value.acknowledged===true;
   if(route.startsWith('/v2/qualification/'))return exact(value,['executor','admission'])&&validExecutorV2(value.executor)&&validCapabilityAdmissionV2(value.admission)&&
     route==='/v2/qualification/'+value.executor.target.targetId&&value.admission.targetId===value.executor.target.targetId;
-  if(route.startsWith('/v2/traces/'))return exact(value,['traceId','spans','analysis'])&&protocolId(value.traceId)&&route==='/v2/traces/'+value.traceId&&
-    Array.isArray(value.spans)&&value.spans.length<=16384&&value.spans.every(validTraceSpanV2)&&value.spans.every((s:any)=>s.traceId===value.traceId)&&canonical(value.analysis)===canonical(analyzeTrace(value.spans));
+  if(route.startsWith('/v2/traces/'))return exact(value,['traceId','spans','analysis',...(value.coverage?['coverage']:[]),...(value.causality?['causality']:[])])&&(!value.coverage||exact(value.coverage,['sourceSdkRoot','sourceDurationMs','criticalPathPending','reasonCode'])&&typeof value.coverage.sourceSdkRoot==='boolean'&&typeof value.coverage.criticalPathPending==='boolean'&&(value.coverage.sourceDurationMs===null||Number.isFinite(value.coverage.sourceDurationMs)&&value.coverage.sourceDurationMs>=0)&&protocolId(value.coverage.reasonCode))&&protocolId(value.traceId)&&route==='/v2/traces/'+value.traceId&&
+    Array.isArray(value.spans)&&value.spans.length<=16384&&value.spans.every(validTraceSpanV2)&&value.spans.every((s:any)=>s.traceId===value.traceId)&&(!value.causality||validTraceCausality(value.causality,value.spans))&&canonical(value.analysis)===canonical(analyzeTrace(value.spans));
   if(route==='/v2/traces')return exact(value,['accepted'])&&Number.isSafeInteger(value.accepted)&&value.accepted>=1&&value.accepted<=128;
   return false;
 }

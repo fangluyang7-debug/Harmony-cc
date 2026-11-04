@@ -66,8 +66,7 @@ export class TelemetryView {
     const data=parsed(row.metadataJson),rows=await this.db.traceSpan.findMany({where:{groupId:peer.groupId}});
     const coverage={sourceSdkRoot:false,reasonCode:'SOURCE_SDK_ROOT_NOT_RECORDED'};
     if(!rows.some(r=>parsed(r.metadataJson).span.traceId===data.traceId))return {traceId:data.traceId,spans:[],analysis:null,state:'WAITING_FOR_EVIDENCE',coverage};
-    // Current ingestion authenticates executor/control spans, not a source SDK end-to-end root.
-    // A structurally complete single PLAN span is not evidence of submit-to-result latency.
-    try{return {...await this.traces.read(peer,data.traceId),state:'RECORDED',coverage};}catch(error){if(error instanceof Error&&error.message==='TRACE_UNAUTHORIZED')throw Error('TRACE_FORBIDDEN');throw error;}
+    // Coverage comes from the authenticated SDK root, not a structurally complete PLAN span.
+    try{return {...await this.traces.read(peer,data.traceId),state:'RECORDED'};}catch(error){if(error instanceof Error&&error.message==='TRACE_UNAUTHORIZED')throw Error('TRACE_FORBIDDEN');throw error;}
   }
 }

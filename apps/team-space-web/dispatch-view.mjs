@@ -12,9 +12,11 @@ export function sample(sample,now){
 }
 export function traceSummary(trace){
   if(!trace?.analysis)return {complete:false,endToEnd:'UNKNOWN',critical:'UNKNOWN',issues:[]};
-  const complete=trace.analysis.status==='COMPLETE'&&trace.coverage?.sourceSdkRoot===true;
-  const issues=[...(trace.analysis.issues??[])];if(trace.coverage?.sourceSdkRoot!==true)issues.push(trace.coverage?.reasonCode??'SOURCE_SDK_ROOT_UNKNOWN');
-  return {complete,endToEnd:complete?ms(trace.analysis.endToEndMs):'UNKNOWN',critical:complete?ms(trace.analysis.criticalPathMs):'UNKNOWN',issues};
+  const complete=trace.analysis.status==='COMPLETE'&&trace.coverage?.sourceSdkRoot===true&&trace.coverage?.criticalPathPending!==true&&trace.causality?.complete!==false;
+  const issues=[...(trace.analysis.issues??[]),...(trace.causality?.missing??[])];if(trace.coverage?.criticalPathPending===true)issues.push(trace.coverage?.reasonCode??'CRITICAL_PATH_DEPENDENCIES_INCOMPLETE');if(trace.coverage?.sourceSdkRoot!==true)issues.push(trace.coverage?.reasonCode??'SOURCE_SDK_ROOT_UNKNOWN');
+  const conflict=issues.some(i=>['CAUSAL_CYCLE','CAUSAL_OVERLAP','TRANSFER_CAUSAL_CONFLICT','NEGATIVE_RESIDUAL'].includes(i));
+  return {complete,endToEnd:number(trace.coverage?.sourceDurationMs)?ms(trace.coverage.sourceDurationMs):complete?ms(trace.analysis.endToEndMs):'UNKNOWN',critical:complete?ms(trace.analysis.criticalPathMs):'UNKNOWN',
+    measuredChain:!conflict&&trace.causality?.links?.length&&number(trace.analysis.measuredCriticalMs)?ms(trace.analysis.measuredCriticalMs):'UNKNOWN',issues:[...new Set(issues)]};
 }
 export function traceGroups(spans){
   const groups=new Map();for(const span of spans){if(!groups.has(span.clockDomainId))groups.set(span.clockDomainId,[]);groups.get(span.clockDomainId).push(span);}

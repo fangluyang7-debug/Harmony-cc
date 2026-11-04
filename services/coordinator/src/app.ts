@@ -1,9 +1,11 @@
 import {retryableJobError} from './job-errors';
 import {WorkflowJobs} from './workflow-jobs';
+import {ArtifactRetention} from './retention';
 import {DirectTransfers} from './direct-transfers';
 import { SpaceEvents } from './space-events';
 import 'reflect-metadata';
 import fs from 'node:fs';
+import {X509Certificate} from 'node:crypto';
 import path from 'node:path';
 import { BadRequestException, ConflictException, Body, Controller, Get, Header, Headers, Param, Module, Post, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -28,7 +30,7 @@ import {TelemetryView} from './telemetry-view';
 import { AppRegistry } from './apps';
 import { SdkJobs } from './sdk';
 import type { ExecutorV2 } from '@harmony/scheduler-core';
-import { ArtifactChannel, ArtifactSchema } from '@harmony/resource-transport';
+import { ArtifactChannel, ArtifactSchema,createSignedDataHandler,DataEndpointIdentity } from '@harmony/resource-transport';
 import { validDeviceProfileV2, validResourceVectorV2, validAllotmentAckV2, protocolId } from '@harmony/scheduler-core';
 
 export async function createCoordinator(config:CoordinatorConfig, recover:(db:PrismaClient,epoch:number)=>Promise<void>=async()=>{},options:{onError?:(error:unknown)=>void;authenticate?:(token:string)=>Promise<Peer>;artifactSchemas?:ReadonlyMap<string,ArtifactSchema>;cpuHost?:boolean;referencePacks?:ReferencePack[]}={}){
@@ -64,11 +66,19 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       @Post('data/endpoints/challenge')async endpointChallenge(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.challenge(await auth.authenticate(bearer(header)),body));}
       @Post('data/endpoints/register')async endpointRegister(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.register(peer,body);await refreshNetwork(peer.groupId);return result;});}
       @Get('data/endpoints')async endpoints(@Headers('authorization') header:string){return this.jobResponse(async()=>directTransfers.list(await auth.authenticate(bearer(header))));}
+      @Post('data/deliveries/missing')async deliveryMissing(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.deliveryMissing(await auth.authenticate(bearer(header)),body));}
+      @Post('data/rejections')async transferRejected(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.transferRejected(await auth.authenticate(bearer(header)),body));}
+      @Post('data/missing')async readMissing(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.readMissing(await auth.authenticate(bearer(header)),body));}
+      @Post('data/deliveries/failed')async deliveryFailed(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.deliveryFailed(await auth.authenticate(bearer(header)),body));}
+      @Post('data/cache/inventory')async cacheInventory(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>retention.inventory(await auth.authenticate(bearer(header)),body));}
+      @Get('data/retention')async retentionPlan(@Headers('authorization') header:string){return this.jobResponse(async()=>retention.plan(await auth.authenticate(bearer(header))));}
+      @Post('data/releases')async releaseConfirmed(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>retention.confirm(await auth.authenticate(bearer(header)),body));}
       @Get('data/deliveries')async pendingDeliveries(@Headers('authorization') header:string){return this.jobResponse(async()=>directTransfers.pendingDeliveries(await auth.authenticate(bearer(header))));}
       @Post('data/authorizations')async transferAuthorization(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.issue(await auth.authenticate(bearer(header)),body));}
       @Post('data/consume')async transferConsume(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.consume(await auth.authenticate(bearer(header)),body));}
       @Post('data/observations')async transferObservation(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.observe(peer,body);if(result.recorded)await refreshNetwork(peer.groupId);return result;});}
       @Post('data/receipts')async transferReceipt(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.receipt(await auth.authenticate(bearer(header)),body));}
+      @Post('data/traces')async transferTrace(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>traces.transfer(await auth.authenticate(bearer(header)),body));}
       @Post('data/network/reset')async networkReset(@Headers('authorization') header:string){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.resetNetwork(peer);await refreshNetwork(peer.groupId);return result;});}
       @Post('data/network/report')async networkReport(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.reportLink(peer,body);await refreshNetwork(peer.groupId);return result;});}
       @Get('data/network')async networkStatus(@Headers('authorization') header:string){return this.jobResponse(async()=>directTransfers.network(await auth.authenticate(bearer(header))));}
@@ -98,6 +108,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       @Get('sdk/jobs/:id')@Header('Cache-Control','no-store')async sdkStatus(@Headers('authorization') header:string,@Param('id') id:string){
         if(!ready||!options.cpuHost)throw new ServiceUnavailableException('CPU_HOST_DISABLED');return this.jobResponse(async()=>sdk.status(await auth.authenticate(bearer(header)),id));
       }
+      @Post('sdk/jobs/:id/received')async resultReceived(@Headers('authorization') header:string,@Param('id') id:string,@Body() body:any){return this.jobResponse(async()=>sdk.received(await auth.authenticate(bearer(header)),id,body));}
       @Post('sdk/jobs/:id/cancel')async sdkCancel(@Headers('authorization') header:string,@Param('id') id:string){
         if(!ready||!options.cpuHost)throw new ServiceUnavailableException('CPU_HOST_DISABLED');return this.jobResponse(async()=>sdk.cancel(await auth.authenticate(bearer(header)),id));
       }
@@ -171,14 +182,28 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     app.use('/v2/spaces',(req:any,res:any)=>{void spaces.handle(req,res);});
     if(config.webDir)app.use(express.static(path.resolve(config.webDir),{index:'index.html',maxAge:0}));
     app.use((request:any,response:any,next:()=>void)=>{
-      if(request.url.startsWith('/v2/artifacts/')){if(!ready){response.status(503).end();return;}void artifacts.handle(request,response);}
+      if(request.url.startsWith('/v2/direct/')){if(!ready||!relayData){response.status(503).end();return;}relayData.handle(request,response);}
+      else if(request.url.startsWith('/v2/artifacts/')){if(!ready){response.status(503).end();return;}void artifacts.handle(request,response);}
       else next();
     });
     await app.init();
     let epoch=0;
+    const relayEndpoint=(groupId=''):DataEndpointIdentity=>({id:identity.id,groupId,holderInstanceId:identity.id,deviceId:identity.id,epoch:String(epoch),
+      address:config.publicUrl??'https://'+(config.certificateHost.includes(':')?'['+config.certificateHost+']':config.certificateHost)+':'+app.getHttpServer().address().port,
+      certificate:identity.cert,fingerprint:new X509Certificate(identity.cert).fingerprint256.replaceAll(':','').toLowerCase()});
+    // Proxy TLS uses a different certificate; signed relay is enabled on LAN TLS only.
+    const relayData=config.proxy?null:createSignedDataHandler({directory:path.join(config.dataDir,'artifact-cache'),domain:config.domain,key:identity.key,certificate:identity.cert,
+      coordinatorCertificate:identity.cert,endpoint:groupId=>groupId?relayEndpoint(groupId):null,channel:artifacts,schemas:options.artifactSchemas??(options.cpuHost?cpuSchemas:new Map()),
+      consume:(signed,proof)=>directTransfers.relayConsume(signed,proof),receipt:(id,hash,bytes)=>directTransfers.relayReceipt(id,hash,bytes),onRejected:(id,code)=>directTransfers.relayRejected(id,code),onReceived:async(signed,start,end)=>{
+        const row=await db.cpuJob.findUniqueOrThrow({where:{id:signed.authorization.attemptId}}),d=JSON.parse(row.metadataJson);
+        await traces.transfer({groupId:signed.authorization.groupId,deviceId:identity.id,holderInstanceId:identity.id,principalId:identity.id,credentialId:identity.id},
+          {authorizationId:signed.authorization.id,side:'RECEIVER',interval:{clockDomainId:traces.clockDomainId,startMono:start,endMono:end}});
+      }});
+    if(relayData)directTransfers.configureRelay({endpoint:relayEndpoint,available:d=>artifacts.available(d),slots:()=>artifacts.availableTransferSlots,bytes:()=>artifacts.availableCacheBytes});
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
     const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>{events.changed(groupId);graphs.changed(groupId);},error=>options.onError?.(error));
-    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks,directTransfers),graphs=new WorkflowJobs(db,jobs,apps,artifacts,referencePacks),sdk=new SdkJobs(jobs,referencePacks,graphs);
+    const retention=new ArtifactRetention(db,directTransfers,artifacts);
+    const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks,directTransfers),graphs=new WorkflowJobs(db,jobs,apps,artifacts,referencePacks,retention),sdk=new SdkJobs(jobs,referencePacks,graphs,retention);
     const telemetry=new TelemetryView(db,directory,traces,groupId=>directTransfers.dashboard(groupId));
     const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk,groupId=>directTransfers.dashboard(groupId),telemetry);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
@@ -196,7 +221,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const restore=()=>restoration??(restoration=(async()=>{
       await db.$connect();
       const state=await db.coordinatorState.upsert({where:{id:identity.id},create:{id:identity.id,epoch:1},update:{epoch:{increment:1}}});epoch=state.epoch;
-      await store.recover(epoch);await recover(db,epoch);ready=true;
+      await store.recover(epoch);await recover(db,epoch);ready=true;retention.start();
       if(options.cpuHost){
         for(const groupId of new Set((await auth.activePeers()).map(p=>p.groupId)))await configureCpuGroup(groupId);
         startCalibration({packs:referencePacks,policy:{maxRuns:8,maxDurationMs:120000,maxBytes:1048576,maxConcurrent:1,caseTimeoutMs:15000,canarySamples:1,activeSamples:2,evidenceTtlMs:3600000,cooldownMs:5000},
@@ -227,7 +252,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       },onError:input.onError},input.intervalMs);
       calibration.start();return service;
     };
-    return {app,db,identity,store,snapshots,planning,channel,auth,apps,sdk,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,directTransfers,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
-      close:async()=>{if(closed)return;closed=true;ready=false;spaces.close();remoteEvaluation.close();await graphs.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
+    return {app,db,identity,store,retention,snapshots,planning,channel,auth,apps,sdk,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,directTransfers,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
+      close:async()=>{if(closed)return;closed=true;ready=false;spaces.close();remoteEvaluation.close();await graphs.close();await retention.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
   }catch(error){await db.$disconnect();await unlock();throw error;}
 }

@@ -96,13 +96,12 @@ test('registered App host qualifies and executes SDK work through the shared pla
     const metadata=JSON.parse((await r.db.cpuJob.findUnique({where:{id:choiceId}})).metadataJson);
     const relayedInput=r.artifacts.available(metadata.input);
     if(local)assert.equal(relayedInput,false);
-    else if(!relayedInput){
-      assert.equal(await r.directTransfers.hasInput(group,remoteHolder,peer.app.appInstanceId,metadata.input.ref),true);
-      const copy=remoteHost.dataHost?.channel.lookup(group,metadata.input.ref);assert.ok(copy,'remote input must have a verified direct replica');
-      assert.deepEqual(await remoteHost.dataHost.channel.readForControl(copy),Buffer.from('{"text":"App host"}'));
+    else if(metadata.offer.transferPlan.length===0){
+      assert.ok((await r.db.transferAuthorization.findMany({where:{attemptId:choiceId,state:'COMPLETED'}})).some(row=>JSON.parse(row.metadataJson).authorization.operation==='WRITE'));
+      const copy=remoteHost.dataHost?.channel.lookup(group,metadata.input.ref);if(copy)assert.equal(copy.ref.contentHash,metadata.input.ref.contentHash);
       assert.deepEqual(metadata.offer.transferPlan,[],'a completed upload is executor-local at dispatch');
     }
-    assert.equal(r.artifacts.available(metadata.output),!local);
+    assert.equal(r.artifacts.available(metadata.output),false,'verified result acknowledgment releases relay bytes');assert.ok(metadata.resultReceivedAt);
   }
  }finally{await remoteHost?.close();await host?.close();await r.close();}
 });

@@ -8,6 +8,7 @@ import {DataEndpointIdentity,ArtifactSchema,validDataEndpoint,transferDigest} fr
 import {RecoveryConnection} from './recovery-client';
 import {allotmentTransport} from './allotment-client';
 import {createSignedDataEndpoint} from './signed-data-endpoint';
+import {pcTraceClockDomainId} from './execution-trace';
 
 export interface DataHostConfig {listenHost:string;advertisedHost:string;port?:number;openssl?:string;}
 function opensslExecutable(explicit?:string){
@@ -49,6 +50,9 @@ export async function openDataHost(directory:string,connection:RecoveryConnectio
   const request=allotmentTransport(connection);let endpoint:DataEndpointIdentity|null=null;
   const data=createSignedDataEndpoint({directory:path.join(storage,'cache'),domain:connection.domain,key:identity.key,certificate:identity.certificate,
     coordinatorCertificate:connection.certificate,endpoint:()=>endpoint,schemas,
+    onRejected:(authorizationId,code)=>request('/v2/data/rejections',{authorizationId,code}),
+    onMissing:authorizationId=>request('/v2/data/missing',{authorizationId}),
+    onReceived:async(signed,startMono,endMono)=>{if(signed.authorization.version===2)await request('/v2/data/traces',{authorizationId:signed.authorization.id,side:'RECEIVER',interval:{clockDomainId:pcTraceClockDomainId,startMono,endMono}});},
     consume:(signed,proof)=>request('/v2/data/consume',{signed,proof}),receipt:(authorizationId,contentHash,bytes)=>request('/v2/data/receipts',{authorizationId,contentHash,bytes})});
   try{
     await new Promise<void>((resolve,reject)=>{data.server.once('error',reject);data.server.listen(options.port??0,options.listenHost,()=>resolve());});

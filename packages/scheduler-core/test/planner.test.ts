@@ -85,6 +85,13 @@ describe('direct input routing',()=>{
       {from:'cloud',to:'pc',bytesPerSecond:100000,fixedMs:0,effective:true,source:'REAL',observedAt:now,ttlMs:3000,endpointId:'ep',endpointEpoch:'epoch',endpointOperation:'WRITE',fromHolderInstanceId:'source',toHolderInstanceId:'worker'}];
     return r;
   }
+  it('a source App retains graph intermediates only when it has a registered data endpoint',()=>{
+    const r=directFixture(),planner=new WorkflowPlacementPlanner(limits,()=>0),source=r.nodes[0].candidates[0];
+    source.appInstanceId='app';source.dataEndpoint={id:'source-endpoint',epoch:'source-epoch'};r.nodes[0].candidates=[source];
+    r.appInstanceId='app';r.localResultHolderId='source';r.nodes[0].output.retainAtExecutor=true;r.materializeOutputsAt='relay';
+    expect(planner.plan(r).suggestion?.[0].outputEndpointId).toBe('source-endpoint');
+    source.dataEndpoint=undefined;expect(planner.plan(r).suggestion?.[0].outputEndpointId).toBeUndefined();
+  });
   it('compares direct, relay and local using the same planner',()=>{
     const r=directFixture(),planner=new WorkflowPlacementPlanner(limits,()=>0);
     expect(planner.plan(r).suggestion?.[0].inputEndpointId).toBe('ep');
@@ -95,6 +102,17 @@ describe('direct input routing',()=>{
     expect(selected?.deviceId).toBe('pc');expect(selected?.inputEndpointId).toBeUndefined();
     expect(selected?.inputTransferMs).toBe(2);
   });
+  it('prepares a failed direct edge through two priced hops within the remaining budget and relay capacity',()=>{
+    const r=directFixture(),planner=new WorkflowPlacementPlanner(limits,()=>0);
+    r.nodes[0].candidates=r.nodes[0].candidates.filter(c=>c.deviceId==='pc');r.nodes[0].baselineTargetId='pc';r.excludedInputEndpoints=['ep'];
+    r.relayCapacity={deviceId:'relay',availableSlots:1,observedAt:now,ttlMs:1000};
+    const selected=planner.plan(r).suggestion?.[0];
+    expect(selected?.inputEndpointId).toBeUndefined();expect(selected?.inputRelayId).toBe('relay');
+    expect(selected?.inputTransferMs).toBe(selected!.inputUploadMs!+selected!.inputDownloadMs!);
+    r.remainingBudgetMs=selected!.inputTransferMs-1;expect(planner.plan(r).status).toBe('blocked');
+    r.remainingBudgetMs=1000;r.relayCapacity.availableSlots=0;expect(planner.plan(r).status).toBe('blocked');
+    r.relayCapacity.availableSlots=1;r.relayCapacity.observedAt=0;expect(planner.plan(r).status).toBe('blocked');
+  });
   it('prices a completed relay fallback from its actual replica',()=>{
     const r=directFixture(),planner=new WorkflowPlacementPlanner(limits,()=>0);
     r.artifacts[0].replicas[0].localOnly=true;
@@ -102,6 +120,17 @@ describe('direct input routing',()=>{
     const selected=planner.plan(r).suggestion?.[0];
     expect(selected?.deviceId).toBe('pc');expect(selected?.inputEndpointId).toBeUndefined();
     expect(selected?.inputTransferMs).toBe(1);
+  });
+  it('excludes relay ingress when measured cache space is insufficient but can still use a completed relay copy',()=>{
+    const r=directFixture(),planner=new WorkflowPlacementPlanner(limits,()=>0);
+    r.nodes[0].candidates=r.nodes[0].candidates.filter(c=>c.deviceId==='pc');r.nodes[0].baselineTargetId='pc';r.excludedInputEndpoints=['ep'];
+    r.relayCapacity={deviceId:'relay',availableSlots:1,availableBytes:r.artifacts[0].bytes-1,observedAt:now,ttlMs:1000};
+    expect(planner.plan(r).status).toBe('blocked');
+    r.relayCapacity.availableBytes=r.artifacts[0].bytes;expect(planner.plan(r).suggestion?.[0].inputRelayId).toBe('relay');
+    r.relayCapacity.availableBytes=0;r.artifacts[0].replicas.push({deviceId:'relay',readMs:0});
+    expect(planner.plan(r).status).toBe('ready');expect(planner.plan(r).suggestion?.[0].inputUploadMs).toBeUndefined();
+    r.artifacts[0].replicas.pop();r.excludedInputEndpoints=[];
+    expect(planner.plan(r).suggestion?.[0].inputEndpointId).toBe('ep');
   });
   it('does not reuse another holder or direction evidence',()=>{
     const r=directFixture();r.links[2].toHolderInstanceId='other';

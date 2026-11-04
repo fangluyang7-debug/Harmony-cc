@@ -1,8 +1,9 @@
+import { util } from '@kit.ArkTS';
 import { common } from '@kit.AbilityKit';
 import { http } from '@kit.NetworkKit';
 import { NativeTransport, TrustedCoordinator, bytes, text, hash, base64, monotonic } from '../platform/NativeTransport';
 import { NativeTransferGrant } from '../platform/NativeTransferGrant';
-import { SdkPort, SdkTicket, SdkInput } from './SchedulerSdk';
+import { SdkPort, SdkTicket, SdkInput, SdkClock } from './SchedulerSdk';
 interface AppExchange {credential:string;}
 interface AppCode {registrationId:string;code:string;}
 interface DirectFailure {endpointId:string;endpointEpoch:string;reason:string;}
@@ -11,6 +12,8 @@ interface DirectReceipt {authorizationId:string;contentHash:string;bytes:number;
 interface DirectRequest {attemptId:string;endpointId:string;operation:string;}
 /** Native adapter shared by SDK consumers. It has no dependency on agent or its journal. */
 export class HarmonySdkPort implements SdkPort {
+ private readonly clockDomainId:string=util.generateRandomUUID(true);
+ measure():SdkClock{return {clockDomainId:this.clockDomainId,milliseconds:monotonic()};}
  localRead?: (contentHash:string)=>Promise<Uint8Array|null>;
  connected?:()=>boolean;
  stageInput?: (input:SdkInput,data:Uint8Array)=>Promise<void>;

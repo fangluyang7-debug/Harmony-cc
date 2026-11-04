@@ -5,7 +5,7 @@ import { ModelManifestV2, ResourceAmountV2, sameModelV2 } from './resources-v2';
 export interface QualityEvidence {
   metric: string; evaluationId: string; direction: 'higher' | 'lower'; value: number;
 }
-export interface PlacementReplica { deviceId: string; readMs: number | null; holderInstanceId?:string; localOnly?:boolean; transferOperation?:'READ'|'WRITE'; }
+export interface PlacementReplica { deviceId: string; readMs: number | null; holderInstanceId?:string; localOnly?:boolean; transferOperation?:'READ'|'WRITE'; endpointId?:string;endpointEpoch?:string; }
 export interface PlacementArtifact { id: string; bytes: number; replicas: PlacementReplica[]; }
 export interface PlacementLink { from: string; to: string; bytesPerSecond: number; fixedMs: number; effective: boolean; observedAt: number; ttlMs: number; source: 'REAL' | 'SIMULATED'; endpointId?:string; endpointEpoch?:string; endpointOperation?:'READ'|'WRITE'; fromHolderInstanceId?:string; toHolderInstanceId?:string; }
 export interface PlacementCandidate {
@@ -35,6 +35,8 @@ export interface PlacementNode {
   candidates: PlacementCandidate[];
 }
 export interface PlacementRequest {
+  excludedInputEndpoints?:string[];
+  relayCapacity?:{deviceId:string;availableSlots:number;availableBytes?:number;observedAt:number;ttlMs:number};
   originHolderId?:string;
   localResultHolderId?:string;
   inputRelayId?:string;
@@ -50,7 +52,7 @@ export interface PlacementRequest {
 }
 export interface PlannerLimits { maxCandidates: number; lookahead: number; beamWidth: number; planningBudgetMs: number; switchCostMs: number; hysteresisMs: number; }
 export interface DeviceResources { deviceId: string; resourcePoolId: string; availableMemoryBytes: number | null; availableSlots: number | null; available?:number|null; observedAt: number; ttlMs: number; }
-export interface PlannerAssignment { outputEndpointId?:string; outputEndpointEpoch?:string; inputEndpointOperation?:'READ'|'WRITE'; inputEndpointId?:string; inputEndpointEpoch?:string; startMs?:number; finishMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
+export interface PlannerAssignment { inputSourceHolderId?:string;inputSourceEndpointId?:string;inputSourceEndpointEpoch?:string; inputRelayId?:string;inputUploadMs?:number;inputDownloadMs?:number; outputEndpointId?:string; outputEndpointEpoch?:string; inputEndpointOperation?:'READ'|'WRITE'; inputEndpointId?:string; inputEndpointEpoch?:string; startMs?:number; finishMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
 export interface PlannerRejection { targetId: string; nodeId: string; deviceId: string; executorId: string; code: string; }
 export interface WorkflowPlacementDecision { status: 'ready' | 'blocked'; baseline: PlannerAssignment[] | null; suggestion: PlannerAssignment[] | null;
   baselineMs: number | null; suggestionMs: number | null; rejections: PlannerRejection[]; truncated: number; planningMs: number; reason: string; }
@@ -135,27 +137,30 @@ export class WorkflowPlacementPlanner {
     if([c.computeMs,c.queueMs,c.coldMs,c.uncertaintyMs,c.publishMs].some(n=>n===null||!Number.isFinite(n)||n<0))return 'COST_UNKNOWN';
     return null;
   }
+  /** Price a fixed producer's publication; it never selects or dispatches another executor. */
+  publication(artifact:PlacementArtifact,to:string,request:PlacementRequest){return this.transfer(artifact,to,request);}
   private transfer(artifact:PlacementArtifact,to:string,r:PlacementRequest,holderInstanceId?:string):number|null {
     return this.transferRoute(artifact,to,r,holderInstanceId)?.cost??null;
   }
-  private transferRoute(artifact:PlacementArtifact,to:string,r:PlacementRequest,holderInstanceId?:string):{cost:number;endpointId?:string;endpointEpoch?:string;endpointOperation?:'READ'|'WRITE'}|null {
+  private transferRoute(artifact:PlacementArtifact,to:string,r:PlacementRequest,holderInstanceId?:string):{cost:number;sourceHolderId?:string;sourceEndpointId?:string;sourceEndpointEpoch?:string;relayId?:string;uploadMs?:number;downloadMs?:number;endpointId?:string;endpointEpoch?:string;endpointOperation?:'READ'|'WRITE'}|null {
     if(!Number.isSafeInteger(artifact.bytes)||artifact.bytes<0)return null;
-    const choices:{cost:number;endpointId?:string;endpointEpoch?:string;endpointOperation?:'READ'|'WRITE'}[]=[];
+    const choices:{cost:number;sourceHolderId?:string;sourceEndpointId?:string;sourceEndpointEpoch?:string;relayId?:string;uploadMs?:number;downloadMs?:number;endpointId?:string;endpointEpoch?:string;endpointOperation?:'READ'|'WRITE'}[]=[];
     const fresh=(l:PlacementLink)=>l.source===r.domain&&l.observedAt<=r.now&&r.now-l.observedAt<=l.ttlMs&&Number.isFinite(l.ttlMs)&&l.ttlMs>0&&
       Number.isFinite(l.bytesPerSecond)&&l.bytesPerSecond>0&&Number.isFinite(l.fixedMs)&&l.fixedMs>=0;
     for(const source of artifact.replicas){
       if(source.readMs===null||!Number.isFinite(source.readMs)||source.readMs<0)continue;
-      if(source.deviceId===to&&(!source.holderInstanceId||source.holderInstanceId===holderInstanceId)){choices.push({cost:source.readMs});continue;}
+      const origin={sourceHolderId:source.holderInstanceId,sourceEndpointId:source.endpointId,sourceEndpointEpoch:source.endpointEpoch};
+      if(source.deviceId===to&&(!source.holderInstanceId||source.holderInstanceId===holderInstanceId)){choices.push({cost:source.readMs,...origin});continue;}
       if(source.localOnly||!r.networkAllowed||r.privacy==='LOCAL_ONLY')continue;
       if(source.holderInstanceId&&r.inputRelayId){
         const upload=this.transfer({id:artifact.id,bytes:artifact.bytes,replicas:[{deviceId:source.deviceId,readMs:source.readMs}]},r.inputRelayId,{...r,inputRelayId:undefined});
         const download=this.transfer({id:artifact.id,bytes:artifact.bytes,replicas:[{deviceId:r.inputRelayId,readMs:0}]},to,{...r,inputRelayId:undefined});
-        if(upload!==null&&download!==null)choices.push({cost:upload+download});
-        for(const link of r.links.filter(l=>l.endpointId&&l.endpointEpoch&&l.endpointOperation===(source.transferOperation??'WRITE')&&l.from===source.deviceId&&l.to===to&&l.fromHolderInstanceId===source.holderInstanceId&&l.toHolderInstanceId===holderInstanceId&&fresh(l)))
-          choices.push({cost:source.readMs+artifact.bytes/link.bytesPerSecond*1000+(link.effective?0:link.fixedMs),endpointId:link.endpointId,endpointEpoch:link.endpointEpoch,endpointOperation:link.endpointOperation});
+        if(upload!==null&&download!==null&&(!r.relayCapacity||r.relayCapacity.deviceId===r.inputRelayId&&r.relayCapacity.availableSlots>=1&&(r.relayCapacity.availableBytes===undefined||Number.isFinite(r.relayCapacity.availableBytes)&&r.relayCapacity.availableBytes>=artifact.bytes)&&r.relayCapacity.observedAt<=r.now&&r.relayCapacity.observedAt+r.relayCapacity.ttlMs>=r.now))choices.push({cost:upload+download,...origin,relayId:r.inputRelayId,uploadMs:upload,downloadMs:download});
+        for(const link of r.links.filter(l=>l.endpointId&&!r.excludedInputEndpoints?.includes(l.endpointId)&&l.endpointEpoch&&l.endpointOperation===(source.transferOperation??'WRITE')&&l.from===source.deviceId&&l.to===to&&l.fromHolderInstanceId===source.holderInstanceId&&l.toHolderInstanceId===holderInstanceId&&fresh(l)))
+          choices.push({...origin,cost:source.readMs+artifact.bytes/link.bytesPerSecond*1000+(link.effective?0:link.fixedMs),endpointId:link.endpointId,endpointEpoch:link.endpointEpoch,endpointOperation:link.endpointOperation});
       }else{
         for(const link of r.links.filter(l=>!l.endpointId&&l.from===source.deviceId&&l.to===to&&fresh(l)))
-          choices.push({cost:source.readMs+artifact.bytes/link.bytesPerSecond*1000+(link.effective?0:link.fixedMs)});
+          choices.push({...origin,cost:source.readMs+artifact.bytes/link.bytesPerSecond*1000+(link.effective?0:link.fixedMs)});
       }
     }
     choices.sort((a,b)=>a.cost-b.cost);return choices[0]??null;
@@ -187,30 +192,34 @@ export class WorkflowPlacementPlanner {
     return Infinity;
   }
   private extend(state:Beam,node:PlacementNode,c:PlacementCandidate,r:PlacementRequest):Beam|null {
+    let inputSourceHolderId:string|undefined,inputSourceEndpointId:string|undefined,inputSourceEndpointEpoch:string|undefined;
+    let inputRelayId:string|undefined,inputUploadMs:number|undefined,inputDownloadMs:number|undefined;
     let inputEndpointId:string|undefined,inputEndpointEpoch:string|undefined,inputEndpointOperation:'READ'|'WRITE'|undefined;
     let transfer=0,ready=Math.max(0,...node.dependencies.map(id=>state.completed.get(id)??0));
     const artifacts=new Map(state.artifacts);
     for(const id of new Set(node.inputs)){
       const artifact=state.artifacts.get(id);if(!artifact)return null;
       const route=this.transferRoute(artifact,c.deviceId,r,c.holderInstanceId);if(route===null)return null;
-      if(node.inputs.length===1){inputEndpointId=route.endpointId;inputEndpointEpoch=route.endpointEpoch;inputEndpointOperation=route.endpointOperation;}
+      if(node.inputs.length===1){inputSourceHolderId=route.sourceHolderId;inputSourceEndpointId=route.sourceEndpointId;inputSourceEndpointEpoch=route.sourceEndpointEpoch;inputRelayId=route.relayId;inputUploadMs=route.uploadMs;inputDownloadMs=route.downloadMs;inputEndpointId=route.endpointId;inputEndpointEpoch=route.endpointEpoch;inputEndpointOperation=route.endpointOperation;}
       transfer+=route.cost;ready=Math.max(ready,state.ready.get(id)??0);
     }
     const output:PlacementArtifact={id:node.output.id,bytes:node.output.bytes,replicas:[{deviceId:c.deviceId,readMs:0}]};
     const localResult=r.localResultHolderId!==undefined&&c.holderInstanceId===r.localResultHolderId&&c.appInstanceId!==undefined&&c.appInstanceId===r.appInstanceId;
-    const retained=!!(node.output.retainAtExecutor&&c.dataEndpoint&&c.holderInstanceId&&!localResult);
-    if(retained)output.replicas[0]={deviceId:c.deviceId,holderInstanceId:c.holderInstanceId,readMs:0,transferOperation:'WRITE'};
+    const retained=!!(node.output.retainAtExecutor&&c.dataEndpoint&&c.holderInstanceId);
+    if(retained)output.replicas[0]={deviceId:c.deviceId,holderInstanceId:c.holderInstanceId,readMs:0,transferOperation:'WRITE',endpointId:c.dataEndpoint!.id,endpointEpoch:c.dataEndpoint!.epoch};
     if(localResult)output.replicas[0].holderInstanceId=c.holderInstanceId;
     const publication=r.materializeOutputsAt&&!localResult&&!retained?this.transfer(output,r.materializeOutputsAt,r):0;
     if(publication===null)return null;
     const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs+publication,duration=execution+c.uncertaintyMs;
-    const demands=this.demands(c,node,r),start=this.earliest(state.occupancy,demands,ready+transfer,duration),end=start+duration;
+    const relayDemands:PoolDemand[]=inputRelayId&&r.relayCapacity?[{key:'relay:'+inputRelayId,amount:1,capacity:r.relayCapacity.availableSlots}]:[];
+    const transferStart=this.earliest(state.occupancy,relayDemands,ready,transfer);
+    const demands=this.demands(c,node,r),start=this.earliest(state.occupancy,demands,transferStart+transfer,duration),end=start+duration;
     const cost=Math.max(state.cost,end);if(cost>r.remainingBudgetMs)return null;
     artifacts.set(node.output.id,r.materializeOutputsAt&&!localResult&&!retained?{...output,replicas:[{deviceId:r.materializeOutputsAt,readMs:0}]}:output);
     const completed=new Map(state.completed);completed.set(node.id,end);
     const availability=new Map(state.ready);availability.set(node.output.id,end);
-    return {cost,artifacts,ready:availability,completed,occupancy:[...state.occupancy,...demands.map(d=>({key:d.key,start,end,amount:d.amount}))],
-      assignments:[...state.assignments,{...(retained?{outputEndpointId:c.dataEndpoint!.id,outputEndpointEpoch:c.dataEndpoint!.epoch}:{}),...(inputEndpointId?{inputEndpointId,inputEndpointEpoch,inputEndpointOperation}:{}),targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,inputTransferMs:transfer,executionMs:execution,uncertaintyMs:c.uncertaintyMs,startMs:start,finishMs:end}]};
+    return {cost,artifacts,ready:availability,completed,occupancy:[...state.occupancy,...relayDemands.map(d=>({key:d.key,start:transferStart,end:transferStart+transfer,amount:d.amount})),...demands.map(d=>({key:d.key,start,end,amount:d.amount}))],
+      assignments:[...state.assignments,{...(inputSourceHolderId?{inputSourceHolderId,inputSourceEndpointId,inputSourceEndpointEpoch}:{}),...(inputRelayId?{inputRelayId,inputUploadMs,inputDownloadMs}:{}),...(retained?{outputEndpointId:c.dataEndpoint!.id,outputEndpointEpoch:c.dataEndpoint!.epoch}:{}),...(inputEndpointId?{inputEndpointId,inputEndpointEpoch,inputEndpointOperation}:{}),targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,inputTransferMs:transfer,executionMs:execution,uncertaintyMs:c.uncertaintyMs,startMs:start,finishMs:end}]};
   }
   private finish(state:Beam|null,nodes:PlacementNode[],r:PlacementRequest):Beam|null {
     if(!state||!r.finalDestination||!nodes.length)return state;
