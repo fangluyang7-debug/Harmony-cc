@@ -131,3 +131,5 @@ PC 旧制品 HTTP 路径现在在 LOAD/PUBLISH 内上报传输子跨度：下载
 鸿蒙 NativeAgent 同步记录中继 GET/PUT 的 FULL_TRANSFER 子跨度，并在 LOAD/PUBLISH 结束时绑定父阶段。该端的 HTTP 子跨度截至响应完成，后续输入长度/哈希校验包含在 LOAD 外层；HTTP 返回成功但校验失败时，LOAD 仍记录 PHASE_FAILED。传输子跨度不参与前后阶段依赖选择。
 
 追踪查询可从同一时钟域的 LOAD/PUBLISH 与完整 HTTP 子区间推导 `LOCAL_PHASE_UNCLASSIFIED` 剩余跨度。该值仅表示已测阶段中 HTTP 以外的区间，计入其他工作量，不表示计算或资源等待。跨时钟、重叠、越界或超过跨度/依赖上限时保留缺失原因；原始上报不改写。完整连续且依赖已连接的同域划分可用于局部因果链，跨域未知仍保留。
+
+QUEUE 可带 `OBSERVED_OWNER_ACTIVE`、`OBSERVED_RESOURCE_CAPACITY`、`OBSERVED_LOCAL_QUEUE_POLICY` 等曾观测原因；多种原因返回 `OBSERVED_MIXED_WAIT`。Harmony 宿主还可观察控制未就绪或准入串行化。该标记不表示整个排队区间由单一原因造成，不用于估算释放、不改变实际账本。没有观测则保留空原因；本地等待事实接口可按 attempt 和资源池关联原因。

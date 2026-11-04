@@ -19,7 +19,8 @@ test('device queue holds capacity through owner yield and settlement, then admit
  const scheduler=new DeviceScheduler(x.ledger,runtime,{shares:[.5,.3,.2],agingMs:100,maxConsecutive:2,yieldDeadlineMs:1000},n=>notices.push(n),()=>100);
  try{
   await scheduler.update(x.offer.resources,'IDLE');const first=scheduler.submit(x.offer,x.offer.allowedConfigs[0]);assert.equal(scheduler.submit(x.offer,x.offer.allowedConfigs[0]),first);await reading;
-  const next=structuredClone(x.offer);next.task.attemptId='second';const second=scheduler.submit(next,next.allowedConfigs[0]);
+  const next=structuredClone(x.offer);next.task.attemptId='second';const waiting=[];const second=scheduler.submit(next,next.allowedConfigs[0],{waiting:reason=>waiting.push(reason)});
+  assert.ok(waiting.includes('RESOURCE_CAPACITY'));
   await scheduler.update(x.offer.resources,'ACTIVE');assert.equal(notices[0].kind,'RESTART');assert.ok(occupiedV2(x.ledger.snapshot()).length);assert.equal(x.ledger.status('second'),null);
   release();assert.equal((await first).state,'CANCELLED_SETTLED');await scheduler.update(x.offer.resources,'IDLE');assert.equal((await second).state,'SUCCEEDED');assert.deepEqual(occupiedV2(x.ledger.snapshot()),[]);
  }finally{release();await scheduler.close();await x.ledger.close();}

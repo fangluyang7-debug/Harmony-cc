@@ -1185,3 +1185,15 @@ agent/probe 使用最终 HAR 的构建结果及 PC 全量结果随后登记。�
 
 验证：核心最终 46/46；正式追踪与 SDK 独立进程矩阵 3/3（约 82 秒），包含中继发布、容量失败和双图竞争，成功图仍为三个计算 attempt。整图后另加依赖数量保护，核心回归已覆盖；未重跑协调者全量。架构检查结果另随本轮记录。未修改原生源码，API 22 编译沿 §52；设备仍待验。
 `git diff --check` 与架构 24/24 通过。本节随 `feat(s5): account for measured local phase remainder` 提交。下一项为资源等待原因和因果关联，仍不标 B10/S5 完成。
+
+## 54. B10/B7 排队原因观测（2026-11-04）
+
+§53 提交为 `ed7adcd`。继续在正式 PC/Harmony 队列链路补观测，不改变候选选择、额度或执行语义。
+
+微队列提供只读 waitingReasons，绑定 attempt 与受阻资源池，依据实际 limits/occupied 区分 OWNER_ACTIVE、RESOURCE_CAPACITY、LOCAL_QUEUE_POLICY；无法判定时 QUEUE_WAIT_UNKNOWN。PC 使用当前账本占用并在选择前记录，遥测回调异常不会阻止准入。Harmony 使用同一算法，另按宿主真实门控记录 CONTROL_UNAVAILABLE、ADMISSION_SERIALIZATION；记录随任务结束清理。
+
+QUEUE 的 reasonCode 为 OBSERVED_<原因>，多种原因则 OBSERVED_MIXED_WAIT，未观察到阻塞不补造原因。这是队列期间曾观察到的原因，不是持续原因时间线，不能把整个 QUEUE 时长归到该原因，也不能作为在途预计释放值。细分等待跨度及资源结算到等待结束的因果关联仍待续。当前方法的资源池关联保留在本地事实接口，追踪 reasonCode 不编码资源身份。
+
+核心 47/47；PC 全量 46/46（含实际占用阻止第二任务及等待原因断言，`.test/s54-pc.log`）；之后新增实际 ArkTS MicroQueue 源码与 PC 的观测结果一致性测试，native-trace 文件 3/3，通过但不冒充原生运行。架构 24/24 通过。API 22 HAR 编译通过（`.test/s54-har.log`）；agent/probe 与正式 SDK 整图正在收尾，最终结果随后登记。模拟器和真机未运行。
+
+§54 最终整合：API 22 agent/probe 构建均通过（`.test/s54-agent.log`、`.test/s54-probe.log`）；正式 SDK 独立进程矩阵 **1/1**（`.test/s54-graph.log`，约 111 秒），覆盖成功、丢回执、直传隔离、容量和双图竞争。成功图均三个 attempt；中继满负例两个 attempt，明确 ARTIFACT_CACHE_FULL。尾部有一次 CONTROL_TRANSPORT_INTERRUPTED，进程退出码 0。未改业务预算。`git diff --check` 通过。随 `feat(s5): report observed queue blocking reasons` 提交，下一项仍是资源等待分段与真实结算关联，不把观测摘要当作 D2 等待估计。

@@ -6,6 +6,7 @@ export interface QueuePolicyV2 {shares:number[];agingMs:number;maxConsecutive:nu
 export interface QueueCreditV2 {priority:string;slots:number;}
 interface QueueScoreV2 {c:number;aged:number;debt:number;bounded:number;}
 interface QueueStreakV2 {last:number;count:number;}
+export interface QueueWaitEvidence {attemptId:string;reasonCode:string;resourcePoolIds:string[];}
 interface QueueEntry {offer:DispatchOfferV2;enqueuedAt:number;startedAt:number|null;}
 /** Queue selection is advisory. The host must atomically admit through its durable resource ledger before start(). */
 export class MicroQueueV2 {
@@ -54,6 +55,14 @@ export class MicroQueueV2 {
       return x.bounded-y.bounded||y.aged-x.aged||y.debt-x.debt||x.c-y.c||a.offer.task.budget.deadlineAt-b.offer.task.budget.deadlineAt||a.enqueuedAt-b.enqueuedAt||a.offer.task.attemptId.localeCompare(b.offer.task.attemptId);
     });
     return JSON.parse(JSON.stringify(candidates[0].offer)) as DispatchOfferV2;
+  }
+  /** Observations only: no reservation, selection, or predicted release. */
+  waitingReasons(limits:ResourceAmountV2[],occupied:ResourceAmountV2[],ownerIdle:boolean,selectedId:string|null):QueueWaitEvidence[]{
+    if(!validResourceVectorV2(limits)||!validResourceVectorV2(occupied))throw Error('QUEUE_RESOURCE_INVALID');
+    return this.rows().filter(e=>e.startedAt===null&&e.offer.task.attemptId!==selectedId).map((e:QueueEntry):QueueWaitEvidence=>{
+      const pools=vectorSumV2(occupied,e.offer.resources).filter(r=>r.amount>(limits.find(l=>l.resourcePoolId===r.resourcePoolId)?.amount??0)&&e.offer.resources.some(d=>d.resourcePoolId===r.resourcePoolId&&d.amount>0)).map(r=>r.resourcePoolId);
+      return {attemptId:e.offer.task.attemptId,reasonCode:!ownerIdle&&e.offer.task.priority!=='ORIGIN_INTERACTIVE'?'OWNER_ACTIVE':pools.length?'RESOURCE_CAPACITY':selectedId!==null?'LOCAL_QUEUE_POLICY':'QUEUE_WAIT_UNKNOWN',resourcePoolIds:pools};
+    });
   }
   start(id:string,now:number){const e=this.entries.get(id);if(!e||e.startedAt!==null||now<e.enqueuedAt)throw Error('QUEUE_NOT_READY');e.startedAt=now;
     const c=categories.indexOf(e.offer.task.priority);for(const r of e.offer.resources)if(r.amount>0){const old=this.streaks.get(r.resourcePoolId);this.streaks.set(r.resourcePoolId,{last:c,count:old?.last===c?old.count+1:1});}}

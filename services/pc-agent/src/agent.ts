@@ -114,9 +114,10 @@ export class PcAgent {
         if((offer.target.backend!=='CPU'&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.options.ports.fixedService))||offer.task.contract.interruptibility!=='CANCEL_RESTART')throw Error('EXECUTOR_UNSUPPORTED');
         const version=await this.options.snapshotVersion(offer);
         const trace=version===null?undefined:new ExecutionTrace(this.traces,{traceId:message.traceId,parentSpanId:null,snapshotVersion:version,deviceInstanceId:this.options.deviceInstanceId},offer);
-        const endQueue=trace?.begin('QUEUE');
-        try{await this.scheduler.submit(offer,this.options.select(offer),{message,trace,selected:()=>endQueue?.(),admitted:()=>{void this.client.flush();}});}
-        finally{endQueue?.();}
+        const endQueue=trace?.begin('QUEUE'),waitReasons=new Set<string>();
+        const finishQueue=()=>endQueue?.(waitReasons.size>1?'OBSERVED_MIXED_WAIT':waitReasons.size===1?'OBSERVED_'+[...waitReasons][0]:null);
+        try{await this.scheduler.submit(offer,this.options.select(offer),{message,trace,waiting:reason=>{waitReasons.add(reason);},selected:finishQueue,admitted:()=>{void this.client.flush();}});}
+        finally{finishQueue();}
       }catch(error){
         if(!this.ledger.status(id)){
           const reason=error instanceof Error&&/^[A-Z_]{1,100}(?::[A-Z_]{1,26})?$/.test(error.message)?error.message:'EXECUTION_REJECTED';

@@ -22,3 +22,14 @@ test('owner yield is intent only; running entries cannot be removed and expiry n
  expect(q.ownerYield(60)[0].reasonCode).toBe('RELEASE_OVERDUE');expect(()=>q.removeWaiting('job')).toThrow('RUNNING');expect(q.expired(20000)).toEqual([]);
  q.settle('job',70);expect(q.ownerYield(71)).toEqual([]);
 });
+
+test('waiting evidence separates actual occupancy, owner protection and local queue policy without changing selection',()=>{
+ const q=new MicroQueue('device1',policy),limits=[{resourcePoolId:'cpu1',amount:1}];
+ q.enqueue(offer('a'),0);q.enqueue(offer('b'),0);
+ const selected=q.choose(limits,[],1,true)!.task.attemptId;
+ expect(q.waitingReasons(limits,limits,true,null).every(e=>e.reasonCode==='RESOURCE_CAPACITY'&&e.resourcePoolIds[0]==='cpu1')).toBe(true);
+ expect(q.waitingReasons(limits,[],false,null).every(e=>e.reasonCode==='OWNER_ACTIVE')).toBe(true);
+ expect(q.waitingReasons(limits,[],true,selected)).toEqual([{attemptId:selected==='a'?'b':'a',reasonCode:'LOCAL_QUEUE_POLICY',resourcePoolIds:[]}]);
+ expect(q.choose(limits,[],1,true)!.task.attemptId).toBe(selected);
+ expect(q.waitingReasons(limits,[],true,null).every(e=>e.reasonCode==='QUEUE_WAIT_UNKNOWN')).toBe(true);
+});

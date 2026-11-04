@@ -14,7 +14,7 @@ export interface ExecutionPorts {
 export class PcExecutionRuntime {
   private readonly active=new Map<string,{abort:AbortController;done:Promise<ExecutionReceiptV2>}>();
   constructor(private readonly ledger:DurableLedger,private readonly ports:ExecutionPorts,private readonly delivery:'BUSINESS'|'EVALUATION'='BUSINESS'){}
-  async run(offer:DispatchOfferV2,selected:ExecutionConfigV2,hooks:{selected?:()=>void;admitted?:()=>void;trace?:ExecutionTrace;maxDurationMs?:number;message?:MessageEnvelopeV2}={}):Promise<ExecutionReceiptV2>{
+  async run(offer:DispatchOfferV2,selected:ExecutionConfigV2,hooks:{waiting?:(reason:string)=>void;selected?:()=>void;admitted?:()=>void;trace?:ExecutionTrace;maxDurationMs?:number;message?:MessageEnvelopeV2}={}):Promise<ExecutionReceiptV2>{
     if((offer.target.backend!=='CPU'&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.ports.fixedService))||offer.task.contract.sideEffectPolicy!=='PURE'||offer.task.inputs.length!==1||!offer.allowedConfigs.some(c=>canonical(c)===canonical(selected)))throw Error('EXECUTION_UNSUPPORTED');
     const admit=async()=>{const context=await this.ports.authorize(offer);return this.ledger.admit(offer,context,hooks.message);};
     const entry=hooks.trace?await hooks.trace.segment('ADMIT',admit):await admit(),id=entry.record.attemptId;

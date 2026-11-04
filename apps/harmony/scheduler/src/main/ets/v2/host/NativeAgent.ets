@@ -92,6 +92,7 @@ export class NativeAgent {
  private offered=new Set<string>();
  private queue:MicroQueueV2;
  private waiting=new Map<string,QueueWaiter>();
+ private waitReasons=new Map<string,Set<string>>();
  private launching=false;
  private queueStarted=new Set<string>();
  private links:LinkV2[]=[];
@@ -230,11 +231,13 @@ export class NativeAgent {
  private async yield():Promise<void>{await this.store.change(new HostChange(s=>{for(const id of this.running){const entry=s.state.entries.find(e=>e.record.attemptId===id);if(!entry||entry.record.resourcesSettled||entry.cancelRequested)continue;s.state=cancelAttemptV2(s.state,id);const notice:YieldNoticeV2={attemptId:id,kind:'RESTART',releaseMs:this.sample(null,'ms'),checkpoint:null,reasonCode:'OWNER_ACTIVE'};this.enqueue(s,'YieldNotice',notice);}}));await this.flush();}
  private digest(offer:DispatchOfferV2):string{const t=offer.task;const value:TaskDigest={inputs:t.inputs,contract:t.contract,parameters:t.parameters,allowedTargetIds:t.allowedTargetIds,allowedConfigurations:t.allowedConfigurations};return hash(bytes(canonical(value)));}
  private report(s:AgentSnapshotV2,receipt:ExecutionReceiptV2):void{const record=s.state.entries.find(e=>e.record.attemptId===receipt.attemptId)!.record;const report:ExecutionReportV2={receipt,allotmentId:record.allotmentId,allotmentVersion:record.allotmentVersion,leaseId:record.leaseId,actualModel:null,timings:[]};this.enqueue(s,'ExecutionReceipt',report);}
- private waitTurn(offer:DispatchOfferV2):Promise<void>{const queued=JSON.parse(JSON.stringify(offer)) as DispatchOfferV2;queued.task.budget.deadlineAt=monotonic()+Math.max(0,offer.task.budget.deadlineAt-this.transport.now());this.queue.enqueue(queued,monotonic());return new Promise<void>((resolve,reject)=>{this.waiting.set(offer.task.attemptId,{resolve,reject});this.pumpQueue();});}
+ private waitTurn(offer:DispatchOfferV2):Promise<void>{this.waitReasons.set(offer.task.attemptId,new Set<string>());const queued=JSON.parse(JSON.stringify(offer)) as DispatchOfferV2;queued.task.budget.deadlineAt=monotonic()+Math.max(0,offer.task.budget.deadlineAt-this.transport.now());this.queue.enqueue(queued,monotonic());return new Promise<void>((resolve,reject)=>{this.waiting.set(offer.task.attemptId,{resolve,reject});this.pumpQueue();});}
  private pumpQueue():void{
   for(const id of this.queue.expired(monotonic())){this.queue.removeWaiting(id);this.waiting.get(id)?.reject(Error('QUEUE_STARVED'));this.waiting.delete(id);}
-  if(this.launching||!this.ready||!this.idle())return;
-  const chosen=this.queue.choose(this.limits(),occupiedV2(this.store.read().state),monotonic(),this.idle());if(chosen===null)return;
+  if(this.launching||!this.ready||!this.idle()){const reason=!this.ready?'CONTROL_UNAVAILABLE':!this.idle()?'OWNER_ACTIVE':'ADMISSION_SERIALIZATION';this.waiting.forEach((_waiter:QueueWaiter,id:string)=>{this.waitReasons.get(id)?.add(reason);});return;}
+  const limits=this.limits(),occupied=occupiedV2(this.store.read().state),chosen=this.queue.choose(limits,occupied,monotonic(),this.idle());
+  for(const observation of this.queue.waitingReasons(limits,occupied,this.idle(),chosen?.task.attemptId??null))this.waitReasons.get(observation.attemptId)?.add(observation.reasonCode);
+  if(chosen===null)return;
   const waiter=this.waiting.get(chosen.task.attemptId);if(waiter!==undefined){this.launching=true;this.waiting.delete(chosen.task.attemptId);waiter.resolve();}
  }
  private async dispatch(message:MessageEnvelopeV2):Promise<void>{
@@ -253,11 +256,11 @@ export class NativeAgent {
    const evidence=await this.transport.json('/v2/qualification/'+offer.target.targetId) as Qualification;
    const local=this.executors().find(e=>e.target.targetId===offer.target.targetId);const a=evidence.admission;
    if(local===undefined||!validCapabilityAdmissionV2(a)||a.domain!==this.installation.bootstrap.domain||a.groupId!==offer.task.groupId||a.holderInstanceId!==this.installation.paired.peer.holderInstanceId||!['CANARY','ACTIVE'].includes(a.state)||a.quality.value===null||a.quality.sampledAt+a.quality.ttlMs<=this.transport.now()||canonical(evidence.executor.target)!==canonical(local.target)||canonical(local.contract)!==canonical(offer.task.contract)||canonical(local.resources)!==canonical(offer.resources)||a.identity!==this.executorDigest(local)||offer.allowedConfigs.some(c=>!local.configurations.some(config=>canonical(config)===canonical(c))))throw Error('CAPABILITY_NOT_QUALIFIED');
-   const trace=new NativeTrace(offer,message.traceId,authorization.snapshotVersion,this.instance);trace.add('QUEUE',queueStart,queueEnd);await trace.segment('ADMIT',()=>this.admit(offer,message,true));this.queue.start(id,monotonic());this.queueStarted.add(id);this.launching=false;this.pumpQueue();this.running.add(id);await this.flush();await this.execute(offer,authorization.inputTicket,null,trace);
+   const trace=new NativeTrace(offer,message.traceId,authorization.snapshotVersion,this.instance);const reasons=this.waitReasons.get(id),reason=reasons===undefined||reasons.size===0?null:reasons.size>1?'OBSERVED_MIXED_WAIT':'OBSERVED_'+Array.from(reasons)[0];trace.add('QUEUE',queueStart,queueEnd,reason);await trace.segment('ADMIT',()=>this.admit(offer,message,true));this.queue.start(id,monotonic());this.queueStarted.add(id);this.launching=false;this.pumpQueue();this.running.add(id);await this.flush();await this.execute(offer,authorization.inputTicket,null,trace);
    try{await this.store.change(new HostChange(s=>{this.enqueue(s,'TraceBatch',{spans:trace.spans} as TraceBatch);}));await this.flush();}catch(e){}
   }catch(e){
    if(!this.store.read().state.entries.some(x=>x.record.attemptId===id)){const reason=/^[A-Z_0-9:]+$/.test((e as Error).message)?(e as Error).message:'EXECUTION_REJECTED';await this.store.change(new HostChange(s=>{receiveAgentMessageV2(s.journal,message,s.state.groupId,factory);const reply:AdmissionReplyV2={attemptId:id,holderInstanceId:s.state.holderInstanceId,status:'REJECTED',reasonCode:reason,record:null,wait:this.sample(null,'ms')};this.enqueue(s,'AdmissionReply',reply,message.messageId);this.enqueue(s,'Ack',{messageId:message.messageId} as AckPayload,message.messageId);}));await this.flush();}else this.error(e as Error);
-  }finally{this.offered.delete(id);this.running.delete(id);if(this.queueStarted.has(id)){if(this.store.read().state.entries.find(e=>e.record.attemptId===id)?.record.resourcesSettled){this.queue.settle(id,monotonic());this.queueStarted.delete(id);}}else{try{this.queue.removeWaiting(id);}catch(e){}}this.launching=false;this.pumpQueue();}
+  }finally{this.waitReasons.delete(id);this.offered.delete(id);this.running.delete(id);if(this.queueStarted.has(id)){if(this.store.read().state.entries.find(e=>e.record.attemptId===id)?.record.resourcesSettled){this.queue.settle(id,monotonic());this.queueStarted.delete(id);}}else{try{this.queue.removeWaiting(id);}catch(e){}}this.launching=false;this.pumpQueue();}
  }
  private async admit(offer:DispatchOfferV2,message:MessageEnvelopeV2|null,live:boolean):Promise<void>{await this.store.change(new HostChange(s=>{
   const result=admitV2(s.state,offer,{now:monotonic(),coordinatorEpoch:s.journal.epoch,online:live&&this.ready,ownerIdle:live&&this.idle(),admissionLimit:this.limits(),executionDigest:this.digest(offer),leaseId:factory.id()});s.state=result.state;

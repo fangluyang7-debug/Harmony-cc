@@ -27,3 +27,20 @@ test('ArkTS failed request and containing LOAD preserve error and failure eviden
  assert.equal(trace.spans.length,2);assert.ok(trace.spans.every(s=>s.reasonCode==='PHASE_FAILED'));
  assert.equal(trace.spans[0].parentSpanId,trace.spans[1].spanId);
 });
+
+test('ArkTS and PC micro queues agree on observed resource and policy wait reasons',()=>{
+ const core=require('@harmony/scheduler-core'),exports={};
+ const source=fs.readFileSync(path.resolve(__dirname,'../../../apps/harmony/scheduler/src/main/ets/v2/core/MicroQueueV2.ets'),'utf8');
+ vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2021,module:ts.ModuleKind.CommonJS}}).outputText,{exports,require:name=>{
+  if(name==='../protocol/ResourcesV2'||name==='./LedgerV2')return core;throw Error('UNEXPECTED_IMPORT');
+ }});
+ const policy={shares:[.5,.3,.2],agingMs:100,maxConsecutive:2,yieldDeadlineMs:1000};
+ const offer=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DispatchOffer.json'));
+ offer.task.priority='REMOTE_INTERACTIVE';offer.task.budget={remainingMs:10000,deadlineAt:10000};
+ const queues=[new core.MicroQueue(offer.target.deviceId,policy),new exports.MicroQueueV2(offer.target.deviceId,policy)];
+ for(const q of queues){q.enqueue(offer,0);const second=structuredClone(offer);second.task.attemptId='second';q.enqueue(second,0);}
+ for(const [occupied,idle,selected]of [[offer.resources,true,null],[[],false,null],[[],true,offer.task.attemptId],[[],true,null]]){
+  const results=queues.map(q=>JSON.stringify(q.waitingReasons(offer.resources,occupied,idle,selected)));
+  assert.equal(results[0],results[1]);
+ }
+});

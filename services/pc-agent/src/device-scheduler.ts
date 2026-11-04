@@ -53,7 +53,11 @@ export class DeviceScheduler {
     try{
       for(const id of this.queue.expired(this.now())){const item=this.pending.get(id)!;this.queue.removeWaiting(id);this.pending.delete(id);item.reject(Error('QUEUE_STARVED'));}
       while(!this.closed){
-        const offer=this.queue.choose(this.limits,occupiedV2(this.ledger.snapshot()),this.now(),this.ownerIdle);if(!offer)break;
+        const occupied=occupiedV2(this.ledger.snapshot()),offer=this.queue.choose(this.limits,occupied,this.now(),this.ownerIdle);
+        for(const observation of this.queue.waitingReasons(this.limits,occupied,this.ownerIdle,offer?.task.attemptId??null)){
+          try{this.pending.get(observation.attemptId)?.hooks.waiting?.(observation.reasonCode);}catch(error){this.lastError=error;}
+        }
+        if(!offer)break;
         const item=this.pending.get(offer.task.attemptId)!;
         item.launching=true;
         item.hooks.selected?.();
