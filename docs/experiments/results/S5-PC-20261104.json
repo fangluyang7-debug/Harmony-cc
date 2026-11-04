@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-11-04",
+  "scope": "S5 PC software continuation, STATUS sections 43-47",
+  "branch": "codex/scheduler-v2-foundation",
+  "baseCommit": "485befb",
+  "codeCommit": "4e0157e348c953b04b636774557f4aec0aefb9ff",
+  "verificationReusedFromImplementationRun": true,
+  "environment": {
+    "node": "v22.18.0",
+    "platform": "win32",
+    "physicalComputers": 1,
+    "domain": "SIMULATED",
+    "network": "local loopback TLS; injected selection costs; not physical LAN latency"
+  },
+  "regression": [
+    {
+      "name": "coordinator",
+      "passed": 106,
+      "total": 106,
+      "failed": 0,
+      "durationMs": 634761.8241,
+      "command": "node --test --test-concurrency=1 test/*.test.cjs",
+      "cwd": "services/coordinator",
+      "sourceLocalLog": ".test/s5-causal-final-coordinator.log",
+      "sourceLogSha256": "9dbfbcba2d5a3cfaccb50f38ccd240b193e4f0b6f23b1ba6f307092ec02b754f"
+    },
+    {
+      "name": "pcAgent",
+      "passed": 41,
+      "total": 41,
+      "failed": 0,
+      "durationMs": 2731.307,
+      "command": "node --test test/*.test.cjs",
+      "cwd": "services/pc-agent",
+      "sourceLocalLog": ".test/s5-causal-final-pc.log",
+      "sourceLogSha256": "b4c18cfb4830525ab1c9eadd41bb66ca52b3b505e2ac6cdd4d9869d0fdac9c47"
+    },
+    {
+      "name": "sdk",
+      "passed": 10,
+      "total": 10,
+      "failed": 0,
+      "durationMs": 114.218,
+      "command": "npm run sdk:test",
+      "cwd": ".",
+      "sourceLocalLog": ".test/s5-causal-final-sdk.log",
+      "sourceLogSha256": "4d5f98b8c18aa94750e47d9045c081b8b2a39475b5744940ad6241b9d9ec100e"
+    },
+    {
+      "name": "transport",
+      "passed": 2,
+      "total": 2,
+      "failed": 0,
+      "durationMs": 709.6353,
+      "command": "npm run transport:test",
+      "cwd": ".",
+      "sourceLocalLog": ".test/s5-causal-final-transport.log",
+      "sourceLogSha256": "fc76eaf9c6c667428f62d6e3e71ff1a71ccad1b732cdc3bbaf98b754b73916fb"
+    },
+    {
+      "name": "architecture",
+      "passed": 24,
+      "total": 24,
+      "failed": 0,
+      "durationMs": 7724.8846,
+      "command": "npm run architecture:deps",
+      "cwd": ".",
+      "sourceLocalLog": ".test/s5-causal-architecture.log",
+      "sourceLogSha256": "c8e7b0a9ece46bd12bdbbad920f210bb2fb1ca23bdbc4e2e279434a119a8b00f"
+    },
+    {
+      "name": "core",
+      "passed": 43,
+      "total": 43,
+      "failed": 0,
+      "command": "npm run core:test",
+      "cwd": ".",
+      "sourceLocalLog": ".test/s5-causal-final-core.log",
+      "sourceLogSha256": "51ef147ca26607510b0415a0e0060024a301b3f5c5540944736dc394ee3b430b"
+    },
+    {
+      "name": "pcConformance",
+      "passed": 8,
+      "total": 8,
+      "failed": 0,
+      "command": "node tests/agent-conformance/run.cjs --agent pc",
+      "cwd": ".",
+      "sourceLocalLog": ".test/s5-causal-final-conformance.log",
+      "sourceLogSha256": "8090dd5713335430a3e7b6b1524055986e4a26bb5c533df2ff283d695b7a303e"
+    }
+  ],
+  "protocol": {
+    "T1Assertions": 503,
+    "T2Checks": 352,
+    "command": "npm run protocol:v2:test",
+    "sourceLocalLog": ".test/s5-causal-final-protocol.log",
+    "sourceLogSha256": "4dd0293407e1eef09d00d23bb59f83c8a2eb2adbcae267b9258ce668806d156b",
+    "nativeCompilation": false
+  },
+  "independentGraphCases": [
+    {
+      "mode": "direct",
+      "state": "SUCCEEDED",
+      "attempts": 3,
+      "relayReceivedBytes": 0
+    },
+    {
+      "mode": "drop-reply",
+      "state": "SUCCEEDED",
+      "attempts": 3,
+      "relayReceivedBytes": 0
+    },
+    {
+      "mode": "isolate",
+      "state": "SUCCEEDED",
+      "attempts": 3,
+      "relayReceivedBytes": 36
+    },
+    {
+      "mode": "cache-full",
+      "state": "SUCCEEDED",
+      "attempts": 3,
+      "relayReceivedBytes": 36
+    },
+    {
+      "mode": "producer-full",
+      "state": "SUCCEEDED",
+      "attempts": 3,
+      "relayReceivedBytes": 0
+    },
+    {
+      "mode": "relay-full",
+      "state": "FAILED",
+      "attempts": 2,
+      "rejection": "ARTIFACT_CACHE_FULL",
+      "remainingBudgetMs": 25613
+    }
+  ],
+  "reassignment": {
+    "state": "SUCCEEDED",
+    "attempts": 3,
+    "from": "C",
+    "to": "D",
+    "sourceEndpointChanged": true,
+    "processesIncludingCoordinator": 4
+  },
+  "native": {
+    "requiredHarmonyOS": "6.0.2",
+    "requiredApi": 22,
+    "status": "BLOCKED_SDK_ENVIRONMENT",
+    "reason": "SDK_BASELINE_MISMATCH",
+    "sourceLocalLog": ".test/s5-sdk-api22-environment.log"
+  },
+  "notRun": [
+    "HarmonyOS API 22 compilation for the current shared SDK",
+    "emulator execution",
+    "physical multi-device LAN acceptance",
+    "HarmonyOS phone acceptance",
+    "GPU acceptance"
+  ],
+  "limits": [
+    "S5/B10/D2 remain partial",
+    "cross-clock gaps and unsplit legacy I/O keep the full critical path UNKNOWN",
+    "no performance gain or multi-physical-device conclusion",
+    "raw logs/databases/credentials/certificates are local-only; the repository contains this sanitized summary"
+  ],
+  "failureHistory": [
+    {
+      "sourceLocalLog": ".test/s5-continuation-coordinator-full.log",
+      "passed": 99,
+      "total": 103,
+      "resolvedInFinalRun": true
+    },
+    {
+      "sourceLocalLog": ".test/s5-capacity-final-coordinator.log",
+      "passed": 103,
+      "total": 105,
+      "resolvedInFinalRun": true
+    }
+  ]
+}
