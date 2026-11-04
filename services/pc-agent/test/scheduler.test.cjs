@@ -19,10 +19,19 @@ test('device queue holds capacity through owner yield and settlement, then admit
  const scheduler=new DeviceScheduler(x.ledger,runtime,{shares:[.5,.3,.2],agingMs:100,maxConsecutive:2,yieldDeadlineMs:1000},n=>notices.push(n),()=>100);
  try{
   await scheduler.update(x.offer.resources,'IDLE');const first=scheduler.submit(x.offer,x.offer.allowedConfigs[0]);assert.equal(scheduler.submit(x.offer,x.offer.allowedConfigs[0]),first);await reading;
-  const next=structuredClone(x.offer);next.task.attemptId='second';const waiting=[];const second=scheduler.submit(next,next.allowedConfigs[0],{waiting:reason=>waiting.push(reason)});
+  const next=structuredClone(x.offer);next.task.attemptId='second';const waiting=[],history=new (require('@harmony/scheduler-core').QueueHistory)();const second=scheduler.submit(next,next.allowedConfigs[0],{waiting:(reason,pools,entries)=>{waiting.push(reason);history.observe(performance.now(),reason,pools,entries,next.task.workflowId);},selected:entries=>history.observe(performance.now(),'SELECTED',[],entries,next.task.workflowId)});
   assert.ok(waiting.includes('RESOURCE_CAPACITY'));
+  const facts=scheduler.queuedFacts(100,'SIMULATED');
+  assert.deepEqual(facts.map(q=>[q.attemptId,q.reason]),[['second','RESOURCE_CAPACITY']]);
+  const live=x.ledger.inFlight(x.ledger.snapshot(),100,'SIMULATED');
+  assert.deepEqual(live.map(f=>f.attemptId),[x.offer.task.attemptId]);
+  assert.deepEqual(live[0].resources,x.offer.resources);assert.equal(live[0].elapsed.value,null);
   await scheduler.update(x.offer.resources,'ACTIVE');assert.equal(notices[0].kind,'RESTART');assert.ok(occupiedV2(x.ledger.snapshot()).length);assert.equal(x.ledger.status('second'),null);
   release();assert.equal((await first).state,'CANCELLED_SETTLED');await scheduler.update(x.offer.resources,'IDLE');assert.equal((await second).state,'SUCCEEDED');assert.deepEqual(occupiedV2(x.ledger.snapshot()),[]);
+  assert.deepEqual(history.samples[0].occupyingAttempts,[x.offer.task.attemptId]);
+  assert.ok(history.samples[0].resourcePoolIds.length);
+  assert.equal(history.samples.at(-1).reasonCode,'SELECTED');
+  assert.deepEqual(history.samples.flatMap(s=>s.settledAttempts),[x.offer.task.attemptId]);
  }finally{release();await scheduler.close();await x.ledger.close();}
 });
 test('cancellation while local authorization is pending settles after admission without starting CPU work',async()=>{
@@ -93,4 +102,16 @@ test('failed relay request preserves its error and emits a failed nested interva
   assert.equal(spans.length,2);assert.ok(spans.every(s=>s.reasonCode==='PHASE_FAILED'));
   assert.equal(spans[0].parentSpanId,spans[1].spanId);assert.ok(spans.every(validTraceSpanV2));
  }finally{await x.ledger.close();}
+});
+
+test('trace flush splits a large queue history batch without losing observations',async()=>{
+ const buffer=new TraceBuffer(),base=require('../../../contracts/scheduling/v2/fixtures/valid/TraceSpan.json');
+ const sample={atMono:1,reasonCode:'RESOURCE_CAPACITY',occupyingAttempts:['a'.repeat(128)],settledAttempts:[],resourcePoolIds:['pool']};
+ const ids=[];
+ for(let i=0;i<96;i++)buffer.emit({...base,spanId:'queue'+i,phase:'QUEUE',queueSamples:Array(8).fill(sample)});
+ let batches=0;
+ for(let i=0;i<96&&ids.length<96;i++)await buffer.flush(async spans=>{
+  batches++;assert.ok(JSON.stringify({spans}).length<=65536);ids.push(...spans.map(s=>s.spanId));
+ });
+ assert.ok(batches>1);assert.equal(new Set(ids).size,96);assert.equal(buffer.dropped,0);
 });

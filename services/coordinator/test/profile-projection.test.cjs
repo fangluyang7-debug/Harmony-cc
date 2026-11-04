@@ -20,6 +20,7 @@ test('authenticated profiles atomically publish versions; duplicate and failed e
   assert.equal((await views.build('g1')).snapshot.candidates.length,0);
   await qualifySimulated(r.db,p);await projection.refresh('g1');
   const before=(await views.build('g1')).snapshot;
+  assert.equal(before.candidates[0].availability.snapshotVersion,before.version);
   assert.equal(before.candidates.length,1);assert.equal(before.devices.length,1);
   assert.equal('pools' in before.devices[0],false);
   await projection.ingest(peer,p);assert.equal((await views.build('g1')).snapshot.version,before.version);
@@ -87,5 +88,60 @@ test('executor changes invalidate only that identity; a holder epoch change requ
   assert.deepEqual((await dir.snapshot('g1','p1',1,contribution)).candidates.map(c=>c.targetId),['target2']);
   p.sequence=1;p.ledgerEpoch++;p.deviceInstanceId='new-instance';await dir.ingest(peer,p);
   assert.equal((await dir.snapshot('g1','p1',1,contribution)).candidates.length,0);
+ }finally{await r.close();}
+});
+
+test('fresh holder evidence forecasts a capacity recheck but never marks an occupied target ready',async()=>{
+ const r=await runtime();try{
+  const {views,projection}=setup(r),p=fixture(),e=p.executors[0],pool=p.pools.find(v=>v.resourcePoolId===e.resources[0].resourcePoolId);
+  pool.occupied.value=pool.admissionLimit.value;
+  p.inFlight=[{attemptId:'running',targetId:e.target.targetId,state:'RUNNING',resources:[{resourcePoolId:pool.resourcePoolId,amount:pool.occupied.value}],
+   elapsed:{value:10,source:'SIMULATED',sampledAt:100,ttlMs:100,unit:'ms'},remaining:{value:30,source:'PRIOR',sampledAt:100,ttlMs:100,unit:'ms'}}];
+  await projection.ingest(peer,p);await projection.configure('g1',policy,contribution);
+  await qualifySimulated(r.db,p);await projection.refresh('g1');
+  const snapshot=(await views.build('g1')).snapshot,a=snapshot.candidates[0].availability;
+  assert.equal(a.snapshotVersion,snapshot.version);assert.equal(a.reason,'RESOURCE_CAPACITY');assert.equal(a.resourceWait.value,30);
+  const {availability}=require('@harmony/scheduler-core');
+  assert.equal(availability(p,e,contribution.priority,1,131).resourceWait.value,null);
+  p.inFlight=[];assert.equal(availability(p,e,contribution.priority,1,100).resourceWait.value,null);
+  pool.occupied.value=0;p.queued=[{attemptId:'waiting',targetId:e.target.targetId,resources:e.resources,priority:contribution.priority,reason:'LOCAL_QUEUE_POLICY',elapsed:{value:2,unit:'ms',source:'SIMULATED',sampledAt:100,ttlMs:100}}];
+  assert.equal(availability(p,e,contribution.priority,1,100).reason,'LOCAL_QUEUE_PENDING');
+  p.queued=[];p.credits.forEach(c=>c.slots=0);
+  assert.equal(availability(p,e,contribution.priority,1,100).reason,'NO_CATEGORY_CREDIT');
+ }finally{await r.close();}
+});
+
+test('battery, charging and temperature policy change placement with a scoped rejection reason',async()=>{
+ const r=await runtime();try{
+  const {dir}=setup(r),p=fixture(),e=p.executors[0];
+  const request={nodes:[{id:'compute',capability:e.contract.capability,dependencies:[],inputs:[],output:{id:'out',bytes:1},baselineTargetId:e.target.targetId,memoryBytes:1,minimumQuality:0,candidates:[]}],
+   artifacts:[],links:[],deviceResources:[],domain:'SIMULATED',remainingBudgetMs:10000,networkAllowed:false,privacy:'LOCAL_ONLY',localDeviceId:p.deviceId,now:100,committedNodeIds:[],committedArtifacts:[]};
+  await dir.ingest(peer,p);await qualifySimulated(r.db,p);
+  async function decide(){
+   p.sequence++;await dir.ingest(peer,p);
+   return r.planning.plan(await dir.snapshot('g1','p1',p.sequence,contribution),request,policy,{now:100,monotonic:()=>0}).decision;
+  }
+  p.battery.value=5;p.charging.value='NOT_CHARGING';
+  assert.equal((await decide()).rejections[0].code,'BATTERY_LOW_OR_UNKNOWN');
+  p.charging.value='CHARGING';assert.equal((await decide()).status,'ready');
+  p.temperature.value=4;assert.equal((await decide()).rejections[0].code,'TEMPERATURE_HIGH_OR_UNKNOWN');
+  p.temperature.value=2;p.powerSave.value='ON';assert.equal((await decide()).rejections[0].code,'POWER_SAVE_OR_UNKNOWN');
+ }finally{await r.close();}
+});
+
+test('a second dispatch cannot spend an outstanding offer credit or reserve an occupied pool twice',async()=>{
+ const r=await runtime();try{
+  const {dir}=setup(r),p=fixture(),offer=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DispatchOffer.json'));
+  offer.task.priority='REMOTE_INTERACTIVE';p.credits.forEach(c=>c.slots=1);
+  await dir.ingest(peer,p);
+  const check=()=>r.db.$transaction(tx=>dir.hasDispatchCredit(tx,offer,peer.holderInstanceId));
+  assert.equal(await check(),true);
+  const data={id:'pending',groupId:'g1',workflowId:'wf',nodeId:'peer',holderInstanceId:'h1',executionDigest:'fixture',taskJson:'{}',state:'OFFERED',offerJson:JSON.stringify(offer)};
+  await r.db.attempt.create({data});assert.equal(await check(),false);
+  const resource=offer.resources[0],pool=p.pools.find(x=>x.resourcePoolId===resource.resourcePoolId);
+  pool.admissionLimit.value=resource.amount;offer.task.priority='REMOTE_BATCH';assert.equal(p.credits.find(c=>c.priority==='REMOTE_BATCH').slots,1);
+  p.sequence++;await dir.ingest(peer,p);assert.equal(await check(),false);
+  await r.db.attempt.update({where:{id:'pending'},data:{state:'FAILED',recordJson:JSON.stringify({resourcesSettled:false})}});assert.equal(await check(),false);
+  await r.db.attempt.update({where:{id:'pending'},data:{recordJson:JSON.stringify({resourcesSettled:true})}});assert.equal(await check(),true);
  }finally{await r.close();}
 });

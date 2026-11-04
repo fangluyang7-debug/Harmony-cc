@@ -1,0 +1,300 @@
+{
+  "id": "AC3",
+  "title": "宏微联合与执行语义",
+  "environment": {
+    "startedAt": "2026-11-04T12:39:56.897Z",
+    "node": "v22.18.0",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "commit": "94755dcc404c1c08f53335b0516bea5728bcb192",
+    "dirty": true,
+    "sourceDigest": "b6c0008f506e0aebf634b13a76c7e5a67cd079d0a76197e265b300073db4acf9"
+  },
+  "simulation": {
+    "result": "LISTED_CASES_PASS",
+    "coverage": "CUDA 后端与显存读数来自测试替身。",
+    "suites": [
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/image-encoder-host.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 42062,
+        "cases": [
+          {
+            "name": "installed PC image adapter qualifies and serves SDK client: CPU",
+            "result": "PASS"
+          },
+          {
+            "name": "installed PC image adapter qualifies and serves SDK client: simulated CUDA",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "81a9f472a2009ffab0ec55dcbc1593bb9666eb8c5ddc554f1a1a03b27851c3a7"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/store.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 65502,
+        "cases": [
+          {
+            "name": "quota preflight and offer creation are one transaction; stale quota creates no attempt/outbox",
+            "result": "PASS"
+          },
+          {
+            "name": "crash before-send: durable query replaces offer without a second attempt",
+            "result": "PASS"
+          },
+          {
+            "name": "crash after-send: durable query replaces offer without a second attempt",
+            "result": "PASS"
+          },
+          {
+            "name": "attempt plus outbox is atomic, duplicate identity is idempotent, changed input conflicts",
+            "result": "PASS"
+          },
+          {
+            "name": "only authorized current attempt/fence/target results commit",
+            "result": "PASS"
+          },
+          {
+            "name": "reconciliation honors side-effect policy and cannot turn unknown execution into automatic replay",
+            "result": "PASS"
+          },
+          {
+            "name": "logical node chooses one result and settles both attempts: backup-first",
+            "result": "PASS"
+          },
+          {
+            "name": "logical node chooses one result and settles both attempts: simultaneous",
+            "result": "PASS"
+          },
+          {
+            "name": "logical node chooses one result and settles both attempts: cancel-before-success",
+            "result": "PASS"
+          },
+          {
+            "name": "logical node chooses one result and settles both attempts: cancel-before-rejection",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "63372ee228551238c4b68ddd16049c2bf62933c839e61409990e0daba978bccd"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/pc-agent",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/ledger.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 2542,
+        "cases": [
+          {
+            "name": "reference settlement persists and frees only settled capacity without initiating business recovery",
+            "result": "PASS"
+          },
+          {
+            "name": "rename failure reports sanitized stage, poisons writer and preserves last committed snapshot",
+            "result": "PASS"
+          },
+          {
+            "name": "Windows transient replacement contention retries the same snapshot and commits once",
+            "result": "PASS"
+          },
+          {
+            "name": "dispatch reservation and reply commit together; terminal report survives crash; wrong envelope cannot reserve",
+            "result": "PASS"
+          },
+          {
+            "name": "rejected dispatch identity persists and cannot later execute after ACK or restart",
+            "result": "PASS"
+          },
+          {
+            "name": "starvation proof survives ACK and restart and binds the original offer bytes",
+            "result": "PASS"
+          },
+          {
+            "name": "atomic multi-pool admission; duplicate delivery does not run twice; cancellation and timeout do not release",
+            "result": "PASS"
+          },
+          {
+            "name": "completed receipts survive restart; RUNNING before engine invocation recovers UNKNOWN and stays occupied",
+            "result": "PASS"
+          },
+          {
+            "name": "grant delay, signature, epoch replay, shrink/drain and independent fence namespaces",
+            "result": "PASS"
+          },
+          {
+            "name": "single writer across processes, corrupt snapshot and missing committed snapshot fail closed",
+            "result": "PASS"
+          },
+          {
+            "name": "revision 6.1 rejects offline App admission but preserves occupancy, duplicate records and settlement",
+            "result": "PASS"
+          },
+          {
+            "name": "abrupt child-process death before-engine preserves the durable execution boundary",
+            "result": "PASS"
+          },
+          {
+            "name": "abrupt child-process death after-settlement preserves the durable execution boundary",
+            "result": "PASS"
+          },
+          {
+            "name": "durable ACCEPTED proves engine was never started; recovery cancels it but never frees RUNNING",
+            "result": "PASS"
+          },
+          {
+            "name": "status response and inbox/outbox survive restart and lost ACK; altered duplicates fail closed",
+            "result": "PASS"
+          },
+          {
+            "name": "legacy snapshot upgrade preserves attempts; bounded journal overflow leaves last committed state intact",
+            "result": "PASS"
+          },
+          {
+            "name": "external-engine recovery retains unknown occupancy and requires matching local settlement evidence",
+            "result": "PASS"
+          },
+          {
+            "name": "profile sequence and outbox persist together; duplicate pending profile is bounded",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "3356db922172fad43b6a0a06fe824558d7c759855a21cbcdb8b9dd3aa9fc429f"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/pc-agent",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/scheduler.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 3060,
+        "cases": [
+          {
+            "name": "device queue holds capacity through owner yield and settlement, then admits the next real CPU job",
+            "result": "PASS"
+          },
+          {
+            "name": "cancellation while local authorization is pending settles after admission without starting CPU work",
+            "result": "PASS"
+          },
+          {
+            "name": "real execution emits local phase spans; failed telemetry flush retries without affecting settlement",
+            "result": "PASS"
+          },
+          {
+            "name": "data integrity failures are attributed to LOAD or PUBLISH before settlement",
+            "result": "PASS"
+          },
+          {
+            "name": "relay HTTP spans remain inside data phases and do not replace execution dependencies",
+            "result": "PASS"
+          },
+          {
+            "name": "failed relay request preserves its error and emits a failed nested interval",
+            "result": "PASS"
+          },
+          {
+            "name": "trace flush splits a large queue history batch without losing observations",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "aadecb0cdb39f1a49fd139eaed168bc9f49ce7d943bab74c7a058bcccd88d6fd"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/workflow.test.cjs"
+        ],
+        "env": {
+          "HARMONY_TEST_BLOCK_BC": "1"
+        },
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 109163,
+        "cases": [
+          {
+            "name": "S5 relay isolation: committed B output crosses relay to C without recomputation",
+            "result": "PASS"
+          },
+          {
+            "name": "status returns durable state while graph progression is busy and notifications coalesce",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "baab4c05c0911046111ce154a5db7feb06bac010182f29a48afd858cc26236a3"
+      }
+    ],
+    "emulator": [
+      {
+        "test": "protocol",
+        "domain": "SIMULATED",
+        "api": "24",
+        "hapSha256": "0cde5e15add6af98b3c6773ec4b6f6538664604a6d096a1f95d9aaee844333dd",
+        "evidenceSha256": "b91d7d8c442bd8194a615ae95b9ac4629cacc900fe4a582181d0cf864da2aa00",
+        "cases": [
+          "01 pairing, credential binding and one-use invitation",
+          "02 profile schema, unknown values and monotonic sequence",
+          "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+          "03b ImageKit crop dispatched by PlanningService; geometry/colour checked; malformed crop settles as failed",
+          "03c emulator lifecycle: background stops admission, foreground resumes qualified contribution",
+          "04 same attempt with a new messageId returns existing admission/result without executing twice",
+          "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+          "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+          "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+          "08 revoked credential cannot reconnect or publish new telemetry"
+        ]
+      }
+    ]
+  },
+  "real": {
+    "result": "NOT_RUN",
+    "pending": [
+      "实际 CUDA 权重、显存、共享内存争用及断线重启。"
+    ]
+  }
+}

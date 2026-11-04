@@ -18,6 +18,14 @@ class IndexerSession {
  private stopRequested=false;
  initialize(context:common.UIAbilityContext):void{this.context=context;AppStorage.setOrCreate('indexerStatus','连接后选择图片，生成 128×128 缩略图');AppStorage.setOrCreate('indexerImages',[] as string[]);AppStorage.setOrCreate('indexerBusy',false);}
  lifecycle(value:boolean):void{this.foreground=value;this.host?.setForeground(value);}
+ connectedSdk():SchedulerSdk {
+  if(!this.sdk||!this.host?.isConnected())throw Error('SDK_COORDINATOR_OFFLINE');
+  return this.sdk;
+ }
+ displayHost():NativeAgent{
+  if(!this.host||!this.host.isConnected())throw Error('SDK_COORDINATOR_OFFLINE');
+  return this.host;
+ }
  async connect(raw:string):Promise<void>{
   if(this.host!==null)return;if(this.context===null)throw Error('APP_CONTEXT_REQUIRED');
   const context=this.context;

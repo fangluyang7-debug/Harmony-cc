@@ -12,6 +12,8 @@ process.on('message',async m=>{try{let value;
   if(!host.fixtureCosts){host.fixtureCosts=new Map();const executor=host.executor.bind(host);host.executor=(capability,now)=>{const result=executor(capability,now),fixed=host.fixtureCosts.get(capability);if(fixed!==undefined)result.compute={...result.compute,value:fixed,sampledAt:now};return result;};}
   host.fixtureCosts.set('text.count.v1',m.value);await host.tick();value=true;
  }else if(m.action==='pause'){host.config.contribution.ownerMode='paused';await host.tick();value=true;
+ }else if(m.action==='evict-ref'){
+  const cache=host.dataHost.channel,d=cache.lookup(m.groupId,m.ref);value=!!d&&cache.forget(d);
  }else if(m.action==='register-endpoint'){await host.dataHost.register();value=host.dataHost.identity();
  }else if(m.action==='freeze'){
   host.peerLinks.close();await host.networkPending;value=true;

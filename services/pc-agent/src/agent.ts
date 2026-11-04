@@ -1,4 +1,5 @@
-import { DispatchOfferV2, ExecutionConfigV2, MessageEnvelopeV2, QueuePolicy, ResourceAmountV2, YieldNoticeV2, ExecutorV2, CapabilityAdmissionV2, canonical } from '@harmony/scheduler-core';
+import { performance } from 'node:perf_hooks';
+import { QueueHistory, DispatchOfferV2, ExecutionConfigV2, MessageEnvelopeV2, QueuePolicy, ResourceAmountV2, YieldNoticeV2, ExecutorV2, CapabilityAdmissionV2, canonical } from '@harmony/scheduler-core';
 import { DurableLedger } from './durable-ledger';
 import { RecoveryClient, RecoveryConnection } from './recovery-client';
 import { PcExecutionRuntime, ExecutionPorts } from './execution-runtime';
@@ -111,12 +112,15 @@ export class PcAgent {
     if(this.pending.size>=8){this.ledger.rejectDispatch(message,'AGENT_BACKPRESSURE');void this.client.flush();return;}
     const done=(async()=>{
       try{
-        if((offer.target.backend!=='CPU'&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.options.ports.fixedService))||offer.task.contract.interruptibility!=='CANCEL_RESTART')throw Error('EXECUTOR_UNSUPPORTED');
+        if((offer.target.backend!=='CPU'&&!(offer.target.backend==='CUDA'&&this.options.ports.imageEncoder?.gpu)&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.options.ports.fixedService))||offer.task.contract.interruptibility!=='CANCEL_RESTART')throw Error('EXECUTOR_UNSUPPORTED');
         const version=await this.options.snapshotVersion(offer);
         const trace=version===null?undefined:new ExecutionTrace(this.traces,{traceId:message.traceId,parentSpanId:null,snapshotVersion:version,deviceInstanceId:this.options.deviceInstanceId},offer);
-        const endQueue=trace?.begin('QUEUE'),waitReasons=new Set<string>();
-        const finishQueue=()=>endQueue?.(waitReasons.size>1?'OBSERVED_MIXED_WAIT':waitReasons.size===1?'OBSERVED_'+[...waitReasons][0]:null);
-        try{await this.scheduler.submit(offer,this.options.select(offer),{message,trace,waiting:reason=>{waitReasons.add(reason);},selected:finishQueue,admitted:()=>{void this.client.flush();}});}
+        const endQueue=trace?.begin('QUEUE'),history=new QueueHistory();
+        const finishQueue=()=>endQueue?.(history.reasons.size>1?'OBSERVED_MIXED_WAIT':history.reasons.size===1?'OBSERVED_'+[...history.reasons][0]:null,history.samples);
+        try{await this.scheduler.submit(offer,this.options.select(offer),{message,trace,
+          waiting:(reason,pools,entries)=>history.observe(performance.now(),reason,pools,entries,offer.task.workflowId),
+          selected:entries=>{history.observe(performance.now(),'SELECTED',[],entries,offer.task.workflowId);finishQueue();},
+          admitted:()=>{void this.client.flush();}});}
         finally{finishQueue();}
       }catch(error){
         if(!this.ledger.status(id)){

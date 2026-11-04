@@ -1,7 +1,8 @@
 import { cropEvaluationPack, validRaster } from './crop';
 export { cropEvaluationPack } from './crop';
+export { loadImageEncodingPack } from './image-encode';
 import { createHash } from 'node:crypto';
-import { canonical, CapabilityPackV2, ExecutionConfigV2, ResourceAmountV2 } from '@harmony/scheduler-core';
+import { canonical, CapabilityPackV2, ExecutionConfigV2, ResourceAmountV2, validModelManifestV2 } from '@harmony/scheduler-core';
 
 export interface ReferenceCase {id:string;input:Buffer;parameters:string;config:ExecutionConfigV2;maxOutputBytes:number;}
 export interface ReferencePack {manifest:CapabilityPackV2;cases:ReferenceCase[];maxOutputBytes:number;evaluate(test:ReferenceCase,output:Buffer):Promise<number>;}
@@ -26,6 +27,14 @@ export async function builtinReferencePacks():Promise<ReferencePack[]>{
  return [...builtinCpuPacks(),await cropEvaluationPack(manifest)];
 }
 export const cpuSchemas=new Map<string,(bytes:Buffer)=>boolean|Promise<boolean>>([
+ ['image.embedding:1',bytes=>{
+   try{
+     const {model,vector}=JSON.parse(bytes.toString('utf8'));
+     return validModelManifestV2(model)&&model.embeddingKind==='image'&&model.normalization==='l2'&&
+       model.dtype==='float32'&&Array.isArray(vector)&&vector.length===model.dimension&&vector.every(Number.isFinite)&&
+       Math.abs(vector.reduce((sum:number,x:number)=>sum+x*x,0)-1)<=0.002;
+   }catch{return false;}
+ }],
  ['image.raster:1',validRaster],
   ['vector.input:1',bytes=>{try{const v=JSON.parse(bytes.toString());return Number.isSafeInteger(v.dimension)&&v.dimension>0&&v.dimension<=65536&&Array.isArray(v.rows)&&v.rows.every((r:any)=>Array.isArray(r)&&r.length===v.dimension&&r.every(Number.isFinite));}catch{return false;}}],
   ['vector.normalized:1',bytes=>{try{const v=JSON.parse(bytes.toString());return Number.isSafeInteger(v.dimension)&&v.dimension>0&&Array.isArray(v.rows)&&Array.isArray(v.norms)&&v.rows.length===v.norms.length&&v.norms.every(Number.isFinite)&&v.rows.every((r:any)=>Array.isArray(r)&&r.length===v.dimension&&r.every(Number.isFinite));}catch{return false;}}],

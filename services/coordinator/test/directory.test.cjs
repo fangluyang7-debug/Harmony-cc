@@ -50,3 +50,18 @@ test('same-device App contribution ceilings are not mistaken for the shared phys
   assert.equal((await dir.snapshot('g1','p1',1,policy)).resources.find(r=>r.resourcePoolId===poolId).available,0,'another group without a fresh profile retains its whole reservation');
  }finally{await r.close();}
 });
+test('an overdue non-interruptible shared pool holder has no promised release time',()=>{
+ const {availability}=require('@harmony/scheduler-core');
+ const p=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DeviceProfile.json')),e=p.executors[0];
+ const pool=p.pools.find(x=>x.resourcePoolId==='cpu1');
+ pool.admissionLimit.value=1;pool.occupied.value=1;
+ e.contract.interruptibility='NON_INTERRUPTIBLE';e.contract.maxNonPreemptibleMs=200;
+ const ms=value=>({value,source:'SIMULATED',unit:'ms',sampledAt:100,ttlMs:1000});
+ p.inFlight=[{attemptId:'long',targetId:e.target.targetId,state:'RUNNING',resources:e.resources,elapsed:ms(100),remaining:ms(100)}];
+ const before=availability(p,e,'REMOTE_INTERACTIVE',1,100);
+ assert.equal(before.blockingReason,'NON_INTERRUPTIBLE_RUNNING');assert.equal(before.resourceWait.value,100);
+ p.inFlight[0].elapsed.value=201;
+ const late=availability(p,e,'REMOTE_INTERACTIVE',1,100);
+ assert.equal(late.reason,'RESOURCE_CAPACITY');assert.equal(late.blockingReason,'RELEASE_OVERDUE');
+ assert.equal(late.resourceWait.value,null);assert.equal(late.resourceWait.source,'UNKNOWN');
+});

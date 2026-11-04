@@ -40,7 +40,11 @@ export interface AttemptRecordV2 {
 }
 export interface AttemptStatusQueryV2 { groupId: string; attemptId: string; holderInstanceId: string; coordinatorEpoch: number; }
 export interface ProtocolErrorV2 { version: number; code: string; retryable: boolean; messageId: string | null; }
+export interface QueueSampleV2 {
+  atMono:number; reasonCode:string; resourcePoolIds:string[]; occupyingAttempts:string[]; settledAttempts:string[];
+}
 export interface TraceSpanV2 {
+  queueSamples?:QueueSampleV2[];
   traceId: string; spanId: string; parentSpanId: string | null; dependsOn: string[]; transferId: string | null;
   workflowId: string; nodeId: string; attemptId: string; targetId: string; deviceInstanceId: string;
   phase: string; durationMs: number; snapshotVersion: number; predictedMs: number | null; reasonCode: string | null;
@@ -164,7 +168,16 @@ export function mayCommitReceiptV2(record: AttemptRecordV2, receipt: ExecutionRe
 export function validAttemptStatusQueryV2(v: AttemptStatusQueryV2): boolean { return exactV2(v,['groupId','attemptId','holderInstanceId','coordinatorEpoch'])&&[v.groupId,v.attemptId,v.holderInstanceId].every((s:string)=>idV2(s))&&integerV2(v.coordinatorEpoch,1); }
 export function validProtocolErrorV2(v: ProtocolErrorV2): boolean { return exactV2(v,['version','code','retryable','messageId'])&&v.version===2&&idV2(v.code)&&typeof v.retryable==='boolean'&&nullableIdV2(v.messageId); }
 export function validTraceSpanV2(v: TraceSpanV2): boolean {
-  return exactV2(v,['traceId','spanId','parentSpanId','dependsOn','transferId','workflowId','nodeId','attemptId','targetId','deviceInstanceId','phase','durationMs','snapshotVersion','predictedMs','reasonCode','startMono','endMono','clockDomainId','measurementScope','authoritativeSide'])&&
+  const fields=['traceId','spanId','parentSpanId','dependsOn','transferId','workflowId','nodeId','attemptId','targetId','deviceInstanceId','phase','durationMs','snapshotVersion','predictedMs','reasonCode','startMono','endMono','clockDomainId','measurementScope','authoritativeSide'];
+  const samples=v?.queueSamples;
+  if(samples!==undefined){
+    fields.push('queueSamples');
+    if(v.phase!=='QUEUE'||!Array.isArray(samples)||samples.length>9||
+      !samples.every((s:QueueSampleV2,i:number)=>exactV2(s,['atMono','reasonCode','resourcePoolIds','occupyingAttempts','settledAttempts'])&&
+        timeV2(s.atMono)&&s.atMono>=v.startMono&&s.atMono<=v.endMono&&(i===0||s.atMono>=samples[i-1].atMono)&&
+        idV2(s.reasonCode)&&idsV2(s.resourcePoolIds,4)&&idsV2(s.occupyingAttempts,4)&&idsV2(s.settledAttempts,4)))return false;
+  }
+  return exactV2(v,fields)&&
     [v.traceId,v.spanId,v.workflowId,v.nodeId,v.attemptId,v.targetId,v.deviceInstanceId,v.clockDomainId].every((s:string)=>idV2(s))&&nullableIdV2(v.parentSpanId)&&nullableIdV2(v.transferId)&&idsV2(v.dependsOn,64)&&v.dependsOn.indexOf(v.spanId)<0&&v.parentSpanId!==v.spanId&&
     ['PLAN','OFFER','ADMIT','QUEUE','TRANSFER_SEND','TRANSFER_RECV','LOAD','EXECUTE','PUBLISH','DELIVER','YIELD','RETRY'].indexOf(v.phase)>=0&&
     timeV2(v.startMono)&&timeV2(v.endMono)&&v.endMono>=v.startMono&&timeV2(v.durationMs)&&Math.abs(v.durationMs-(v.endMono-v.startMono))<0.001&&

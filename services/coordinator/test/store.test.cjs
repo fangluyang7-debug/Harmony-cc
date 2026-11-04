@@ -22,6 +22,16 @@ test('quota preflight and offer creation are one transaction; stale quota create
   assert.equal(calls,2);assert.equal(await db.attempt.count(),1);
  }finally{await db.$disconnect();}
 });
+test('a late admission cannot reverse a durable pre-start rejection',async()=>{
+ const {db,store}=await database();
+ try{
+  const f=attempt();await store.persistOffer(f.offer,f.record.holderInstanceId,f.message);
+  await db.attempt.update({where:{id:f.record.attemptId},data:{state:'REJECTED',rejectionJson:JSON.stringify({reply:{reasonCode:'QUEUE_STARVED_NOT_STARTED'}})}});
+  await assert.rejects(store.recordAdmission(f.record),/ADMISSION_CONFLICT/);
+  const row=await db.attempt.findUniqueOrThrow({where:{id:f.record.attemptId}});
+  assert.equal(row.state,'REJECTED');assert.equal(row.recordJson,null);
+ }finally{await db.$disconnect();}
+});
 for(const point of ['before-send','after-send'])test(`crash ${point}: durable query replaces offer without a second attempt`,async()=>{
   const {db,url,store}=await database();
   try{
@@ -98,4 +108,74 @@ test('reconciliation honors side-effect policy and cannot turn unknown execution
     assert.equal(await db.attempt.count(),4); // Recommendations do not create attempts.
     await assert.rejects(store.reconciliationAction('other-group','reconcile0'),/AUTHORIZATION_DENIED/);
   }finally{await db.$disconnect();}
+});
+
+for(const race of ['backup-first','simultaneous','cancel-before-success','cancel-before-rejection'])test('logical node chooses one result and settles both attempts: '+race,async()=>{
+ const {db,store,url}=await database();let reopened;
+ try{
+  const primary=attempt(),backup=attempt();
+  for(const f of [primary,backup])f.offer.task.priority='REMOTE_INTERACTIVE';
+  backup.offer.task.attemptId='backup';backup.offer.task.allowedTargetIds=['target2'];
+  Object.assign(backup.offer.target,{targetId:'target2',deviceId:'device2'});
+  for(const hop of backup.offer.transferPlan)hop.to=backup.offer.target.deviceId;
+  backup.message.messageId='backup-offer';
+  Object.assign(backup.record,{attemptId:'backup',holderInstanceId:'h2'});
+  Object.assign(backup.record.fence,{deviceId:'device2',holderInstanceId:'h2'});
+  for(const f of [primary,backup]){
+   f.message.payload=JSON.stringify(f.offer);f.record.executionDigest=executionDigest(f.offer.task);
+  }
+  await store.persistOffer(primary.offer,'h1',primary.message);
+  await store.recordAdmission(primary.record);
+  await store.persistOffer(backup.offer,'h2',backup.message,async()=>{},primary.offer.task.attemptId);
+  await store.recordAdmission(backup.record);
+  const win={...fixture('ExecutionReceipt'),attemptId:'backup',actualTarget:backup.offer.target,fence:backup.record.fence};
+  win.outputs=[{...win.outputs[0],schemaId:'output.schema'}];
+  for(const f of [primary,backup]){
+   await db.cpuJob.create({data:{id:f.offer.task.attemptId,groupId:'g1',principalId:f.offer.task.app.principalId,sourceHolderId:'source',state:'DISPATCHED',
+    metadataJson:JSON.stringify({output:{groupId:'g1',ownerPrincipalId:f.offer.task.app.principalId,ref:win.outputs[0]}})}});
+  }
+  await assert.rejects(store.receive('g1','h2',{...win,outputs:fixture('ExecutionReceipt').outputs},1),/RACE_OUTPUT_SCOPE/);
+  if(race.startsWith('cancel-before-')){
+   const node=await db.node.findFirstOrThrow();await db.node.update({where:{id:node.id},data:{state:'CANCEL_REQUESTED'}});
+   assert.equal(await store.receive('g1','h2',win,1),'RECONCILE');
+   assert.equal((await db.node.findUniqueOrThrow({where:{id:node.id}})).state,'CANCEL_REQUESTED');
+   assert.equal(JSON.parse((await db.attempt.findUniqueOrThrow({where:{id:primary.record.attemptId}})).recordJson).resourcesSettled,false);
+   if(race==='cancel-before-rejection'){
+    await db.$transaction(async tx=>{
+     await tx.attempt.update({where:{id:primary.record.attemptId},data:{state:'REJECTED'}});
+     await store.recordNodeFailure(tx,node.id,primary.record.attemptId,'REJECTED');
+    });
+   }else assert.equal(await store.receive('g1','h1',fixture('ExecutionReceipt'),1),'RECONCILE');
+   const ended=await db.node.findUniqueOrThrow({where:{id:node.id}});
+   assert.equal(ended.state,'CANCELLED_SETTLED');assert.equal(ended.winnerAttemptId,null);
+   assert.equal(await db.receipt.count({where:{committed:true}}),0);return;
+  }
+  if(race==='simultaneous'){
+   const first={...fixture('ExecutionReceipt'),outputs:win.outputs};
+   const results=await Promise.all([store.receive('g1','h1',first,1),store.receive('g1','h2',win,1)]);
+   assert.deepEqual(results.sort(),['COMMITTED','RECONCILE']);
+   assert.equal(await db.receipt.count({where:{committed:true}}),1);
+   const winner=await db.receipt.findFirstOrThrow({where:{committed:true}}),node=await db.node.findFirstOrThrow();
+   assert.equal(node.winnerAttemptId,winner.attemptId);
+   assert.ok((await db.attempt.findMany()).every(row=>JSON.parse(row.recordJson).resourcesSettled));
+   return;
+  }
+  assert.equal(await store.receive('g1','h2',win,1),'COMMITTED');
+  assert.equal((await db.cpuJob.findUniqueOrThrow({where:{id:primary.record.attemptId}})).state,'CANCEL_REQUESTED');
+  assert.equal(JSON.parse((await db.attempt.findUniqueOrThrow({where:{id:primary.record.attemptId}})).recordJson).resourcesSettled,false);
+  await db.$disconnect();reopened=new PrismaClient({datasources:{db:{url}}});const next=new CoordinatorStore(reopened,'coordinator1');
+  const late=fixture('ExecutionReceipt');
+  assert.equal(await next.receive('g1','h1',late,1),'RECONCILE');
+  assert.equal(await next.receive('g1','h2',win,1),'COMMITTED');
+  const {raceIntervals,raceKey}=require('../dist/race-timing');
+  const raceNode=await reopened.node.findFirstOrThrow();
+  const timing=JSON.parse((await reopened.costObservation.findUniqueOrThrow({where:{id:raceKey(raceNode.id)}})).metadataJson);
+  const spans=raceIntervals(timing,raceNode.primaryAttemptId,raceNode.backupAttemptId);
+  assert.ok(spans.offerToWinnerMs>=0&&spans.offerToWinnerMs!==null);
+  assert.ok(spans.winnerToBothSettledMs>=0&&spans.winnerToBothSettledMs!==null);
+  assert.equal(raceIntervals({...timing,offer:{...timing.offer,clock:'another-process'}},raceNode.primaryAttemptId,raceNode.backupAttemptId).offerToWinnerMs,null);
+  const node=await reopened.node.findFirstOrThrow();assert.equal(node.winnerAttemptId,'backup');assert.equal(node.currentAttemptId,'backup');
+  assert.equal(await reopened.receipt.count({where:{committed:true}}),1);
+  assert.equal(JSON.parse((await reopened.attempt.findUniqueOrThrow({where:{id:late.attemptId}})).recordJson).resourcesSettled,true);
+ }finally{await reopened?.$disconnect();await db.$disconnect();}
 });

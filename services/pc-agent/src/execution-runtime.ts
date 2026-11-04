@@ -1,10 +1,13 @@
+import {ImageEncoder,imageExecutorId,cudaExecutorId} from './image-encoder';
+import {ModelManifestV2} from '@harmony/scheduler-core';
 import { createHash } from 'node:crypto';
-import { DispatchOfferV2, ExecutionReceiptV2, ExecutionConfigV2, LedgerAdmissionV2, ArtifactRefV2, MessageEnvelopeV2, canonical } from '@harmony/scheduler-core';
+import { DispatchOfferV2, ExecutionReceiptV2, ExecutionConfigV2, LedgerEntryV2, LedgerAdmissionV2, ArtifactRefV2, MessageEnvelopeV2, canonical } from '@harmony/scheduler-core';
 import { DurableLedger } from './durable-ledger';
 import { executeCpu } from './cpu-engine';
 import { ExecutionTrace } from './execution-trace';
 
 export interface ExecutionPorts {
+  imageEncoder?:ImageEncoder;
   fixedService?(offer:DispatchOfferV2,input:Buffer,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string}>;
   /** Trusted local gate checks current qualification, target identity, task authorization and owner policy. */
   authorize(offer:DispatchOfferV2):Promise<Omit<LedgerAdmissionV2,'now'|'executionDigest'|'leaseId'>>;
@@ -14,31 +17,40 @@ export interface ExecutionPorts {
 export class PcExecutionRuntime {
   private readonly active=new Map<string,{abort:AbortController;done:Promise<ExecutionReceiptV2>}>();
   constructor(private readonly ledger:DurableLedger,private readonly ports:ExecutionPorts,private readonly delivery:'BUSINESS'|'EVALUATION'='BUSINESS'){}
-  async run(offer:DispatchOfferV2,selected:ExecutionConfigV2,hooks:{waiting?:(reason:string)=>void;selected?:()=>void;admitted?:()=>void;trace?:ExecutionTrace;maxDurationMs?:number;message?:MessageEnvelopeV2}={}):Promise<ExecutionReceiptV2>{
-    if((offer.target.backend!=='CPU'&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.ports.fixedService))||offer.task.contract.sideEffectPolicy!=='PURE'||offer.task.inputs.length!==1||!offer.allowedConfigs.some(c=>canonical(c)===canonical(selected)))throw Error('EXECUTION_UNSUPPORTED');
+  async run(offer:DispatchOfferV2,selected:ExecutionConfigV2,hooks:{waiting?:(reason:string,pools:string[],entries:LedgerEntryV2[])=>void;selected?:(entries:LedgerEntryV2[])=>void;admitted?:()=>void;trace?:ExecutionTrace;maxDurationMs?:number;message?:MessageEnvelopeV2}={}):Promise<ExecutionReceiptV2>{
+    if((offer.target.backend!=='CPU'&&!(offer.target.backend==='CUDA'&&this.ports.imageEncoder?.gpu)&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.ports.fixedService))||offer.task.contract.sideEffectPolicy!=='PURE'||offer.task.inputs.length!==1||!offer.allowedConfigs.some(c=>canonical(c)===canonical(selected)))throw Error('EXECUTION_UNSUPPORTED');
     const admit=async()=>{const context=await this.ports.authorize(offer);return this.ledger.admit(offer,context,hooks.message);};
     const entry=hooks.trace?await hooks.trace.segment('ADMIT',admit):await admit(),id=entry.record.attemptId;
     if(entry.record.receipt)return entry.record.receipt;
     if(this.active.has(id))return this.active.get(id)!.done;
     if(entry.record.state!=='ACCEPTED')throw Error('EXECUTION_RECOVERY_REQUIRED');
-    hooks.admitted?.();
     const abort=new AbortController();
-    const done=this.execute(offer,selected,entry.record.fence,abort,hooks.trace,hooks.maxDurationMs);
-    this.active.set(id,{abort,done});try{return await done;}finally{this.active.delete(id);}
+    const done=Promise.resolve().then(()=>this.execute(offer,selected,entry.record.fence,abort,hooks.trace,hooks.maxDurationMs));
+    this.active.set(id,{abort,done});
+    try{hooks.admitted?.();}catch{abort.abort();}
+    try{return await done;}finally{this.active.delete(id);}
   }
   private async execute(offer:DispatchOfferV2,config:ExecutionConfigV2,fence:ExecutionReceiptV2['fence'],abort:AbortController,trace?:ExecutionTrace,maxDurationMs=Infinity){
+    let actualModel:ModelManifestV2|null=null;
     const task=offer.task;let state='FAILED',outputs:ArtifactRefV2[]=[],errorCode:string|null=null;
     const segment=<T>(phase:string,work:()=>Promise<T>)=>trace?trace.segment(phase,work):work();
     const deadline=setTimeout(()=>abort.abort(),Math.min(offer.leaseMs,task.budget.remainingMs,maxDurationMs));
     try{
+      if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
       const bytes=await segment('LOAD',async()=>{
         const input=await this.ports.read(task.inputs[0],offer,trace);
         if(createHash('sha256').update(input).digest('hex')!==task.inputs[0].contentHash)throw Error('INPUT_HASH');
         return input;
       });
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
-      this.ledger.begin(task.attemptId); // Durable RUNNING always precedes the engine call.
+      this.ledger.begin(task.attemptId,bytes.length,task.contract.serviceId?'UNKNOWN':'COLD'); // Durable RUNNING always precedes the engine call.
       const result=await segment('EXECUTE',async()=>{
+        if(offer.target.executorId===imageExecutorId||offer.target.executorId===cudaExecutorId){
+          const encoder=this.ports.imageEncoder;
+          if(!encoder||canonical(encoder.pack.manifest.contract)!==canonical(task.contract))throw Error('ENCODER_SCOPE');
+          const output=await encoder.execute(offer,bytes,abort.signal);actualModel=output.model;
+          return {...output,hash:createHash('sha256').update(output.bytes).digest('hex')};
+        }
         if(!task.contract.serviceId)return executeCpu(task.contract.capability,bytes,JSON.parse(task.parameters),config,abort.signal);
         if(!this.ports.fixedService)throw Error('SERVICE_ADAPTER_REQUIRED');
         const output=await this.ports.fixedService(offer,bytes,abort.signal);if(output.bytes.length<1||output.bytes.length>8388608)throw Error('SERVICE_OUTPUT_INVALID');
@@ -55,7 +67,7 @@ export class PcExecutionRuntime {
     }catch(error){errorCode=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'EXECUTION_FAILED';if(abort.signal.aborted||errorCode==='CANCELLED_SETTLED')state='CANCELLED_SETTLED';}
     finally{clearTimeout(deadline);}
     const receipt:ExecutionReceiptV2={attemptId:task.attemptId,coordinatorEpoch:task.coordinatorEpoch,planRevision:task.planRevision,fence,state,resourcesSettled:true,outputs,
-      actualTarget:offer.target,actualConfiguration:config.id,errorCode};this.ledger.settle(receipt,this.delivery);return receipt;
+      actualTarget:offer.target,actualConfiguration:config.id,errorCode};this.ledger.settle(receipt,this.delivery,actualModel);return receipt;
   }
   cancel(attemptId:string){this.ledger.cancel(attemptId);this.active.get(attemptId)?.abort.abort();}
   async close(){for(const [id]of this.active)this.cancel(id);await Promise.allSettled([...this.active.values()].map(a=>a.done));}

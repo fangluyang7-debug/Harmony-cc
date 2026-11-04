@@ -102,6 +102,15 @@ test('registered App host qualifies and executes SDK work through the shared pla
       assert.deepEqual(metadata.offer.transferPlan,[],'a completed upload is executor-local at dispatch');
     }
     assert.equal(r.artifacts.available(metadata.output),false,'verified result acknowledgment releases relay bytes');assert.ok(metadata.resultReceivedAt);
+    const observationId='execute:'+JSON.stringify([group,metadata.holderId,chosenResult.status.targetId]);
+    let feedback;
+    for(const end=Date.now()+8000;Date.now()<end;){
+      const row=await r.db.costObservation.findUnique({where:{id:observationId}});
+      feedback=row&&JSON.parse(row.metadataJson).samples.find(s=>s.id===choiceId);
+      if(feedback)break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.ok(feedback?.ms>0,'authenticated EXECUTE trace reaches the target cost bucket');
   }
  }finally{await remoteHost?.close();await host?.close();await r.close();}
 });

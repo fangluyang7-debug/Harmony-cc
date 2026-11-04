@@ -3,6 +3,7 @@ import { PrismaClient } from '../generated/client';
 import { CapabilityPackV2, CapabilityAdmissionV2, ExecutorV2, ExecutionConfigV2, canonical, sameModelV2, validCapabilityPackV2, validExecutionConfigV2, sampleUsableV2, vectorFitsV2 } from '@harmony/scheduler-core';
 import { DeviceDirectory, executorIdentity } from './directory';
 import { Peer } from './channel';
+import {sustainedDrift} from './performance-feedback';
 import type { EvaluationPermit, EvaluationResult } from '@harmony/resource-transport';
 export type { EvaluationPermit, EvaluationResult } from '@harmony/resource-transport';
 
@@ -89,6 +90,11 @@ export class QualificationService {
         return this.publish(peer,targetId,job,'WAITING_WINDOW','OWNER_OR_HOST_NOT_AVAILABLE');
       if(job.cooldownUntil>this.now())return this.publish(peer,targetId,job,'SUSPENDED','EVALUATION_COOLDOWN');
       if(job.quality!==null&&job.next>=Math.max(pack.cases.length,this.policy.activeSamples)){
+        if(await sustainedDrift(this.db,id,identity,job.generation)){
+          job={...job,generation:job.generation+1,next:0,runs:0,durationMs:0,bytes:0,quality:null,
+            expiresAt:0,lastDurationMs:null,cooldownUntil:this.now()+this.policy.cooldownMs};
+          return this.publish(peer,targetId,job,'SUSPENDED','EXECUTION_COST_DRIFT');
+        }
         const current=await this.db.capabilityState.findUnique({where:{id}});
         if(current&&JSON.parse(current.metadataJson).state==='ACTIVE')return 'ACTIVE';
         return this.publish(peer,targetId,job,'ACTIVE','EVALUATION_PASSED');

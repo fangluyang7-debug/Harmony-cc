@@ -18,6 +18,10 @@ function api(address,cert){let cookie='';return async(route,body,headers={})=>ne
 async function main(){
  const dir=fs.mkdtempSync(path.join(root,'.test/agent-conformance-'));
  const report={agent:kind,domain,startedAt:new Date().toISOString(),checks:[],wireCounts:{},errors:[]};
+ if(kind==='harmony-emulator'){
+  const hap=process.env.HARMONY_AGENT_HAP||path.join(root,'.test/s2-harmony-agent/entry/build/default/outputs/default/entry-default-unsigned.hap');
+  report.hapSha256=crypto.createHash('sha256').update(fs.readFileSync(hap)).digest('hex');
+ }
  const save=()=>fs.writeFileSync(path.join(dir,'report.json'),JSON.stringify(report,null,2));
  const config=loadConfig({COORDINATOR_DATA_DIR:path.join(dir,'coordinator'),COORDINATOR_HOST:host,COORDINATOR_PORT:'0',COORDINATOR_CERTIFICATE_HOST:host,COORDINATOR_DOMAIN:domain});
  execFileSync(process.execPath,['scripts/migrate.cjs'],{cwd:path.join(root,'services/coordinator'),env:{...process.env,COORDINATOR_DATA_DIR:config.dataDir},stdio:'pipe',windowsHide:true});
@@ -45,7 +49,12 @@ async function main(){
    await assert.rejects(request('/v2/pair',{inviteId:device.invitation.inviteId,code:device.invitation.code,holderInstanceId:device.holderInstanceId}));
   });
   await step('02 profile schema, unknown values and monotonic sequence',async()=>{
-   assert.ok(core.validDeviceProfileV2(profile));assert.equal(profile.domain,domain);assert.equal(profile.battery.value,null);assert.equal(profile.temperature.value,null);
+   assert.ok(core.validDeviceProfileV2(profile));assert.equal(profile.domain,domain);
+   for(const reading of [profile.battery,profile.temperature]){
+    if(reading.value===null)assert.equal(reading.source,'UNKNOWN');
+    else{assert.equal(reading.source,domain==='REAL'?'MEASURED':'SIMULATED');assert.ok(Number.isFinite(reading.value)&&reading.value>=0);}
+   }
+   assert.ok(profile.battery.value===null||profile.battery.value<=100);
    await until(()=>messages.filter(m=>m.type==='DeviceProfile').length>=2);
    const rows=messages.filter(m=>m.type==='DeviceProfile').map(m=>JSON.parse(m.payload));assert.ok(rows.every(core.validDeviceProfileV2));
    assert.ok(rows[rows.length-1].sequence>rows[0].sequence);

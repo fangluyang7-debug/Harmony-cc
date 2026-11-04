@@ -1,4 +1,5 @@
 import {ArtifactDescriptor,directTransfer,SignedTransfer,transfer} from '@harmony/resource-transport';
+import {ImageEncoder,imageExecutorId,cudaExecutorId} from './image-encoder';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -24,10 +25,11 @@ import {pcTraceClockDomainId} from './execution-trace';
 export interface FixedServiceAdapter {pack:ReferencePack;execute(input:Buffer,parameters:string,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string}>;}
 export interface CpuHostConfig {
   dataEndpoint?:DataHostConfig|false;
+  imageEncoder?:ImageEncoder;
   fixedServices?:FixedServiceAdapter[];
   controlIntervalMs?:number;
   directory:string;identity:{groupId:string;deviceId:string;holderInstanceId:string;appInstanceId:string|null};connection:RecoveryConnection;
-  contribution:{ownerMode:'dedicated'|'windows-idle'|'paused';maxCpuThreads:number;maxMemoryBytes:number;reserveMemoryBytes:number;idleThresholdMs?:number};
+  contribution:{ownerMode:'dedicated'|'windows-idle'|'paused';maxCpuThreads:number;maxMemoryBytes:number;maxVramBytes?:number;reserveMemoryBytes:number;idleThresholdMs?:number};
 }
 /** Standalone CPU host assembled from paired identity, owner policy, installed packs and network services. */
 export class CpuHost {
@@ -70,7 +72,7 @@ export class CpuHost {
       fs.renameSync(temporary,target);
   }
   private constructor(readonly ledger:DurableLedger,private readonly config:CpuHostConfig,private readonly onError:(e:unknown)=>void){
-    this.packs=[...builtinCpuPacks(),...(config.fixedServices??[]).map(s=>s.pack)];
+    this.packs=[...builtinCpuPacks(),...(config.imageEncoder?[config.imageEncoder.pack]:[]),...(config.fixedServices??[]).map(s=>s.pack)];
     if(new Set(this.packs.map(p=>p.manifest.contract.capability)).size!==this.packs.length)throw Error('SERVICE_CAPABILITY_CONFLICT');
     const request=allotmentTransport(config.connection),packs=this.packs,installed=new Map(packs.flatMap(p=>p.cases.map(c=>[packDigest(p)+':'+c.id,c] as const)));
     this.relayLinks=new RelayLinks(config.identity.deviceId,config.connection.domain,request);
@@ -89,7 +91,7 @@ export class CpuHost {
         allowedTargetIds:[executor.target.targetId],qualityTarget:'reference',privacy:'LOCAL_ONLY',priority:'REMOTE_BATCH',parameters:test.parameters,allowedConfigurations:[permit.config.id],businessIdempotencyKey:null},
         target:executor.target,resources:executor.resources,allowedConfigs:[permit.config],allotmentId:grant.allotmentId,allotmentVersion:grant.version,leaseMs:permit.timeoutMs,transferPlan:[],dependencies:[],reasonCode:'TRUSTED_REFERENCE'};
       return offer;
-    },context,(offer,input,signal)=>this.executeService(offer,input,signal));
+    },context,(offer,input,signal)=>this.executeService(offer,input,signal),config.imageEncoder);
     const run=evaluator.runInstalled.bind(evaluator);
     evaluator.runInstalled=async(permit,executor,signal)=>{const result=await run(permit,executor,signal);if(result.output.length)this.costs.set(executor.contract.capability,{value:result.durationMs,at:Date.now()});return result;};
     // Authorization and the input ticket share one authenticated response. Consume once;
@@ -116,7 +118,7 @@ export class CpuHost {
         const reply=await authorize(offer);if(authorizations.size>=8)authorizations.delete(authorizations.keys().next().value!);authorizations.set(offer.task.attemptId,reply.offer);
         return Number.isSafeInteger(reply.snapshotVersion)&&reply.snapshotVersion!>0?reply.snapshotVersion!:null;
       },
-      ports:{...remotePorts,fixedService:(offer,input,signal)=>this.executeService(offer,input,signal),publish:async(bytes,schemaId,offer,trace)=>{
+      ports:{...remotePorts,imageEncoder:config.imageEncoder,fixedService:(offer,input,signal)=>this.executeService(offer,input,signal),publish:async(bytes,schemaId,offer,trace)=>{
         const reply=await request('/v2/executions/'+offer.task.attemptId+'/output',{bytes:bytes.length,contentHash:digest(bytes),schemaId}) as {ticket:Parameters<typeof transfer>[1];delivery:string;descriptor?:ArtifactDescriptor;endpoint?:{id:string;epoch:string}};
         if(reply.delivery==='RETAINED'){
           const host=this.dataHost,endpoint=host?.identity(),descriptor=reply.descriptor;
@@ -155,7 +157,7 @@ export class CpuHost {
           const admitted=await context();
           return admitted;
         }},
-      allotments:{policy:()=>({base:this.appPolicy?.offlineBase??[],extra:this.appPolicy?.onlineExtra??[{resourcePoolId:'cpu',amount:config.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:config.contribution.maxMemoryBytes}],leaseMs:60000}),renewEveryMs:config.controlIntervalMs??20000},
+      allotments:{policy:()=>({base:this.appPolicy?.offlineBase??[],extra:this.appPolicy?.onlineExtra??[{resourcePoolId:'cpu',amount:config.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:config.contribution.maxMemoryBytes},...(config.imageEncoder?.gpu?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:Math.min(config.imageEncoder.gpu.limit,config.contribution.maxVramBytes??Infinity)}]:[])],leaseMs:60000}),renewEveryMs:config.controlIntervalMs??20000},
       cancellationRequested:async offer=>(await request('/v2/executions/'+offer.task.attemptId+'/control',{}) as {cancel:boolean}).cancel===true,
       calibration:{executor:evaluator},onYield:()=>{},onExecutionSettled:()=>{void (this.pending??Promise.resolve()).then(()=>this.tick(false)).catch(onError);},onError});
   }
@@ -183,9 +185,12 @@ export class CpuHost {
   private executor(capability:string,now:number):ExecutorV2{
     const pack=this.packs.find(p=>p.manifest.contract.capability===capability)!,cost=this.costs.get(capability);
     const prior=(value:number|null,sampledAt=now):NumericSampleV2=>({value,source:value===null?'UNKNOWN':'PRIOR',sampledAt,ttlMs:3600000,unit:'ms'});
-    return {target:{targetId:'cpu-'+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
-      executorId:'node.cpu.v1',executorVersion:'1',backend:pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:['cpu','ram'],stableExecutionId:'node.cpu.v1'},contract:pack.manifest.contract,model:null,
-      resources:structuredClone(pack.manifest.resourceLimit),configurations:[{...pack.cases[0].config}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(0),cold:prior(0),publish:prior(0),uncertainty:prior(0)};
+    const gpu=pack===this.config.imageEncoder?.pack&&!!this.config.imageEncoder.gpu;
+    const resources=pack.manifest.resourceLimit.filter(r=>gpu||!['gpu','vram'].includes(r.resourcePoolId));
+    const executorId=pack===this.config.imageEncoder?.pack?(gpu?cudaExecutorId:imageExecutorId):'node.cpu.v1';
+    return {target:{targetId:(gpu?'cuda-':'cpu-')+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
+      executorId,executorVersion:'1',backend:gpu?'CUDA':pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
+      resources:structuredClone(resources),configurations:[{...pack.cases[0].config}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(0),cold:prior(0),publish:prior(0),uncertainty:prior(0)};
   }
   private async sample(syncSettings=true){
     try{
@@ -201,24 +206,30 @@ export class CpuHost {
         }
       }
       const links=this.agent.ready?await this.relayLinks.sample(Date.now()+this.clockOffset):[];
-      const system=collectSystemResources(),p=this.config.contribution,state=this.ledger.snapshot(),occupied=occupiedV2(state),now=Date.now()+this.clockOffset;
+      const system=collectSystemResources(),p=this.config.contribution,before=occupiedV2(this.ledger.snapshot());
       const owner=p.ownerMode==='dedicated'?'IDLE':p.ownerMode==='paused'?'ACTIVE':await windowsOwnerActivity(p.idleThresholdMs??60000);
       if(this.stopped)return;
-      const ownRam=occupied.find(r=>r.resourcePoolId==='ram')?.amount??0;
+      const ownRam=before.find(r=>r.resourcePoolId==='ram')?.amount??0;
       this.owner=owner;this.limits=[{resourcePoolId:'cpu',amount:Math.min(system.cpuThreads,p.maxCpuThreads)},
         {resourcePoolId:'ram',amount:Math.min(p.maxMemoryBytes,system.totalMemoryBytes,ownRam+Math.max(0,system.freeMemoryBytes-p.reserveMemoryBytes))}];
+      const gpu=this.config.imageEncoder?.gpu;
+      if(gpu){const free=await gpu.freeBytes();this.limits.push({resourcePoolId:'gpu',amount:free>0?1:0},{resourcePoolId:'vram',amount:Math.min(gpu.limit,p.maxVramBytes??Infinity,free)});}
       if(owner!=='IDLE')this.limits=this.limits.map(r=>({...r,amount:0}));
       await this.agent.updateResources(this.limits,owner);
+      const state=this.ledger.snapshot(),occupied=occupiedV2(state),now=Date.now()+this.clockOffset;
       if(!this.agent.ready||!state.grant||this.ledger.pendingMessages().some(m=>m.type==='DeviceProfile'))return;
       const source=this.config.connection.domain==='REAL'?'MEASURED':'SIMULATED';
       const numeric=(value:number,unit:string):NumericSampleV2=>({value,source,sampledAt:system.sampledAt+this.clockOffset,ttlMs:15000,unit});
       const unknown=(unit:string)=>({value:null,source:'UNKNOWN',sampledAt:now,ttlMs:15000,unit});
       const status=(value:string,source='PRIOR')=>({value,source,sampledAt:now,ttlMs:15000,unit:'state'});
+      const executors=this.packs.filter(pack=>!this.appPolicy||this.appPolicy.identity.allowedContracts.includes(pack.manifest.contract.contractId)).map(pack=>this.executor(pack.manifest.contract.capability,now));
       const profile:Omit<DeviceProfileV2,'sequence'>={deviceId:state.deviceId,deviceInstanceId:this.instance,holderInstanceId:state.holderInstanceId,ledgerEpoch:state.ledgerEpoch,domain:this.config.connection.domain,
         ownerActivity:owner==='UNKNOWN'?unknown('state'):status(owner,p.ownerMode==='windows-idle'?source:'PRIOR'),foreground:status('FOREGROUND'),powerSave:status('OFF'),charging:unknown('state'),battery:unknown('percent'),temperature:unknown('level'),
-        pools:[{id:'cpu',kind:'CPU_SLOTS',unit:'slots',total:system.cpuThreads,limit:p.maxCpuThreads},{id:'ram',kind:'RAM_BYTES',unit:'bytes',total:system.totalMemoryBytes,limit:p.maxMemoryBytes}].map(pool=>({resourcePoolId:pool.id,kind:pool.kind,exclusive:false,total:numeric(pool.total,pool.unit),ownerReserved:Math.max(0,pool.total-pool.limit),contributionLimit:pool.limit,
+        pools:[{id:'cpu',kind:'CPU_SLOTS',unit:'slots',total:system.cpuThreads,limit:p.maxCpuThreads},{id:'ram',kind:'RAM_BYTES',unit:'bytes',total:system.totalMemoryBytes,limit:p.maxMemoryBytes},...(gpu?[{id:'gpu',kind:'GPU_SLOTS',unit:'slots',total:1,limit:1},{id:'vram',kind:'VRAM_BYTES',unit:'bytes',total:gpu.totalBytes,limit:Math.min(gpu.limit,p.maxVramBytes??Infinity)}]:[])].map(pool=>({resourcePoolId:pool.id,kind:pool.kind,exclusive:pool.id==='gpu',total:numeric(pool.total,pool.unit),ownerReserved:Math.max(0,pool.total-pool.limit),contributionLimit:pool.limit,
           admissionLimit:numeric(this.limits.find(r=>r.resourcePoolId===pool.id)!.amount,pool.unit),occupied:numeric(occupied.find(r=>r.resourcePoolId===pool.id)?.amount??0,pool.unit),draining:(occupied.find(r=>r.resourcePoolId===pool.id)?.amount??0)>this.limits.find(r=>r.resourcePoolId===pool.id)!.amount,drainMs:unknown('ms')})),
-        executors:this.packs.filter(pack=>!this.appPolicy||this.appPolicy.identity.allowedContracts.includes(pack.manifest.contract.contractId)).map(pack=>this.executor(pack.manifest.contract.capability,now)),links,credits:['ORIGIN_INTERACTIVE','REMOTE_INTERACTIVE','REMOTE_BATCH'].map(priority=>({priority,slots:owner==='IDLE'?1:0}))};
+        executors,links,credits:this.agent.scheduler.capacityCredits(executors.map(e=>e.resources),occupied)};
+      const facts=this.ledger.inFlight(state,now,profile.domain);if(facts)profile.inFlight=facts;
+      const queued=this.agent.scheduler.queuedFacts(now,profile.domain);if(queued)profile.queued=queued;
       await this.agent.publishProfile(profile);
     }catch(error){this.onError(error);this.owner='UNKNOWN';this.limits=[];await this.agent.updateResources([],'UNKNOWN');}
   }
@@ -226,12 +237,12 @@ export class CpuHost {
     if(!this.agent.ready){this.peerLinks.invalidate();return;}
     const epoch=this.ledger.snapshot().grant?.coordinatorEpoch??0;
     const network=canonical(networkInterfaces());
-    if(this.config.dataEndpoint!==false&&network!==this.endpointNetwork&&Date.now()>=this.endpointRetryAt){
+    if(this.config.dataEndpoint!==false&&(!this.dataHost||network!==this.endpointNetwork)&&Date.now()>=this.endpointRetryAt){
       await this.dataHost?.close();this.dataHost=undefined;this.endpointRetryAt=Date.now()+30000;
       try{this.dataHost=await openDataHost(this.config.directory,this.config.connection,this.config.dataEndpoint??await discoverDataHost(this.config.connection),cpuSchemas);this.endpointNetwork=network;this.endpointCoordinatorEpoch=epoch;}
       catch(error){this.onError(error);}this.peerLinks.invalidate();
     }
-    if(this.dataHost&&epoch!==this.endpointCoordinatorEpoch){await this.dataHost.register();this.endpointCoordinatorEpoch=epoch;this.peerLinks.invalidate();}
+    if(this.dataHost&&(!this.dataHost.identity()||epoch!==this.endpointCoordinatorEpoch)){await this.dataHost.register();this.endpointCoordinatorEpoch=epoch;this.peerLinks.invalidate();}
     await this.peerLinks.sample();await this.collectReleased();await this.deliver();
   }
   private async collectReleased(){

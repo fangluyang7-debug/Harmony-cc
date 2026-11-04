@@ -1,0 +1,323 @@
+{
+  "id": "AC8",
+  "title": "设备内调度与额度",
+  "environment": {
+    "startedAt": "2026-11-04T12:39:56.897Z",
+    "node": "v22.18.0",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "commit": "94755dcc404c1c08f53335b0516bea5728bcb192",
+    "dirty": true,
+    "sourceDigest": "b6c0008f506e0aebf634b13a76c7e5a67cd079d0a76197e265b300073db4acf9"
+  },
+  "simulation": {
+    "result": "LISTED_CASES_PASS",
+    "coverage": "双 App 在已确认双槽容量内竞争；设备等待界限须结合前提判读。",
+    "suites": [
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/allotments.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 35314,
+        "cases": [
+          {
+            "name": "an offered dispatch pins its acknowledged quota version until admission is persisted",
+            "result": "PASS"
+          },
+          {
+            "name": "same-device budget stays reserved across expiry, restart and shrink until authenticated persisted settlement",
+            "result": "PASS"
+          },
+          {
+            "name": "offline base always reserves physical capacity; duplicate installation binding and agent base are rejected",
+            "result": "PASS"
+          },
+          {
+            "name": "network allotment client installs and acknowledges renewals and rejects revoked credentials",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "f9522cdf13a18b781db6c0007b995f1575c7606d2c24593605f275392e7c81d7"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/pc-agent",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/scheduler.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 3060,
+        "cases": [
+          {
+            "name": "device queue holds capacity through owner yield and settlement, then admits the next real CPU job",
+            "result": "PASS"
+          },
+          {
+            "name": "cancellation while local authorization is pending settles after admission without starting CPU work",
+            "result": "PASS"
+          },
+          {
+            "name": "real execution emits local phase spans; failed telemetry flush retries without affecting settlement",
+            "result": "PASS"
+          },
+          {
+            "name": "data integrity failures are attributed to LOAD or PUBLISH before settlement",
+            "result": "PASS"
+          },
+          {
+            "name": "relay HTTP spans remain inside data phases and do not replace execution dependencies",
+            "result": "PASS"
+          },
+          {
+            "name": "failed relay request preserves its error and emits a failed nested interval",
+            "result": "PASS"
+          },
+          {
+            "name": "trace flush splits a large queue history batch without losing observations",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "aadecb0cdb39f1a49fd139eaed168bc9f49ce7d943bab74c7a058bcccd88d6fd"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/pc-agent",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/ledger.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 2542,
+        "cases": [
+          {
+            "name": "reference settlement persists and frees only settled capacity without initiating business recovery",
+            "result": "PASS"
+          },
+          {
+            "name": "rename failure reports sanitized stage, poisons writer and preserves last committed snapshot",
+            "result": "PASS"
+          },
+          {
+            "name": "Windows transient replacement contention retries the same snapshot and commits once",
+            "result": "PASS"
+          },
+          {
+            "name": "dispatch reservation and reply commit together; terminal report survives crash; wrong envelope cannot reserve",
+            "result": "PASS"
+          },
+          {
+            "name": "rejected dispatch identity persists and cannot later execute after ACK or restart",
+            "result": "PASS"
+          },
+          {
+            "name": "starvation proof survives ACK and restart and binds the original offer bytes",
+            "result": "PASS"
+          },
+          {
+            "name": "atomic multi-pool admission; duplicate delivery does not run twice; cancellation and timeout do not release",
+            "result": "PASS"
+          },
+          {
+            "name": "completed receipts survive restart; RUNNING before engine invocation recovers UNKNOWN and stays occupied",
+            "result": "PASS"
+          },
+          {
+            "name": "grant delay, signature, epoch replay, shrink/drain and independent fence namespaces",
+            "result": "PASS"
+          },
+          {
+            "name": "single writer across processes, corrupt snapshot and missing committed snapshot fail closed",
+            "result": "PASS"
+          },
+          {
+            "name": "revision 6.1 rejects offline App admission but preserves occupancy, duplicate records and settlement",
+            "result": "PASS"
+          },
+          {
+            "name": "abrupt child-process death before-engine preserves the durable execution boundary",
+            "result": "PASS"
+          },
+          {
+            "name": "abrupt child-process death after-settlement preserves the durable execution boundary",
+            "result": "PASS"
+          },
+          {
+            "name": "durable ACCEPTED proves engine was never started; recovery cancels it but never frees RUNNING",
+            "result": "PASS"
+          },
+          {
+            "name": "status response and inbox/outbox survive restart and lost ACK; altered duplicates fail closed",
+            "result": "PASS"
+          },
+          {
+            "name": "legacy snapshot upgrade preserves attempts; bounded journal overflow leaves last committed state intact",
+            "result": "PASS"
+          },
+          {
+            "name": "external-engine recovery retains unknown occupancy and requires matching local settlement evidence",
+            "result": "PASS"
+          },
+          {
+            "name": "profile sequence and outbox persist together; duplicate pending profile is bounded",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "3356db922172fad43b6a0a06fe824558d7c759855a21cbcdb8b9dd3aa9fc429f"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "tests/agent-conformance/run.cjs",
+          "--agent",
+          "pc"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 39382,
+        "cases": [
+          {
+            "name": "01 pairing, credential binding and one-use invitation",
+            "result": "PASS"
+          },
+          {
+            "name": "02 profile schema, unknown values and monotonic sequence",
+            "result": "PASS"
+          },
+          {
+            "name": "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+            "result": "PASS"
+          },
+          {
+            "name": "04 same attempt with a new messageId returns existing admission/result without executing twice",
+            "result": "PASS"
+          },
+          {
+            "name": "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+            "result": "PASS"
+          },
+          {
+            "name": "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+            "result": "PASS"
+          },
+          {
+            "name": "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+            "result": "PASS"
+          },
+          {
+            "name": "08 revoked credential cannot reconnect or publish new telemetry",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "f1276fa85c8da991bf781c543c36186dceeb805df950fcce7ead55de672b2704"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/batch-ready.test.cjs",
+          "test/two-app-hosts.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 76243,
+        "cases": [
+          {
+            "name": "a waiting grant in another team cannot stall an eligible interaction behind a readable batch backlog",
+            "result": "PASS"
+          },
+          {
+            "name": "restored batch queue rotates apps, waits for credit events and expires a blocked tail independently",
+            "result": "PASS"
+          },
+          {
+            "name": "weighted resource time orders competing apps and measured settlement corrects an estimate once",
+            "result": "PASS"
+          },
+          {
+            "name": "under contention, ready interactive and batch jobs in the same app both receive dispatch turns",
+            "result": "PASS"
+          },
+          {
+            "name": "two independent App hosts share one physical budget without cross-App execution or result access",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "a8185ac32b2699ccb22a24de4f18e7449dab26898771266aae603a4904ab0d4f"
+      }
+    ],
+    "emulator": [
+      {
+        "test": "protocol",
+        "domain": "SIMULATED",
+        "api": "24",
+        "hapSha256": "0cde5e15add6af98b3c6773ec4b6f6538664604a6d096a1f95d9aaee844333dd",
+        "evidenceSha256": "b91d7d8c442bd8194a615ae95b9ac4629cacc900fe4a582181d0cf864da2aa00",
+        "cases": [
+          "01 pairing, credential binding and one-use invitation",
+          "02 profile schema, unknown values and monotonic sequence",
+          "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+          "03b ImageKit crop dispatched by PlanningService; geometry/colour checked; malformed crop settles as failed",
+          "03c emulator lifecycle: background stops admission, foreground resumes qualified contribution",
+          "04 same attempt with a new messageId returns existing admission/result without executing twice",
+          "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+          "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+          "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+          "08 revoked credential cannot reconnect or publish new telemetry"
+        ]
+      },
+      {
+        "test": "native-queue",
+        "domain": "SIMULATED",
+        "api": "24",
+        "hapSha256": "3d7b126257ff42492c0de1a2e632337e88f04e1548570fe702f9815912308e06",
+        "evidenceSha256": "eb9dbb85924800537b65e99346f4ebb6dabe0c253487ad2ca50fd6b8d814f16e",
+        "cases": [
+          "measured interference delays shared-pool admission",
+          "independent pool and owner gate",
+          "unstarted wait cap",
+          "admission resumes after settlement"
+        ]
+      }
+    ]
+  },
+  "real": {
+    "result": "NOT_RUN",
+    "pending": [
+      "所有者活动切换、后台暂停与未结算资源保护。"
+    ]
+  }
+}

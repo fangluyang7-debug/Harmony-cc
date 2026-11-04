@@ -3,8 +3,13 @@ import path from 'node:path';
 import { X509Certificate } from 'node:crypto';
 import { createCoordinator } from './app';
 import { loadConfig } from './config';
+import { builtinReferencePacks,loadImageEncodingPack } from '@harmony/reference-capabilities';
 async function main(){
-  const config=loadConfig(process.env),runtime=await createCoordinator(config,async()=>{},{cpuHost:process.env.COORDINATOR_CPU_HOST==='1'});
+  const config=loadConfig(process.env),cpuHost=process.env.COORDINATOR_CPU_HOST==='1';
+  const suite=process.env.COORDINATOR_IMAGE_ENCODING_SUITE;
+  if(suite&&!cpuHost)throw Error('ENCODING_ARTIFACT_HOST_REQUIRED');
+  const referencePacks=suite?[...await builtinReferencePacks(),await loadImageEncodingPack(suite)]:undefined;
+  const runtime=await createCoordinator(config,async()=>{},{cpuHost,referencePacks});
   try{await runtime.app.listen(config.port,config.host);await runtime.restore();}
   catch(error){await runtime.close();throw error;}
   for(const signal of ['SIGINT','SIGTERM'] as const)process.once(signal,()=>{void runtime.close().then(()=>process.exit(0));});

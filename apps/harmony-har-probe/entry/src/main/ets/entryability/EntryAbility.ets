@@ -6,6 +6,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { runLedgerFixtures, acceptedFixture } from '../LedgerFixtures';
 import { AgentStoreV2, AgentPersistenceV2, AgentMessageFactoryV2, agentMessageV2, bindAgentJournalV2 } from 'scheduler';
 import { runSdkProbe } from '../SdkProbe';
+import { verifyQueue } from '../QueueProbe';
 interface Ack {messageId:string;}
 export default class EntryAbility extends UIAbility {
   private foreground=false;
@@ -17,6 +18,7 @@ export default class EntryAbility extends UIAbility {
       const sdkResult=await runSdkProbe(this.context,encoded??null,()=>this.foreground);if(sdkResult!==null){AppStorage.setOrCreate('probeResult',sdkResult);hilog.info(0x0001,'HarmonyProbe','%{public}s',sdkResult);return;}
       const fixtures=util.TextDecoder.create('utf-8').decodeToString(await this.context.resourceManager.getRawFileContent('ledger-v2.json'));
       const count=runLedgerFixtures(fixtures);
+      verifyQueue(acceptedFixture(fixtures).entries[0].offer);
       const db=await relationalStore.getRdbStore(this.context,{name:'probe.db',securityLevel:relationalStore.SecurityLevel.S1});
       await db.executeSql('CREATE TABLE IF NOT EXISTS proof (id INTEGER PRIMARY KEY, launches INTEGER NOT NULL, fixtureCount INTEGER NOT NULL)');
       await db.executeSql('INSERT OR IGNORE INTO proof VALUES (1,0,0)');
@@ -31,7 +33,7 @@ export default class EntryAbility extends UIAbility {
       if(fresh){await store.change({apply:s=>{s.state=fixture;s.journal=bindAgentJournalV2(s.journal,'probe-coordinator',1);const factory:AgentMessageFactoryV2={id:()=>util.generateRandomUUID(true),digest:(text:string)=>text};const payload:Ack={messageId:'probe-origin'};s.journal.outbox.push(agentMessageV2(s.journal,s.state.groupId,s.state.holderInstanceId,'Ack',payload,factory,'probe-origin'));}});}
       const saved=store.read();if(saved.journal.outbox.length!==1||!fresh&&(saved.state.entries[0].record.state!=='CANCELLED_SETTLED'||!saved.state.entries[0].record.resourcesSettled))throw Error('NATIVE_RECOVERY_OR_OUTBOX_LOST');
       await storeDb.close();
-      const result='PASS native ledger fixtures='+count+'; persisted launches='+launches+'; atomic ledger/outbox='+(fresh?'SEEDED':'RECOVERED');
+      const result='PASS native ledger fixtures='+count+'; persisted launches='+launches+'; atomic ledger/outbox='+(fresh?'SEEDED':'RECOVERED')+'; queue interference/expiry=PASS';
       AppStorage.setOrCreate('probeResult',result);hilog.info(0x0001,'HarmonyProbe','%{public}s',result);
     }catch(e){const message='FAIL '+(e as Error).message;AppStorage.setOrCreate('probeResult',message);hilog.error(0x0001,'HarmonyProbe','%{public}s',message);}
   }

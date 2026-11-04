@@ -29,19 +29,33 @@ export class DirectTransfers {
     const value={endpoint,nonce:randomBytes(32).toString('base64url'),expiresAt:this.now()+30000,coordinatorEpoch:this.epoch()};
     this.challenges.set(endpoint.id,value);return structuredClone(value);
   }
-  async register(peer:Peer,input:{challenge:Challenge;signature:string}){
-    if(!exact(input,['challenge','signature'])||typeof input.signature!=='string'||input.signature.length>2048)throw Error('ENDPOINT_PROOF_INVALID');
+  async register(peer:Peer,input:{challenge:Challenge;signature:string;verified?:string[]}){
+    const verified=input?.verified;
+    if(verified!==undefined&&(!Array.isArray(verified)||verified.length>4096||verified.some(v=>typeof v!=='string'||!/^[a-f0-9]{64}$/.test(v))))throw Error('ENDPOINT_PROOF_INVALID');
+    if(!exact(input,verified===undefined?['challenge','signature']:['challenge','signature','verified'])||typeof input.signature!=='string'||input.signature.length>2048)throw Error('ENDPOINT_PROOF_INVALID');
     const id=transferDigest(canonical([peer.groupId,peer.holderInstanceId])),pending=this.challenges.get(id);
     if(!pending||pending.expiresAt<=this.now()||pending.coordinatorEpoch!==this.epoch()||canonical(pending)!==canonical(input.challenge)||
-      !verify('sha256',Buffer.from(canonical(pending)),new X509Certificate(pending.endpoint.certificate).publicKey,Buffer.from(input.signature,'base64')))throw Error('ENDPOINT_PROOF_INVALID');
+      !verify('sha256',Buffer.from(canonical(verified===undefined?pending:{challenge:pending,verified})),new X509Certificate(pending.endpoint.certificate).publicKey,Buffer.from(input.signature,'base64')))throw Error('ENDPOINT_PROOF_INVALID');
     this.challenges.delete(id);
     await this.db.$transaction(async tx=>{
       await this.active(tx,peer.credentialId);
-      if(!await tx.dataEndpoint.findUnique({where:{id}})&&await tx.dataEndpoint.count({where:{groupId:peer.groupId}})>=64)throw Error('ENDPOINT_DIRECTORY_CAPACITY');
+      const previous=await tx.dataEndpoint.findUnique({where:{id}});
+      if(!previous&&await tx.dataEndpoint.count({where:{groupId:peer.groupId}})>=64)throw Error('ENDPOINT_DIRECTORY_CAPACITY');
       await tx.dataEndpoint.upsert({where:{id},create:{id,groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,credentialId:peer.credentialId,coordinatorEpoch:this.epoch(),metadataJson:JSON.stringify(pending.endpoint)},
         update:{credentialId:peer.credentialId,coordinatorEpoch:this.epoch(),metadataJson:JSON.stringify(pending.endpoint)}});
       await tx.transferAuthorization.updateMany({where:{endpointId:id,state:'ISSUED'},data:{state:'REVOKED'}});
+      const old=previous&&previous.credentialId===peer.credentialId&&verified?.length?await tx.dataReplica.findMany({where:{groupId:peer.groupId,endpointId:id}}):[];
       await tx.dataReplica.deleteMany({where:{endpointId:id}});
+      const confirmed=new Set(verified),restored:Prisma.DataReplicaCreateManyInput[]=[];
+      for(const row of old){
+        const copy=JSON.parse(row.metadataJson);
+        if(copy.kind==='ORPHAN'||copy.releaseIntent||copy.missing||copy.expiresAt<=this.now()||
+          canonical(copy.endpoint)!==canonical(JSON.parse(previous!.metadataJson))||
+          !confirmed.has(transferDigest(canonical([copy.ref,copy.bytes]))))continue;
+        const key=transferDigest(canonical([peer.groupId,copy.ref,id,pending.endpoint.epoch]));
+        restored.push({id:key,groupId:peer.groupId,endpointId:id,metadataJson:JSON.stringify({...copy,endpoint:pending.endpoint,verifiedAt:this.now()})});
+      }
+      if(restored.length)await tx.dataReplica.createMany({data:restored});
     });return pending.endpoint;
   }
   private async active(tx:Db,id:string):Promise<Peer>{

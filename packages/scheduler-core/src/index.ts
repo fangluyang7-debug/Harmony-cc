@@ -8,6 +8,7 @@ export * from './planning-api';
 export * from './recovery';
 export * from './resources-v2';
 export * from './ledger-v2';
+export * from './availability';
 export * from './micro-queue';
 export * from './trace-analysis';
 export * from './trace-causality';

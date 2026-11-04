@@ -17,6 +17,14 @@ test('input preparation re-plans C copy to D through PlanningService and preserv
  const f=fixture();await f.jobs.prepareDelivery({groupId:'group'},'child',f.data);
  const d=f.stored();assert.equal(d.holderId,'d');assert.equal(d.delivery.senderHolderId,'c');assert.equal(d.delivery.senderEndpointId,'ep-c');assert.notEqual(d.delivery.id,'old');assert.equal(d.sourceAttemptId,'parent');assert.deepEqual(d.input.ref,f.data.input.ref);assert.equal(d.deadlineAt,f.data.deadlineAt);assert.equal(f.revoked(),1);
 });
+test('a prepared relay download keeps the confirmed upload identity and its remaining-budget evidence',async()=>{
+ const f=fixture();f.data.delivery.relay=true;
+ f.jobs.artifacts.available=()=>true;
+ f.jobs.directTransfers.relayConfirmed=async(id,deliveryId)=>id==='child'&&deliveryId==='old';
+ f.jobs.choose=async()=>assert.fail('a completed upload must not be prepared again');
+ await f.jobs.prepareDelivery({groupId:'group'},'child',f.data);
+ assert.equal(f.data.delivery.id,'old');assert.equal(f.revoked(),0);
+});
 test('local-only copy and inadequate budget cannot dispatch; an existing attempt blocks preparation mutations',async()=>{
  const local=fixture(true);await assert.rejects(local.jobs.prepareDelivery({groupId:'group'},'child',local.data),/NO_LEGAL_PLAN/);assert.equal(local.stored().delivery.id,'old');
  const budget=fixture();budget.data.deadlineAt=Date.now()+1;await assert.rejects(budget.jobs.prepareDelivery({groupId:'group'},'child',budget.data),/ARTIFACT_UNAVAILABLE|NO_LEGAL_PLAN/);
@@ -28,8 +36,8 @@ test('local-only copy and inadequate budget cannot dispatch; an existing attempt
 test('confirmed source loss ends the graph with a distinguishable failure and cancels pending children without replaying the parent',async()=>{
  const {WorkflowJobs}=require('../dist/workflow-jobs');let state='ACTIVE',saved,cancelled=0,starts=0;
  const data={peer:{groupId:'g'},deadlineAt:Date.now()+10000,workflow:{nodes:[{id:'b',dependsOn:[]},{id:'c',inputFrom:'b',dependsOn:['b']}]},nodes:[{id:'b',jobId:'parent',state:'COMMITTED',output:{ref:{artifactId:'r'}}},{id:'c',jobId:'child',state:'SUBMITTED'}]};
- const db={sdkWorkflowJob:{findUniqueOrThrow:async()=>({state}),update:async({data:d})=>{state=d.state??state;if(d.metadataJson)saved=JSON.parse(d.metadataJson);}}};
- const jobs={status:async()=>({state:'WAITING_INPUT'}),graphOutput:async()=>null,graphInput:async()=>{throw Error('ARTIFACT_UNAVAILABLE:CONFIRMED_MISSING');},start:async()=>{starts++;},cancel:async()=>{cancelled++;return {state:'CANCELLED'};}};
+ const db={cpuJob:{findMany:async()=>[{id:'child'}]},sdkWorkflowJob:{findUniqueOrThrow:async()=>({state}),updateMany:async({where,data:d})=>{if(state!==where.state)return {count:0};state=d.state;if(d.metadataJson)saved=JSON.parse(d.metadataJson);return {count:1};},update:async({data:d})=>{state=d.state??state;if(d.metadataJson)saved=JSON.parse(d.metadataJson);}}};
+ const jobs={winnerFor:async(_peer,id)=>id,status:async()=>({state:'WAITING_INPUT'}),graphOutput:async()=>null,graphInput:async()=>{throw Error('ARTIFACT_UNAVAILABLE:CONFIRMED_MISSING');},start:async()=>{starts++;},cancel:async()=>{cancelled++;return {state:'CANCELLED'};}};
  const graphs=new WorkflowJobs(db,jobs,{context:async()=>({})},{},[]);await graphs.progress('g',data);assert.equal(state,'FAILED');assert.equal(saved.failure.code,'ARTIFACT_UNAVAILABLE');assert.equal(saved.failure.reason,'CONFIRMED_MISSING');assert.equal(cancelled,1);assert.equal(starts,0);assert.equal(saved.nodes[0].jobId,'parent');
 });
 

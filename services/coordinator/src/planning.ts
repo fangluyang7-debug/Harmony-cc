@@ -16,8 +16,11 @@ export class SnapshotBuilder {
       const data={groupId:input.groupId,revision:snapshot.version,metadataJson:JSON.stringify({snapshot:{...snapshot,candidates:[],devices:[]},policy,contributionPolicy})};
       await tx.group.upsert({where:{id:input.groupId},create:{id:input.groupId,...data},update:data});
       // These rows are independently addressable control-plane directory projections.
-      for(const candidate of input.candidates)await tx.target.upsert({where:{id:JSON.stringify([input.groupId,candidate.targetId])},
+      for(const candidate of input.candidates){
+        if(candidate.availability&&candidate.availability.snapshotVersion!==snapshot.version)throw Error('AVAILABILITY_SCOPE_MISMATCH');
+        await tx.target.upsert({where:{id:JSON.stringify([input.groupId,candidate.targetId])},
         create:{id:JSON.stringify([input.groupId,candidate.targetId]),groupId:input.groupId,revision:snapshot.version,metadataJson:JSON.stringify(candidate)},update:{revision:snapshot.version,metadataJson:JSON.stringify(candidate)}});
+      }
       for(const device of input.devices){
         const id=JSON.stringify(['snapshot-device',input.groupId,device.deviceId,device.holderInstanceId??null]);
         await tx.deviceInstance.upsert({where:{id},create:{id,groupId:input.groupId,revision:snapshot.version,metadataJson:JSON.stringify(device)},update:{revision:snapshot.version,metadataJson:JSON.stringify(device)}});

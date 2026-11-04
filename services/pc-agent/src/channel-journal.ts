@@ -4,7 +4,7 @@ import { canonical, MessageEnvelopeV2, validMessageEnvelopeV2, protocolId, valid
 export interface ChannelJournal {
   coordinatorId:string|null;epoch:number;sequence:number;receivedSequence:number;
   inbox:{id:string;digest:string}[];outbox:MessageEnvelopeV2[];
-  dispatches?:{messageId:string;attemptId:string;rejected?:boolean}[];
+  dispatches?:{messageId:string;attemptId:string;rejected?:boolean;reasonCode?:string;offerDigest?:string}[];
 }
 export const newChannelJournal=():ChannelJournal=>({coordinatorId:null,epoch:0,sequence:0,receivedSequence:0,inbox:[],outbox:[]});
 const copy=<T>(v:T):T=>JSON.parse(JSON.stringify(v));
@@ -17,7 +17,10 @@ export function validateJournal(j:ChannelJournal,groupId:string,holderInstanceId
       !['RecoveryRequest','AttemptStatusReply','Ack','AdmissionReply','ExecutionReceipt','TraceBatch','DeviceProfile','YieldNotice','ProtocolError'].includes(m.type)||m.seq>j.sequence)||
     new Set(j.outbox.map(m=>m.messageId)).size!==j.outbox.length||j.outbox.some((m,i)=>i>0&&m.seq<=j.outbox[i-1].seq))throw Error('CHANNEL_JOURNAL_CORRUPT');
   if(Buffer.byteLength(JSON.stringify(j.outbox))>1048576)throw Error('CHANNEL_BACKPRESSURE');
-  if(j.dispatches!==undefined&&(!Array.isArray(j.dispatches)||j.dispatches.length>4096||j.dispatches.some(d=>!protocolId(d.messageId)||!protocolId(d.attemptId))))throw Error('CHANNEL_JOURNAL_CORRUPT');
+  if(j.dispatches!==undefined&&(!Array.isArray(j.dispatches)||j.dispatches.length>4096||j.dispatches.some(d=>
+    !protocolId(d.messageId)||!protocolId(d.attemptId)||
+    d.reasonCode!==undefined&&(!d.rejected||!protocolId(d.reasonCode))||
+    d.offerDigest!==undefined&&(!d.rejected||!/^[a-f0-9]{64}$/.test(d.offerDigest)))))throw Error('CHANNEL_JOURNAL_CORRUPT');
 }
 /** Persist only when admission or rejection is durable; queued offers are not acknowledged prematurely. */
 export function receiveDispatch(j:ChannelJournal,m:MessageEnvelopeV2,groupId:string,deviceId:string):ChannelJournal{

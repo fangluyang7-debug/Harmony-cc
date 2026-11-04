@@ -14,6 +14,45 @@ function packFor(p){const e=p.executors[0],input=Buffer.from('{"dimension":2,"ro
  cases:[{id:'normal',input,parameters:'{}',config:e.configurations[0],maxOutputBytes:4096}],evaluate:async(_test,bytes)=>JSON.parse(bytes).rows[0][0]===.6?1:0};}
 const contribution={minimumBattery:20,maximumTemperature:3,allowMetered:false,priority:'REMOTE_INTERACTIVE',requireForeground:true};
 
+test('committed same-bucket execution drift opens circuit and a new reference generation restores it',async()=>{
+ const r=await runtime();let now=100,runs=0;
+ try{
+  const dir=new DeviceDirectory(r.db,'SIMULATED',()=>now),p=profile();await dir.ingest(peer,p);
+  const runner={run:async permit=>{runs++;return {settled:true,permitId:permit.id,domain:'SIMULATED',durationMs:1,output:Buffer.from('{"rows":[[0.6,0.8]]}')};},reconcile:async()=>null};
+  const create=()=>new QualificationService(r.db,dir,[packFor(p)],runner,policy,async()=>null,()=>now);
+  const service=create(),target='target1';
+  await service.advance(peer,target);assert.equal(await service.advance(peer,target),'ACTIVE');
+  const job=JSON.parse((await r.db.calibrationJob.findUniqueOrThrow({where:{id:key}})).metadataJson);
+  const {observeExecution}=require('../dist/performance-feedback');
+  let i=0;
+  async function sample(ms,config='standard',committed=true){
+   const id='obs-'+(++i),span={attemptId:id,traceId:id,snapshotVersion:1,phase:'EXECUTE',targetId:target,
+    durationMs:ms,measurementScope:'LOCAL_INTERVAL',authoritativeSide:'SELF'};
+   const data={traceId:id,holderId:'h1',input:{bytes:64},decisionEvidence:{executionIdentity:job.identity,calibrationGeneration:job.generation,snapshotVersion:1},
+    offer:{target:{targetId:target},task:{contract:p.executors[0].contract,parameters:'{}'},allowedConfigs:[config]}};
+   await r.db.cpuJob.create({data:{id,groupId:'g1',principalId:'p1',sourceHolderId:'h1',state:'DISPATCHED',metadataJson:JSON.stringify(data)}});
+   await r.db.$transaction(async tx=>{await observeExecution(tx,'g1','h1',span);await observeExecution(tx,'g1','h1',span);});
+   await r.db.receipt.create({data:{id,attemptId:id,recordJson:'{}',committed}});
+  }
+  for(const ms of [10,12,11,150,160])await sample(ms);
+  await sample(180,'different');await sample(200,'standard',false);
+  assert.equal(await service.advance(peer,target),'ACTIVE');
+  await sample(170);
+  assert.equal(await create().advance(peer,target),'SUSPENDED');
+  assert.equal((await dir.qualification(peer,target)).admission.reasonCode,'EXECUTION_COST_DRIFT');
+  assert.equal((await dir.snapshot('g1','p1',1,contribution)).candidates.length,0);
+  assert.equal(await service.advance(peer,target),'SUSPENDED');assert.equal(runs,2);
+  now+=policy.cooldownMs+1;
+  assert.equal(await service.advance(peer,target),'CANARY');assert.equal(await service.advance(peer,target),'ACTIVE');
+  assert.equal(await service.advance(peer,target),'ACTIVE');assert.equal(runs,4);
+  p.sequence++;p.executors[0].target.executorVersion='2';await dir.ingest(peer,p);
+  assert.equal((await dir.snapshot('g1','p1',1,contribution)).candidates.length,0);
+  assert.equal(await service.advance(peer,target),'SUSPENDED');
+  assert.equal((await dir.qualification(peer,target)).admission.reasonCode,'EVIDENCE_INVALIDATED');
+  assert.equal(await service.advance(peer,target),'CANARY');assert.equal(runs,5);
+ }finally{await r.close();}
+});
+
 test('fresh CANARY evidence remains usable while the next case runs; a failed reference still suspends it',async()=>{
  const r=await runtime();let release;try{
   const now=100,dir=new DeviceDirectory(r.db,'SIMULATED',()=>now),p=profile();await dir.ingest(peer,p);const pack=packFor(p);let runs=0;

@@ -20,7 +20,8 @@ const passwordHash=(password:string,salt:string)=>new Promise<Buffer>((resolve,r
 function label(v:unknown,max=60){if(typeof v!=='string'||!v.trim()||v.trim().length>max)throw Error('INPUT_INVALID');return v.trim();}
 export function contribution(v:any){
   if(!v||!['dedicated','windows-idle','paused'].includes(v.ownerMode)||!Number.isInteger(v.maxCpuThreads)||v.maxCpuThreads<1||v.maxCpuThreads>256||!Number.isSafeInteger(v.maxMemoryBytes)||v.maxMemoryBytes<67108864||v.maxMemoryBytes>1099511627776||!Number.isSafeInteger(v.reserveMemoryBytes)||v.reserveMemoryBytes<0||v.reserveMemoryBytes>1099511627776)throw Error('CONTRIBUTION_INVALID');
-  return {ownerMode:v.ownerMode,maxCpuThreads:v.maxCpuThreads,maxMemoryBytes:v.maxMemoryBytes,reserveMemoryBytes:v.reserveMemoryBytes};
+  if(v.maxVramBytes!==undefined&&(!Number.isSafeInteger(v.maxVramBytes)||v.maxVramBytes<0||v.maxVramBytes>1099511627776))throw Error('CONTRIBUTION_INVALID');
+  return {...(v.maxVramBytes?{maxVramBytes:v.maxVramBytes}:{}),ownerMode:v.ownerMode,maxCpuThreads:v.maxCpuThreads,maxMemoryBytes:v.maxMemoryBytes,reserveMemoryBytes:v.reserveMemoryBytes};
 }
 
 /** Browser accounts and room membership are separate from device execution credentials. */
@@ -50,7 +51,7 @@ export class TeamSpaces {
       this.db.spaceMember.findMany({where:{spaceId}}),this.db.spaceUser.findMany({where:{id:{in:(await this.db.spaceMember.findMany({where:{spaceId}})).map(m=>m.userId)}},select:{id:true,name:true}}),
       this.db.spaceDevice.findMany({where:{spaceId}}),this.directory.profiles(spaceId),this.db.capabilityState.findMany({where:{groupId:spaceId}}),
       this.db.cpuJob.findMany({where:{groupId:spaceId},take:100}),this.db.attempt.findMany({where:{groupId:spaceId}})]);
-    let available:string[]=[];try{const s=await this.snapshots.build(spaceId);available=s.policy.revoked?[]:s.snapshot.candidates.filter(c=>s.policy.allowedTargetIds.includes(c.targetId)&&c.observedAt+c.ttlMs>now).map(c=>c.targetId);}catch{}
+    let available:string[]=[];try{const s=await this.snapshots.build(spaceId);available=s.policy.revoked?[]:s.snapshot.candidates.filter(c=>(!c.availability||c.availability.reason==='AVAILABLE')&&s.policy.allowedTargetIds.includes(c.targetId)&&c.observedAt+c.ttlMs>now).map(c=>c.targetId);}catch{}
     const devices=registered.map(d=>{const p=profiles.find(p=>p.deviceId===d.id),sample=p?.ownerActivity;
       const online=!!sample&&sample.sampledAt+sample.ttlMs>now;
       return {id:d.id,name:d.name,userId:d.userId,online,lastSeen:sample?.sampledAt??null,settings:JSON.parse(d.settingsJson),profile:p??null,
@@ -135,11 +136,11 @@ export class TeamSpaces {
       if(action==='devices'&&method==='POST'){
         await this.member(user.id,spaceId,['OWNER','MEMBER']);const settings=contribution(body.settings);
         if(id){const d=await this.db.spaceDevice.findUniqueOrThrow({where:{id}});if(d.spaceId!==spaceId||d.userId!==user.id&&member.role!=='OWNER')throw Error('DEVICE_FORBIDDEN');
-          const initial=JSON.parse(d.settingsJson);if(settings.maxCpuThreads!==initial.maxCpuThreads||settings.maxMemoryBytes!==initial.maxMemoryBytes)throw Error('CAPACITY_REPAIR_REQUIRED');
+          const initial=JSON.parse(d.settingsJson);if(settings.maxCpuThreads!==initial.maxCpuThreads||settings.maxMemoryBytes!==initial.maxMemoryBytes||(settings.maxVramBytes??0)!==(initial.maxVramBytes??0))throw Error('CAPACITY_REPAIR_REQUIRED');
           await this.db.spaceDevice.update({where:{id},data:{settingsJson:JSON.stringify(settings)}});res.json({ok:true});return;}
         const address=this.config.publicUrl;if(!address)throw Error('PUBLIC_URL_REQUIRED');
         const deviceId=randomUUID(),holderId=randomUUID();
-        await this.allotments.confirmDevice(deviceId,[{resourcePoolId:'cpu',amount:settings.maxCpuThreads},{resourcePoolId:'ram',amount:settings.maxMemoryBytes}],[{groupId:spaceId,holderInstanceId:holderId,appInstanceId:null}]);
+        await this.allotments.confirmDevice(deviceId,[{resourcePoolId:'cpu',amount:settings.maxCpuThreads},{resourcePoolId:'ram',amount:settings.maxMemoryBytes},...(settings.maxVramBytes?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:settings.maxVramBytes}]:[])],[{groupId:spaceId,holderInstanceId:holderId,appInstanceId:null}]);
         const invitation=await this.auth.invite(spaceId,user.id,deviceId,address,600000);
         await this.db.spaceDevice.create({data:{id:deviceId,spaceId,userId:user.id,holderId,name:label(body.name),settingsJson:JSON.stringify(settings),createdAt:Date.now()}});
         res.json({invitation:{...invitation,tlsMode:this.config.proxy?'public':'pinned'},holderInstanceId:holderId,domain:this.config.domain,contribution:settings});return;

@@ -188,12 +188,26 @@ test('independent endpoint processes consume single-use scoped grants online and
   const resumed=await r.directTransfers.issue(app.peer,{attemptId:partialId,endpointId:right.endpoint.id,operation:'WRITE'});assert.notEqual(resumed.signed.authorization.id,partialGrant.signed.authorization.id);
   await source.request({action:'send',grant:resumed,bytes:bytes.toString('base64')});assert.equal(await r.db.attempt.count({where:{id:partialId}}),0);
   const oldNetwork=await issue();await r.directTransfers.resetNetwork(app.peer);await assert.rejects(send(oldNetwork));
-  const oldEndpoint=await issue();target.close();target=processEndpoint();
+  const oldEndpoint=await issue();await target.request({action:'close'});target.close();target=processEndpoint();
+  // Simulate an older installation whose files still live under its previous advertised address.
+  const fs=require('node:fs'),base=path.join(r.config.dataDir,'target','data-endpoint'),legacy=path.join(base,transferDigest('127.0.0.2'),'cache');
+  fs.mkdirSync(path.dirname(legacy));fs.renameSync(path.join(base,'cache'),legacy);
   const restartedEndpoint=await target.request({action:'open',directory:path.join(r.config.dataDir,'target'),connection:connection(worker.paired,worker.invite)}),replacement=restartedEndpoint.endpoint;
+  assert.equal(await target.request({action:'read-cache',groupId:group,ref:partialRef}),bytes.toString('base64'));
+  assert.equal(await r.directTransfers.hasInput(group,worker.paired.peer.holderInstanceId,app.peer.app.appInstanceId,partialRef),true);
+  assert.equal(fs.readdirSync(legacy).filter(f=>f.endsWith('.blob')).length,0);
+  const restored=(await r.db.dataReplica.findMany({where:{endpointId:replacement.id}})).map(row=>JSON.parse(row.metadataJson)).find(copy=>copy.ref.artifactId===partialRef.artifactId);
+  assert.equal(restored.authorizationId,resumed.signed.authorization.id);
+  assert.equal(restored.endpoint.epoch,replacement.epoch);
+  // A descriptor and matching byte count alone cannot recover a corrupt object.
+  const stable=path.join(base,'cache'),metadata=fs.readdirSync(stable).find(name=>name.endsWith('.json')&&JSON.parse(fs.readFileSync(path.join(stable,name),'utf8')).ref.artifactId===partialRef.artifactId);
+  fs.writeFileSync(path.join(stable,metadata.replace(/\.json$/,'.blob')),Buffer.alloc(bytes.length));
+  const rechecked=await target.request({action:'register'});
+  assert.equal(await r.directTransfers.hasInput(group,worker.paired.peer.holderInstanceId,app.peer.app.appInstanceId,partialRef),false);
   assert.notEqual(restartedEndpoint.pid,right.pid);assert.notEqual(replacement.epoch,right.endpoint.epoch);assert.equal(replacement.fingerprint,right.endpoint.fingerprint);
   await assert.rejects(send(oldEndpoint));await assert.rejects(r.directTransfers.consume(worker.paired.peer,oldEndpoint));
   await assert.rejects(issue(),/TRANSFER_PLAN_CHANGED/);
-  data.plan.decision.suggestion[0].inputEndpointEpoch=replacement.epoch;
+  data.plan.decision.suggestion[0].inputEndpointEpoch=rechecked.epoch;
   await r.db.cpuJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
   const revocable=await issue(),{DirectTransfers}=require('../dist/direct-transfers');
   const nextCoordinatorEpoch=new DirectTransfers(r.db,r.identity.key,r.identity.cert,'SIMULATED',()=>r.epoch+1);

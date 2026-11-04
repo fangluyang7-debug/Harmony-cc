@@ -4,6 +4,8 @@
     "pages/SchedulerPanelPage",
     "pages/DualPhoneLabPage",
     "pages/CloudPhoneDispatchPage",
-    "pages/V2CropPage"
+    "pages/V2CropPage",
+    "pages/V2ImageSearchPage",
+    "pages/V2DisplaySharePage"
   ]
 }

@@ -3,7 +3,8 @@ import { DispatchOfferV2, validDispatchOfferV2, AttemptStatusReplyV2 } from '../
 import { canonical } from '../core/CanonicalV2';
 const protocolId=(value:string):boolean=>typeof value==='string'&&/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value);
 export interface InboxV2 { id:string;digest:string; }
-export interface AgentJournalV2 { coordinatorId:string|null;epoch:number;sequence:number;receivedSequence:number;inbox:InboxV2[];outbox:MessageEnvelopeV2[]; }
+export interface RejectedOfferV2 {attemptId:string;digest:string;reason:string;}
+export interface AgentJournalV2 {rejected?:RejectedOfferV2[]; coordinatorId:string|null;epoch:number;sequence:number;receivedSequence:number;inbox:InboxV2[];outbox:MessageEnvelopeV2[]; }
 export interface AgentMessageFactoryV2 { id():string;digest(text:string):string; }
 export function newAgentJournalV2():AgentJournalV2 {return {coordinatorId:null,epoch:0,sequence:0,receivedSequence:0,inbox:[],outbox:[]};}
 export function validateAgentJournalV2(j:AgentJournalV2,group:string,holder:string):void {
@@ -12,6 +13,9 @@ export function validateAgentJournalV2(j:AgentJournalV2,group:string,holder:stri
   !Array.isArray(j.inbox)||j.inbox.length>4096||j.inbox.some(e=>!protocolId(e.id)||!/^[a-f0-9]{64}$/.test(e.digest))||new Set(j.inbox.map(e=>e.id)).size!==j.inbox.length||
   !Array.isArray(j.outbox)||j.outbox.length>64||j.outbox.some((m,i)=>!validMessageEnvelopeV2(m,[])||m.groupId!==group||m.senderInstanceId!==holder||m.coordinatorEpoch!==j.epoch||m.seq>j.sequence||i>0&&m.seq<=j.outbox[i-1].seq)||new Set(j.outbox.map(m=>m.messageId)).size!==j.outbox.length)throw Error('CHANNEL_JOURNAL_CORRUPT');
  if(JSON.stringify(j.outbox).length>1048576)throw Error('CHANNEL_BACKPRESSURE');
+ if(j.rejected!==undefined&&(!Array.isArray(j.rejected)||j.rejected.length>4096||
+   j.rejected.some(r=>!protocolId(r.attemptId)||!protocolId(r.reason)||!/^[a-f0-9]{64}$/.test(r.digest))||
+   new Set(j.rejected.map(r=>r.attemptId)).size!==j.rejected.length))throw Error('CHANNEL_JOURNAL_CORRUPT');
 }
 export function bindAgentJournalV2(j:AgentJournalV2,id:string,epoch:number):AgentJournalV2 {
  if(!protocolId(id)||!Number.isSafeInteger(epoch)||epoch<1||j.coordinatorId!==null&&j.coordinatorId!==id||epoch<j.epoch)throw Error('COORDINATOR_BINDING_MISMATCH');

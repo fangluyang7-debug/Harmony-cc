@@ -27,8 +27,8 @@ export class DeviceScheduler {
     if(previous){if(canonical(previous.offer)!==canonical(offer)||canonical(previous.config)!==canonical(config))throw Error('QUEUE_CONFLICT');return previous.done;}
     if(!offer.allowedConfigs.some(c=>canonical(c)===canonical(config)))throw Error('CONFIG_NOT_ALLOWED');
     const existing=this.ledger.status(offer.task.attemptId);
-    if(existing){hooks.selected?.();return this.runtime.run(offer,config,hooks);} // Runtime verifies immutable offer and never reruns recovered attempts.
-    this.queue.enqueue(offer,this.now());
+    if(existing){hooks.selected?.(this.ledger.snapshot().entries);return this.runtime.run(offer,config,hooks);} // Runtime verifies immutable offer and never reruns recovered attempts.
+    this.queue.enqueue(offer,this.now(),performance.now());
     let resolve!:(v:ExecutionReceiptV2)=>void,reject!:(e:Error)=>void;
     const done=new Promise<ExecutionReceiptV2>((yes,no)=>{resolve=yes;reject=no;});
     this.pending.set(offer.task.attemptId,{offer:structuredClone(offer),config:structuredClone(config),started:false,launching:false,cancelRequested:false,enqueuedAt:this.now(),resolve,reject,done,hooks});
@@ -53,21 +53,22 @@ export class DeviceScheduler {
     try{
       for(const id of this.queue.expired(this.now())){const item=this.pending.get(id)!;this.queue.removeWaiting(id);this.pending.delete(id);item.reject(Error('QUEUE_STARVED'));}
       while(!this.closed){
-        const occupied=occupiedV2(this.ledger.snapshot()),offer=this.queue.choose(this.limits,occupied,this.now(),this.ownerIdle);
+        const state=this.ledger.snapshot(),occupied=occupiedV2(state),offer=this.queue.choose(this.limits,occupied,this.now(),this.ownerIdle);
         for(const observation of this.queue.waitingReasons(this.limits,occupied,this.ownerIdle,offer?.task.attemptId??null)){
-          try{this.pending.get(observation.attemptId)?.hooks.waiting?.(observation.reasonCode);}catch(error){this.lastError=error;}
+          this.queue.noteWait(observation.attemptId,observation.reasonCode);
+          try{this.pending.get(observation.attemptId)?.hooks.waiting?.(observation.reasonCode,observation.resourcePoolIds,state.entries);}catch(error){this.lastError=error;}
         }
         if(!offer)break;
         const item=this.pending.get(offer.task.attemptId)!;
-        item.launching=true;
-        item.hooks.selected?.();
+        item.launching=true;this.queue.noteWait(offer.task.attemptId,'ADMISSION_SERIALIZATION');
+        item.hooks.selected?.(state.entries);
         let released!:()=>void;const admitted=new Promise<void>(resolve=>{released=resolve;});
         const work=this.runtime.run(offer,item.config,{...item.hooks,admitted:()=>{item.started=true;this.queue.start(offer.task.attemptId,this.now());item.hooks.admitted?.();
           if(item.cancelRequested||this.closed||!this.ownerIdle)queueMicrotask(()=>this.runtime.cancel(offer.task.attemptId));released();},
           maxDurationMs:Math.max(1,offer.task.budget.remainingMs-(this.now()-item.enqueuedAt))});
         void work.then(item.resolve,item.reject).finally(()=>{
           // A failed settlement retains the queue and ledger reservation for recovery.
-          if(item.started){if(this.ledger.status(offer.task.attemptId)?.resourcesSettled)this.queue.settle(offer.task.attemptId,this.now());}
+          if(item.started){const record=this.ledger.status(offer.task.attemptId);if(record?.resourcesSettled)this.queue.settle(offer.task.attemptId,this.now(),record.receipt?.state==='SUCCEEDED');}
           else this.queue.removeWaiting(offer.task.attemptId);
           this.pending.delete(offer.task.attemptId);released();void this.pump().catch(error=>{this.lastError=error;});
         }).catch(error=>{this.lastError=error;released();});
@@ -75,6 +76,10 @@ export class DeviceScheduler {
         await admitted;
       }
     }finally{this.pumping=false;}
+  }
+  queuedFacts(sampledAt:number,domain:string){return this.queue.queuedFacts(performance.now(),sampledAt,domain);}
+  capacityCredits(demands:ResourceAmountV2[][],occupied:ResourceAmountV2[]){
+    return this.queue.capacityCredits(demands,this.limits,occupied,this.ownerIdle);
   }
   credits(demands:ReadonlyMap<string,ResourceAmountV2[]>){return this.queue.credits(demands,this.limits,occupiedV2(this.ledger.snapshot()),this.ownerIdle);}
   async close(){this.closed=true;clearInterval(this.timer);const work=[...this.pending.values()].map(p=>p.done);for(const id of this.pending.keys())this.cancel(id);await Promise.allSettled(work);await this.runtime.close();}

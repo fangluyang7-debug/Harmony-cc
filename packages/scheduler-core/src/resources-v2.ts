@@ -16,7 +16,19 @@ export interface ExecutorV2 {
 }
 export interface LinkV2 {from:string;to:string;networkEpoch:string;via:string|null;fixedMs:NumericSampleV2;bytesPerSecond:NumericSampleV2;metered:boolean;}
 export interface CreditV2 {priority:string;slots:number;}
+export interface QueuedFactV2 {
+  attemptId:string;targetId:string;resources:ResourceAmountV2[];priority:string;reason:string;elapsed:NumericSampleV2;
+}
+export interface TimingHistoryV2 {samples:number;survivors:number;p90TotalMs:number;p90RemainingMs:number|null;}
+export interface InFlightV2 {
+  history?:TimingHistoryV2;
+  attemptId:string; targetId:string; state:string; resources:ResourceAmountV2[];
+  elapsed:NumericSampleV2; remaining:NumericSampleV2;
+}
 export interface DeviceProfileV2 {
+  energyGate?:string;
+  queued?:QueuedFactV2[];
+  inFlight?:InFlightV2[];
   deviceId:string;deviceInstanceId:string;holderInstanceId:string;ledgerEpoch:number;sequence:number;domain:string;
   ownerActivity:StateSampleV2;foreground:StateSampleV2;charging:StateSampleV2;powerSave:StateSampleV2;
   battery:NumericSampleV2;temperature:NumericSampleV2;pools:PoolV2[];executors:ExecutorV2[];links:LinkV2[];credits:CreditV2[];
@@ -36,7 +48,7 @@ export interface DispatchOfferV2 {
   allotmentId:string;allotmentVersion:number;leaseMs:number;transferPlan:TransferHopV2[];dependencies:DependencyV2[];reasonCode:string;
 }
 export interface AdmissionReplyV2 {attemptId:string;holderInstanceId:string;status:string;reasonCode:string|null;record:AttemptRecordV2|null;wait:NumericSampleV2;}
-export interface ExecutionReportV2 {receipt:ExecutionReceiptV2;allotmentId:string;allotmentVersion:number;leaseId:string;actualModel:ModelManifestV2|null;timings:NumericSampleV2[];}
+export interface ExecutionReportV2 {resourceHeldMs?:number;receipt:ExecutionReceiptV2;allotmentId:string;allotmentVersion:number;leaseId:string;actualModel:ModelManifestV2|null;timings:NumericSampleV2[];}
 export interface YieldNoticeV2 {attemptId:string;kind:string;releaseMs:NumericSampleV2;checkpoint:ArtifactRefV2|null;reasonCode:string;}
 export interface AttemptStatusReplyV2 {attemptId:string;record:AttemptRecordV2|null;}
 export interface CapabilityPackV2 {packId:string;contract:TaskContractV2;executorIds:string[];model:ModelManifestV2|null;suiteId:string;qualityThreshold:number;resourceLimit:ResourceAmountV2[];}
@@ -86,7 +98,31 @@ export function validExecutorV2(v:ExecutorV2):boolean{
 export function validLinkV2(v:LinkV2):boolean{return exact(v,['from','to','networkEpoch','via','fixedMs','bytesPerSecond','metered'])&&[v.from,v.to,v.networkEpoch].every((s:string)=>id(s))&&v.from!==v.to&&(v.via===null||id(v.via))&&typeof v.metered==='boolean'&&validNumericSampleV2(v.fixedMs)&&v.fixedMs.unit==='ms'&&validNumericSampleV2(v.bytesPerSecond)&&v.bytesPerSecond.unit==='bytes_per_second'&&(v.bytesPerSecond.value===null||v.bytesPerSecond.value>0);}
 export function validCreditV2(v:CreditV2):boolean{return exact(v,['priority','slots'])&&['ORIGIN_INTERACTIVE','REMOTE_INTERACTIVE','REMOTE_BATCH'].includes(v.priority)&&integer(v.slots)&&v.slots<=1024;}
 export function validDeviceProfileV2(v:DeviceProfileV2):boolean{
-  return exact(v,['deviceId','deviceInstanceId','holderInstanceId','ledgerEpoch','sequence','domain','ownerActivity','foreground','charging','powerSave','battery','temperature','pools','executors','links','credits'])&&
+  const fields=['deviceId','deviceInstanceId','holderInstanceId','ledgerEpoch','sequence','domain','ownerActivity','foreground','charging','powerSave','battery','temperature','pools','executors','links','credits'];
+  if(v?.energyGate!==undefined){
+    fields.push('energyGate');
+    if(!['LOW_BATTERY','THERMAL_LIMIT','POWER_SAVE'].includes(v.energyGate))return false;
+  }
+  if(v?.queued!==undefined){
+    fields.push('queued');
+    if(!Array.isArray(v.queued)||v.queued.length>32||!v.queued.every((q:QueuedFactV2)=>
+      exact(q,['attemptId','targetId','resources','priority','reason','elapsed'])&&id(q.targetId)&&id(q.reason)&&
+      ['ORIGIN_INTERACTIVE','REMOTE_INTERACTIVE','REMOTE_BATCH'].includes(q.priority)&&validResourceVectorV2(q.resources)&&
+      validNumericSampleV2(q.elapsed)&&q.elapsed.unit==='ms')||!unique(v.queued.map((q:QueuedFactV2)=>q.attemptId)))return false;
+  }
+  if(v?.inFlight!==undefined){
+    fields.push('inFlight');
+    if(!Array.isArray(v.inFlight)||v.inFlight.length>32||!v.inFlight.every((f:InFlightV2)=>
+      (f?.history===undefined?exact(f,['attemptId','targetId','state','resources','elapsed','remaining']):
+      exact(f,['attemptId','targetId','state','resources','elapsed','remaining','history'])&&
+      exact(f.history,['samples','survivors','p90TotalMs','p90RemainingMs'])&&integer(f.history.samples,1)&&f.history.samples<=32&&
+      integer(f.history.survivors)&&f.history.survivors<=f.history.samples&&nonnegative(f.history.p90TotalMs)&&
+      (f.history.survivors===0?f.history.p90RemainingMs===null:f.history.p90RemainingMs!==null&&nonnegative(f.history.p90RemainingMs)))&&id(f.targetId)&&
+      ['ACCEPTED','RUNNING'].includes(f.state)&&validResourceVectorV2(f.resources)&&
+      [f.elapsed,f.remaining].every((s:NumericSampleV2)=>validNumericSampleV2(s)&&s.unit==='ms'))||
+      !unique(v.inFlight.map((f:InFlightV2)=>f.attemptId)))return false;
+  }
+  return exact(v,fields)&&
     [v.deviceId,v.deviceInstanceId,v.holderInstanceId].every((s:string)=>id(s))&&integer(v.ledgerEpoch,1)&&integer(v.sequence,1)&&['REAL','SIMULATED'].includes(v.domain)&&
     [v.ownerActivity,v.foreground,v.charging,v.powerSave].every((s:StateSampleV2)=>validStateSampleV2(s))&&
     (v.ownerActivity.value===null||['IDLE','ACTIVE','UNKNOWN'].includes(v.ownerActivity.value))&&(v.foreground.value===null||['FOREGROUND','BACKGROUND'].includes(v.foreground.value))&&
@@ -108,7 +144,9 @@ export function validDispatchOfferV2(v:DispatchOfferV2):boolean{
     Array.isArray(v.transferPlan)&&v.transferPlan.length<=256&&v.transferPlan.every((h:TransferHopV2)=>validTransferHopV2(h)&&h.to===v.target.deviceId)&&Array.isArray(v.dependencies)&&v.dependencies.length<=64&&v.dependencies.every((d:DependencyV2)=>validDependencyV2(d))&&unique(v.dependencies.map((d:DependencyV2)=>d.nodeId))&&id(v.reasonCode);
 }
 export function validAdmissionReplyV2(v:AdmissionReplyV2):boolean{return exact(v,['attemptId','holderInstanceId','status','reasonCode','record','wait'])&&id(v.attemptId)&&id(v.holderInstanceId)&&['ACCEPTED','REJECTED'].includes(v.status)&&(v.reasonCode===null||id(v.reasonCode))&&validNumericSampleV2(v.wait)&&v.wait.unit==='ms'&&(v.status==='ACCEPTED'?validAttemptRecordV2(v.record!)&&v.record!.attemptId===v.attemptId&&v.record!.holderInstanceId===v.holderInstanceId:v.record===null&&v.reasonCode!==null);}
-export function validExecutionReportV2(v:ExecutionReportV2):boolean{return exact(v,['receipt','allotmentId','allotmentVersion','leaseId','actualModel','timings'])&&validExecutionReceiptV2(v.receipt)&&id(v.allotmentId)&&integer(v.allotmentVersion,1)&&id(v.leaseId)&&(v.actualModel===null||validModelManifestV2(v.actualModel))&&Array.isArray(v.timings)&&v.timings.length<=32&&v.timings.every((s:NumericSampleV2)=>validNumericSampleV2(s)&&s.unit==='ms');}
+export function validExecutionReportV2(v:ExecutionReportV2):boolean{const keys=['receipt','allotmentId','allotmentVersion','leaseId','actualModel','timings'];
+  if(v?.resourceHeldMs!==undefined){if(!Number.isFinite(v.resourceHeldMs)||v.resourceHeldMs<0)return false;keys.push('resourceHeldMs');}
+  return exact(v,keys)&&validExecutionReceiptV2(v.receipt)&&id(v.allotmentId)&&integer(v.allotmentVersion,1)&&id(v.leaseId)&&(v.actualModel===null||validModelManifestV2(v.actualModel))&&Array.isArray(v.timings)&&v.timings.length<=32&&v.timings.every((s:NumericSampleV2)=>validNumericSampleV2(s)&&s.unit==='ms');}
 export function validYieldNoticeV2(v:YieldNoticeV2):boolean{return exact(v,['attemptId','kind','releaseMs','checkpoint','reasonCode'])&&id(v.attemptId)&&['CHECKPOINT','RESTART','DRAINING'].includes(v.kind)&&validNumericSampleV2(v.releaseMs)&&v.releaseMs.unit==='ms'&&(v.checkpoint===null||validArtifactRefV2(v.checkpoint))&&(v.kind!=='CHECKPOINT'||v.checkpoint!==null)&&id(v.reasonCode);}
 export function validAttemptStatusReplyV2(v:AttemptStatusReplyV2):boolean{return exact(v,['attemptId','record'])&&id(v.attemptId)&&(v.record===null||validAttemptRecordV2(v.record)&&v.record.attemptId===v.attemptId);}
 export function validCapabilityPackV2(v:CapabilityPackV2):boolean{return exact(v,['packId','contract','executorIds','model','suiteId','qualityThreshold','resourceLimit'])&&id(v.packId)&&validTaskContractV2(v.contract)&&Array.isArray(v.executorIds)&&v.executorIds.length>0&&v.executorIds.length<=64&&unique(v.executorIds)&&(v.model===null||validModelManifestV2(v.model))&&id(v.suiteId)&&nonnegative(v.qualityThreshold)&&v.qualityThreshold<=1&&validResourceVectorV2(v.resourceLimit)&&v.resourceLimit.length>0;}

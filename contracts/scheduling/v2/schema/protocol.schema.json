@@ -1062,6 +1062,58 @@
     "TraceSpan": {
       "type": "object",
       "properties": {
+        "queueSamples": {
+          "type": "array",
+          "maxItems": 9,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "atMono": {
+                "type": "number",
+                "minimum": 0
+              },
+              "reasonCode": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+              },
+              "resourcePoolIds": {
+                "type": "array",
+                "maxItems": 4,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                }
+              },
+              "occupyingAttempts": {
+                "type": "array",
+                "maxItems": 4,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                }
+              },
+              "settledAttempts": {
+                "type": "array",
+                "maxItems": 4,
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+                }
+              }
+            },
+            "required": [
+              "atMono",
+              "reasonCode",
+              "resourcePoolIds",
+              "occupyingAttempts",
+              "settledAttempts"
+            ]
+          }
+        },
         "traceId": {
           "type": "string",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",

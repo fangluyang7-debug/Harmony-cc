@@ -11,7 +11,7 @@ export function appRequest(connection:AppConnection){
  const publicTls=connection.tlsMode==='public';
  if(!publicTls&&new X509Certificate(connection.certificate).fingerprint256.replaceAll(':','').toLowerCase()!==connection.fingerprint)throw Error('CERTIFICATE_PIN_MISMATCH');
  return (route:string,body:string|null)=>new Promise<string>((resolve,reject)=>{
-  if(!/^\/v2\/(?:data\/(?:authorizations|receipts|observations|network\/(?:reset|failure))|apps\/(?:registrations(?:\/[A-Za-z0-9_.:-]+\/revoke)?|exchange|me)|sdk\/jobs(?:\/[A-Za-z0-9_.:-]+(?:\/(?:start|cancel|received))?)?)$/.test(route)){reject(Error('SDK_ROUTE_INVALID'));return;}
+  if(!/^\/v2\/(?:display(?:\/[a-zA-Z0-9-]+(?:\/(?:accept|leave|publish|shown|revoke))?)?|data\/(?:authorizations|receipts|observations|network\/(?:reset|failure))|apps\/(?:registrations(?:\/[A-Za-z0-9_.:-]+\/revoke)?|exchange|me)|sdk\/jobs(?:\/[A-Za-z0-9_.:-]+(?:\/(?:start|cancel|received))?)?)$/.test(route)){reject(Error('SDK_ROUTE_INVALID'));return;}
   const bytes=body===null?null:Buffer.from(body);if(bytes&&bytes.length>100000){reject(Error('SDK_REQUEST_TOO_LARGE'));return;}
   const request=https.request(new URL(route,base),{method:bytes?'POST':'GET',...(publicTls?{}:{ca:connection.certificate,checkServerIdentity:(host:string,cert:tls.PeerCertificate)=>tls.checkServerIdentity(host,cert)??(cert.fingerprint256?.replaceAll(':','').toLowerCase()===connection.fingerprint?undefined:Error('CERTIFICATE_PIN_MISMATCH'))}),headers:{Authorization:'Bearer '+connection.credential,...(bytes?{'Content-Type':'application/json','Content-Length':bytes.length}:{})}},response=>{
    const chunks:Buffer[]=[];let count=0;

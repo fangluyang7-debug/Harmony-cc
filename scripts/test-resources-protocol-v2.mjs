@@ -19,6 +19,20 @@ for(const source of sources){
   for(const suffix of ['missing','unknown']){const bad=load(`fixtures/t2/invalid/${name}-${suffix}.json`);assert.equal(schema(bad),false,name);assert.equal(validate(bad),false,name);cases++;}
   for(const bad of [null,undefined,0,[],true]){assert.equal(validate(bad),false,name);cases++;}
  }
+ const profile=load('fixtures/t2/valid/DeviceProfile.json'),executor=profile.executors[0];
+ const sample={source:'SIMULATED',value:1,sampledAt:100,ttlMs:100,unit:'ms'};
+ profile.inFlight=[{attemptId:'running',targetId:executor.target.targetId,state:'RUNNING',resources:executor.resources,elapsed:sample,remaining:{...sample,value:null,source:'UNKNOWN'}}];
+ profile.queued=[{attemptId:'waiting',targetId:executor.target.targetId,priority:'REMOTE_INTERACTIVE',reason:'RESOURCE_CAPACITY',resources:executor.resources,elapsed:sample}];
+ assert.equal(ajv.getSchema('urn:scheduling:v2:resources#/definitions/DeviceProfile')(profile),true);
+ assert.equal(api.validDeviceProfileV2(profile),true);cases+=2;
+ profile.inFlight[0].history={samples:4,survivors:0,p90TotalMs:40,p90RemainingMs:null};
+ assert.equal(api.validDeviceProfileV2(profile),true);cases++;
+ profile.inFlight[0].history.survivors=5;assert.equal(api.validDeviceProfileV2(profile),false);cases++;
+ delete profile.inFlight[0].history;
+ profile.inFlight[0].state='QUEUED';assert.equal(api.validDeviceProfileV2(profile),false);cases++;
+ const report=load('fixtures/t2/valid/ExecutionReport.json');report.resourceHeldMs=12;
+ assert.equal(api.validExecutionReportV2(report),true);cases++;
+ report.resourceHeldMs=-1;assert.equal(api.validExecutionReportV2(report),false);cases++;
  const admission=load('fixtures/t2/valid/CapabilityAdmission.json');
  const schema=ajv.getSchema('urn:scheduling:v2:resources#/definitions/CapabilityAdmission');
  for(const patch of [{state:'ADMIN_APPROVED'},{revision:0},{identity:'not-a-hash'},

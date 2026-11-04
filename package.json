@@ -59,6 +59,7 @@
     "core:test": "npm --workspace @harmony/scheduler-core test",
     "core:build": "npm --workspace @harmony/scheduler-core run build",
     "architecture:deps": "node scripts/check-architecture.mjs && node --test scripts/check-architecture.test.mjs",
+    "acceptance:report": "npm run conformance:build && npm --prefix services/api-server run build && node scripts/scheduler-acceptance.cjs",
     "protocol:v2:test": "node scripts/test-scheduling-protocol-v2.mjs && node scripts/test-resources-protocol-v2.mjs",
     "coordinator:lan": "node scripts/start-coordinator-lan.cjs",
     "coordinator:dev": "npm --workspace @harmony/coordinator run dev",

@@ -1,5 +1,5 @@
 import { DispatchOfferV2 } from '../protocol/ResourcesV2';
-import { TraceSpanV2, validTraceSpanV2 } from '../protocol/SchedulingProtocolV2';
+import { QueueSampleV2, TraceSpanV2, validTraceSpanV2 } from '../protocol/SchedulingProtocolV2';
 import { monotonic, factory } from './NativePlatform';
 const clockDomain=factory.id();
 export class NativeTrace {
@@ -11,9 +11,10 @@ export class NativeTrace {
  private snapshotVersion:number;
  private instance:string;
  constructor(offer:DispatchOfferV2,traceId:string,snapshotVersion:number,instance:string){this.offer=offer;this.traceId=traceId;this.snapshotVersion=snapshotVersion;this.instance=instance;}
- add(phase:string,startMono:number,endMono:number,reasonCode:string|null=null):void{
+ add(phase:string,startMono:number,endMono:number,reasonCode:string|null=null,samples?:QueueSampleV2[]):void{
   const span:TraceSpanV2={traceId:this.traceId,parentSpanId:null,snapshotVersion:this.snapshotVersion,deviceInstanceId:this.instance,spanId:factory.id(),dependsOn:this.previous===null?[]:[this.previous],transferId:null,
    workflowId:this.offer.task.workflowId,nodeId:this.offer.task.nodeId,attemptId:this.offer.task.attemptId,targetId:this.offer.target.targetId,phase,durationMs:endMono-startMono,predictedMs:null,reasonCode,startMono,endMono,clockDomainId:clockDomain,measurementScope:'LOCAL_INTERVAL',authoritativeSide:'SELF'};
+  if(samples!==undefined&&samples.length>0)span.queueSamples=samples;
   if(validTraceSpanV2(span)){
    for(const transfer of this.transfers){transfer.parentSpanId=span.spanId;if(validTraceSpanV2(transfer))this.spans.push(transfer);}
    this.transfers=[];this.spans.push(span);this.previous=span.spanId;

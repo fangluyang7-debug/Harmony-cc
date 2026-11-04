@@ -14,6 +14,7 @@ struct Index {
  build(){Column({space:20}){
   Text('Harmony · 贡献设备').fontSize(28).fontWeight(FontWeight.Bold);
   Text(this.status).fontSize(17);
+  Button('结果展示').onClick(()=>{this.getUIContext().getRouter().pushUrl({url:'pages/Display'});});
   TextArea({placeholder:'设备邀请 JSON（来自局域网控制台）',text:this.invitation}).height(160).onChange(v=>{this.invitation=v;});
   Button('配对并加入').onClick(()=>{try{const bootstrap=JSON.parse(this.invitation) as Bootstrap;void openAgent(getContext(this) as common.UIAbilityContext,bootstrap).then(()=>{this.invitation='';}).catch((e:Error)=>{AppStorage.set('agentStatus',e.message);});}catch(e){AppStorage.set('agentStatus','配对信息格式错误');}});
   Text('贡献上限：CPU 槽位 ≤ '+this.maxCpuLimit+'；内存 ≤ '+this.maxMemoryLimit+' MiB').fontSize(14);

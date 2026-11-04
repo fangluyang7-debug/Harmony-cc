@@ -24,12 +24,13 @@ export class ProfileProjection {
     new WorkflowPlacementPlanner(policy.limits,()=>0);
     await this.db.$transaction(async tx=>{
       // Bootstrap must not overwrite an explicit policy installed after its initial read.
-      if(onlyReplacePolicyVersion){const row=await tx.group.findUnique({where:{id:groupId}});
+      const row=await tx.group.findUnique({where:{id:groupId}});
+      if(onlyReplacePolicyVersion){
         if(row){const saved=JSON.parse(row.metadataJson);if(saved.policy.version!==onlyReplacePolicyVersion){
-          if(saved.contributionPolicy)await this.publish(tx,groupId,saved.policy,saved.contributionPolicy);return;
+          if(saved.contributionPolicy)await this.publish(tx,groupId,saved.policy,saved.contributionPolicy,row.revision+1);return;
         }}
       }
-      await this.publish(tx,groupId,policy,contribution);
+      await this.publish(tx,groupId,policy,contribution,(row?.revision??0)+1);
     });
   }
   async ingest(peer:Peer,profile:DeviceProfileV2):Promise<void>{
@@ -40,8 +41,7 @@ export class ProfileProjection {
       if(!row)return; // Visible in the directory, but no authorized planning policy yet.
       const saved=JSON.parse(row.metadataJson);
       if(!saved.contributionPolicy)return; // A-stage snapshots are not silently opted in.
-      await this.publish(tx,peer.groupId,saved.policy,saved.contributionPolicy);
-      return (await tx.group.findUniqueOrThrow({where:{id:peer.groupId}})).revision;
+      return this.publish(tx,peer.groupId,saved.policy,saved.contributionPolicy,row.revision+1);
     });
     if(version!==undefined)dispatchDiagnostics.record({at:Date.now(),kind:"SNAPSHOT_REFRESH",groupId:peer.groupId,holderId:peer.holderInstanceId,source:"PROFILE",snapshotVersion:version});
   }
@@ -52,14 +52,13 @@ export class ProfileProjection {
       if(!row)throw Error('GROUP_UNKNOWN');
       const saved=JSON.parse(row.metadataJson);
       if(!saved.contributionPolicy)throw Error('PROFILE_POLICY_REQUIRED');
-      await this.publish(tx,groupId,saved.policy,saved.contributionPolicy);
-      const rowAfter=await tx.group.findUniqueOrThrow({where:{id:groupId}});
-      return rowAfter.revision;
+      return this.publish(tx,groupId,saved.policy,saved.contributionPolicy,row.revision+1);
     });
     dispatchDiagnostics.record({at:Date.now(),kind:"SNAPSHOT_REFRESH",groupId,source,jobId,snapshotVersion:version});
   }
-  private async publish(tx:Prisma.TransactionClient,groupId:string,policy:PlanningPolicy,contribution:ContributionPolicy){
-    const snapshot=await this.directory.snapshot(groupId,policy.version,1,contribution,tx);
+  private async publish(tx:Prisma.TransactionClient,groupId:string,policy:PlanningPolicy,contribution:ContributionPolicy,version:number){
+    const snapshot=await this.directory.snapshot(groupId,policy.version,version,contribution,tx);
     await this.snapshots.replace(snapshot,policy,tx,contribution);
+    return version;
   }
 }

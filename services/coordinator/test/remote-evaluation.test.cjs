@@ -38,7 +38,9 @@ test('remote calibration crosses process and TLS boundaries; dropped output deli
   fresh(s.profile);s.profile.sequence++;
   await r.profiles.configure('g1',{version:'policy1',revoked:false,allowedTargetIds:['target1'],limits:{maxCandidates:8,lookahead:16,beamWidth:8,planningBudgetMs:20,switchCostMs:0,hysteresisMs:0}},
    {minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true});
-  await r.profiles.ingest(s.pair.peer,s.profile);const errors=[];
+  child.send({profile:s.profile});
+  await until(async()=>r.directory.controlState('g1','h1',s.profile.deviceInstanceId,s.profile.ledgerEpoch)==='ONLINE');
+  const errors=[];
   r.startCalibration({packs:[s.pack],policy:{maxRuns:4,maxDurationMs:30000,maxBytes:100000,maxConcurrent:1,caseTimeoutMs:10000,canarySamples:1,activeSamples:1,evidenceTtlMs:60000,cooldownMs:100},
    gate:async()=>null,onError:e=>errors.push(e.message),intervalMs:100});
   await until(async()=>(await r.directory.qualification(s.pair.peer,'target1')).admission.state==='ACTIVE');assert.equal(runs,1);assert.deepEqual(errors,[]);

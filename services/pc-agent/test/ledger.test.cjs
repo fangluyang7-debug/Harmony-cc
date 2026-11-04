@@ -67,6 +67,20 @@ test('rejected dispatch identity persists and cannot later execute after ACK or 
  try{assert.throws(()=>restarted.admit(o,context,m),/PREVIOUSLY_REJECTED/);assert.equal(restarted.status('a1'),null);assert.deepEqual(occupiedV2(restarted.snapshot()),[]);}
  finally{await restarted.close();}
 });
+test('starvation proof survives ACK and restart and binds the original offer bytes',async()=>{
+ const {ledger,dir}=await setup();ledger.bindChannel('coordinator1',1);const o=offer();
+ ledger.rejectDispatch(dispatch(o),'QUEUE_STARVED');
+ for(const m of ledger.pendingMessages())ledger.acknowledgeMessage(m.messageId);
+ await ledger.close();const restarted=await DurableLedger.open(dir,identity,cert,()=>0);
+ try{
+  restarted.rejectDispatch(dispatch(o,'retry'),'DISPATCH_PREVIOUSLY_REJECTED');
+  const reply=JSON.parse(restarted.pendingMessages().find(m=>m.type==='AdmissionReply').payload);
+  assert.equal(reply.reasonCode,'QUEUE_STARVED_NOT_STARTED');assert.equal(reply.record,null);
+  const changed=structuredClone(o);changed.task.parameters='{"different":true}';
+  assert.throws(()=>restarted.rejectDispatch(dispatch(changed,'conflict'),'QUEUE_STARVED'),/ATTEMPT_CONFLICT/);
+  assert.throws(()=>restarted.admit(o,context),/PREVIOUSLY_REJECTED/);
+ }finally{await restarted.close();}
+});
 test('atomic multi-pool admission; duplicate delivery does not run twice; cancellation and timeout do not release',async()=>{
  const {ledger:l,setNow}=await setup();try{
   const a=l.admit(offer(),context);assert.deepEqual(l.admit(offer(),context).record,a.record);

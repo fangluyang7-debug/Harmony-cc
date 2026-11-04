@@ -19,7 +19,14 @@ fs.writeFileSync(path.join(stage,'entry/oh-package.json5'),JSON.stringify(module
 fs.mkdirSync(path.join(stage,'entry/src/main/resources/rawfile'),{recursive:true});
 fs.copyFileSync(path.join(root,'tests/agent-conformance/fixtures/ledger-v2.json'),path.join(stage,'entry/src/main/resources/rawfile/ledger-v2.json'));
 const references=require('@harmony/reference-capabilities');
-fs.writeFileSync(path.join(stage,'entry/src/main/resources/rawfile/reference-packs.json'),JSON.stringify((await references.builtinReferencePacks()).map(p=>({manifest:p.manifest,digest:references.packDigest(p),cases:p.cases.map(c=>({...c,input:c.input.toString('base64')}))}))));
+const rawDir=path.join(stage,'entry/src/main/resources/rawfile');
+const packs=(await references.builtinReferencePacks()).map(p=>({manifest:p.manifest,digest:references.packDigest(p),cases:p.cases.map(c=>({...c,input:c.input.toString('base64')}))}));
+if(process.env.HARMONY_IMAGE_ENCODER_CONFIG){
+ packs.push(await require('./package-harmony-image-encoder.cjs').packageImageEncoder(process.env.HARMONY_IMAGE_ENCODER_CONFIG,rawDir));
+}else{
+ for(const file of ['image-encoder.json','image-encoder.ms'])fs.rmSync(path.join(rawDir,file),{force:true});
+}
+fs.writeFileSync(path.join(rawDir,'reference-packs.json'),JSON.stringify(packs));
 const env={...process.env,DEVECO_SDK_HOME:sdk,JAVA_HOME:path.join(studio,'jbr'),PATH:path.join(studio,'tools/node')+path.delimiter+path.join(studio,'jbr/bin')+path.delimiter+process.env.PATH};
 const node=path.join(studio,'tools/node/node.exe');
 function run(args){const r=spawnSync(node,args,{cwd:stage,env,stdio:'inherit',windowsHide:true});if(r.error)throw r.error;if(r.status!==0)process.exit(r.status??1);}

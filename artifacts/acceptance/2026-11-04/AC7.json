@@ -1,0 +1,206 @@
+{
+  "id": "AC7",
+  "title": "安全与隔离",
+  "environment": {
+    "startedAt": "2026-11-04T12:39:56.897Z",
+    "node": "v22.18.0",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "commit": "94755dcc404c1c08f53335b0516bea5728bcb192",
+    "dirty": true,
+    "sourceDigest": "b6c0008f506e0aebf634b13a76c7e5a67cd079d0a76197e265b300073db4acf9"
+  },
+  "simulation": {
+    "result": "LISTED_CASES_PASS",
+    "coverage": "本次覆盖软件身份、会话、制品和回执作用域。",
+    "suites": [
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/apps.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 30678,
+        "cases": [
+          {
+            "name": "owner-confirmed one-use registration derives App identity, reserves offline capacity before delivery and rejects self-grants",
+            "result": "PASS"
+          },
+          {
+            "name": "logical App concurrency/resource quota is shared across installations and queued reservations are bounded",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "84864020c4fedfeca8d441108576d0deeba69b3daa4243e66f49eaefb3d5d34e"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/auth.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 22369,
+        "cases": [
+          {
+            "name": "pinned pairing is single-use; rotation and revocation immediately invalidate the old connection",
+            "result": "PASS"
+          },
+          {
+            "name": "expired and forged invitations do not issue credentials; runtime domains stay separate",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "673cc3049f7588be4c7d3be165b4e61a788ec65fe135fe1b125e8c357348eac0"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/direct-transfers.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 17324,
+        "cases": [
+          {
+            "name": "independent endpoint processes consume single-use scoped grants online and invalidate network epochs",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "bd224c4d1bfc01d3823709cd1fdc158c74a80518f0245836a11e49012326909f"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/display-sessions.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 11006,
+        "cases": [
+          {
+            "name": "only viewer acknowledgement confirms a current lease and version",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "6770c7f2fcf8a722c801bae958380ff07d667bd1767fdd605eb6fc3b2e7fac51"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/store.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 65502,
+        "cases": [
+          {
+            "name": "quota preflight and offer creation are one transaction; stale quota creates no attempt/outbox",
+            "result": "PASS"
+          },
+          {
+            "name": "crash before-send: durable query replaces offer without a second attempt",
+            "result": "PASS"
+          },
+          {
+            "name": "crash after-send: durable query replaces offer without a second attempt",
+            "result": "PASS"
+          },
+          {
+            "name": "attempt plus outbox is atomic, duplicate identity is idempotent, changed input conflicts",
+            "result": "PASS"
+          },
+          {
+            "name": "only authorized current attempt/fence/target results commit",
+            "result": "PASS"
+          },
+          {
+            "name": "reconciliation honors side-effect policy and cannot turn unknown execution into automatic replay",
+            "result": "PASS"
+          },
+          {
+            "name": "logical node chooses one result and settles both attempts: backup-first",
+            "result": "PASS"
+          },
+          {
+            "name": "logical node chooses one result and settles both attempts: simultaneous",
+            "result": "PASS"
+          },
+          {
+            "name": "logical node chooses one result and settles both attempts: cancel-before-success",
+            "result": "PASS"
+          },
+          {
+            "name": "logical node chooses one result and settles both attempts: cancel-before-rejection",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "63372ee228551238c4b68ddd16049c2bf62933c839e61409990e0daba978bccd"
+      }
+    ],
+    "emulator": [
+      {
+        "test": "protocol",
+        "domain": "SIMULATED",
+        "api": "24",
+        "hapSha256": "0cde5e15add6af98b3c6773ec4b6f6538664604a6d096a1f95d9aaee844333dd",
+        "evidenceSha256": "b91d7d8c442bd8194a615ae95b9ac4629cacc900fe4a582181d0cf864da2aa00",
+        "cases": [
+          "01 pairing, credential binding and one-use invitation",
+          "02 profile schema, unknown values and monotonic sequence",
+          "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+          "03b ImageKit crop dispatched by PlanningService; geometry/colour checked; malformed crop settles as failed",
+          "03c emulator lifecycle: background stops admission, foreground resumes qualified contribution",
+          "04 same attempt with a new messageId returns existing admission/result without executing twice",
+          "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+          "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+          "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+          "08 revoked credential cannot reconnect or publish new telemetry"
+        ]
+      }
+    ]
+  },
+  "real": {
+    "result": "NOT_RUN",
+    "pending": [
+      "ODID、沙箱身份与权限撤销的真机交叉验证。"
+    ]
+  }
+}

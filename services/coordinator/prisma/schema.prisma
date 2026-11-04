@@ -13,6 +13,19 @@ model CoordinatorState {
   epoch Int
 }
 
+model DisplaySession {
+  id String @id
+  groupId String
+  sourceHolderId String
+  viewerHolderId String
+  state String
+  viewVersion Int @default(0)
+  shownVersion Int @default(0)
+  content String?
+  expiresAt BigInt
+  @@index([groupId, viewerHolderId, state])
+}
+
 model ChannelInbox {
   id String @id
   digest String
@@ -32,6 +45,9 @@ model Workflow {
 }
 
 model Node {
+  primaryAttemptId String?
+  backupAttemptId String?
+  winnerAttemptId String?
   id String @id
   workflowId String
   currentAttemptId String?
@@ -39,6 +55,7 @@ model Node {
 }
 
 model Attempt {
+  recoveryEstimateJson String?
   id String @id
   groupId String
   workflowId String
@@ -186,6 +203,7 @@ model EvaluationDispatch {
 }
 
 model CpuJob {
+  readyWaitJson String?
   id String @id
   groupId String
   principalId String
@@ -206,6 +224,8 @@ model ConsoleApp {
 }
 
 model RegisteredApp {
+  batchWeight Int @default(1)
+  batchService Float @default(0)
   id String @id
   groupId String
   principalId String
@@ -331,4 +351,24 @@ model PeerNetwork {
   credentialId String
   metadataJson String
   @@unique([groupId, holderInstanceId])
+}
+
+model BatchReadyJob {
+  priority String @default("REMOTE_BATCH")
+  id String @id
+  groupId String
+  appId String
+  peerJson String
+  queuedAt Float
+  deadlineAt Float
+  reason String
+  @@index([groupId, queuedAt])
+}
+
+model BatchCharge {
+  id String @id
+  appId String
+  estimatedMs Float
+  rate Float
+  actualMs Float?
 }

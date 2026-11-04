@@ -38,6 +38,9 @@ test('formal SDK graph crosses independent host processes: direct, relay isolati
     assert.equal(publication.phase,'PUBLISH');assert.equal(sent.measurementScope,'FULL_TRANSFER');
     assert.equal(sent.clockDomainId,publication.clockDomainId);assert.ok(sent.startMono>=publication.startMono&&sent.endMono<=publication.endMono);
     assert.ok(traced.analysis.predictionErrors.some(row=>row.spanId===publication.spanId));
+    const errors=new Set(traced.analysis.predictionErrors.map(row=>row.spanId));
+    assert.ok(traced.spans.filter(s=>s.reasonCode==='LOCAL_PHASE_UNCLASSIFIED').every(s=>!errors.has(s.spanId)));
+    assert.deepEqual(p.decisionEvidence.phaseCosts,p.plan.decision.suggestion[0].phaseCosts);
    }
    assert.equal(measured.coverage.criticalPathPending,true,'cross-clock gaps still prevent a complete critical-path claim');
    assert.ok(measured.analysis.predictionErrors.some(row=>row.phase==='EXECUTE'&&Number.isFinite(row.errorMs)&&row.snapshotVersion>0));

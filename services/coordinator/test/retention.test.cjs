@@ -30,3 +30,55 @@ test('durable DAG retention protects a remaining branch, unsettled work and unac
   assert.equal(reopened.forget(descriptor),true);await reopened.writeForControl(extra,bytes);assert.equal(reopened.available(extra),true);
  }finally{await r.close();}
 });
+
+test('failed fork drains running and half-recorded siblings across recovery before releasing shared bytes',async()=>{
+ const {WorkflowJobs}=require('../dist/workflow-jobs'),r=await runtime({artifactSchemas:new Map([['blob:1',()=>true]])});
+ let worker,restarted;
+ try{
+  const group=randomUUID(),owner=randomUUID(),id=randomUUID(),capacity=[{resourcePoolId:'cpu',amount:1}];
+  const invite=await r.auth.invite(group,owner,'device',r.url),device=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:'holder'});
+  await r.allotments.confirmDevice('device',capacity,[{groupId:group,holderInstanceId:'holder',appInstanceId:null}]);
+  const invitation=await r.apps.register(device.peer,{label:'Fork source',allowedContracts:['text.count.v1'],maxConcurrent:4,resources:capacity,offlineBase:[],onlineExtra:capacity},r.url);
+  const {peer}=await r.apps.exchange({registrationId:invitation.registrationId,code:invitation.code});
+  const bytes=Buffer.from('shared'),d={groupId:group,ownerPrincipalId:owner,domain:'SIMULATED',bytes:bytes.length,expiresAt:Date.now()+60000,ref:{artifactId:'middle',contentVersion:1,contentHash:transferDigest(bytes),schemaId:'blob',schemaVersion:1}};
+  const nodes=['producer','failed','running','partial','downstream'].map((name,i)=>({id:name,jobId:name,state:['COMMITTED','SUBMITTED','SUBMITTED','PENDING','PENDING'][i]}));
+  const graph={peer,nodes,workflow:{nodes:nodes.map(n=>({id:n.id,dependsOn:n.id==='producer'?[]:['producer'],inputFrom:n.id==='producer'?undefined:'producer'}))},inputs:{},deadlineAt:Date.now()+30000};
+  await r.db.sdkWorkflowJob.create({data:{id,groupId:group,sourceHolderId:peer.holderInstanceId,state:'ACTIVE',metadataJson:JSON.stringify(graph)}});
+  const runningRecord={...require('./fixtures.cjs').attempt().record,groupId:group,attemptId:'running',principalId:owner,state:'RUNNING',resourcesSettled:false};
+  for(const [name,state] of [['failed','REJECTED'],['running','RUNNING'],['partial',null]]){
+   const metadata={input:d,output:null,offer:{target:{targetId:'target',deviceId:'device'},task:{workflowId:id,nodeId:name}}};
+   await r.db.cpuJob.create({data:{id:name,groupId:group,sourceHolderId:peer.holderInstanceId,principalId:owner,state:state?'DISPATCHED':'WAITING_INPUT',metadataJson:JSON.stringify(metadata)}});
+   if(state)await r.db.attempt.create({data:{id:name,groupId:group,workflowId:id,nodeId:name,holderInstanceId:'worker',executionDigest:'fixture',taskJson:'{}',state,recordJson:state==='RUNNING'?JSON.stringify(runningRecord):null}});
+  }
+  r.artifacts.register(d);await r.artifacts.writeForControl(d,bytes);
+  const open=()=>new WorkflowJobs(r.db,r.jobs,r.apps,r.artifacts,[],r.retention);
+  worker=open();await worker.advance(group);
+  const graphState=async()=>(await r.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state;
+  assert.equal(await graphState(),'CANCEL_REQUESTED');
+  assert.equal((await r.db.cpuJob.findUnique({where:{id:'partial'}})).state,'CANCELLED');
+  assert.equal((await r.db.cpuJob.findUnique({where:{id:'running'}})).state,'CANCEL_REQUESTED');
+  await worker.close();worker=open();await worker.advance(group);assert.equal(await graphState(),'CANCEL_REQUESTED');
+  assert.equal(r.artifacts.available(d),true);
+  await r.db.attempt.update({where:{id:'running'},data:{state:'CANCELLED_SETTLED',recordJson:JSON.stringify({...runningRecord,state:'CANCELLED_SETTLED',resourcesSettled:true})}});
+  const release=r.artifacts.acquireTransferSlot();
+  try{await worker.advance(group);assert.equal(await graphState(),'REJECTED');assert.equal(r.artifacts.available(d),true);}
+  finally{release();}
+  await r.retention.sweepRelay();assert.equal(r.artifacts.available(d),false);
+  assert.equal(await r.db.attempt.count({where:{workflowId:id}}),2);assert.equal(await r.db.cpuJob.count({where:{id:'downstream'}}),0);
+  // Restart the coordinator itself at the submission/cursor crash boundary. No
+  // client poll or new connection should be necessary to finish cancellation.
+  const interrupted=randomUUID(),orphan=randomUUID();
+  const stoppedGraph={...graph,nodes:[{id:'orphan',jobId:orphan,state:'PENDING'}]};
+  await r.db.sdkWorkflowJob.create({data:{id:interrupted,groupId:group,sourceHolderId:peer.holderInstanceId,state:'CANCEL_REQUESTED',metadataJson:JSON.stringify(stoppedGraph)}});
+  await r.db.cpuJob.create({data:{id:orphan,groupId:group,sourceHolderId:peer.holderInstanceId,principalId:owner,state:'WAITING_INPUT',metadataJson:JSON.stringify({offer:{task:{workflowId:interrupted,nodeId:'orphan'}}})}});
+  await worker.close();await r.close();
+  restarted=await require('../dist/app').createCoordinator(r.config);
+  await restarted.restore();
+  const until=Date.now()+5000;
+  while((await restarted.db.sdkWorkflowJob.findUniqueOrThrow({where:{id:interrupted}})).state!=='CANCELLED_SETTLED'){
+   if(Date.now()>until)assert.fail('startup failed to drain persisted cancellation');
+   await new Promise(resolve=>setTimeout(resolve,30));
+  }
+  assert.equal((await restarted.db.cpuJob.findUniqueOrThrow({where:{id:orphan}})).state,'CANCELLED');
+ }finally{await restarted?.close();await worker?.close();await r.close();}
+});

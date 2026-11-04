@@ -133,3 +133,19 @@ PC 旧制品 HTTP 路径现在在 LOAD/PUBLISH 内上报传输子跨度：下载
 追踪查询可从同一时钟域的 LOAD/PUBLISH 与完整 HTTP 子区间推导 `LOCAL_PHASE_UNCLASSIFIED` 剩余跨度。该值仅表示已测阶段中 HTTP 以外的区间，计入其他工作量，不表示计算或资源等待。跨时钟、重叠、越界或超过跨度/依赖上限时保留缺失原因；原始上报不改写。完整连续且依赖已连接的同域划分可用于局部因果链，跨域未知仍保留。
 
 QUEUE 可带 `OBSERVED_OWNER_ACTIVE`、`OBSERVED_RESOURCE_CAPACITY`、`OBSERVED_LOCAL_QUEUE_POLICY` 等曾观测原因；多种原因返回 `OBSERVED_MIXED_WAIT`。Harmony 宿主还可观察控制未就绪或准入串行化。该标记不表示整个排队区间由单一原因造成，不用于估算释放、不改变实际账本。没有观测则保留空原因；本地等待事实接口可按 attempt 和资源池关联原因。
+
+### 端点重登记与本地副本复核
+
+PC 宿主登记端点时，逐个读回当前空间缓存，检查长度、内容哈希与 schema。通过检查的对象按 `transferDigest(canonical([ref,bytes]))` 生成清单。非空清单使用 `{challenge,verified,signature}`，签名覆盖 `canonical({challenge,verified})`。空清单沿用原有 challenge 签名；旧客户端仍可登记。升级时先更新协调者。
+
+协调者在一个事务中切换端点 epoch、撤销旧目的端待用授权，并用同凭据、同端点上一代的有效副本记录与复核清单求交。保留原 App、生产 attempt 或已完成传输的授权记录、服务范围和到期时间。普通清理库存、已标记缺失或清理中的记录均不能据此恢复。新一轮交付仍需当前代次的链路证据与授权。
+
+PC 的证书按公告地址保存，制品缓存归安装目录所有。启动时迁移历史地址目录中能验证的对象，在新缓存完成写入后移除旧对象。无法迁移的冲突或超容量对象保留到后续启动复核或到期清理。
+
+### SDK 批量类别与就绪状态
+
+`submit(workflow, { requestId, budgetMs, resultDestination: 'ORIGIN', priority: 'REMOTE_BATCH' })` 将单节点、替代方案或整个 DAG 的各节点标记为批量任务。省略 priority 时沿用 REMOTE_INTERACTIVE。两类任务均经 PlanningService 选择目标，按对应类别的 credit 接受派发。
+
+完成初始规划并将所需输入放到位后，批量 start 持久化到 BatchReadyJob。SDK 状态中的 QUEUED、queuedAt、queueReason 可用于展示等待。等待不延长原截止时间，App 并发额度在正式派发时核查。协调者收到控制事件、开始新批次和启动恢复时处理队列；SDK 状态读取不负责驱动派发。部署前执行协调者现有数据库迁移入口，以创建 202611040001_batch_ready 对应表。
+
+批量 App 注册策略支持可选 batchWeight（整数 1–64，默认 1）。同一 App 的安装共享权重和已累计的批量服务量。每次首次派发，将估计的资源持有时长乘以该任务在设备已确认物理容量中的最大资源占比，再除以 App 权重。队列优先尝试累计值较小的就绪 App。执行方在结算回执的可选字段 resourceHeldMs 中报告本次准入到结算的单调时钟时长；协调者按原资源占比修正同一条计费记录。准入被拒时修正为零，老端缺少计量时保留估计值。数据库更新包括迁移 202611040002_batch_service。

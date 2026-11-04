@@ -51,5 +51,12 @@ for(const source of sources){
   caller.appInstanceId='other-app';equal(api.allowsArtifactV2(grant,caller,'READ',1),false);
   const span=load('TraceSpan');span.durationMs=9;equal(api.validTraceSpanV2(span),false);
   span.durationMs=10;span.phase='TRANSFER_SEND';equal(api.validTraceSpanV2(span),false);
+  const sample={atMono:2,reasonCode:'RESOURCE_CAPACITY',resourcePoolIds:['cpu1'],occupyingAttempts:['other'],settledAttempts:[]};
+  const queue={...load('TraceSpan'),phase:'QUEUE',queueSamples:[sample]};
+  equal(ajv.getSchema('urn:scheduling:v2#/definitions/TraceSpan')(queue),true);
+  equal(api.validTraceSpanV2(queue),true);
+  equal(api.validTraceSpanV2({...queue,phase:'EXECUTE'}),false);
+  equal(api.validTraceSpanV2({...queue,queueSamples:[sample,{...sample,atMono:1}]}),false);
+  equal(api.validTraceSpanV2({...queue,queueSamples:[{...sample,atMono:11}]}),false);
 }
 console.log(`PASS T1 schemas and TS/ArkTS parity: ${checks} assertions (transpiled fixture tests, not native HAR compilation)`);

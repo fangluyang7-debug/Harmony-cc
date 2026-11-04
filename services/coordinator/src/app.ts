@@ -1,3 +1,4 @@
+import {DisplaySessions} from './display-sessions';
 import {retryableJobError} from './job-errors';
 import {WorkflowJobs} from './workflow-jobs';
 import {ArtifactRetention} from './retention';
@@ -45,6 +46,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const store=new CoordinatorStore(db,identity.id);
     const events=new SpaceEvents();
     const auth=new PairingService(db,identity.cert,config.domain);
+    const display=new DisplaySessions(db);
     const apps=new AppRegistry(db,auth,identity.cert,config.domain);
     const artifacts=new ArtifactChannel(path.join(config.dataDir,'artifact-cache'),config.domain,token=>auth.authenticate(token),options.artifactSchemas??(options.cpuHost?cpuSchemas:new Map()));
     artifacts.sweep();
@@ -63,6 +65,10 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     }
     @Controller('/v2')
     class Pairing {
+      @Post('display')async inviteDisplay(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>display.invite(await auth.authenticate(bearer(header)),body));}
+      @Get('display')async displayInbox(@Headers('authorization') header:string){return this.jobResponse(async()=>display.inbox(await auth.authenticate(bearer(header))));}
+      @Get('display/:id')async displayStatus(@Headers('authorization') header:string,@Param('id') id:string){return this.jobResponse(async()=>display.status(await auth.authenticate(bearer(header)),id));}
+      @Post('display/:id/:action')async displayChange(@Headers('authorization') header:string,@Param('id') id:string,@Param('action') action:string,@Body() body:any){return this.jobResponse(async()=>display.change(await auth.authenticate(bearer(header)),id,action,body));}
       @Post('data/endpoints/challenge')async endpointChallenge(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>directTransfers.challenge(await auth.authenticate(bearer(header)),body));}
       @Post('data/endpoints/register')async endpointRegister(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),result=await directTransfers.register(peer,body);await refreshNetwork(peer.groupId);return result;});}
       @Get('data/endpoints')async endpoints(@Headers('authorization') header:string){return this.jobResponse(async()=>directTransfers.list(await auth.authenticate(bearer(header))));}
@@ -201,9 +207,12 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       }});
     if(relayData)directTransfers.configureRelay({endpoint:relayEndpoint,available:d=>artifacts.available(d),slots:()=>artifacts.availableTransferSlots,bytes:()=>artifacts.availableCacheBytes});
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
-    const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>{events.changed(groupId);graphs.changed(groupId);},error=>options.onError?.(error));
+    const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>{events.changed(groupId);graphs.changed(groupId);jobs.batch.changed(groupId);},error=>options.onError?.(error));
+    directory.controlState=(group,holder,instance,epoch)=>channel.linkState(group,holder,instance,epoch);
     const retention=new ArtifactRetention(db,directTransfers,artifacts);
     const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks,directTransfers),graphs=new WorkflowJobs(db,jobs,apps,artifacts,referencePacks,retention),sdk=new SdkJobs(jobs,referencePacks,graphs,retention);
+    channel.onUnstarted=(tx,id)=>graphs.adoptUnstarted(tx,id);
+    channel.onUnavailable=peer=>jobs.unavailable(peer);
     const telemetry=new TelemetryView(db,directory,traces,groupId=>directTransfers.dashboard(groupId));
     const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk,groupId=>directTransfers.dashboard(groupId),telemetry);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
@@ -215,18 +224,20 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       await profiles.configure(groupId,{version:'cpu-host-v1',revoked:false,allowedTargetIds:targets,limits:{maxCandidates:64,lookahead:16,beamWidth:8,planningBudgetMs:20,switchCostMs:0,hysteresisMs:0}},
         {minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true},'cpu-host-v1');
     };
-    channel.register('DeviceProfile',{validate:validDeviceProfileV2,handle:async(peer,payload)=>{await profiles.ingest(peer,payload);if(options.cpuHost)await configureCpuGroup(peer.groupId);}});
+    channel.register('DeviceProfile',{validate:validDeviceProfileV2,handle:async(peer,payload)=>{await profiles.ingest(peer,payload);if(options.cpuHost)await configureCpuGroup(peer.groupId);if(payload.inFlight?.some((f:{history?:unknown})=>f.history))await jobs.assessSlow(peer.groupId,payload).catch(error=>options.onError?.(error));}});
     channel.register('TraceBatch',{validate:p=>p&&Object.keys(p).join('|')==='spans'&&Array.isArray(p.spans),handle:(peer,p)=>traces.ingest(peer,p.spans)});
     let restoration:Promise<void>|undefined;
     const restore=()=>restoration??(restoration=(async()=>{
       await db.$connect();
       const state=await db.coordinatorState.upsert({where:{id:identity.id},create:{id:identity.id,epoch:1},update:{epoch:{increment:1}}});epoch=state.epoch;
-      await store.recover(epoch);await recover(db,epoch);ready=true;retention.start();
+      await store.recover(epoch);await recover(db,epoch);ready=true;retention.start();await jobs.batch.restore();
       if(options.cpuHost){
         for(const groupId of new Set((await auth.activePeers()).map(p=>p.groupId)))await configureCpuGroup(groupId);
         startCalibration({packs:referencePacks,policy:{maxRuns:8,maxDurationMs:120000,maxBytes:1048576,maxConcurrent:1,caseTimeoutMs:15000,canarySamples:1,activeSamples:2,evidenceTtlMs:3600000,cooldownMs:5000},
           gate:async()=>null,onError:()=>{},intervalMs:1000});
       }
+      const stopping=await db.sdkWorkflowJob.findMany({where:{state:'CANCEL_REQUESTED'},select:{groupId:true},distinct:['groupId']});
+      for(const row of stopping)graphs.changed(row.groupId);
     })());
     let closed=false;
     let calibration:QualificationLoop|undefined;
@@ -253,6 +264,6 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       calibration.start();return service;
     };
     return {app,db,identity,store,retention,snapshots,planning,channel,auth,apps,sdk,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,directTransfers,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,
-      close:async()=>{if(closed)return;closed=true;ready=false;spaces.close();remoteEvaluation.close();await graphs.close();await retention.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
+      close:async()=>{if(closed)return;closed=true;ready=false;spaces.close();remoteEvaluation.close();await graphs.close();await jobs.closeBackups();await jobs.batch.close();await retention.close();try{await calibration?.close();await channel.close();await app.close();await db.$disconnect();}finally{await unlock();}}};
   }catch(error){await db.$disconnect();await unlock();throw error;}
 }

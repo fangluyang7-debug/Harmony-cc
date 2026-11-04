@@ -36,8 +36,9 @@ test('integrated agent: trusted CPU qualification -> pinned artifacts -> WS disp
    cases:[{id:'reference',input,parameters:'{}',config,maxOutputBytes:4096}],evaluate:async(_c,b)=>canonical(JSON.parse(b))===canonical({dimension:2,rows:[[.6,.8],[0,0]],norms:[5,0]})?1:0};
   const packDigest=digest(Buffer.from(canonical({manifest:pack.manifest,cases:pack.cases.map(c=>({...c,input:digest(c.input)}))})));
   const evaluator=new CalibrationExecutor(ledger,path.join(r.config.dataDir,'evaluation'),'SIMULATED',new Map([[packDigest+':reference',pack.cases[0]]]),async permit=>{const o=offerFor(permit.id);o.leaseMs=permit.timeoutMs;return o;},async()=>context());
+  let businessQueued=false;
   const options={connection:{address:r.url,certificate:invite.certificate,fingerprint:invite.fingerprint,credential:pair.credential,domain:'SIMULATED'},
-   deviceInstanceId:'instance1',queuePolicy:{shares:[.5,.3,.2],agingMs:100,maxConsecutive:2,yieldDeadlineMs:1000},select:o=>o.allowedConfigs[0],snapshotVersion:()=>1,onYield:()=>{},onError:e=>errors.push(e.message),
+   deviceInstanceId:'instance1',queuePolicy:{shares:[.5,.3,.2],agingMs:100,maxConsecutive:2,yieldDeadlineMs:1000},select:o=>{if(o.task.attemptId==='business')businessQueued=true;return o.allowedConfigs[0];},snapshotVersion:()=>1,onYield:()=>{},onError:e=>errors.push(e.message),
    now:()=>100,
    ports:{...ports,authorize:async()=>context()},calibration:{executor:evaluator,intervalMs:100}};
   agent=new PcAgent(ledger,options);await agent.updateResources(grant.extra,'IDLE');agent.start();await until(()=>agent.ready);
@@ -50,12 +51,18 @@ test('integrated agent: trusted CPU qualification -> pinned artifacts -> WS disp
   assert.equal(ledger.pendingMessages().filter(m=>m.type==='RecoveryRequest').length,0,'reference settlement must not trigger global business recovery');
   let dropped=false,reportId;const send=r.channel.send.bind(r.channel);
   r.channel.send=async(session,m)=>{const pending=ledger.pendingMessages().find(p=>p.messageId===m.ackOf);if(!dropped&&m.type==='Ack'&&pending?.type==='ExecutionReceipt'){dropped=true;reportId=pending.messageId;session.socket.terminate();return;}return send(session,m);};
-  const business=await dispatch('business');try{await until(async()=> (await r.db.receipt.findUnique({where:{id:'business'}}))?.committed);}catch(error){throw Error(JSON.stringify({cause:error.message,errors,local:ledger.status('business'),pending:ledger.pendingMessages().map(m=>({type:m.type,payload:m.type==='AdmissionReply'?m.payload:undefined}))}));}
+  await agent.updateResources([],'IDLE');
+  const business=await dispatch('business');
+  await until(()=>businessQueued);await agent.updateResources(grant.extra,'IDLE');
+  try{await until(async()=> (await r.db.receipt.findUnique({where:{id:'business'}}))?.committed);}catch(error){throw Error(JSON.stringify({cause:error.message,errors,local:ledger.status('business'),pending:ledger.pendingMessages().map(m=>({type:m.type,payload:m.type==='AdmissionReply'?m.payload:undefined}))}));}
   await until(()=>dropped&&agent.ready&&!ledger.pendingMessages().some(m=>m.messageId===reportId));
   assert.equal(publishes,1);assert.equal(ledger.snapshot().entries.filter(e=>e.record.attemptId==='business').length,1);assert.deepEqual(occupiedV2(ledger.snapshot()),[]);
   const d=outputs.get('business'),result=await transfer(invite,r.artifacts.issue(d,peer,'READ'),pair.credential);assert.deepEqual(JSON.parse(result.bytes),{dimension:2,rows:[[.6,.8],[0,0]],norms:[5,0]});
   await until(async()=>await r.db.traceSpan.count()>=7);const trace=await r.traces.read(peer,'trace-business');
   assert.deepEqual(trace.spans.filter(s=>s.parentSpanId===null).map(s=>s.phase).sort(),['ADMIT','EXECUTE','LOAD','PUBLISH','QUEUE']);
+  const queue=trace.spans.find(s=>s.phase==='QUEUE');
+  assert.deepEqual(queue.queueSamples.map(s=>s.reasonCode),['RESOURCE_CAPACITY','SELECTED']);
+  assert.ok(queue.queueSamples[0].resourcePoolIds.length);assert.deepEqual(queue.queueSamples[1].settledAttempts,[]);
   const transfers=trace.spans.filter(s=>s.transferId);assert.deepEqual(transfers.map(s=>s.phase).sort(),['TRANSFER_RECV','TRANSFER_SEND']);
   for(const phase of ['LOAD','PUBLISH']){
    const parent=trace.spans.find(s=>s.phase===phase&&s.parentSpanId===null),children=trace.spans.filter(s=>s.parentSpanId===parent.spanId);

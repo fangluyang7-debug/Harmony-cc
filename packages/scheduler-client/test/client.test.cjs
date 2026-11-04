@@ -50,7 +50,12 @@ test('refused or ambiguous plans never send bytes, dispatch, or retry; timeout d
 });
 test('TypeScript and ArkTS SDK submission sources stay identical',()=>{
  const fs=require('node:fs'),path=require('node:path'),root=path.resolve(__dirname,'../../..');
- const ts=fs.readFileSync(path.join(root,'packages/scheduler-client/src/index.ts'),'utf8'),ets=fs.readFileSync(path.join(root,'apps/harmony/scheduler/src/main/ets/v2/client/SchedulerSdk.ets'),'utf8');assert.equal(ts.replaceAll('\r\n','\n'),ets.replaceAll('\r\n','\n'));
+ const ts=fs.readFileSync(path.join(root,'packages/scheduler-client/src/index.ts'),'utf8').replaceAll('\r\n','\n');
+ const ets=fs.readFileSync(path.join(root,'apps/harmony/scheduler/src/main/ets/v2/client/SchedulerSdk.ets'),'utf8').replaceAll('\r\n','\n');
+ const typeImport="import type {ModelManifestV2} from '@harmony/scheduler-core';";
+ const nativeImport="import {ModelManifestV2} from '../protocol/ResourcesV2';";
+ assert.ok(ts.startsWith(typeImport+'\n'));assert.ok(ets.startsWith(nativeImport+'\n'));
+ assert.equal(ts.slice(typeImport.length),ets.slice(nativeImport.length));
 });
 test('closing a submitter during capacity wait stops metadata retries before any dispatch or transfer',async()=>{
  let requests=0,cancelled=false,time=0;

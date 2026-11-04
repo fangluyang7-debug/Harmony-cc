@@ -57,16 +57,19 @@ test('origin sandbox costs zero transfer only for its holder; another holder on 
  f.snapshot.links=[];assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
 });
 
-test('one planner chooses origin or remote according to compute plus measured relay cost',()=>{
+for(const [sourceId,workerId] of [['d1','remote'],['cloud-runtime','phone_7'],['phone_7','cloud-runtime']])
+test('placement follows measured costs across device identifiers '+sourceId+' and '+workerId,()=>{
  const service=new PlanningService(null),f=fixture();
+ f.snapshot.devices[0].deviceId=sourceId;f.snapshot.resources[0].deviceId=sourceId;
+ f.snapshot.candidates[0].deviceId=sourceId;f.request.localDeviceId=sourceId;
  f.snapshot.devices[0].holderInstanceId='source';f.snapshot.candidates[0].holderInstanceId='source';
- f.snapshot.devices.push({...f.snapshot.devices[0],deviceId:'remote',holderInstanceId:'worker'});
- f.snapshot.resources.push({...f.snapshot.resources[0],deviceId:'remote'});
- f.snapshot.candidates.push({...f.snapshot.candidates[0],targetId:'remote-target',deviceId:'remote',holderInstanceId:'worker',computeMs:1});
+ f.snapshot.devices.push({...f.snapshot.devices[0],deviceId:workerId,holderInstanceId:'worker'});
+ f.snapshot.resources.push({...f.snapshot.resources[0],deviceId:workerId});
+ f.snapshot.candidates.push({...f.snapshot.candidates[0],targetId:'remote-target',deviceId:workerId,holderInstanceId:'worker',computeMs:1});
  f.policy.allowedTargetIds.push('remote-target');
- f.request.artifacts[0].replicas=[{deviceId:'d1',holderInstanceId:'source',readMs:0}];
+ f.request.artifacts[0].replicas=[{deviceId:sourceId,holderInstanceId:'source',readMs:0}];
  f.request.inputRelayId='relay';f.request.networkAllowed=true;f.request.privacy='AUTHORIZED_REMOTE';delete f.request.finalDestination;
- f.snapshot.links=[['d1','relay'],['relay','remote']].map(([from,to])=>({from,to,bytesPerSecond:1000,fixedMs:2,effective:false,observedAt:100,ttlMs:1000,source:'SIMULATED'}));
+ f.snapshot.links=[[sourceId,'relay'],['relay',workerId]].map(([from,to])=>({from,to,bytesPerSecond:1000,fixedMs:2,effective:false,observedAt:100,ttlMs:1000,source:'SIMULATED'}));
  assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0].targetId,'target1');
  f.snapshot.candidates[0].computeMs=100;
  assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0].targetId,'remote-target');
@@ -112,4 +115,37 @@ test('fixed service placement requires the registered origin App holder and matc
  f.request.originHolderId='other';assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
  f.request.originHolderId='origin';c.serviceId='different';assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
  c.serviceId='catalog';delete c.appInstanceId;delete f.request.appInstanceId;assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
+});
+
+test('online slowdown uses a fresh alternate plan and keeps the primary when waiting is faster',async()=>{
+ const r=await require('./helpers.cjs').runtime();
+ try{
+  const f=fixture(),now=Date.now(),id='slow',group='g1',profile={deviceId:'primary',holderInstanceId:'holder',domain:'SIMULATED'};
+  f.snapshot.capturedAt=now;f.snapshot.devices[0].sampledAt=now;f.snapshot.resources[0].observedAt=now;f.snapshot.candidates[0].observedAt=now;
+  for(const samples of [f.snapshot.devices,f.snapshot.resources,f.snapshot.candidates])samples[0].ttlMs=30000;
+  const primary={...f.snapshot.candidates[0],targetId:'primary-target',deviceId:'primary',computeMs:1};
+  f.snapshot.candidates.push(primary);f.policy.allowedTargetIds.push(primary.targetId);
+  f.snapshot.devices.push({...f.snapshot.devices[0],deviceId:'primary',deviceInstanceId:'primary-instance'});
+  f.snapshot.resources.push({...f.snapshot.resources[0],deviceId:'primary'});
+  f.request.networkAllowed=true;f.request.privacy='AUTHORIZED_REMOTE';f.request.finalDestination=undefined;
+  f.request.artifacts[0].replicas.push({deviceId:'primary',readMs:0});
+  await r.snapshots.replace(f.snapshot,f.policy);
+  const d={offer:{target:{targetId:'primary-target'},task:{priority:'REMOTE_INTERACTIVE',contract:{sideEffectPolicy:'PURE'}}},
+   holderId:'holder',deadlineAt:now+30000,request:f.request};
+  await r.db.cpuJob.create({data:{id,groupId:group,principalId:'app',sourceHolderId:'source',state:'DISPATCHED',metadataJson:JSON.stringify(d)}});
+  await r.db.attempt.create({data:{id,groupId:group,workflowId:'wf',nodeId:'n',holderInstanceId:'holder',executionDigest:'fixture',taskJson:'{}',state:'RUNNING'}});
+  const sample=value=>({value,source:'SIMULATED',unit:'ms',sampledAt:now,ttlMs:30000});
+  profile.inFlight=[{attemptId:id,targetId:'primary-target',state:'RUNNING',elapsed:sample(150),remaining:sample(4),
+   history:{samples:24,survivors:2,p90TotalMs:100,p90RemainingMs:8}}];
+  await r.jobs.assessSlow(group,profile);
+  const row=await r.db.attempt.findUniqueOrThrow({where:{id}}),result=JSON.parse(row.recoveryEstimateJson);
+  assert.equal(result.reason,'WAIT_FOR_PRIMARY');assert.equal(result.alternativeMs,10);assert.equal(result.remainingMs,4);
+  assert.equal(row.state,'RUNNING');assert.equal(result.targetId,'target1');
+  await r.db.attempt.update({where:{id},data:{recoveryEstimateJson:null}});
+  profile.inFlight[0].remaining.value=80;
+  await r.jobs.assessSlow(group,profile);
+  const second=await r.db.attempt.findUniqueOrThrow({where:{id}});
+  assert.equal(JSON.parse(second.recoveryEstimateJson).reason,'ALTERNATIVE_FASTER');
+  assert.equal(await r.db.outbox.count(),0);
+ }finally{await r.close();}
 });

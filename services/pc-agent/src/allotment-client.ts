@@ -15,7 +15,7 @@ export function allotmentTransport(connection:RecoveryConnection,onServerTime?:(
     const jobAction=/^\/v2\/(?:jobs\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}\/start|executions\/[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}\/(?:authorize|input|output|retained|control))$/.test(route);
     if(!read&&!report&&!jobAction&&!['/v2/allotments/request','/v2/allotments/ack','/v2/evaluations/claim','/v2/jobs','/v2/device-settings','/v2/link-probe','/v2/data/endpoints/challenge','/v2/data/endpoints/register','/v2/data/authorizations','/v2/data/deliveries/failed','/v2/data/deliveries/missing','/v2/data/missing','/v2/data/rejections','/v2/data/releases','/v2/data/cache/inventory','/v2/data/consume','/v2/data/receipts','/v2/data/observations','/v2/data/traces'].includes(route)){reject(Error('CONTROL_ROUTE_INVALID'));return;}
     const data=Buffer.from(JSON.stringify(body));
-    if(data.length>100000){reject(Error('CONTROL_REQUEST_TOO_LARGE'));return;}
+    if(data.length>(route==='/v2/data/endpoints/register'?320000:100000)){reject(Error('CONTROL_REQUEST_TOO_LARGE'));return;}
     const request=https.request(new URL(route,connection.address),{...pinned(connection),method:read?'GET':'POST',headers:{
       Authorization:'Bearer '+connection.credential,'Content-Type':'application/json','Content-Length':read?0:data.length
     }},response=>{

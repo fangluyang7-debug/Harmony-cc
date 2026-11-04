@@ -1,7 +1,11 @@
 import { DeviceResources, PlacementCandidate, PlacementLink, PlacementRequest, PlannerLimits, WorkflowPlacementPlanner, WorkflowPlacementDecision } from './planner';
 
 export interface DeviceEpoch { deviceId:string; holderInstanceId?:string; deviceInstanceId:string; ledgerEpoch:number; sampledAt:number; ttlMs:number; }
+export interface ExcludedTarget {
+  deviceId:string;targetId:string;executorId:string;capability:string;appInstanceId?:string;code:string;
+}
 export interface PlanningSnapshot {
+  excludedTargets?:ExcludedTarget[];
   version:number; policyVersion:string; groupId:string; domain:'REAL'|'SIMULATED'; capturedAt:number;
   devices:DeviceEpoch[]; resources:DeviceResources[]; candidates:PlacementCandidate[]; links:PlacementLink[];
 }
@@ -19,8 +23,22 @@ export function plan(snapshot:PlanningSnapshot,request:PlacementRequest,policy:P
     if(deviceIds.has(key))throw new Error('DEVICE_IDENTITY_AMBIGUOUS');deviceIds.add(key);
     return !!d.deviceId&&!!d.deviceInstanceId&&Number.isSafeInteger(d.ledgerEpoch)&&d.ledgerEpoch>0&&Number.isFinite(d.sampledAt)&&d.sampledAt<=clock.now&&Number.isFinite(d.ttlMs)&&d.ttlMs>0&&clock.now-d.sampledAt<=d.ttlMs;
   }).map(d=>d.deviceId+':'+(d.holderInstanceId??'')));
-  const candidates=snapshot.candidates.filter(c=>(c.appInstanceId===undefined||c.appInstanceId===request.appInstanceId)&&validDevices.has(c.deviceId+':'+(c.holderInstanceId??''))&&policy.allowedTargetIds.includes(c.targetId));
-  const effective:PlacementRequest={...request,now:clock.now,domain:snapshot.domain,deviceResources:snapshot.resources,links:snapshot.links,
+  const candidates=snapshot.candidates.filter(c=>(c.appInstanceId===undefined||c.appInstanceId===request.appInstanceId)&&validDevices.has(c.deviceId+':'+(c.holderInstanceId??''))&&policy.allowedTargetIds.includes(c.targetId)).map(c=>{
+    if(!request.priority)return c;
+    const capacity=c.categoryCapacity?.find(v=>v.priority===request.priority);
+    if(capacity)return {...c,availability:capacity.availability,availableSlots:capacity.slots};
+    // Snapshots from before category-aware planning have only the interactive allowance.
+    return request.priority==='REMOTE_BATCH'?{...c,availableSlots:0}:c;
+  });
+  const effective:PlacementRequest={...request,snapshotVersion:snapshot.version,now:clock.now,domain:snapshot.domain,deviceResources:snapshot.resources,links:snapshot.links,
     nodes:request.nodes.map(node=>({...node,candidates:candidates.filter(c=>c.capability===node.capability&&(!node.allowedTargetIds||node.allowedTargetIds.includes(c.targetId)))}))};
-  return {groupId:snapshot.groupId,domain:snapshot.domain,snapshotVersion:snapshot.version,policyVersion:policy.version,decision:new WorkflowPlacementPlanner(policy.limits,clock.monotonic).plan(effective)};
+  const decision=new WorkflowPlacementPlanner(policy.limits,clock.monotonic).plan(effective);
+  for(const target of snapshot.excludedTargets??[]){
+    if(!policy.allowedTargetIds.includes(target.targetId)||target.appInstanceId!==undefined&&target.appInstanceId!==request.appInstanceId)continue;
+    for(const node of effective.nodes){
+      if(node.capability===target.capability&&!request.committedNodeIds.includes(node.id)&&(!node.allowedTargetIds||node.allowedTargetIds.includes(target.targetId)))
+        decision.rejections.push({nodeId:node.id,targetId:target.targetId,deviceId:target.deviceId,executorId:target.executorId,code:target.code});
+    }
+  }
+  return {groupId:snapshot.groupId,domain:snapshot.domain,snapshotVersion:snapshot.version,policyVersion:policy.version,decision};
 }

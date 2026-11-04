@@ -9,8 +9,8 @@ const peer={groupId:'g1',holderInstanceId:'h1',deviceId:'device1',principalId:'p
 const authenticate=async token=>{if(token!=='test-token')throw Error('UNAUTHORIZED');return peer;};
 function envelope(r,id,seq,type='Hello',payload={versions:[2],extensions:[]}){return {protocolVersion:2,messageId:id,type,groupId:'g1',senderInstanceId:'h1',coordinatorEpoch:r.epoch,seq,ackOf:null,traceId:'trace1',payload:JSON.stringify(payload),extensions:[]};}
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
-async function connect(r,token='test-token'){
-  const ws=new WebSocket(r.url.replace('https:','wss:')+'/v2/channel',{ca:r.identity.cert,family:4,headers:{Authorization:'Bearer '+token}});
+async function connect(r,token='test-token',autoPong=true){
+  const ws=new WebSocket(r.url.replace('https:','wss:')+'/v2/channel',{ca:r.identity.cert,family:4,autoPong,headers:{Authorization:'Bearer '+token}});
   const queue=[],waiters=[];ws.on('message',b=>{const m=JSON.parse(b.toString());if(waiters.length)waiters.shift()(m);else queue.push(m);});
   ws.next=()=>queue.length?Promise.resolve(queue.shift()):Promise.race([new Promise(resolve=>waiters.push(resolve)),new Promise((_,reject)=>{const t=setTimeout(()=>reject(Error('MESSAGE_TIMEOUT')),5000);t.unref();})]);
   await once(ws,'open');return ws;
@@ -105,6 +105,8 @@ test('profile events and heartbeat cross TLS/WS and ACK only after snapshot publ
     await publisher.start();assert.equal((await r.snapshots.build('g1')).snapshot.devices.length,1);
     assert.equal((await r.snapshots.build('g1')).snapshot.candidates.length,0);
     await qualifySimulated(r.db,profile);await r.profiles.refresh('g1');
+    assert.equal((await r.snapshots.build('g1')).snapshot.candidates.length,0,'hello and profile alone do not complete recovery');
+    ws.send(JSON.stringify(envelope(r,'recover',++sequence,'RecoveryRequest',{})));await ws.next();await r.profiles.refresh('g1');
     assert.equal((await r.snapshots.build('g1')).snapshot.candidates.length,1);
     profile.ownerActivity.value='ACTIVE';await publisher.changed();
     assert.equal((await r.snapshots.build('g1')).snapshot.candidates.length,0);
@@ -115,5 +117,32 @@ test('profile events and heartbeat cross TLS/WS and ACK only after snapshot publ
     const bad={...profile,sequence:profileSequence+1,holderInstanceId:'other'};
     const closed=once(ws,'close');ws.send(JSON.stringify(envelope(r,'forged',++sequence,'DeviceProfile',bad)));assert.equal((await closed)[0],1008);
     assert.equal((await r.snapshots.build('g1')).snapshot.version,before);
+    assert.equal(r.channel.linkState('g1','h1',profile.deviceInstanceId,profile.ledgerEpoch),'OFFLINE');
   }finally{await publisher?.stop();ws?.terminate();await r.close();}
+});
+
+test('busy socket with missing pongs stops being eligible while its ledger occupancy remains',async()=>{
+ const r=await runtime({authenticate});let ws;
+ try{
+  ws=await connect(r,'test-token',false);
+  ws.send(JSON.stringify(envelope(r,'hello',1)));await ws.next();
+  ws.send(JSON.stringify(envelope(r,'recover',2,'RecoveryRequest',{})));await ws.next();
+  const profile=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DeviceProfile.json'));
+  const now=Date.now();
+  const update=v=>{if(v&&typeof v==='object'){if('sampledAt' in v){v.sampledAt=now;v.ttlMs=30000;}else Object.values(v).forEach(update);}};update(profile);
+  const executor=profile.executors[0],sample={value:10,unit:'ms',source:'SIMULATED',sampledAt:now,ttlMs:30000};
+  profile.inFlight=[{attemptId:'running',targetId:executor.target.targetId,state:'RUNNING',resources:executor.resources,elapsed:sample,remaining:sample}];
+  const pool=profile.pools.find(p=>p.resourcePoolId===executor.resources[0].resourcePoolId);
+  pool.occupied.value=executor.resources[0].amount;pool.draining=pool.occupied.value>pool.admissionLimit.value;
+  ws.send(JSON.stringify(envelope(r,'profile',3,'DeviceProfile',profile)));await ws.next();
+  const state=()=>r.channel.linkState('g1','h1',profile.deviceInstanceId,profile.ledgerEpoch);
+  assert.equal(state(),'ONLINE');const end=Date.now()+5000;
+  while(state()==='ONLINE'&&Date.now()<end)await new Promise(resolve=>setTimeout(resolve,20));
+  assert.equal(state(),'SUSPECT');
+  const policy={minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true};
+  const snapshot=await r.directory.snapshot('g1','live',1,policy);
+  assert.ok(snapshot.excludedTargets.some(t=>['CONTROL_SUSPECT','CONTROL_OFFLINE'].includes(t.code)));
+  assert.equal(snapshot.candidates.length,0);
+  assert.deepEqual((await r.directory.profiles('g1'))[0].inFlight,profile.inFlight);
+ }finally{ws?.terminate();await r.close();}
 });

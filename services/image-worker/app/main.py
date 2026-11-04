@@ -3,6 +3,8 @@ from __future__ import annotations
 import base64
 import hashlib
 import io
+import json
+from importlib.metadata import version
 import os
 import threading
 from contextlib import asynccontextmanager
@@ -87,6 +89,8 @@ class ModelRegistry:
         self.embedding_model = None
         self.embedding_preprocess = None
         self.embedding_tokenizer = None
+        self.image_manifest_lock = threading.Lock()
+        self.image_manifest = None
         self.embedding_model_name = os.getenv("IMAGE_WORKER_EMBEDDING_MODEL", "ViT-B-32")
         self.embedding_pretrained = os.getenv(
             "IMAGE_WORKER_EMBEDDING_PRETRAINED",
@@ -549,6 +553,34 @@ def embed(payload: ImagePayload) -> EmbeddingResponse:
     if text and text.strip():
         return registry.embed_text(text.strip())
     raise HTTPException(status_code=400, detail="IMAGE_OR_TEXT_REQUIRED")
+
+
+@app.post("/v2/images/embed")
+def embed_image_v2(payload: ImagePayload) -> dict[str, Any]:
+    if not payload.imageBase64:
+        raise HTTPException(status_code=400, detail="IMAGE_V2_INPUT_INVALID")
+    image = decode_base64_image(payload.imageBase64)
+    # Freeze the manifest against the weights and transform actually loaded by this worker.
+    with registry.image_manifest_lock:
+        embedding = registry.embed_image(image)
+        if registry.image_manifest is None:
+            model, _, _ = registry._embedding()
+            digest = hashlib.sha256()
+            for name, tensor in sorted(model.state_dict().items()):
+                header = json.dumps([name, str(tensor.dtype), list(tensor.shape)]).encode()
+                digest.update(len(header).to_bytes(4, "big"))
+                digest.update(header)
+                digest.update(tensor.detach().cpu().contiguous().reshape(-1).view(torch.uint8).numpy())
+            prep = ["exif-transpose-rgb-v1", model.visual.preprocess_cfg,
+                    version("open-clip-torch"), version("torchvision"), version("Pillow")]
+            registry.image_manifest = {
+                "modelId": registry.embedding_model_name, "version": registry.embedding_pretrained,
+                "weightsHash": digest.hexdigest(),
+                "preprocessVersion": hashlib.sha256(json.dumps(prep, sort_keys=True).encode()).hexdigest(),
+                "embeddingKind": "image", "dimension": embedding.dimension,
+                "dtype": "float32", "normalization": "l2",
+            }
+    return {"model": registry.image_manifest, "vector": embedding.vector}
 
 
 @app.post("/v1/images/extract-and-embed", response_model=ExtractAndEmbedResponse)

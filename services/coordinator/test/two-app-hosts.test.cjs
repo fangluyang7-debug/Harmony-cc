@@ -1,5 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),path=require('node:path'),{randomUUID}=require('node:crypto');
 const {runtime}=require('./helpers.cjs');
+const interactiveWaitLimitMs=5000; // Controlled two-slot fixture policy, measured from submission to admitted input read.
 const {CpuHost}=require('../../pc-agent/dist/host'),{DurableLedger}=require('../../pc-agent/dist/durable-ledger');
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(check){const end=Date.now()+45000;while(Date.now()<end){if(await check())return;await sleep(100);}throw Error('TWO_APP_TIMEOUT');}
@@ -20,12 +21,22 @@ test('two independent App hosts share one physical budget without cross-App exec
   await assert.rejects(r.apps.register(owner.peer,{label:'Overbooked',allowedContracts:['text.count.v1'],maxConcurrent:1,resources:unit,offlineBase:unit,onlineExtra:[]},r.url),/APP_BASE_BUDGET_UNAVAILABLE/);
   for(let repetition=0;repetition<5;repetition++){
   const tasks=[];
-  for(const [i,host]of hosts.entries()){
+  for(const i of [1,0]){
+   const host=hosts[i];
    const sdk=host.sdk(),input=await sdk.registerInput(Buffer.from(JSON.stringify({text:i===0?'SoleAI':'Indexer'})),'text.input');
    const runtime=host.agent.runtime,read=runtime.ports.read,publish=runtime.ports.publish;runtime.ports.publish=async(...args)=>{try{return await publish(...args);}catch(error){errors.push('publish:'+String(error));throw error;}};let release,entered;const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r);gates.push(release);
    runtime.ports.read=async(...args)=>{entered();await gate;try{return await read(...args);}catch(error){errors.push('read:'+String(error));throw error;}};
-   const id=randomUUID(),task=await sdk.submit({version:3,id,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
-   await started;tasks.push(task);
+   const id=randomUUID(),start=performance.now(),task=await sdk.submit({version:3,id,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN',priority:i===1?'REMOTE_BATCH':'REMOTE_INTERACTIVE'});
+   await started;tasks[i]=task;
+   if(i===0){
+    const waitMs=performance.now()-start;
+    assert.equal(hosts[1].ledger.status(tasks[1].id).resourcesSettled,false);
+    assert.ok(waitMs<=interactiveWaitLimitMs,'eligible interactive wait '+waitMs+' ms exceeded '+interactiveWaitLimitMs);
+    console.log('INTERACTIVE_ADMITTED_MS '+waitMs.toFixed(1));
+   }else{
+    const readyWait=(await task.status()).readyWait;
+    assert.equal(readyWait.priority,'REMOTE_BATCH');assert.equal(readyWait.outcome,'OFFERED');assert.ok(readyWait.waitMs>=0);
+   }
   }
   for(let i=0;i<2;i++){
    const state=hosts[i].ledger.snapshot(),entry=state.entries.find(e=>e.record.attemptId===tasks[i].id);
@@ -41,5 +52,5 @@ test('two independent App hosts share one physical budget without cross-App exec
    assert.equal((await r.db.receipt.findUnique({where:{id:tasks[i].id}})).committed,true);
   }
   }
- }catch(error){console.error(JSON.stringify({errors,jobs:await r.db.cpuJob.findMany(),entries:hosts.map(h=>h.ledger.snapshot().entries)},null,2));throw error;}finally{gates.forEach(release=>release());for(const h of hosts)await h.close();await r.close();}
+ }catch(error){console.error(JSON.stringify({errors,jobs:await r.db.cpuJob.findMany({select:{id:true,state:true}})},null,2));throw error;}finally{gates.forEach(release=>release());for(const h of hosts)await h.close();await r.close();}
 });

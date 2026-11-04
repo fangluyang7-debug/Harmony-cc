@@ -492,6 +492,7 @@ struct Index {
   private Profile() {
     Column({ space: 20 }) {
       Button('v2 裁剪验收').onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/V2CropPage' }).catch(() => this.notify('验收入口打开失败')); })
+      Button('v2 图像候选检索').onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/V2ImageSearchPage' }).catch(() => this.notify('检索入口打开失败')); })
       Text('本机偏好').fontSize(24).fontWeight(FontWeight.Bold).width('100%')
       Row() {
         Text('参与本地体验反馈').fontSize(16).layoutWeight(1)

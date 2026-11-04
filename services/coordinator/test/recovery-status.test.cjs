@@ -51,3 +51,17 @@ test('successful output may still hold resources; later settlement changes only 
   await assert.rejects(r.store.reconcileStatus('g1','h1','device1',q.messageId,reply,1),/TERMINAL_CONFLICT/);
  }finally{await r.close();}
 });
+test('a committed output accepts independently confirmed release without recommitting or changing output',async()=>{
+ const r=await runtime();try{
+  const f=attempt();f.message.senderInstanceId=r.identity.id;await r.store.persistOffer(f.offer,'h1',f.message);await r.store.recordAdmission(f.record);
+  const held={...fixture('ExecutionReceipt'),resourcesSettled:false},released={...held,resourcesSettled:true};
+  assert.equal(await r.store.receive('g1','h1',held,1),'COMMITTED');
+  assert.equal(await r.store.receive('g1','h1',released,2),'RECONCILE');
+  assert.equal(JSON.parse((await r.db.attempt.findFirst()).recordJson).resourcesSettled,false);
+  await assert.rejects(r.store.receive('g1','h1',{...released,outputs:[]},1),/RECEIPT_CONFLICT/);
+  assert.equal(await r.store.receive('g1','h1',released,1),'COMMITTED');
+  assert.equal(JSON.parse((await r.db.attempt.findFirst()).recordJson).resourcesSettled,true);
+  assert.equal(await r.db.receipt.count({where:{committed:true}}),1);
+  await assert.rejects(r.store.receive('g1','h1',held,1),/RECEIPT_CONFLICT/);
+ }finally{await r.close();}
+});

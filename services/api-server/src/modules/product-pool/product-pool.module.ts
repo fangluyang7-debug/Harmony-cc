@@ -4,6 +4,8 @@ import { CacheModule } from '../../cache/cache.module';
 import { AssetsModule } from '../assets/assets.module';
 import { ProductProfileModule } from '../product-profile/product-profile.module';
 import { ProductPoolController } from './controllers/product-pool.controller';
+import { ImageSearchV2Controller } from './controllers/image-search-v2.controller';
+import { AuthModule } from '../auth/auth.module';
 import { ANN_SEARCH_PORT } from './application/ann-search-port.interface';
 import { AnnSearchService } from './application/ann-search.service';
 import { CANDIDATE_VISUAL_VERIFICATION_ADAPTER } from './application/candidate-visual-verification-adapter.interface';
@@ -57,8 +59,8 @@ import { StandardProductViewAdapterService } from './application/standard-produc
 import { VolcengineDoubaoEmbeddingProviderService } from './application/volcengine-doubao-embedding-provider.service';
 
 @Module({
-  imports: [CacheModule, AssetsModule, ProductProfileModule],
-  controllers: [ProductPoolController],
+  imports: [CacheModule, AssetsModule, ProductProfileModule, AuthModule],
+  controllers: [ProductPoolController, ImageSearchV2Controller],
   providers: [
     ProductPoolService,
     HashEmbeddingProviderService,

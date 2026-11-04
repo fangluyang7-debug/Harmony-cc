@@ -3,12 +3,12 @@ import path from 'node:path';
 import { createServer } from 'node:net';
 import { createHash, createHmac, verify, randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import { canonical, LedgerStateV2, LedgerAdmissionV2, DispatchOfferV2, AllotmentGrantV2, ExecutionReceiptV2,
+import { RunTimings, canonical, LedgerStateV2, LedgerAdmissionV2, DispatchOfferV2, AllotmentGrantV2, ExecutionReceiptV2,
   newLedgerV2, recoverLedgerV2, requestGrantV2, installGrantV2, admitV2, startAttemptV2, cancelAttemptV2, settleAttemptV2,
   occupiedV2, validAttemptRecordV2, validDispatchOfferV2, validAllotmentGrantV2, validResourceVectorV2, MessageEnvelopeV2, validTraceSpanV2, TraceSpanV2,
   YieldNoticeV2,validYieldNoticeV2,validProtocolErrorV2 } from '@harmony/scheduler-core';
 import { ChannelJournal, newChannelJournal, validateJournal, bindJournal, journalMessage, answerQuery, receiveDispatch } from './channel-journal';
-import { DeviceProfileV2, validDeviceProfileV2 } from '@harmony/scheduler-core';
+import { ModelManifestV2,DeviceProfileV2, validDeviceProfileV2 } from '@harmony/scheduler-core';
 
 type Identity=Pick<LedgerStateV2,'groupId'|'deviceId'|'holderInstanceId'|'appInstanceId'>;
 const clone=<T>(v:T):T=>JSON.parse(JSON.stringify(v));
@@ -32,6 +32,8 @@ function validateState(s:LedgerStateV2,identity:Identity):void {
 }
 /** All quota, fence, attempt and settlement changes commit through this single snapshot. */
 export class DurableLedger {
+  private timings=new RunTimings();
+  inFlight(state:LedgerStateV2,sampledAt:number,domain:string){return this.timings.sample(state.entries,this.clock(),sampledAt,domain);}
   private poisoned=false;private closed=false;
   private constructor(private readonly directory:string,private state:LedgerStateV2,private readonly certificate:string,
     private readonly unlock:()=>Promise<void>,private readonly clock:()=>number,private channel:ChannelJournal){}
@@ -105,7 +107,11 @@ export class DurableLedger {
   rejectDispatch(message:MessageEnvelopeV2,reasonCode:string){
     const offer=JSON.parse(message.payload);if(this.status(offer.task.attemptId))throw Error('DISPATCH_ALREADY_ADMITTED');
     const channel=receiveDispatch(this.channel,message,this.state.groupId,this.state.deviceId);
-    channel.dispatches!.find(d=>d.messageId===message.messageId)!.rejected=true;
+    const prior=channel.dispatches!.find(d=>d.attemptId===offer.task.attemptId&&d.rejected);
+    const digest=createHash('sha256').update(canonical(offer)).digest('hex');
+    if(prior?.offerDigest&&prior.offerDigest!==digest)throw Error('ATTEMPT_CONFLICT');
+    reasonCode=prior?(prior.reasonCode??'DISPATCH_PREVIOUSLY_REJECTED'):reasonCode==='QUEUE_STARVED'?'QUEUE_STARVED_NOT_STARTED':reasonCode;
+    Object.assign(channel.dispatches!.find(d=>d.messageId===message.messageId)!,{rejected:true,reasonCode,offerDigest:digest});
     if(!channel.outbox.some(m=>m.type==='AdmissionReply'&&m.ackOf===message.messageId))channel.outbox.push(journalMessage(channel,this.state.groupId,this.state.holderInstanceId,'AdmissionReply',
       {attemptId:offer.task.attemptId,holderInstanceId:this.state.holderInstanceId,status:'REJECTED',reasonCode,record:null,wait:{value:null,source:'UNKNOWN',sampledAt:0,ttlMs:1,unit:'ms'}},message.messageId));
     if(!channel.outbox.some(m=>m.type==='Ack'&&m.ackOf===message.messageId))channel.outbox.push(journalMessage(channel,this.state.groupId,this.state.holderInstanceId,'Ack',{messageId:message.messageId},message.messageId));
@@ -125,10 +131,10 @@ export class DurableLedger {
     if(!record)throw Error('ATTEMPT_UNKNOWN');if(record.resourcesSettled)return;
     const channel=clone(this.channel);channel.outbox.push(journalMessage(channel,this.state.groupId,this.state.holderInstanceId,'YieldNotice',notice));this.commit(this.state,channel);
   }
-  private addReport(channel:ChannelJournal,state:LedgerStateV2,receipt:ExecutionReceiptV2){
+  private addReport(channel:ChannelJournal,state:LedgerStateV2,receipt:ExecutionReceiptV2,resourceHeldMs?:number,actualModel:ModelManifestV2|null=null){
     if(channel.outbox.some(m=>m.type==='ExecutionReceipt'&&JSON.parse(m.payload).receipt.attemptId===receipt.attemptId))return;
     const record=state.entries.find(e=>e.record.attemptId===receipt.attemptId)!.record;
-    channel.outbox.push(journalMessage(channel,state.groupId,state.holderInstanceId,'ExecutionReceipt',{receipt,allotmentId:record.allotmentId,allotmentVersion:record.allotmentVersion,leaseId:record.leaseId,actualModel:null,timings:[]}));
+    channel.outbox.push(journalMessage(channel,state.groupId,state.holderInstanceId,'ExecutionReceipt',{receipt,resourceHeldMs,allotmentId:record.allotmentId,allotmentVersion:record.allotmentVersion,leaseId:record.leaseId,actualModel,timings:[]}));
   }
   queueTrace(spans:TraceSpanV2[]){
     if(this.channel.outbox.length>=32)throw Error('TRACE_BACKPRESSURE');
@@ -136,19 +142,24 @@ export class DurableLedger {
     const channel=clone(this.channel);channel.outbox.push(journalMessage(channel,this.state.groupId,this.state.holderInstanceId,'TraceBatch',{spans}));this.commit(this.state,channel);
   }
   /** Must return successfully BEFORE the adapter calls its engine; a crash in between never retries. */
-  begin(attemptId:string){this.commit(startAttemptV2(this.state,attemptId,this.clock()));return clone(this.state.entries.find(e=>e.record.attemptId===attemptId)!);}
+  begin(attemptId:string,inputBytes?:number,startup:'COLD'|'WARM'|'UNKNOWN'='UNKNOWN'){const now=this.clock();this.commit(startAttemptV2(this.state,attemptId,now));this.timings.start(attemptId,now,inputBytes,startup);return clone(this.state.entries.find(e=>e.record.attemptId===attemptId)!);}
   cancel(attemptId:string){this.commit(cancelAttemptV2(this.state,attemptId));}
   expire(){for(const e of this.state.entries)if(!e.record.resourcesSettled&&this.clock()>=e.deadline&&!e.cancelRequested)this.cancel(e.record.attemptId);}
   /** Only a locally confirmed engine settlement may invoke this method, never a network timeout. */
-  settle(receipt:ExecutionReceiptV2,delivery:'BUSINESS'|'EVALUATION'='BUSINESS'){
+  settle(receipt:ExecutionReceiptV2,delivery:'BUSINESS'|'EVALUATION'='BUSINESS',actualModel:ModelManifestV2|null=null){
     const next=settleAttemptV2(this.state,receipt),channel=clone(this.channel);
     // Reference evaluation results use the durable permit-report protocol. A
     // successful reference is not a missing business dispatch to reconcile.
     if(delivery==='BUSINESS'&&next.settlementSeq!==this.state.settlementSeq&&channel.coordinatorId!==null){
-      if(receipt.coordinatorEpoch===channel.epoch&&channel.dispatches?.some(d=>d.attemptId===receipt.attemptId))this.addReport(channel,next,receipt);
+      if(receipt.coordinatorEpoch===channel.epoch&&channel.dispatches?.some(d=>d.attemptId===receipt.attemptId)){
+        const e=next.entries.find(entry=>entry.record.attemptId===receipt.attemptId)!;
+        const admittedAt=e.deadline-Math.min(e.offer.leaseMs,e.offer.task.budget.remainingMs);
+        this.addReport(channel,next,receipt,e.record.ledgerEpoch===next.ledgerEpoch?Math.max(0,this.clock()-admittedAt):undefined,actualModel);
+      }
       else if(!channel.outbox.some(m=>m.type==='RecoveryRequest'))channel.outbox.push(journalMessage(channel,next.groupId,next.holderInstanceId,'RecoveryRequest',{}));
     }
     this.commit(next,channel);
+    this.timings.finish(next.entries.find(e=>e.record.attemptId===receipt.attemptId)!,this.clock());
   }
   status(attemptId:string){this.guard();return clone(this.state.entries.find(e=>e.record.attemptId===attemptId)?.record??null);}
   receipts(){this.guard();return clone(this.state.entries.flatMap(e=>e.record.receipt?[e.record.receipt]:[]));}

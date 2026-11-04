@@ -23,13 +23,19 @@ test('formal unpinned graph reassigns C to D after C receives B output; C serves
    if(d?.offer.task.workflowId===id&&d.offer.task.nodeId==='count'&&!reassigned&&await r.directTransfers.hasInput(group,peers[1].holderInstanceId,peers[0].app.appInstanceId,d.input.ref)){
     reassigned=true;parentRef=d.input.ref;await hosts[1].request({action:'pause'});
     await until(async()=>{await r.profiles.refresh(group);return !(await r.snapshots.build(group)).snapshot.candidates.some(c=>c.holderInstanceId===peers[1].holderInstanceId);});
-    await hosts[0].request({action:'register-endpoint'});await links();
+    await Promise.all(hosts.map(h=>h.request({action:'register-endpoint'})));
+    for(const i of [0,1])assert.equal(await r.directTransfers.hasInput(group,peers[i].holderInstanceId,peers[0].app.appInstanceId,parentRef),true);
+    // Producer subsequently loses its actual bytes; C's revalidated copy must serve D.
+    assert.equal(await hosts[0].request({action:'evict-ref',groupId:group,ref:parentRef}),true);
+    await hosts[0].request({action:'register-endpoint'});
+    assert.equal(await r.directTransfers.hasInput(group,peers[0].holderInstanceId,peers[0].app.appInstanceId,parentRef),false);
+    await links();
    }
    return start(peer,jobId,...rest);
   };
   await hosts[0].request({action:'submit',jobId:id});const result=await hosts[0].request({action:'result',jobId:id});assert.equal(result.state,'SUCCEEDED');assert.deepEqual(Buffer.from(result.output,'base64'),counts);assert.equal(reassigned,true);
   const attempts=await r.db.attempt.findMany({where:{workflowId:id}});assert.equal(attempts.length,3);assert.equal(attempts.find(a=>JSON.parse(a.taskJson).nodeId==='count').holderInstanceId,peers[2].holderInstanceId);assert.equal(attempts.some(a=>a.holderInstanceId===peers[1].holderInstanceId),false);
   const grants=await r.db.transferAuthorization.findMany({where:{groupId:group,state:'COMPLETED'}});assert.ok(grants.map(g=>JSON.parse(g.metadataJson).authorization).some(a=>a.senderHolderId===peers[1].holderInstanceId&&a.receiverHolderId===peers[2].holderInstanceId&&a.ref.artifactId===parentRef.artifactId));
-  await until(async()=>!await hosts[0].request({action:'ref',groupId:group,ref:parentRef}));console.log('REASSIGNMENT_GRAPH '+JSON.stringify({pids,state:result.state,attempts:attempts.length,from:'C',to:'D',sourceEndpointChanged:true}));
+  await until(async()=>!await hosts[0].request({action:'ref',groupId:group,ref:parentRef}));console.log('REASSIGNMENT_GRAPH '+JSON.stringify({pids,state:result.state,attempts:attempts.length,from:'C',to:'D',allEndpointsReregistered:true,producerCopyLost:true}));
  }finally{for(const h of hosts){try{await h.request({action:'close'});}catch{}h.close();}await r.close();}
 });

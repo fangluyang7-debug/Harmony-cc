@@ -32,7 +32,7 @@ test('paired standalone CPU host automatically qualifies; metadata submission ->
   const connection={address:r.url,certificate:sourceInvite.certificate,fingerprint:sourceInvite.fingerprint,credential:source.credential,domain:'SIMULATED'},request=allotmentTransport(connection);
   const sourceConfig=path.join(dir,'source.json');fs.writeFileSync(sourceConfig,JSON.stringify({connection}),{mode:0o600});
   const input=Buffer.from(JSON.stringify({text:'Hello team\n资源协同'})),requestId=crypto.randomUUID(),metadata={requestId,capability:'text.count.v1',contentHash:hash(input),bytes:input.length};
-  const plan=await request('/v2/jobs',metadata);assert.equal(plan.deviceId,'worker-pc');
+  const plan=await submitWhenAvailable(request,metadata,()=>{});assert.equal(plan.deviceId,'worker-pc');
   assert.ok(plans>0);assert.equal(preflights,0);
   await assert.rejects(request('/v2/jobs',{...metadata,requestId:crypto.randomUUID(),targetId:'unqualified-target'}),/NO_LEGAL_PLAN/);
   await assert.rejects(request('/v2/jobs',{...metadata,requestId:crypto.randomUUID(),budgetMs:0}),/BUDGET_EXHAUSTED/);

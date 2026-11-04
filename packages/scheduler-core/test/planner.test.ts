@@ -210,3 +210,18 @@ describe('D4 DAG critical path and shared resource calendar',()=>{
     r.remainingBudgetMs=300;expect(new WorkflowPlacementPlanner(limits,()=>0).plan(r).suggestionMs).toBe(220);
   });
 });
+
+test('snapshot wait contract rejects mismatches, forecasts and expiry; policy queue does not hold a DAG slot',()=>{
+ const r=fixture();r.snapshotVersion=4;
+ const c=r.nodes[0].candidates[0],queue={value:10,source:'PRIOR',sampledAt:now,ttlMs:100,unit:'ms'};
+ c.queueMs=10;c.computeMs=20;c.availability={targetId:c.targetId,snapshotVersion:4,poolIds:['shared'],reason:'AVAILABLE',policyWait:queue,resourceWait:{...queue,value:0}};
+ for(const node of r.nodes){node.candidates=[c];node.dependencies=[];node.inputs=['input'];}
+ const run=()=>new WorkflowPlacementPlanner(limits,()=>0).plan(r);
+ expect(run().suggestionMs).toBe(50);
+ expect(run().suggestion?.map(a=>a.dagResourceWaitMs)).toEqual([0,20]);
+ c.availability.snapshotVersion++;expect(run().rejections[0].code).toBe('AVAILABILITY_SCOPE_MISMATCH');
+ c.availability.snapshotVersion=4;c.availability.targetId='other';expect(run().suggestion).toBeNull();
+ c.availability.targetId=c.targetId;c.availability.reason='RESOURCE_CAPACITY';c.availability.resourceWait.value=5;
+ expect(run().suggestion).toBeNull();expect(run().rejections[0].retryAfterMs).toBe(5);
+ r.now+=101;expect(run().rejections[0].retryAfterMs).toBeUndefined();
+});

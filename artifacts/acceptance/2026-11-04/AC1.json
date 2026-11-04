@@ -1,0 +1,247 @@
+{
+  "id": "AC1",
+  "title": "App 解耦",
+  "environment": {
+    "startedAt": "2026-11-04T12:39:56.897Z",
+    "node": "v22.18.0",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "commit": "94755dcc404c1c08f53335b0516bea5728bcb192",
+    "dirty": true,
+    "sourceDigest": "b6c0008f506e0aebf634b13a76c7e5a67cd079d0a76197e265b300073db4acf9"
+  },
+  "simulation": {
+    "result": "LISTED_CASES_PASS",
+    "coverage": "S4 摘要覆盖记录的接入前后边界；三条图像路径使用替身编码器。",
+    "suites": [
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "scripts/check-architecture.mjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 4317,
+        "cases": [],
+        "outputSha256": "71fa30ec94b8aefa1c64fdf7e2499d4c3694b95aa569ea9322088afe9347eec9"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "scripts/check-architecture.test.mjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 10591,
+        "cases": [
+          {
+            "name": "pure local export",
+            "result": "PASS"
+          },
+          {
+            "name": "comments are not dependencies",
+            "result": "PASS"
+          },
+          {
+            "name": "node IO import",
+            "result": "PASS"
+          },
+          {
+            "name": "Nest export",
+            "result": "PASS"
+          },
+          {
+            "name": "Prisma dynamic import",
+            "result": "PASS"
+          },
+          {
+            "name": "opaque dynamic import",
+            "result": "PASS"
+          },
+          {
+            "name": "require",
+            "result": "PASS"
+          },
+          {
+            "name": "import equals",
+            "result": "PASS"
+          },
+          {
+            "name": "ambient time",
+            "result": "PASS"
+          },
+          {
+            "name": "random alias",
+            "result": "PASS"
+          },
+          {
+            "name": "random computed",
+            "result": "PASS"
+          },
+          {
+            "name": "environment",
+            "result": "PASS"
+          },
+          {
+            "name": "concrete identity",
+            "result": "PASS"
+          },
+          {
+            "name": "v1 service import",
+            "result": "PASS"
+          },
+          {
+            "name": "v1 package import",
+            "result": "PASS"
+          },
+          {
+            "name": "R21 rejects candidate access, aliases and destructuring outside registered planning/read-only modules",
+            "result": "PASS"
+          },
+          {
+            "name": "R25 rejects literal identities in coordinator and SDK but accepts credential-derived identities",
+            "result": "PASS"
+          },
+          {
+            "name": "CLI rejects R21/R25 violation fixtures in a production-shaped tree",
+            "result": "PASS"
+          },
+          {
+            "name": "production tree passes and CLI exits successfully",
+            "result": "PASS"
+          },
+          {
+            "name": "ArkTS pure core rejects Kit IO and ambient clocks",
+            "result": "PASS"
+          },
+          {
+            "name": "ArkTS dependency scanner resolves ets and forbids client-to-agent/core-to-agent imports",
+            "result": "PASS"
+          },
+          {
+            "name": "ArkTS client and agent cannot hide a dependency through a shared ets bridge",
+            "result": "PASS"
+          },
+          {
+            "name": "real CLI rejects a relative v1 service import and core escape",
+            "result": "PASS"
+          },
+          {
+            "name": "a service cannot hide a v1 dependency behind another workspace package",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "c8c8d6b2bd67178a7f0952ff3fa275874e77965543b84fa39c713cdbaf68c80b"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "scripts/check-s4-core-baseline.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 112,
+        "cases": [],
+        "outputSha256": "c6e744a9c13fe3232438c46497c68252856c3f52dc549cd512aaeb67ce564abd"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/sdk-host.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 35289,
+        "cases": [
+          {
+            "name": "registered App host qualifies and executes SDK work through the shared planner and durable ledger",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "32ab44fd01e4d58befd12f19ef5561624c0bdcdb20df1f938bad8c90df344c2c"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "tests/sdk/native-image-encoder.test.cjs",
+          "tests/sdk/indexer-storage.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 755,
+        "cases": [
+          {
+            "name": "Indexer keeps committed revisions across reopen and isolates the full model space",
+            "result": "PASS"
+          },
+          {
+            "name": "converted artifact is hash-bound; native adapter validates tensors and emits the registered space",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "4d36dff26ba427c49494364baae1d6c79208ac3ff6cf61afce0dd6c871c0d150"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "services/api-server/test/image-search-v2.test.cjs"
+        ],
+        "env": {
+          "HARMONY_IMAGE_TEAM_TEST": "1"
+        },
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 30599,
+        "cases": [
+          {
+            "name": "business session searches pinned vector and image spaces across index activation",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "3e4f04a96e5269917d6853b24a29af4ca680535d06cd4a58dda3baa22d9874b3"
+      }
+    ]
+  },
+  "real": {
+    "result": "NOT_RUN",
+    "pending": [
+      "两个独立 App 同机切换、共享 HAR、真实输入输出。"
+    ]
+  }
+}

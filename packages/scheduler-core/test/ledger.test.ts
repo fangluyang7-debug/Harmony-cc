@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { newLedgerV2, requestGrantV2, installGrantV2, admitV2, occupiedV2, vectorSumV2, recoverLedgerV2 } from '../src/ledger-v2';
+import { RunTimings, newLedgerV2, requestGrantV2, installGrantV2, admitV2, occupiedV2, vectorSumV2, recoverLedgerV2 } from '../src/ledger-v2';
 import { DispatchOfferV2, AllotmentGrantV2 } from '../src/resources-v2';
 const load=(name:string)=>JSON.parse(readFileSync(resolve(__dirname,'../../../contracts/scheduling/v2/fixtures/t2/valid/'+name+'.json'),'utf8'));
 const setup=()=>{
@@ -37,4 +37,46 @@ test('a renewed grant rejects an older offer without reserving resources',()=>{
  state=requestGrantV2(state,'renew',2);state=installGrantV2(state,{...grant,version:grant.version+1,leaseRequestId:'renew'},true,2);
  expect(()=>admitV2(state,offer,{...context,now:3})).toThrow('ALLOTMENT_MISMATCH');
  expect(occupiedV2(state)).toEqual([]);
+});
+
+test('live timings compare like-for-like completed work, expire and never free occupancy',()=>{
+ const {state,offer,context}=setup(),timing=new RunTimings(),entry=admitV2(state,offer,context).entry;
+ entry.record.state='RUNNING';
+ const sample=(t:number)=>timing.sample([entry],t,1000+t,'SIMULATED')![0];
+ expect(sample(1).elapsed.value).toBeNull();
+ timing.start(entry.record.attemptId,10);
+ expect(sample(15).remaining.value).toBeNull();
+ timing.finish({...entry,record:{...entry.record,state:'SUCCEEDED',resourcesSettled:true}},50);
+ timing.start(entry.record.attemptId,100);
+ expect(sample(115).elapsed.value).toBe(15);expect(sample(115).remaining.value).toBe(25);
+ expect(sample(145).remaining.value).toBeNull();expect(entry.record.resourcesSettled).toBe(false);
+ entry.cancelRequested=true;expect(sample(120).remaining.value).toBeNull();
+ entry.cancelRequested=false;entry.offer.task.parameters='different';expect(sample(120).remaining.value).toBeNull();
+ entry.offer.task.parameters=offer.task.parameters;timing.start(entry.record.attemptId,61000);
+ expect(sample(61001).remaining.value).toBeNull();
+});
+
+test('remaining forecast conditions on runs that survived the current elapsed time',()=>{
+ const {state,offer,context}=setup(),timing=new RunTimings(),entry=admitV2(state,offer,context).entry;
+ entry.record.state='RUNNING';
+ const id=entry.record.attemptId;
+ for(const [start,duration] of [[0,10],[20,40],[70,100],[180,120]]){
+  timing.start(id,start);timing.finish({...entry,record:{...entry.record,state:'SUCCEEDED',resourcesSettled:true}},start+duration);
+ }
+ timing.start(id,400);
+ const running=timing.sample([entry],450,1000,'SIMULATED')![0];
+ expect(running.remaining.value).toBe(50);expect(running.history).toEqual({samples:4,survivors:2,p90TotalMs:120,p90RemainingMs:70});
+ const overrun=timing.sample([entry],530,1080,'SIMULATED')![0];
+ expect(overrun.remaining.value).toBeNull();expect(overrun.history?.survivors).toBe(0);
+});
+test('known startup state and verified input size distinguish comparable execution samples',()=>{
+ const {state,offer,context}=setup(),timing=new RunTimings(),entry=admitV2(state,offer,context).entry;
+ const id=entry.record.attemptId;
+ timing.start(id,0,1024,'COLD');timing.finish({...entry,record:{...entry.record,state:'SUCCEEDED',resourcesSettled:true}},50);
+ entry.offer.task.inputs[0].contentHash='b'.repeat(64);
+ const estimate=(size:number,startup:'COLD'|'WARM'|'UNKNOWN')=>{
+  timing.start(id,100,size,startup);return timing.sample([entry],110,1000,'SIMULATED')![0].remaining.value;
+ };
+ expect(estimate(1500,'COLD')).toBe(40);expect(estimate(2048,'COLD')).toBeNull();
+ expect(estimate(1500,'WARM')).toBeNull();expect(estimate(1500,'UNKNOWN')).toBeNull();
 });

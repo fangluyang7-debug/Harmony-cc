@@ -1,0 +1,219 @@
+{
+  "id": "AC4",
+  "title": "资源完整",
+  "environment": {
+    "startedAt": "2026-11-04T12:39:56.897Z",
+    "node": "v22.18.0",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "commit": "94755dcc404c1c08f53335b0516bea5728bcb192",
+    "dirty": true,
+    "sourceDigest": "b6c0008f506e0aebf634b13a76c7e5a67cd079d0a76197e265b300073db4acf9"
+  },
+  "simulation": {
+    "result": "LISTED_CASES_PASS",
+    "coverage": "展示确认覆盖 HTTPS 协议；模拟器页面呈现单独登记。",
+    "suites": [
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/directory.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 23380,
+        "cases": [
+          {
+            "name": "profile evidence, identity and revision are validated; discovery cannot authorize business work",
+            "result": "PASS"
+          },
+          {
+            "name": "battery, temperature, foreground, power and owner signals change eligibility without invented zeros",
+            "result": "PASS"
+          },
+          {
+            "name": "same-device App contribution ceilings are not mistaken for the shared physical budget",
+            "result": "PASS"
+          },
+          {
+            "name": "an overdue non-interruptible shared pool holder has no promised release time",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "712c158101bc25a849775cd556afde0c4f833e8b39bad0e88e9fb9e469e0d028"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/direct-transfers.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 17324,
+        "cases": [
+          {
+            "name": "independent endpoint processes consume single-use scoped grants online and invalidate network epochs",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "bd224c4d1bfc01d3823709cd1fdc158c74a80518f0245836a11e49012326909f"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/display-sessions.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 11006,
+        "cases": [
+          {
+            "name": "only viewer acknowledgement confirms a current lease and version",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "6770c7f2fcf8a722c801bae958380ff07d667bd1767fdd605eb6fc3b2e7fac51"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/planning.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 19057,
+        "cases": [
+          {
+            "name": "pure planning does not touch I/O ports and returns bounded fallback on virtual time",
+            "result": "PASS"
+          },
+          {
+            "name": "device epoch freshness and target authorization affect the decision",
+            "result": "PASS"
+          },
+          {
+            "name": "App-bound candidates require the same authenticated installation even with an explicit target",
+            "result": "PASS"
+          },
+          {
+            "name": "origin sandbox costs zero transfer only for its holder; another holder on the same device pays both relay hops",
+            "result": "PASS"
+          },
+          {
+            "name": "placement follows measured costs across device identifiers d1 and remote",
+            "result": "PASS"
+          },
+          {
+            "name": "placement follows measured costs across device identifiers cloud-runtime and phone_7",
+            "result": "PASS"
+          },
+          {
+            "name": "placement follows measured costs across device identifiers phone_7 and cloud-runtime",
+            "result": "PASS"
+          },
+          {
+            "name": "explicit target is a planner constraint; qualified alternatives cannot bypass it",
+            "result": "PASS"
+          },
+          {
+            "name": "database projection is consistent and preflight rejects changed versions and revocation",
+            "result": "PASS"
+          },
+          {
+            "name": "local result publication stays private only for the authenticated App holder",
+            "result": "PASS"
+          },
+          {
+            "name": "fixed service placement requires the registered origin App holder and matching logical service",
+            "result": "PASS"
+          },
+          {
+            "name": "online slowdown uses a fresh alternate plan and keeps the primary when waiting is faster",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "5589a785078426b89c6822738cf2259372c4bf192aff8eb44e3271e2e0256466"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/workflow.test.cjs"
+        ],
+        "env": {
+          "HARMONY_TEST_BLOCK_BC": "1"
+        },
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 109163,
+        "cases": [
+          {
+            "name": "S5 relay isolation: committed B output crosses relay to C without recomputation",
+            "result": "PASS"
+          },
+          {
+            "name": "status returns durable state while graph progression is busy and notifications coalesce",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "baab4c05c0911046111ce154a5db7feb06bac010182f29a48afd858cc26236a3"
+      }
+    ],
+    "emulator": [
+      {
+        "test": "display",
+        "domain": "SIMULATED",
+        "api": "24",
+        "hapSha256": "0cde5e15add6af98b3c6773ec4b6f6538664604a6d096a1f95d9aaee844333dd",
+        "evidenceSha256": "d1bf1a62fb9913174d0dbffe9aa73cb42603eba215abeaa928db93aaa734cdfd",
+        "cases": [
+          "visible versions 1 and 2",
+          "stale publish refused",
+          "human-action acknowledgement",
+          "revocation clears view",
+          "viewer exit closes lease"
+        ]
+      }
+    ]
+  },
+  "real": {
+    "result": "NOT_RUN",
+    "pending": [
+      "真实温度、电量、链路变化和接收端屏幕确认。"
+    ]
+  }
+}

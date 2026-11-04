@@ -1,3 +1,5 @@
+import {openRaceTiming,noteRace} from './race-timing';
+import {settleBatchCharge} from './batch-ready';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaClient, Prisma } from '../generated/client';
 import {
@@ -14,7 +16,7 @@ export function executionDigest(task:TaskInstanceV2):string {
 /** All methods are internal control-plane operations; HTTP adapters must authenticate first. */
 export class CoordinatorStore {
   constructor(readonly db:PrismaClient,readonly senderInstanceId:string){}
-  async persistOffer(offer:DispatchOfferV2,holderInstanceId:string,message:MessageEnvelopeV2,validateGrant?:(tx:Prisma.TransactionClient)=>Promise<void>):Promise<'CREATED'|'EXISTING'> {
+  async persistOffer(offer:DispatchOfferV2,holderInstanceId:string,message:MessageEnvelopeV2,validateGrant?:(tx:Prisma.TransactionClient)=>Promise<void>,backupOf?:string):Promise<'CREATED'|'EXISTING'> {
     if(!validDispatchOfferV2(offer))throw new Error('ATTEMPT_INVALID');
     const task=offer.task;
     if(!validTaskInstanceV2(task)||!protocolId(holderInstanceId)||!validMessageEnvelopeV2(message,[])||
@@ -35,8 +37,20 @@ export class CoordinatorStore {
       await tx.workflow.upsert({where:{id:task.workflowId},create:{id:task.workflowId,groupId:task.groupId,planRevision:task.planRevision,state:'ACTIVE'},update:{}});
       const nodeId=JSON.stringify([task.workflowId,task.nodeId]);
       const node=await tx.node.findUnique({where:{id:nodeId}});
-      if(node?.currentAttemptId)throw new Error('NODE_HAS_CURRENT_ATTEMPT');
-      await tx.node.upsert({where:{id:nodeId},create:{id:nodeId,workflowId:task.workflowId,currentAttemptId:task.attemptId,state:'OFFERED'},update:{currentAttemptId:task.attemptId,state:'OFFERED'}});
+      if(backupOf){
+        const primary=await tx.attempt.findUnique({where:{id:backupOf}}),prior=primary?.offerJson?JSON.parse(primary.offerJson) as DispatchOfferV2:null;
+        if(!node||node.currentAttemptId!==backupOf||node.winnerAttemptId||node.backupAttemptId||node.state==='COMMITTED'||!prior||
+          !['OFFERED','ACCEPTED','RUNNING'].includes(primary!.state)||prior.target.deviceId===offer.target.deviceId||
+          task.contract.sideEffectPolicy!=='PURE'||task.priority==='REMOTE_BATCH'||!validateGrant)throw Error('BACKUP_SCOPE');
+        const equivalent=(o:DispatchOfferV2)=>{const {attemptId,allowedTargetIds,allowedConfigurations,budget,...logical}=o.task;return canonical([logical,o.dependencies]);};
+        if(equivalent(offer)!==equivalent(prior)||task.budget.deadlineAt>prior.task.budget.deadlineAt)throw Error('BACKUP_SCOPE');
+        await openRaceTiming(tx,task.groupId,nodeId,primary!.recoveryEstimateJson);
+        await tx.node.update({where:{id:nodeId},data:{primaryAttemptId:backupOf,backupAttemptId:task.attemptId}});
+      }else{
+        if(node?.currentAttemptId)throw new Error('NODE_HAS_CURRENT_ATTEMPT');
+        const fields={currentAttemptId:task.attemptId,primaryAttemptId:task.attemptId,backupAttemptId:null,winnerAttemptId:null,state:'OFFERED'};
+        await tx.node.upsert({where:{id:nodeId},create:{id:nodeId,workflowId:task.workflowId,...fields},update:fields});
+      }
       await tx.attempt.create({data:{id:task.attemptId,groupId:task.groupId,workflowId:task.workflowId,nodeId,holderInstanceId,executionDigest:digest,state:'OFFERED',recordJson:null,taskJson:JSON.stringify(task),offerJson:JSON.stringify(offer)}});
       const sequence=await tx.dispatchSequence.upsert({where:{id:this.senderInstanceId},create:{id:this.senderInstanceId,value:1},update:{value:{increment:1}}});
       await tx.outbox.create({data:{id:message.messageId,sequence:sequence.value,groupId:task.groupId,attemptId:task.attemptId,kind:message.type,epoch:message.coordinatorEpoch,messageJson:JSON.stringify({...message,seq:sequence.value})}});
@@ -49,6 +63,7 @@ export class CoordinatorStore {
     await this.db.$transaction(async tx=>{
       const row=await tx.attempt.findUnique({where:{id:record.attemptId}});
       if(!row)throw new Error('ATTEMPT_UNKNOWN');
+      if(row.rejectionJson!==null)throw new Error('ADMISSION_CONFLICT');
       const task=JSON.parse(row.taskJson) as TaskInstanceV2;
       const offer=row.offerJson===null?null:JSON.parse(row.offerJson) as DispatchOfferV2;
       if(offer&&(offer.allotmentId!==record.allotmentId||offer.allotmentVersion!==record.allotmentVersion||offer.target.deviceId!==record.fence.deviceId))throw new Error('ADMISSION_CONFLICT');
@@ -59,8 +74,24 @@ export class CoordinatorStore {
         return;
       }
       await tx.attempt.update({where:{id:row.id},data:{state:'ACCEPTED',recordJson:JSON.stringify(record)}});
-      await tx.node.update({where:{id:row.nodeId},data:{state:'ACCEPTED'}});
+      await tx.node.updateMany({where:{id:row.nodeId,winnerAttemptId:null,currentAttemptId:row.id},data:{state:'ACCEPTED'}});
     });
+  }
+  async recordNodeFailure(tx:Prisma.TransactionClient,nodeId:string,id:string,state:string){
+    const node=await tx.node.findUniqueOrThrow({where:{id:nodeId}});
+    if(node.backupAttemptId&&state==='REJECTED')await noteRace(tx,nodeId,id,false,true);
+    if(node.winnerAttemptId||node.state==='COMMITTED')return;
+    if(node.backupAttemptId){
+      const other=id===node.backupAttemptId?node.primaryAttemptId:node.backupAttemptId;
+      if(other){const sibling=await tx.attempt.findUniqueOrThrow({where:{id:other}});
+        if(['CANCEL_REQUESTED','CANCELLED_SETTLED'].includes(node.state)){
+          if(sibling.state==='REJECTED'||sibling.recordJson&&JSON.parse(sibling.recordJson).resourcesSettled)
+            await tx.node.update({where:{id:nodeId},data:{state:'CANCELLED_SETTLED'}});
+          return;
+        }
+        if(!['FAILED','CANCELLED_SETTLED','YIELDED','REJECTED'].includes(sibling.state))return;}
+    }else if(node.currentAttemptId!==id)return;
+    await tx.node.update({where:{id:nodeId},data:{state}});
   }
   /** Recovery replaces unacknowledged offers with status queries, never new attempts. */
   async recover(epoch:number):Promise<void>{
@@ -143,6 +174,10 @@ export class CoordinatorStore {
       const offer=row.offerJson?JSON.parse(row.offerJson) as DispatchOfferV2:null,task=JSON.parse(row.taskJson) as TaskInstanceV2;
       if(offer&&offer.target.deviceId!==deviceId)throw Error('STATUS_UNAUTHORIZED');
       const old=row.recordJson?JSON.parse(row.recordJson) as AttemptRecordV2:null,record=reply.record;
+      if(row.rejectionJson!==null){
+        if(record!==null)throw Error('ADMISSION_CONFLICT');
+        await tx.outbox.update({where:{id:query.id},data:{acked:true}});return;
+      }
       if(record===null){
         if(old)throw Error('STATUS_RECORD_LOST');
         await tx.attempt.update({where:{id:row.id},data:{state:'HOLDER_RECORD_MISSING'}});
@@ -169,12 +204,13 @@ export class CoordinatorStore {
           }
           await tx.receipt.upsert({where:{id:row.id},create:{id:row.id,attemptId:row.id,recordJson:JSON.stringify(receipt),committed:false},update:{recordJson:JSON.stringify(receipt)}});
         }
+        if(record.resourcesSettled&&!old?.resourcesSettled){const node=await tx.node.findUnique({where:{id:row.nodeId}});if(node?.backupAttemptId)await noteRace(tx,row.nodeId,row.id,false,true);}
         await tx.attempt.update({where:{id:row.id},data:{state:record.state,recordJson:JSON.stringify(record)}});
       }
       await tx.outbox.update({where:{id:query.id},data:{acked:true}});
     });
   }
-  async receive(groupId:string,holderInstanceId:string,receipt:ExecutionReceiptV2,currentEpoch:number):Promise<'COMMITTED'|'RECONCILE'> {
+  async receive(groupId:string,holderInstanceId:string,receipt:ExecutionReceiptV2,currentEpoch:number,resourceHeldMs?:number):Promise<'COMMITTED'|'RECONCILE'> {
     if(!validExecutionReceiptV2(receipt))throw new Error('RECEIPT_INVALID');
     return this.db.$transaction(async tx=>{
       const row=await tx.attempt.findUnique({where:{id:receipt.attemptId}});
@@ -183,7 +219,16 @@ export class CoordinatorStore {
       if(row.holderInstanceId!==holderInstanceId)throw new Error('AUTHORIZATION_DENIED');
       const committed=await tx.receipt.findUnique({where:{id:receipt.attemptId}});
       if(committed?.committed){
-        if(canonical(JSON.parse(committed.recordJson))!==canonical(receipt))throw new Error('RECEIPT_CONFLICT');
+        const prior=JSON.parse(committed.recordJson) as ExecutionReceiptV2;
+        if(canonical({...prior,resourcesSettled:receipt.resourcesSettled})!==canonical(receipt)||prior.resourcesSettled&&!receipt.resourcesSettled)throw new Error('RECEIPT_CONFLICT');
+        if(!prior.resourcesSettled&&receipt.resourcesSettled){
+          if(receipt.coordinatorEpoch!==currentEpoch||!record)return 'RECONCILE';
+          await tx.receipt.update({where:{id:row.id},data:{recordJson:JSON.stringify(receipt)}});
+          await tx.attempt.update({where:{id:row.id},data:{recordJson:JSON.stringify({...record,receipt,resourcesSettled:true})}});
+          const node=await tx.node.findUniqueOrThrow({where:{id:row.nodeId}});
+          if(node.backupAttemptId)await noteRace(tx,row.nodeId,row.id,false,true);
+        }
+        if(receipt.resourcesSettled)await settleBatchCharge(tx,row.id,resourceHeldMs);
         return 'COMMITTED';
       }
       const task=JSON.parse(row.taskJson) as TaskInstanceV2;
@@ -194,24 +239,53 @@ export class CoordinatorStore {
       const currentFence=record&&record.attemptId===receipt.attemptId&&equalFenceV2(record.fence,receipt.fence)&&
         record.coordinatorEpoch===currentEpoch&&receipt.coordinatorEpoch===currentEpoch&&record.planRevision===workflow.planRevision&&receipt.planRevision===workflow.planRevision;
       if(currentFence&&record.resourcesSettled&&record.receipt&&canonical(record.receipt)!==canonical(receipt))throw Error('RECEIPT_CONFLICT');
-      // A confirmed failure settles the mirror immediately, without committing a business result.
-      // Recovery recommendations still do not create or dispatch a new attempt.
-      if(currentFence&&workflow.state==='ACTIVE'&&node.currentAttemptId===row.id&&receipt.resourcesSettled&&['FAILED','CANCELLED_SETTLED','YIELDED'].includes(receipt.state)){
+      const participant=node.currentAttemptId===row.id||!!node.backupAttemptId&&(node.primaryAttemptId===row.id||node.backupAttemptId===row.id);
+      const loser=!!node.winnerAttemptId&&node.winnerAttemptId!==row.id&&participant;
+      const cancelledRace=!!node.backupAttemptId&&!node.winnerAttemptId&&['CANCEL_REQUESTED','CANCELLED_SETTLED'].includes(node.state);
+      if(currentFence&&participant&&(loser||cancelledRace)&&receipt.resourcesSettled){
+        await noteRace(tx,row.nodeId,row.id,false,true);
         await tx.receipt.upsert({where:{id:row.id},create:{id:row.id,attemptId:row.id,recordJson:JSON.stringify(receipt),committed:false},update:{recordJson:JSON.stringify(receipt)}});
         await tx.attempt.update({where:{id:row.id},data:{state:receipt.state,recordJson:JSON.stringify({...record,state:receipt.state,resourcesSettled:true,receipt})}});
-        await tx.node.update({where:{id:row.nodeId},data:{state:receipt.state}});
         await tx.outbox.updateMany({where:{attemptId:row.id},data:{acked:true}});
+        if(cancelledRace){
+          const siblings=await tx.attempt.findMany({where:{id:{in:[node.primaryAttemptId!,node.backupAttemptId!]}}});
+          if(siblings.every(a=>a.state==='REJECTED'||a.recordJson&&JSON.parse(a.recordJson).resourcesSettled))
+            await tx.node.update({where:{id:row.nodeId},data:{state:'CANCELLED_SETTLED'}});
+        }
+        await settleBatchCharge(tx,row.id,resourceHeldMs);
         return 'RECONCILE';
       }
-      if(!record||workflow.state!=='ACTIVE'||node.currentAttemptId!==row.id||!mayCommitReceiptV2(record,receipt,currentEpoch,workflow.planRevision)){
+      // A confirmed failure settles the mirror immediately, without committing a business result.
+      // Recovery recommendations still do not create or dispatch a new attempt.
+      if(currentFence&&workflow.state==='ACTIVE'&&participant&&receipt.resourcesSettled&&['FAILED','CANCELLED_SETTLED','YIELDED'].includes(receipt.state)){
+        await tx.receipt.upsert({where:{id:row.id},create:{id:row.id,attemptId:row.id,recordJson:JSON.stringify(receipt),committed:false},update:{recordJson:JSON.stringify(receipt)}});
+        await tx.attempt.update({where:{id:row.id},data:{state:receipt.state,recordJson:JSON.stringify({...record,state:receipt.state,resourcesSettled:true,receipt})}});
+        if(node.backupAttemptId)await noteRace(tx,row.nodeId,row.id,false,true);
+        await this.recordNodeFailure(tx,row.nodeId,row.id,receipt.state);
+        await tx.outbox.updateMany({where:{attemptId:row.id},data:{acked:true}});
+        await settleBatchCharge(tx,row.id,resourceHeldMs);
+        return 'RECONCILE';
+      }
+      if(!record||workflow.state!=='ACTIVE'||!participant||loser||cancelledRace||!mayCommitReceiptV2(record,receipt,currentEpoch,workflow.planRevision)){
         // Preserve evidence for reconciliation; an old epoch is not a new execution grant.
         await tx.receipt.upsert({where:{id:receipt.attemptId},create:{id:receipt.attemptId,attemptId:row.id,recordJson:JSON.stringify(receipt),committed:false},update:{}});
         return 'RECONCILE';
       }
+      if(node.backupAttemptId){
+        await noteRace(tx,row.nodeId,row.id,true,receipt.resourcesSettled);
+        const job=await tx.cpuJob.findUnique({where:{id:row.id}});
+        const expected=job&&JSON.parse(job.metadataJson).output;
+        if(!expected||job.groupId!==groupId||job.principalId!==task.app.principalId||expected.groupId!==groupId||
+          expected.ownerPrincipalId!==task.app.principalId||receipt.outputs.length!==1||
+          !task.contract.outputSchemas.includes(expected.ref.schemaId)||canonical(expected.ref)!==canonical(receipt.outputs[0]))throw Error('RACE_OUTPUT_SCOPE');
+      }
       await tx.receipt.upsert({where:{id:receipt.attemptId},create:{id:receipt.attemptId,attemptId:row.id,recordJson:JSON.stringify(receipt),committed:true},update:{committed:true,recordJson:JSON.stringify(receipt)}});
       await tx.attempt.update({where:{id:row.id},data:{state:receipt.state,recordJson:JSON.stringify({...record,state:receipt.state,resourcesSettled:receipt.resourcesSettled,receipt})}});
-      await tx.node.update({where:{id:row.nodeId},data:{state:'COMMITTED'}});
+      await tx.node.update({where:{id:row.nodeId},data:{state:'COMMITTED',currentAttemptId:row.id,winnerAttemptId:row.id}});
+      const other=row.id===node.backupAttemptId?node.primaryAttemptId:node.backupAttemptId;
+      if(other)await tx.cpuJob.updateMany({where:{id:other,state:{in:['DISPATCHING','DISPATCHED']}},data:{state:'CANCEL_REQUESTED'}});
       await tx.outbox.updateMany({where:{attemptId:row.id},data:{acked:true}});
+      if(receipt.resourcesSettled)await settleBatchCharge(tx,row.id,resourceHeldMs);
       return 'COMMITTED';
     });
   }

@@ -51,6 +51,7 @@ test('browser spaces persist, isolate roles and operate a paired CPU host with a
   assert.equal((await owner('/'+group+'/devices/'+deviceId,{settings:{...settings,ownerMode:'paused'}})).status,200);
   await until(async()=>((await owner('/'+group)).body.devices[0].profile.ownerActivity.value==='ACTIVE'));
   const blocked=await guest('/'+group+'/jobs',{requestId:crypto.randomUUID(),capability:'text.count.v1',input:{text:'paused'}});assert.equal(blocked.body.error,'NO_LEGAL_PLAN');
+  const gpu=await owner('/'+group+'/devices',{name:'PC-B',settings:{...settings,maxVramBytes:1073741824}});assert.equal(gpu.status,200);assert.equal(gpu.body.contribution.maxVramBytes,1073741824);
   await owner('/logout',{});assert.equal((await owner('/me')).status,401);
   assert.equal((await owner('/login',{account,password:'wrong-password'})).status,400);
   assert.equal((await owner('/login',{account,password:'test-password-123'})).status,200);

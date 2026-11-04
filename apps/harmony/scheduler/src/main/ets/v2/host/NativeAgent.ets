@@ -1,3 +1,4 @@
+import { encodeImage } from './ImageEncoder';
 import { NativePeerLinks } from '../platform/NativePeerLinks';
 import { HarmonySdkPort } from '../client/HarmonySdkPort';
 import { SchedulerSdk, SdkInput } from '../client/SchedulerSdk';
@@ -6,16 +7,16 @@ import { AppIdentityV2 } from '../protocol/SchedulingProtocolV2';
 import { common } from '@kit.AbilityKit';
 import { webSocket, http } from '@kit.NetworkKit';
 import { hilog, hidebug } from '@kit.PerformanceAnalysisKit';
-import { power } from '@kit.BasicServicesKit';
+import { batteryInfo, power, thermal } from '@kit.BasicServicesKit';
 import { cropImage } from './ImageCrop';
 import { NativeTrace } from './NativeTrace';
 import { AgentStoreV2, AgentSnapshotV2, AgentChangeV2 } from '../agent/AgentStoreV2';
 import { AgentJournalV2, agentMessageV2, bindAgentJournalV2, receiveAgentMessageV2, validateAgentOfferV2, statusPayloadV2 } from '../agent/AgentJournalV2';
-import { newLedgerV2, requestGrantV2, installGrantV2, admitV2, startAttemptV2, cancelAttemptV2, settleAttemptV2, occupiedV2, LedgerEntryV2 } from '../core/LedgerV2';
+import { RunTimings, newLedgerV2, requestGrantV2, installGrantV2, admitV2, startAttemptV2, cancelAttemptV2, settleAttemptV2, occupiedV2, LedgerEntryV2 } from '../core/LedgerV2';
 import { canonical } from '../core/CanonicalV2';
-import { ResourceAmountV2, DispatchOfferV2, AllotmentGrantV2, AllotmentAckV2, DeviceProfileV2, NumericSampleV2, StateSampleV2, ExecutorV2, CapabilityPackV2, ExecutionConfigV2, CapabilityAdmissionV2, validCapabilityAdmissionV2, PoolV2, CreditV2, ModelManifestV2, ExecutionReportV2, AdmissionReplyV2, YieldNoticeV2, LinkV2, validDeviceProfileV2 } from '../protocol/ResourcesV2';
+import { ResourceAmountV2, DispatchOfferV2, AllotmentGrantV2, AllotmentAckV2, DeviceProfileV2, NumericSampleV2, StateSampleV2, ExecutorV2, CapabilityPackV2, ExecutionConfigV2, CapabilityAdmissionV2, validCapabilityAdmissionV2, PoolV2, ModelManifestV2, ExecutionReportV2, AdmissionReplyV2, YieldNoticeV2, LinkV2, validDeviceProfileV2 } from '../protocol/ResourcesV2';
 import { MessageEnvelopeV2, TraceSpanV2, TaskContractV2, TargetV2, AttemptRecordV2, ExecutionReceiptV2, ArtifactRefV2, validMessageEnvelopeV2 } from '../protocol/SchedulingProtocolV2';
-import { MicroQueueV2 } from '../core/MicroQueueV2';
+import { MicroQueueV2, QueueHistory } from '../core/MicroQueueV2';
 import { NativeDatabase, NativeTransport, Bootstrap, Paired, Installation, Contribution, bytes, text, hash, factory, monotonic, base64 } from './NativePlatform';
 class HostChange implements AgentChangeV2 {
  private action:(snapshot:AgentSnapshotV2)=>void;
@@ -23,6 +24,8 @@ class HostChange implements AgentChangeV2 {
  apply(snapshot:AgentSnapshotV2):void{this.action(snapshot);}
 }
 interface ExecutionControl {cancel:boolean;settled:boolean;}
+interface DisplayInvite {viewerHolderId:string;leaseMs:number;}
+interface DisplayMutation {version?:number;text?:string;}
 interface AppPolicy {identity:AppIdentityV2;offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
 export interface ReferenceCase {id:string;input:string;parameters:string;config:ExecutionConfigV2;maxOutputBytes:number;}
 export interface ReferencePack {manifest:CapabilityPackV2;digest:string;cases:ReferenceCase[];}
@@ -46,7 +49,7 @@ interface Probe {relayId:string;padding:string;}
 interface Observation {bytes:number;durationMs:number;}
 interface ProtocolError {version:number;code:string;retryable:boolean;messageId:string;}
 interface TraceBatch {spans:TraceSpanV2[];}
-interface QueueWaiter {resolve:()=>void;reject:(error:Error)=>void;}
+interface QueueWaiter {workflowId:string;resolve:()=>void;reject:(error:Error)=>void;}
 interface PairInput {inviteId:string;code:string;holderInstanceId:string;}
 interface HelloPayload {versions:number[];extensions:Object[];}
 function helloPayload():HelloPayload{return {versions:[2],extensions:[]};}
@@ -92,14 +95,34 @@ export class NativeAgent {
  private offered=new Set<string>();
  private queue:MicroQueueV2;
  private waiting=new Map<string,QueueWaiter>();
- private waitReasons=new Map<string,Set<string>>();
+ private waitReasons=new Map<string,QueueHistory>();
  private launching=false;
+ private timings=new RunTimings();
  private queueStarted=new Set<string>();
  private links:LinkV2[]=[];
  private costs=new Map<string,number>();
  private totalRam:number|null=null;
  private availableRam:number|null=null;
  private powerSaving:string|null=null;
+ private batteryPercent:number|null=null;
+ private charging:string|null=null;
+ private thermalLevel:number|null=null;
+ private energyGate:string|null=null;
+ private sampleEnergy():void{
+  try{const soc=batteryInfo.batterySOC;this.batteryPercent=Number.isFinite(soc)&&soc>=0&&soc<=100?soc:null;}catch(e){this.batteryPercent=null;}
+  try{
+   const status=batteryInfo.chargingStatus;
+   this.charging=status===batteryInfo.BatteryChargeState.ENABLE||status===batteryInfo.BatteryChargeState.FULL?'CHARGING':
+    status===batteryInfo.BatteryChargeState.DISABLE||status===batteryInfo.BatteryChargeState.NONE?'NOT_CHARGING':null;
+  }catch(e){this.charging=null;}
+  try{const level=thermal.getLevel();this.thermalLevel=level>=thermal.ThermalLevel.COOL&&level<=thermal.ThermalLevel.ESCAPE?level:null;}catch(e){this.thermalLevel=null;}
+  let low=false;
+  try{const level=batteryInfo.batteryCapacityLevel;low=level===batteryInfo.BatteryCapacityLevel.LEVEL_LOW||level===batteryInfo.BatteryCapacityLevel.LEVEL_WARNING||level===batteryInfo.BatteryCapacityLevel.LEVEL_CRITICAL;}catch(e){}
+  if(this.thermalLevel!==null&&this.thermalLevel>=thermal.ThermalLevel.OVERHEATED)this.energyGate='THERMAL_LIMIT';
+  else if(this.powerSaving==='ON')this.energyGate='POWER_SAVE';
+  else if(low&&this.charging==='NOT_CHARGING')this.energyGate='LOW_BATTERY';
+  else this.energyGate=null;
+ }
  private constructor(context:common.UIAbilityContext,db:NativeDatabase,store:AgentStoreV2,transport:NativeTransport,installation:Installation,packs:ReferencePack[]){this.context=context;this.db=db;this.store=store;this.transport=transport;this.installation=installation;this.packs=packs;this.contribution=JSON.parse(JSON.stringify(installation.bootstrap.contribution)) as Contribution;this.queue=new MicroQueueV2(installation.paired.peer.deviceId,{shares:[.5,.3,.2],agingMs:1000,maxConsecutive:2,yieldDeadlineMs:1000});}
  static async start(context:common.UIAbilityContext,bootstrap:Bootstrap|null,lifecycleForeground:()=>boolean=()=>true,registered:Installation|null=null,services:NativeServiceAdapter[]=[]):Promise<NativeAgent>{
   if(NativeAgent.starting)throw Error('HOST_ALREADY_STARTED');NativeAgent.starting=true;
@@ -132,6 +155,16 @@ export class NativeAgent {
   agent.lifecycleForeground=lifecycleForeground;agent.foreground=lifecycleForeground();await agent.restorePreferences();agent.timer=setInterval(()=>{void agent.tick().catch((e:Error)=>agent.error(e as Error));},2000);await agent.tick();return agent;
  }
  isConnected():boolean{return this.ready&&!this.stopped;}
+ displayHolderId():string{return this.installation.paired.peer.holderInstanceId;}
+ async displayInbox():Promise<Object>{return this.transport.json('/v2/display');}
+ async displayInvite(viewerHolderId:string):Promise<Object>{
+  const invite:DisplayInvite={viewerHolderId,leaseMs:300000};
+  return this.transport.json('/v2/display',invite);
+ }
+ async displaySession(id:string,action:string='',body:DisplayMutation={}):Promise<Object>{
+  if(!/^[a-zA-Z0-9-]{1,100}$/.test(id)||!['','accept','leave','publish','shown','revoke'].includes(action))throw Error('DISPLAY_ROUTE_INVALID');
+  return this.transport.json('/v2/display/'+id+(action?'/'+action:''),action?body:null);
+ }
  async sdk():Promise<SchedulerSdk>{
   if(this.policy===null||this.inputs===null)throw Error('APP_HOST_REQUIRED');
   const port=await HarmonySdkPort.open(this.context,this.installation.bootstrap.invitation,this.installation.paired.credential);
@@ -149,7 +182,7 @@ export class NativeAgent {
  async configure(cpu:number,memoryMB:number):Promise<void>{const next:Contribution={ownerMode:'dedicated',maxCpuThreads:cpu,maxMemoryBytes:memoryMB*1048576,reserveMemoryBytes:this.contribution.reserveMemoryBytes};if(!this.withinCeiling(next))throw Error('CONTRIBUTION_EXCEEDS_PAIRED_CEILING');this.contribution=next;await this.db.put('contribution',JSON.stringify(next));this.showPreferences();await this.tick();}
  async setEnabled(value:boolean):Promise<void>{this.enabled=value;await this.db.put('contribution-enabled',String(value));if(!value)await this.yield();this.showPreferences();if(this.ready)await this.profile();}
  private idle():boolean{return this.foreground&&this.lifecycleForeground()&&this.enabled&&!this.paused;}
- private limits():ResourceAmountV2[]{const p=this.contribution,used=occupiedV2(this.store.read().state).find(x=>x.resourcePoolId==='ram')?.amount??0;return [{resourcePoolId:'cpu',amount:this.idle()?p.maxCpuThreads:0},{resourcePoolId:'ram',amount:this.idle()&&this.availableRam!==null?Math.min(p.maxMemoryBytes,used+Math.max(0,this.availableRam-p.reserveMemoryBytes)):0}];}
+ private limits():ResourceAmountV2[]{const available=this.idle()&&this.energyGate===null,p=this.contribution,used=occupiedV2(this.store.read().state).find(x=>x.resourcePoolId==='ram')?.amount??0;return [{resourcePoolId:'cpu',amount:available?p.maxCpuThreads:0},{resourcePoolId:'ram',amount:available&&this.availableRam!==null?Math.min(p.maxMemoryBytes,used+Math.max(0,this.availableRam-p.reserveMemoryBytes)):0}];}
  private enqueue(s:AgentSnapshotV2,type:string,payload:Object,ackOf:string|null=null):MessageEnvelopeV2 {const m=agentMessageV2(s.journal,s.state.groupId,s.state.holderInstanceId,type,payload,factory,ackOf);s.journal.outbox.push(m);return m;}
  private async flush():Promise<void>{if(this.socket===null)return;for(const m of this.store.read().journal.outbox){if(!this.welcomed&&m.type!=='Hello'||this.sent.has(m.messageId))continue;this.sent.add(m.messageId);await this.socket.send(JSON.stringify(m));if(m.type==='Ack')await this.store.change(new HostChange(s=>{s.journal.outbox=s.journal.outbox.filter(x=>x.messageId!==m.messageId);}));}}
  private async connect():Promise<void>{
@@ -189,16 +222,24 @@ export class NativeAgent {
  }
  private async ackQuota():Promise<void>{const state=this.store.read().state,g=state.grant;if(g===null)return;const ack:AllotmentAckV2={allotmentId:g.allotmentId,holderInstanceId:state.holderInstanceId,ledgerEpoch:g.ledgerEpoch,coordinatorEpoch:g.coordinatorEpoch,version:g.version,persisted:true,settlementSeq:state.settlementSeq,occupied:occupiedV2(state)};const signed:SignedAck={ack,signature:await this.transport.ackSignature(ack)};await this.transport.json('/v2/allotments/ack',signed);}
  private sample(value:number|null,unit:string,source:string='PRIOR'):NumericSampleV2{return {value,unit,source:value===null?'UNKNOWN':source,sampledAt:this.transport.now(),ttlMs:15000};}
- private status(value:string|null):StateSampleV2{return {value,unit:'state',source:value===null?'UNKNOWN':'PRIOR',sampledAt:this.transport.now(),ttlMs:15000};}
- private credits(limits:ResourceAmountV2[],used:ResourceAmountV2[]):CreditV2[]{const demands=new Map<string,ResourceAmountV2[]>();for(const priority of ['ORIGIN_INTERACTIVE','REMOTE_INTERACTIVE','REMOTE_BATCH'])demands.set(priority,this.packs[0].manifest.resourceLimit);return this.queue.credits(demands,limits,used,this.idle());}
- private executors():ExecutorV2[]{return this.packs.map(pack=>({target:{targetId:'harmony-'+hash(bytes(this.installation.paired.peer.holderInstanceId+':'+pack.manifest.contract.capability)).slice(0,32),deviceId:this.installation.paired.peer.deviceId,executorId:'harmony.cpu.v1',executorVersion:'1',backend:pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:['cpu','ram'],stableExecutionId:'harmony.cpu.v1'},contract:pack.manifest.contract,model:null,resources:pack.manifest.resourceLimit,configurations:[pack.cases[0].config],compute:this.sample(this.costs.get(pack.manifest.contract.capability)??null,'ms',this.installation.bootstrap.domain==='REAL'?'MEASURED':'SIMULATED'),queue:this.sample(0,'ms'),cold:this.sample(0,'ms'),publish:this.sample(0,'ms'),uncertainty:this.sample(0,'ms')} as ExecutorV2));}
+ private status(value:string|null,source:string='PRIOR'):StateSampleV2{return {value,unit:'state',source:value===null?'UNKNOWN':source,sampledAt:this.transport.now(),ttlMs:15000};}
+ private executors():ExecutorV2[]{return this.packs.map((pack:ReferencePack):ExecutorV2=>{
+  const encoder=pack.manifest.contract.capability==='image.encode.v1';
+  const executorId=encoder?'harmony.image.cpu.v1':'harmony.cpu.v1';
+  const resources=pack.manifest.resourceLimit.filter((r:ResourceAmountV2)=>!encoder||r.resourcePoolId==='cpu'||r.resourcePoolId==='ram');
+  return {target:{targetId:'harmony-'+hash(bytes(this.installation.paired.peer.holderInstanceId+':'+pack.manifest.contract.capability)).slice(0,32),deviceId:this.installation.paired.peer.deviceId,executorId,executorVersion:'1',backend:pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:['cpu','ram'],stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,resources,configurations:[pack.cases[0].config],compute:this.sample(this.costs.get(pack.manifest.contract.capability)??null,'ms',this.installation.bootstrap.domain==='REAL'?'MEASURED':'SIMULATED'),queue:this.sample(0,'ms'),cold:this.sample(0,'ms'),publish:this.sample(0,'ms'),uncertainty:this.sample(0,'ms')} as ExecutorV2;});}
   private async profile():Promise<void>{
   await this.store.change(new HostChange(s=>{
    if(s.journal.outbox.some(m=>m.type==='DeviceProfile'))return;const used=occupiedV2(s.state),limits=this.limits();
+   const executors=this.executors();
+   const sampleSource=this.installation.bootstrap.domain==='REAL'?'MEASURED':'SIMULATED';
    const profile:DeviceProfileV2={deviceId:s.state.deviceId,deviceInstanceId:this.instance,holderInstanceId:s.state.holderInstanceId,ledgerEpoch:s.state.ledgerEpoch,sequence:s.journal.sequence+1,domain:this.installation.bootstrap.domain,
-    ownerActivity:this.status(this.idle()?'IDLE':'ACTIVE'),foreground:this.status(this.foreground&&this.lifecycleForeground()?'FOREGROUND':'BACKGROUND'),charging:this.status(null),powerSave:this.status(this.powerSaving),battery:this.sample(null,'percent'),temperature:this.sample(null,'level'),
+    ownerActivity:this.status(this.idle()?'IDLE':'ACTIVE'),foreground:this.status(this.foreground&&this.lifecycleForeground()?'FOREGROUND':'BACKGROUND'),charging:this.status(this.charging,sampleSource),powerSave:this.status(this.powerSaving,sampleSource),battery:this.sample(this.batteryPercent,'percent',sampleSource),temperature:this.sample(this.thermalLevel,'level',sampleSource),
     pools:limits.map((r:ResourceAmountV2):PoolV2=>({resourcePoolId:r.resourcePoolId,kind:r.resourcePoolId==='cpu'?'CPU_SLOTS':'RAM_BYTES',exclusive:false,total:this.sample(r.resourcePoolId==='cpu'?this.contribution.maxCpuThreads:this.totalRam,r.resourcePoolId==='cpu'?'slots':'bytes',r.resourcePoolId==='cpu'?'PRIOR':this.installation.bootstrap.domain==='REAL'?'MEASURED':'SIMULATED'),ownerReserved:0,contributionLimit:r.resourcePoolId==='cpu'?this.contribution.maxCpuThreads:this.contribution.maxMemoryBytes,admissionLimit:this.sample(r.amount,r.resourcePoolId==='cpu'?'slots':'bytes'),occupied:this.sample(used.find(x=>x.resourcePoolId===r.resourcePoolId)?.amount??0,r.resourcePoolId==='cpu'?'slots':'bytes'),draining:(used.find(x=>x.resourcePoolId===r.resourcePoolId)?.amount??0)>r.amount,drainMs:this.sample(null,'ms')})),
-    executors:this.executors(),links:this.links,credits:this.credits(limits,used)};
+    executors:executors,links:this.links,credits:this.queue.capacityCredits(executors.map(e=>e.resources),limits,used,this.idle())};
+   if(this.energyGate!==null)profile.energyGate=this.energyGate;
+   const queued=this.queue.queuedFacts(monotonic(),this.transport.now(),profile.domain);if(queued!==undefined)profile.queued=queued;
+   const facts=this.timings.sample(s.state.entries,monotonic(),this.transport.now(),profile.domain);if(facts!==undefined)profile.inFlight=facts;
    if(!validDeviceProfileV2(profile))throw Error('PROFILE_INVALID');this.enqueue(s,'DeviceProfile',profile);
   }));await this.flush();
  }
@@ -223,27 +264,34 @@ export class NativeAgent {
  }
  private async tick():Promise<void>{
   if(this.stopped||this.refreshing)return;if(this.foreground!==this.lifecycleForeground())this.setForeground(this.lifecycleForeground());this.refreshing=true;
-  try{try{const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;this.availableRam=Number(memory.availableMem)*1024;}catch(e){this.totalRam=null;this.availableRam=null;}try{const mode=power.getPowerMode();this.powerSaving=mode===power.DevicePowerMode.MODE_NORMAL||mode===power.DevicePowerMode.MODE_PERFORMANCE?'OFF':'ON';}catch(e){this.powerSaving=null;}await this.connect();if(!this.ready)return;void this.peerLinks?.sample().catch((e:Error)=>{this.peerLinks?.invalidate();this.error(e);});const reply:Settings=this.policy===null?await this.transport.json('/v2/device-settings',{} as Record<string,Object>) as Settings:{settings:null};const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
+  try{try{const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;this.availableRam=Number(memory.availableMem)*1024;}catch(e){this.totalRam=null;this.availableRam=null;}try{const mode=power.getPowerMode();this.powerSaving=mode===power.DevicePowerMode.MODE_NORMAL||mode===power.DevicePowerMode.MODE_PERFORMANCE?'OFF':'ON';}catch(e){this.powerSaving=null;}this.sampleEnergy();await this.connect();if(!this.ready)return;void this.peerLinks?.sample().catch((e:Error)=>{this.peerLinks?.invalidate();this.error(e);});const reply:Settings=this.policy===null?await this.transport.json('/v2/device-settings',{} as Record<string,Object>) as Settings:{settings:null};const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
    await this.pollCancellation();this.pumpQueue();try{await this.renew();}catch(e){this.error(e as Error);}if(this.links.length===0||this.links[0].fixedMs.sampledAt+10000<this.transport.now())await this.probeLinks();await this.profile();this.pumpQueue();if(this.idle())void this.calibrate().catch((e:Error)=>this.error(e as Error));
   }finally{this.refreshing=false;}
  }
  setForeground(foreground:boolean):void {this.foreground=foreground;void (async()=>{if(!foreground)await this.yield();if(this.ready)await this.profile();})().catch((e:Error)=>this.error(e as Error));}
  private async yield():Promise<void>{await this.store.change(new HostChange(s=>{for(const id of this.running){const entry=s.state.entries.find(e=>e.record.attemptId===id);if(!entry||entry.record.resourcesSettled||entry.cancelRequested)continue;s.state=cancelAttemptV2(s.state,id);const notice:YieldNoticeV2={attemptId:id,kind:'RESTART',releaseMs:this.sample(null,'ms'),checkpoint:null,reasonCode:'OWNER_ACTIVE'};this.enqueue(s,'YieldNotice',notice);}}));await this.flush();}
  private digest(offer:DispatchOfferV2):string{const t=offer.task;const value:TaskDigest={inputs:t.inputs,contract:t.contract,parameters:t.parameters,allowedTargetIds:t.allowedTargetIds,allowedConfigurations:t.allowedConfigurations};return hash(bytes(canonical(value)));}
- private report(s:AgentSnapshotV2,receipt:ExecutionReceiptV2):void{const record=s.state.entries.find(e=>e.record.attemptId===receipt.attemptId)!.record;const report:ExecutionReportV2={receipt,allotmentId:record.allotmentId,allotmentVersion:record.allotmentVersion,leaseId:record.leaseId,actualModel:null,timings:[]};this.enqueue(s,'ExecutionReceipt',report);}
- private waitTurn(offer:DispatchOfferV2):Promise<void>{this.waitReasons.set(offer.task.attemptId,new Set<string>());const queued=JSON.parse(JSON.stringify(offer)) as DispatchOfferV2;queued.task.budget.deadlineAt=monotonic()+Math.max(0,offer.task.budget.deadlineAt-this.transport.now());this.queue.enqueue(queued,monotonic());return new Promise<void>((resolve,reject)=>{this.waiting.set(offer.task.attemptId,{resolve,reject});this.pumpQueue();});}
+ private report(s:AgentSnapshotV2,receipt:ExecutionReceiptV2,resourceHeldMs?:number):void{const entry=s.state.entries.find(e=>e.record.attemptId===receipt.attemptId)!;const record=entry.record;
+  const actualModel=receipt.state==='SUCCEEDED'&&entry.offer.target.executorId==='harmony.image.cpu.v1'?JSON.parse(entry.offer.task.parameters) as ModelManifestV2:null;const report:ExecutionReportV2={receipt,allotmentId:record.allotmentId,allotmentVersion:record.allotmentVersion,leaseId:record.leaseId,actualModel,timings:[]};if(resourceHeldMs!==undefined)report.resourceHeldMs=resourceHeldMs;this.enqueue(s,'ExecutionReceipt',report);}
+ private waitTurn(offer:DispatchOfferV2):Promise<void>{this.waitReasons.set(offer.task.attemptId,new QueueHistory());const queued=JSON.parse(JSON.stringify(offer)) as DispatchOfferV2;queued.task.budget.deadlineAt=monotonic()+Math.max(0,offer.task.budget.deadlineAt-this.transport.now());this.queue.enqueue(queued,monotonic());return new Promise<void>((resolve,reject)=>{this.waiting.set(offer.task.attemptId,{workflowId:offer.task.workflowId,resolve,reject});this.pumpQueue();});}
  private pumpQueue():void{
   for(const id of this.queue.expired(monotonic())){this.queue.removeWaiting(id);this.waiting.get(id)?.reject(Error('QUEUE_STARVED'));this.waiting.delete(id);}
-  if(this.launching||!this.ready||!this.idle()){const reason=!this.ready?'CONTROL_UNAVAILABLE':!this.idle()?'OWNER_ACTIVE':'ADMISSION_SERIALIZATION';this.waiting.forEach((_waiter:QueueWaiter,id:string)=>{this.waitReasons.get(id)?.add(reason);});return;}
-  const limits=this.limits(),occupied=occupiedV2(this.store.read().state),chosen=this.queue.choose(limits,occupied,monotonic(),this.idle());
-  for(const observation of this.queue.waitingReasons(limits,occupied,this.idle(),chosen?.task.attemptId??null))this.waitReasons.get(observation.attemptId)?.add(observation.reasonCode);
+  const state=this.store.read().state;
+  if(this.launching||!this.ready||!this.idle()){const reason=!this.ready?'CONTROL_UNAVAILABLE':!this.idle()?'OWNER_ACTIVE':'ADMISSION_SERIALIZATION';this.waiting.forEach((_waiter:QueueWaiter,id:string)=>{this.queue.noteWait(id,reason);this.waitReasons.get(id)?.observe(monotonic(),reason,[],state.entries,_waiter.workflowId);});return;}
+  const limits=this.limits(),occupied=occupiedV2(state),chosen=this.queue.choose(limits,occupied,monotonic(),this.idle());
+  for(const observation of this.queue.waitingReasons(limits,occupied,this.idle(),chosen?.task.attemptId??null)){
+   this.queue.noteWait(observation.attemptId,observation.reasonCode);
+   const waiter=this.waiting.get(observation.attemptId);if(waiter)this.waitReasons.get(observation.attemptId)?.observe(monotonic(),observation.reasonCode,observation.resourcePoolIds,state.entries,waiter.workflowId);
+  }
   if(chosen===null)return;
-  const waiter=this.waiting.get(chosen.task.attemptId);if(waiter!==undefined){this.launching=true;this.waiting.delete(chosen.task.attemptId);waiter.resolve();}
+  const waiter=this.waiting.get(chosen.task.attemptId);if(waiter!==undefined){this.queue.noteWait(chosen.task.attemptId,'ADMISSION_SERIALIZATION');this.waitReasons.get(chosen.task.attemptId)?.observe(monotonic(),'SELECTED',[],state.entries,waiter.workflowId);this.launching=true;this.waiting.delete(chosen.task.attemptId);waiter.resolve();}
  }
  private async dispatch(message:MessageEnvelopeV2):Promise<void>{
   const offer=validateAgentOfferV2(message,this.installation.paired.peer.deviceId),id=offer.task.attemptId;
   if(this.offered.has(id))return;this.offered.add(id);
   try{
+   const rejected=this.store.read().journal.rejected?.find(r=>r.attemptId===id);
+   if(rejected)throw Error(rejected.digest===factory.digest(canonical(offer))?rejected.reason:'ATTEMPT_CONFLICT');
    const old=this.store.read().state.entries.find(e=>e.record.attemptId===id);
    if(old){
     if(canonical(old.offer)!==canonical(offer)||old.record.executionDigest!==this.digest(offer)){await this.store.change(new HostChange(s=>{const p:ProtocolError={version:2,code:'ATTEMPT_CONFLICT',retryable:false,messageId:message.messageId};this.enqueue(s,'ProtocolError',p);}));await this.flush();return;}
@@ -256,13 +304,20 @@ export class NativeAgent {
    const evidence=await this.transport.json('/v2/qualification/'+offer.target.targetId) as Qualification;
    const local=this.executors().find(e=>e.target.targetId===offer.target.targetId);const a=evidence.admission;
    if(local===undefined||!validCapabilityAdmissionV2(a)||a.domain!==this.installation.bootstrap.domain||a.groupId!==offer.task.groupId||a.holderInstanceId!==this.installation.paired.peer.holderInstanceId||!['CANARY','ACTIVE'].includes(a.state)||a.quality.value===null||a.quality.sampledAt+a.quality.ttlMs<=this.transport.now()||canonical(evidence.executor.target)!==canonical(local.target)||canonical(local.contract)!==canonical(offer.task.contract)||canonical(local.resources)!==canonical(offer.resources)||a.identity!==this.executorDigest(local)||offer.allowedConfigs.some(c=>!local.configurations.some(config=>canonical(config)===canonical(c))))throw Error('CAPABILITY_NOT_QUALIFIED');
-   const trace=new NativeTrace(offer,message.traceId,authorization.snapshotVersion,this.instance);const reasons=this.waitReasons.get(id),reason=reasons===undefined||reasons.size===0?null:reasons.size>1?'OBSERVED_MIXED_WAIT':'OBSERVED_'+Array.from(reasons)[0];trace.add('QUEUE',queueStart,queueEnd,reason);await trace.segment('ADMIT',()=>this.admit(offer,message,true));this.queue.start(id,monotonic());this.queueStarted.add(id);this.launching=false;this.pumpQueue();this.running.add(id);await this.flush();await this.execute(offer,authorization.inputTicket,null,trace);
+   const trace=new NativeTrace(offer,message.traceId,authorization.snapshotVersion,this.instance);const history=this.waitReasons.get(id),reasons=history?.reasons,reason=reasons===undefined||reasons.size===0?null:reasons.size>1?'OBSERVED_MIXED_WAIT':'OBSERVED_'+Array.from(reasons)[0];trace.add('QUEUE',queueStart,queueEnd,reason,history?.samples);await trace.segment('ADMIT',()=>this.admit(offer,message,true));this.queue.start(id,monotonic());this.queueStarted.add(id);this.launching=false;this.pumpQueue();this.running.add(id);await this.flush();await this.execute(offer,authorization.inputTicket,null,trace);
    try{await this.store.change(new HostChange(s=>{this.enqueue(s,'TraceBatch',{spans:trace.spans} as TraceBatch);}));await this.flush();}catch(e){}
   }catch(e){
-   if(!this.store.read().state.entries.some(x=>x.record.attemptId===id)){const reason=/^[A-Z_0-9:]+$/.test((e as Error).message)?(e as Error).message:'EXECUTION_REJECTED';await this.store.change(new HostChange(s=>{receiveAgentMessageV2(s.journal,message,s.state.groupId,factory);const reply:AdmissionReplyV2={attemptId:id,holderInstanceId:s.state.holderInstanceId,status:'REJECTED',reasonCode:reason,record:null,wait:this.sample(null,'ms')};this.enqueue(s,'AdmissionReply',reply,message.messageId);this.enqueue(s,'Ack',{messageId:message.messageId} as AckPayload,message.messageId);}));await this.flush();}else this.error(e as Error);
-  }finally{this.waitReasons.delete(id);this.offered.delete(id);this.running.delete(id);if(this.queueStarted.has(id)){if(this.store.read().state.entries.find(e=>e.record.attemptId===id)?.record.resourcesSettled){this.queue.settle(id,monotonic());this.queueStarted.delete(id);}}else{try{this.queue.removeWaiting(id);}catch(e){}}this.launching=false;this.pumpQueue();}
+   if(!this.store.read().state.entries.some(x=>x.record.attemptId===id)){const reason=/^[A-Z_0-9:]+$/.test((e as Error).message)?(e as Error).message:'EXECUTION_REJECTED';await this.store.change(new HostChange(s=>{receiveAgentMessageV2(s.journal,message,s.state.groupId,factory);
+    if(!s.journal.rejected)s.journal.rejected=[];
+    const old=s.journal.rejected.find(r=>r.attemptId===id),digest=factory.digest(canonical(offer));
+    if(old&&old.digest!==digest){const conflict:ProtocolError={version:2,code:'ATTEMPT_CONFLICT',retryable:false,messageId:message.messageId};this.enqueue(s,'ProtocolError',conflict);return;}
+    const code=old?.reason??(reason==='QUEUE_STARVED'?'QUEUE_STARVED_NOT_STARTED':reason);
+    if(!old)s.journal.rejected.push({attemptId:id,digest,reason:code});
+    const reply:AdmissionReplyV2={attemptId:id,holderInstanceId:s.state.holderInstanceId,status:'REJECTED',reasonCode:code,record:null,wait:{value:null,source:'UNKNOWN',sampledAt:0,ttlMs:1,unit:'ms'}};this.enqueue(s,'AdmissionReply',reply,message.messageId);this.enqueue(s,'Ack',{messageId:message.messageId} as AckPayload,message.messageId);}));await this.flush();}else this.error(e as Error);
+  }finally{this.waitReasons.delete(id);this.offered.delete(id);this.running.delete(id);if(this.queueStarted.has(id)){const record=this.store.read().state.entries.find(e=>e.record.attemptId===id)?.record;if(record?.resourcesSettled){this.queue.settle(id,monotonic(),record.receipt?.state==='SUCCEEDED');this.queueStarted.delete(id);}}else{try{this.queue.removeWaiting(id);}catch(e){}}this.launching=false;this.pumpQueue();}
  }
  private async admit(offer:DispatchOfferV2,message:MessageEnvelopeV2|null,live:boolean):Promise<void>{await this.store.change(new HostChange(s=>{
+  if(s.journal.rejected?.some(r=>r.attemptId===offer.task.attemptId))throw Error('DISPATCH_PREVIOUSLY_REJECTED');
   const result=admitV2(s.state,offer,{now:monotonic(),coordinatorEpoch:s.journal.epoch,online:live&&this.ready,ownerIdle:live&&this.idle(),admissionLimit:this.limits(),executionDigest:this.digest(offer),leaseId:factory.id()});s.state=result.state;
   if(message!==null){receiveAgentMessageV2(s.journal,message,s.state.groupId,factory);const record=JSON.parse(JSON.stringify(result.entry.record)) as AttemptRecordV2;record.state='ACCEPTED';record.resourcesSettled=false;record.receipt=null;const reply:AdmissionReplyV2={attemptId:record.attemptId,holderInstanceId:s.state.holderInstanceId,status:'ACCEPTED',reasonCode:null,record,wait:this.sample(null,'ms')};this.enqueue(s,'AdmissionReply',reply,message.messageId);this.enqueue(s,'Ack',{messageId:message.messageId} as AckPayload,message.messageId);if(result.entry.record.receipt!==null)this.report(s,result.entry.record.receipt);}
  }));}
@@ -270,6 +325,11 @@ export class NativeAgent {
   const service=this.services.find(s=>s.pack.manifest.contract.capability===capability);
   if(service){const entry=this.store.read().state.entries.find(e=>e.record.attemptId===id);if(!entry||this.policy===null||entry.offer.task.app.appInstanceId!==this.policy.identity.appInstanceId||entry.offer.task.originDeviceId!==this.installation.paired.peer.deviceId||canonical(entry.offer.task.contract)!==canonical(service.pack.manifest.contract))throw Error('SERVICE_SCOPE');
    const result=await service.execute(new Uint8Array(input),parameters,()=>this.cancelled(id));if(result.data.byteLength<1||result.data.byteLength>8388608||!entry.offer.task.contract.outputSchemas.includes(result.schemaId))throw Error('SERVICE_OUTPUT_INVALID');return result;
+  }
+  if(capability==='image.encode.v1'){
+   const pack=this.packs.find(p=>p.manifest.contract.capability===capability);
+   if(!pack||!pack.manifest.model)throw Error('ENCODER_MODEL_REQUIRED');
+   return {data:await encodeImage(this.context,input,parameters,pack.manifest.model,()=>this.cancelled(id)),schemaId:'image.embedding'};
   }
   if(capability==='image.crop.v1')return {data:await cropImage(input,parameters),schemaId:'image.raster'};
   if(capability==='text.count.v1'){const v=JSON.parse(text(input)) as TextInput;if(Object.keys(v).join('|')!=='text'||typeof v.text!=='string')throw Error('TEXT_INVALID');const output:TextOutput={characters:Array.from(v.text).length,words:v.text.trim()?v.text.trim().split(/\s+/u).length:0,lines:v.text.length?v.text.split(/\r\n|\r|\n/u).length:0};return {data:bytes(JSON.stringify(output)),schemaId:'text.counts'};}
@@ -283,12 +343,13 @@ export class NativeAgent {
    let input:Uint8Array;
    if(test!==null)input=base64.decodeSync(test.input);else{if(ticket===null||ticket.operation!=='READ'||canonical(ticket.ref)!==canonical(offer.task.inputs[0]))throw Error('ARTIFACT_SCOPE');const local=offer.transferPlan.length===0&&this.inputs!==null;if(local&&(offer.task.app.appInstanceId!==this.policy?.identity.appInstanceId||offer.task.originDeviceId!==this.installation.paired.peer.deviceId))throw Error('LOCAL_INPUT_SCOPE');const cached=local?await this.inputs!.read(ticket.ref.contentHash):null;if(local&&cached===null)throw Error('SDK_INPUT_NOT_REGISTERED');const download=async():Promise<Uint8Array>=>await this.transport.request('/v2/artifacts/'+ticket!.ref.artifactId+'/'+ticket!.ref.contentVersion,null,http.RequestMethod.GET,{'Authorization':'Bearer '+ticket!.token,'X-Device-Credential':this.transport.credential});input=cached??(trace===null?await download():await trace.transfer('READ',download));if(input.byteLength!==ticket.bytes)throw Error('TRANSFER_SIZE');}
    if(hash(input)!==offer.task.inputs[0].contentHash)throw Error('INPUT_HASH');trace?.add(phase,phaseStart,monotonic());phaseStart=-1;if(this.cancelled(id))throw Error('CANCELLED_SETTLED');
-   await this.store.change(new HostChange(s=>{s.state=startAttemptV2(s.state,id,monotonic());}));const computeStart=monotonic();phase='EXECUTE';phaseStart=computeStart;const result=await this.engine(offer.task.contract.capability,input,offer.task.parameters,id);this.costs.set(offer.task.contract.capability,monotonic()-computeStart);trace?.add(phase,phaseStart,monotonic());phaseStart=-1;if(this.cancelled(id))throw Error('CANCELLED_SETTLED');phase='PUBLISH';phaseStart=monotonic();
+   await this.store.change(new HostChange(s=>{s.state=startAttemptV2(s.state,id,monotonic());}));const computeStart=monotonic();this.timings.start(id,computeStart,input.byteLength,offer.target.executorId==='harmony.image.cpu.v1'?'COLD':'UNKNOWN');phase='EXECUTE';phaseStart=computeStart;const result=await this.engine(offer.task.contract.capability,input,offer.task.parameters,id);this.costs.set(offer.task.contract.capability,monotonic()-computeStart);trace?.add(phase,phaseStart,monotonic());phaseStart=-1;if(this.cancelled(id))throw Error('CANCELLED_SETTLED');phase='PUBLISH';phaseStart=monotonic();
    if(test!==null){if(result.data.byteLength>test.maxOutputBytes)throw Error('EVALUATION_OUTPUT_LIMIT');report={settled:true,permitId:id,domain:this.installation.bootstrap.domain,output:base64.encodeToStringSync(result.data),durationMs:monotonic()-start};await this.db.put('evaluation:'+id,JSON.stringify(report));outputs=[{artifactId:id,contentVersion:1,contentHash:hash(result.data),schemaId:result.schemaId,schemaVersion:1}];}
    else{const publish:PublishInput={bytes:result.data.byteLength,contentHash:hash(result.data),schemaId:result.schemaId};const destination=await this.transport.json('/v2/executions/'+id+'/output',publish) as OutputTicket;const t=destination.ticket;if(t.operation!=='WRITE'||t.bytes!==result.data.byteLength||t.ref.contentHash!==hash(result.data)||t.ref.schemaId!==result.schemaId)throw Error('ARTIFACT_SCOPE');if(destination.delivery==='LOCAL'){if(this.inputs===null||this.policy?.identity.appInstanceId!==offer.task.app.appInstanceId||offer.task.originDeviceId!==this.installation.paired.peer.deviceId)throw Error('LOCAL_OUTPUT_SCOPE');await this.inputs.stage(t.ref.contentHash,t.bytes,result.data);}else{const upload=async():Promise<Uint8Array>=>await this.transport.request('/v2/artifacts/'+t.ref.artifactId+'/'+t.ref.contentVersion,null,http.RequestMethod.PUT,{'Authorization':'Bearer '+t.token,'X-Device-Credential':this.transport.credential,'Content-Type':'application/octet-stream'},result.data);if(trace===null)await upload();else await trace.transfer('WRITE',upload);}outputs=[t.ref];}
    trace?.add(phase,phaseStart,monotonic());phaseStart=-1;state='SUCCEEDED';
   }catch(e){if(phaseStart>=0)trace?.add(phase,phaseStart,monotonic(),'PHASE_FAILED');errorCode=/^[A-Z_]+$/.test((e as Error).message)?(e as Error).message:'EXECUTION_FAILED';if(this.cancelled(id)||errorCode==='CANCELLED_SETTLED')state='CANCELLED_SETTLED';}
-  await this.store.change(new HostChange(s=>{const entry=s.state.entries.find(x=>x.record.attemptId===id)!;const receipt:ExecutionReceiptV2={attemptId:id,coordinatorEpoch:offer.task.coordinatorEpoch,planRevision:offer.task.planRevision,fence:entry.record.fence,state,resourcesSettled:true,outputs,actualTarget:offer.target,actualConfiguration:offer.allowedConfigs[0].id,errorCode};s.state=settleAttemptV2(s.state,receipt);if(test===null)this.report(s,receipt);}));
+  await this.store.change(new HostChange(s=>{const entry=s.state.entries.find(x=>x.record.attemptId===id)!;const receipt:ExecutionReceiptV2={attemptId:id,coordinatorEpoch:offer.task.coordinatorEpoch,planRevision:offer.task.planRevision,fence:entry.record.fence,state,resourcesSettled:true,outputs,actualTarget:offer.target,actualConfiguration:offer.allowedConfigs[0].id,errorCode};s.state=settleAttemptV2(s.state,receipt);if(test===null){const admittedAt=entry.deadline-Math.min(offer.leaseMs,offer.task.budget.remainingMs);this.report(s,receipt,entry.record.ledgerEpoch===s.state.ledgerEpoch?Math.max(0,monotonic()-admittedAt):undefined);}}));
+  const settled=this.store.read().state.entries.find(e=>e.record.attemptId===id);if(settled)this.timings.finish(settled,monotonic());
   await this.ackQuota();await this.flush();return report;
  }
  private executorDigest(e:ExecutorV2):string{const value:ExecutorDigest={target:e.target,contract:e.contract,model:e.model,resources:e.resources,configurations:e.configurations};return hash(bytes(canonical(value)));}

@@ -15,7 +15,7 @@ test(isolateBC?'S5 relay isolation: committed B output crosses relay to C withou
    const device=randomUUID(),holder=randomUUID(),invite=await r.auth.invite(group,randomUUID(),device,r.url),owner=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:holder});
    await r.allotments.confirmDevice(device,capacity,[{groupId:group,holderInstanceId:holder,appInstanceId:null}]);
    let paired=owner;
-   if(isApp){const invitation=await r.apps.register(owner.peer,{label:'Graph source',allowedContracts:['text.count.v1',collect.manifest.contract.contractId,final.manifest.contract.contractId],maxConcurrent:2,resources:capacity,offlineBase:capacity,onlineExtra:[]},r.url);paired=await r.apps.exchange({registrationId:invitation.registrationId,code:invitation.code});source=paired;}else producer=paired;
+   if(isApp){const invitation=await r.apps.register(owner.peer,{label:'Graph source',allowedContracts:['text.count.v1',collect.manifest.contract.contractId,final.manifest.contract.contractId],maxConcurrent:2,resources:capacity.map(r=>({...r,amount:r.amount*2})),offlineBase:capacity,onlineExtra:[]},r.url);paired=await r.apps.exchange({registrationId:invitation.registrationId,code:invitation.code});source=paired;}else producer=paired;
    const identity={groupId:group,deviceId:device,holderInstanceId:paired.peer.holderInstanceId,appInstanceId:paired.peer.app?.appInstanceId??null},directory=path.join(r.config.dataDir,identity.holderInstanceId),ledger=await DurableLedger.open(directory,identity,invite.certificate);await ledger.close();
    const host=await CpuHost.open({directory,identity,connection:{address:r.url,certificate:invite.certificate,fingerprint:invite.fingerprint,credential:paired.credential,domain:'SIMULATED'},controlIntervalMs:1500,contribution:{ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:268435456,reserveMemoryBytes:0},...(isApp?{fixedServices:[collect,final].map(pack=>({pack,execute:async input=>({bytes:input,schemaId:pack.manifest.contract.outputSchemas[0]})}))}:{})},e=>errors.push(String(e)));hosts.push(host);host.start();
   }
@@ -68,7 +68,7 @@ test(isolateBC?'S5 relay isolation: committed B output crosses relay to C withou
     for(const handler of handlers)handler.call(server,req,res);
    });
   }
-  const task=await sdk.submit(workflow,{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
+  const task=await sdk.submit(workflow,{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN',priority:'REMOTE_BATCH'});
   let result;
   try{result=await task.result();}finally{
    if(isolateBC){
@@ -107,8 +107,119 @@ test(isolateBC?'S5 relay isolation: committed B output crosses relay to C withou
     assert.equal(consumed.sourceAttemptId,produced.offer.task.attemptId);
   }
   const finalJob=await r.db.cpuJob.findUnique({where:{id:attempts.find(a=>JSON.parse(a.taskJson).nodeId==='finish').id}});assert.equal(r.artifacts.available(JSON.parse(finalJob.metadataJson).output),false);
+  assert.ok(attempts.every(row=>JSON.parse(row.taskJson).priority==='REMOTE_BATCH'));
   const graphTrace=await r.traces.read(source.peer,id);assert.equal(graphTrace.traceId,id);assert.equal(graphTrace.coverage.sourceSdkRoot,true);assert.ok(graphTrace.coverage.sourceDurationMs>0);assert.equal(graphTrace.coverage.criticalPathPending,true);assert.equal(new Set(graphTrace.spans.map(s=>s.nodeId)).size,3);if(isolateBC){assert.ok(graphTrace.spans.some(s=>s.nodeId==='finish'&&s.phase==='TRANSFER_RECV'));assert.ok(graphTrace.spans.some(s=>s.nodeId==='finish'&&s.phase==='LOAD'));}
   await task.status();assert.equal(await r.db.attempt.count({where:{workflowId:id}}),3,'status must not replay committed nodes');
+  const yieldedId=randomUUID(),yieldedWorkflow=structuredClone(workflow);yieldedWorkflow.id=yieldedId;
+  const agent=hosts[0].agent,originalRead=agent.runtime.ports.read;
+  let interrupted;
+  agent.runtime.ports.read=async(ref,offer,...rest)=>{
+   if(!interrupted&&offer.task.workflowId===yieldedId&&offer.task.nodeId==='finish'){
+    interrupted=offer.task.attemptId;
+    await agent.updateResources(capacity,'ACTIVE');
+    await agent.updateResources(capacity,'IDLE');
+   }
+   return originalRead(ref,offer,...rest);
+  };
+  try{
+   const yieldedTask=await sdk.submit(yieldedWorkflow,{requestId:yieldedId,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
+   const resumed=await yieldedTask.result();assert.deepEqual(Buffer.from(resumed.output),counts);
+   assert.deepEqual(resumed.status.nodes.find(n=>n.id==='finish').yieldedAttempts,[interrupted]);
+   const attempts=await r.db.attempt.findMany({where:{workflowId:yieldedId}});
+   assert.equal(attempts.length,4);assert.equal(attempts.find(a=>a.id===interrupted).state,'CANCELLED_SETTLED');
+   assert.equal(attempts.filter(a=>a.state==='SUCCEEDED').length,3);
+  }finally{agent.runtime.ports.read=originalRead;}
+  // Hold the primary publication while a fresh SIMULATED conditional sample
+  // triggers normal planning, quota reservation, dispatch and SDK delivery.
+  for(const mode of ['slow','dag','quota','offline']){
+  const offline=mode==='offline',dag=mode==='dag',quota=mode==='quota';
+  const raceId=randomUUID(),held=new Map();let raceEntered,raceRelease,restoreLink=()=>{};
+  const enteredGate=new Promise(r=>raceEntered=r),releaseGate=new Promise(r=>raceRelease=r);
+  for(const h of hosts){
+   const ports=h.agent.runtime.ports,write=ports.publish;held.set(ports,write);
+   ports.publish=async(bytes,schema,offer,...rest)=>{
+    if(offer.task.workflowId===raceId&&offer.task.nodeId==='compute'&&!offer.task.attemptId.startsWith('backup-')){raceEntered({h,id:offer.task.attemptId});await releaseGate;}
+    return write(bytes,schema,offer,...rest);
+   };
+  }
+  try{
+   const raceInput=await sdk.registerInput(raw,'text.input');
+   const raceNodes=[{id:'compute',capability:'text.count.v1',input:raceInput,dependsOn:[],parameters:'{}'}];
+   if(dag)raceNodes.push({id:'finish',capability:final.manifest.contract.capability,inputFrom:'compute',dependsOn:['compute'],parameters:'{}'});
+   const raceTask=await sdk.submit({id:raceId,version:3,qualityTarget:'reference',outputContract:'text.counts',nodes:raceNodes},
+    {requestId:raceId,budgetMs:30000,resultDestination:'ORIGIN'});
+   const {h:primaryHost,id:primaryId}=await enteredGate;
+   const primaryRow=await r.db.cpuJob.findUniqueOrThrow({where:{id:primaryId}}),d=JSON.parse(primaryRow.metadataJson);
+   const profile=(await r.directory.profiles(group)).find(p=>p.holderInstanceId===d.holderId);
+   const sample=value=>({value,unit:'ms',source:'SIMULATED',sampledAt:Date.now()-1000,ttlMs:15000});
+   profile.inFlight=[{attemptId:primaryId,targetId:d.offer.target.targetId,state:'RUNNING',resources:d.offer.resources,elapsed:sample(150),remaining:sample(5000),
+    history:{samples:24,survivors:2,p90TotalMs:100,p90RemainingMs:6000}}];
+   if(quota)await r.db.registeredApp.update({where:{id:source.peer.app.appId},data:{maxConcurrent:1}});
+   if(offline){
+    const client=primaryHost.agent.client,connect=client.connect.bind(client);
+    let reconnect;const gate=new Promise(resolve=>reconnect=resolve);
+    client.connect=async()=>{await gate;return connect();};
+    restoreLink=()=>{client.connect=connect;reconnect();};
+    client.socket.terminate();
+   }
+   let lastReport=0;
+   const reportSlow=async()=>{
+    if(offline||Date.now()-lastReport<1500||primaryHost.ledger.pendingMessages().some(m=>m.type==='DeviceProfile'))return;
+    lastReport=Date.now();
+    const current=(await r.directory.profiles(group)).find(p=>p.holderInstanceId===d.holderId);
+    current.inFlight=[{...profile.inFlight[0],elapsed:sample(150),remaining:sample(5000)}];
+    try{await primaryHost.agent.publishProfile(current);}catch(e){if(e.message!=='PROFILE_PENDING')throw e;}
+   };
+   const pendingResult=raceTask.result();void pendingResult.catch(()=>{});
+   if(quota){
+    await until(async()=>{await reportSlow();return JSON.parse((await r.db.attempt.findUniqueOrThrow({where:{id:primaryId}})).recoveryEstimateJson??'{}').backupRefusal==='APP_QUOTA_EXCEEDED';});
+    assert.equal(await r.db.attempt.count({where:{workflowId:raceId}}),1);
+    raceRelease();assert.deepEqual(Buffer.from((await pendingResult).output),counts);continue;
+   }
+   await until(async()=>{await reportSlow();return !!(await r.db.node.findUnique({where:{id:JSON.stringify([raceId,'compute'])}}))?.winnerAttemptId;});
+   const node=await r.db.node.findUniqueOrThrow({where:{id:JSON.stringify([raceId,'compute'])}});
+   assert.equal(node.winnerAttemptId,node.backupAttemptId);assert.ok(node.winnerAttemptId);
+   const both=await r.db.attempt.findMany({where:{workflowId:raceId}});
+   assert.equal(both.filter(a=>JSON.parse(a.taskJson).nodeId==='compute').length,2);assert.equal(new Set(both.map(a=>a.holderInstanceId)).size,2);
+   assert.equal(JSON.parse(both.find(a=>a.id===primaryId).recordJson).resourcesSettled,false);
+   restoreLink();raceRelease();await until(async()=>JSON.parse((await r.db.attempt.findUniqueOrThrow({where:{id:primaryId}})).recordJson).resourcesSettled);
+   const value=await pendingResult;assert.deepEqual(Buffer.from(value.output),counts);assert.equal(value.jobId,raceId);
+   assert.equal(await r.db.receipt.count({where:{id:{in:[primaryId,node.backupAttemptId]},committed:true}}),1);
+   if(dag){
+    assert.equal(await r.db.attempt.count({where:{workflowId:raceId}}),3);
+    assert.equal(value.status.nodes.find(n=>n.id==='compute').jobId,node.winnerAttemptId);
+   }
+  }finally{restoreLink();raceRelease();for(const [ports,write] of held)ports.publish=write;if(quota)await r.db.registeredApp.update({where:{id:source.peer.app.appId},data:{maxConcurrent:2}});}
+  }
+  for(const single of [false,true]){
+  const starvedId=randomUUID(),originalChoosers=new Map();let refusedId=null;
+  try{
+   for(const host of hosts){
+    const queue=host.agent.scheduler.queue,choose=queue.choose.bind(queue);originalChoosers.set(queue,choose);
+    queue.choose=(...args)=>{
+     const offer=choose(...args);
+     if(offer?.task.workflowId===starvedId&&offer.task.nodeId===(single?'compute':'encode')){
+      refusedId??=offer.task.attemptId;
+      if(offer.task.attemptId===refusedId)return null;
+     }
+     return offer;
+    };
+   }
+   const task=await sdk.submit({id:starvedId,version:3,qualityTarget:'reference',outputContract:'text.counts',nodes:[
+    {id:'encode',capability:'text.count.v1',input:await sdk.registerInput(raw,'text.input'),dependsOn:[],parameters:'{}'},
+    ...(single?[]:[{id:'finish',capability:final.manifest.contract.capability,inputFrom:'encode',dependsOn:['encode'],parameters:'{}'}])]},
+    {requestId:starvedId,budgetMs:30000,resultDestination:'ORIGIN'});
+   const result=await task.result();assert.deepEqual(Buffer.from(result.output),counts);assert.equal(result.jobId,starvedId);
+   const attempts=await r.db.attempt.findMany({where:{workflowId:starvedId}});
+   const refused=attempts.find(a=>a.id===refusedId),ran=attempts.find(a=>a.id!==refusedId&&JSON.parse(a.taskJson).nodeId===(single?'compute':'encode'));
+   assert.equal(attempts.length,single?2:3);assert.equal(refused.recordJson,null);
+   if(single)assert.equal(result.status.targetId,JSON.parse(ran.offerJson).target.targetId);
+   assert.deepEqual(result.status.nodes.find(n=>n.id===(single?'compute':'encode')).reassignedAttempts,[refusedId]);
+   assert.equal(JSON.parse(refused.rejectionJson).reply.reasonCode,'QUEUE_STARVED_NOT_STARTED');
+   assert.notEqual(ran.holderInstanceId,refused.holderInstanceId);assert.equal(ran.state,'SUCCEEDED');
+   assert.equal(await r.db.receipt.count({where:{id:refusedId}}),0);
+  }finally{for(const [queue,choose] of originalChoosers)queue.choose=choose;}
+  }
   const cancelId=randomUUID(),cancelWorkflow=structuredClone(workflow);cancelWorkflow.id=cancelId;
   const runtime=hosts[0].agent.runtime,read=runtime.ports.read;let release,entered;
   const gate=new Promise(r=>release=r),started=new Promise(r=>entered=r);
@@ -121,4 +232,19 @@ test(isolateBC?'S5 relay isolation: committed B output crosses relay to C withou
    assert.equal(await r.db.attempt.count({where:{workflowId:cancelId}}),1,'cancelled graph must not dispatch its downstream nodes');
   }finally{release();runtime.ports.read=read;}
  }catch(error){console.error(JSON.stringify({errors,graphs:await r.db.sdkWorkflowJob.findMany(),attempts:await r.db.attempt.findMany()},null,2));throw error;}finally{for(const h of hosts)await h.close();await r.close();}
+});
+
+test('status returns durable state while graph progression is busy and notifications coalesce',async()=>{
+ const {WorkflowJobs}=require('../dist/workflow-jobs');
+ let release,entered,passes=0;
+ const gate=new Promise(resolve=>{release=resolve;}),started=new Promise(resolve=>{entered=resolve;});
+ const graphs=new WorkflowJobs({sdkWorkflowJob:{findMany:async()=>{passes++;entered();await gate;return [];}}},null,null,null,[]);
+ graphs.owned=async()=>({row:{state:'ACTIVE'},data:{workflow:{nodes:[]},nodes:[{id:'n',state:'PENDING'}],plan:{decision:{suggestion:[{nodeId:'n'}]}}}});
+ try{
+  graphs.changed('group');await started;
+  for(let i=0;i<100;i++)graphs.changed('group');
+  const status=await graphs.status({groupId:'group'},'job');
+  assert.equal(status.state,'ACTIVE');assert.equal(passes,1);
+  release();await graphs.work;assert.equal(passes,2);
+ }finally{release();await graphs.close();}
 });

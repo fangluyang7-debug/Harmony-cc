@@ -1,8 +1,9 @@
+import {raceKey,raceIntervals} from './race-timing';
 import {PrismaClient} from '../generated/client';
 import {DeviceDirectory} from './directory';
 import {TraceService} from './traces';
 import {Peer} from './channel';
-import {protocolId} from '@harmony/scheduler-core';
+import {availability,protocolId} from '@harmony/scheduler-core';
 
 const parsed=(value:string|null|undefined)=>value?JSON.parse(value):null;
 const finite=(value:unknown):number|null=>typeof value==='number'&&Number.isFinite(value)?value:null;
@@ -13,31 +14,37 @@ export class TelemetryView {
 
   async snapshot(groupId:string,principalId:string){
     const now=Date.now();
-    const [space,registered,profiles,qualifications,rows,attempts,graphs,network,peerNetworks,authorizations,endpoints,grantRows]=await Promise.all([
+    const [space,registered,profiles,qualifications,rows,attempts,graphs,network,peerNetworks,authorizations,endpoints,grantRows,batchRows]=await Promise.all([
       this.db.teamSpace.findUniqueOrThrow({where:{id:groupId}}),this.db.spaceDevice.findMany({where:{spaceId:groupId}}),
       this.directory.profiles(groupId),this.db.capabilityState.findMany({where:{groupId}}),this.db.cpuJob.findMany({where:{groupId}}),
       this.db.attempt.findMany({where:{groupId}}),this.db.sdkWorkflowJob.findMany({where:{groupId}}),this.networkView?.(groupId)??[],this.db.peerNetwork.findMany({where:{groupId}}),
-      this.db.transferAuthorization.findMany({where:{groupId}}),this.db.dataEndpoint.findMany({where:{groupId}}),this.db.allotment.findMany({where:{groupId}})
+      this.db.transferAuthorization.findMany({where:{groupId}}),this.db.dataEndpoint.findMany({where:{groupId}}),this.db.allotment.findMany({where:{groupId}}),this.db.batchReadyJob.findMany({where:{groupId},select:{id:true,reason:true,queuedAt:true}})
     ]);
     const ids=[...new Set([...registered.map(d=>d.id),...profiles.map(p=>p.deviceId)])];
     const grants=grantRows.filter(r=>r.id.startsWith('["allotment",')).map(r=>parsed(r.metadataJson));
     const devices=ids.map(id=>{
       const registration=registered.find(d=>d.id===id),holders=profiles.filter(p=>p.deviceId===id);
       const reservations=grants.filter(r=>r.grant.deviceId===id&&r.grant.groupId===groupId);
-      return {id,name:registration?.name??id,holders:holders.map(profile=>({profile,
+      return {id,name:registration?.name??id,holders:holders.map(profile=>({profile,controlState:this.directory.controlState?.(groupId,profile.holderInstanceId,profile.deviceInstanceId,profile.ledgerEpoch)??'UNKNOWN',
+        resourceForecasts:profile.executors.map(e=>{const a=availability(profile,e,'REMOTE_INTERACTIVE',profile.sequence,now);return {targetId:a.targetId,reason:a.reason,blockingReason:a.blockingReason,resourceWait:a.resourceWait};}),
         evidenceFresh:profile.ownerActivity.sampledAt<=now&&profile.ownerActivity.sampledAt+profile.ownerActivity.ttlMs>now,
         qualification:profile.executors.map(e=>({targetId:e.target.targetId,...parsed(qualifications.find(q=>q.id===JSON.stringify([groupId,profile.holderInstanceId,e.target.targetId]))?.metadataJson)}))})),
         allotments:reservations.map(r=>({holderInstanceId:r.grant.holderInstanceId,appInstanceId:r.grant.appInstanceId,version:r.grant.version,coordinatorEpoch:r.grant.coordinatorEpoch,
           base:r.grant.base,extra:r.grant.extra,reserved:r.reserved,ack:r.ack?{version:r.ack.version,occupied:r.ack.occupied,settlementSeq:r.ack.settlementSeq}:null}))};
     });
+    const racing=await this.db.node.findMany({where:{workflowId:{in:[...new Set(attempts.map(a=>a.workflowId))]},backupAttemptId:{not:null}}});
+    const timingRows=racing.length?await this.db.costObservation.findMany({where:{groupId,id:{in:racing.map(n=>raceKey(n.id))}}}):[];
+    const timings=new Map(timingRows.map(r=>[r.id,parsed(r.metadataJson)]));
+    const raceByNode=new Map(racing.map(n=>[n.id,{primary:n.primaryAttemptId,backup:n.backupAttemptId,winner:n.winnerAttemptId,timing:timings.has(raceKey(n.id))?raceIntervals(timings.get(raceKey(n.id)),n.primaryAttemptId!,n.backupAttemptId!):null}]));
     const attemptById=new Map(attempts.map(a=>[a.id,a]));
+    const batchByJob=new Map(batchRows.map(b=>[b.id,b]));
     const jobs=rows.map(row=>{
       const data=parsed(row.metadataJson),offer=data.offer,attempt=attemptById.get(row.id),record=parsed(attempt?.recordJson),rejection=parsed(attempt?.rejectionJson),yielded=parsed(attempt?.yieldJson);
-      const decision=data.plan?.decision;
+      const decision=data.plan?.decision,batch=!attempt?batchByJob.get(row.id):undefined;
       return {id:row.id,workflowId:offer.task.workflowId,nodeId:offer.task.nodeId,capability:offer.task.contract.capability,
-        state:attempt?.state??row.state,targetId:offer.target.targetId,deviceId:offer.target.deviceId,holderInstanceId:data.holderId,originDeviceId:offer.task.originDeviceId,
+        state:attempt?.state??(batch?'QUEUED':row.state),queueReason:batch?.reason??null,queuedAt:batch?.queuedAt??null,targetId:offer.target.targetId,deviceId:offer.target.deviceId,holderInstanceId:data.holderId,originDeviceId:offer.task.originDeviceId,
         createdAt:finite(data.request?.now),traceId:data.traceId,traceOwner:row.principalId===principalId,
-        reason:offer.reasonCode,resourcesSettled:record?.resourcesSettled??null,
+        reason:offer.reasonCode,recoveryEstimate:parsed(attempt?.recoveryEstimateJson),race:attempt?raceByNode.get(attempt.nodeId)??null:null,resourcesSettled:record?.resourcesSettled??null,
         rejection:rejection?{reasonCode:rejection.reasonCode??rejection.reply?.reasonCode??'UNKNOWN',receivedAt:finite(rejection.receivedAt)}:null,
         yield:yielded?{reasonCode:yielded.notice?.reasonCode??'UNKNOWN',receivedAt:finite(yielded.receivedAt)}:null,
         plan:data.plan?{snapshotVersion:data.plan.snapshotVersion,policyVersion:data.plan.policyVersion,
@@ -57,7 +64,7 @@ export class TelemetryView {
     return {version:1,space:{id:space.id,name:space.name},updatedAt:now,domain:this.directory.domain,devices,network,links,transfers,
       jobs:jobs.slice(0,100),jobWindow:100,jobCount:jobs.length,
       workflows:graphs.map(row=>{const d=parsed(row.metadataJson);return {id:row.id,state:row.state,nodes:d.nodes.map((n:any)=>({id:n.id,jobId:n.jobId,state:n.state}))};}),
-      features:{hedging:'NOT_IMPLEMENTED_S6',reassignment:'NOT_IMPLEMENTED_S6',candidateCosts:'PERSISTED_BASELINE_AND_SELECTED_ONLY',traceAccess:'EXISTING_PRINCIPAL_READERS',readOnly:true}};
+      features:{hedging:'PURE_INTERACTIVE_RELAY_INPUT',reassignment:'AVAILABLE',candidateCosts:'PERSISTED_BASELINE_AND_SELECTED_ONLY',traceAccess:'EXISTING_PRINCIPAL_READERS',readOnly:true}};
   }
 
   async trace(peer:Peer,jobId:string){

@@ -3,6 +3,8 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { fileIo } from '@kit.CoreFileKit';
 import { image } from '@kit.ImageKit';
 import { util } from '@kit.ArkTS';
+import {LocalImageIndex,ImageRecord} from './LocalImageIndex';
+import {ReferencePack,ModelManifestV2,sameModelV2} from 'scheduler';
 import { NativeAgent, HarmonySdkPort, SchedulerSdk, SdkTask, SdkWorkflow, SubmitOptions, TrustedCoordinator, Bootstrap, Paired, ResourceAmountV2 } from 'scheduler';
 interface Registration extends TrustedCoordinator {registrationId:string;code:string;expiresAt:number;domain:string;}
 interface Registered extends Paired {offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
@@ -61,7 +63,58 @@ class IndexerSession {
   }finally{this.busy=false;AppStorage.setOrCreate('indexerBusy',false);}
  }
  async cancel():Promise<void>{this.stopRequested=true;if(this.task!==null){await this.task.cancel();AppStorage.setOrCreate('indexerStatus','已请求取消，等待执行端结算');}}
+ async encodeSelection(query:boolean):Promise<void>{
+  if(this.busy)return;
+  if(!this.context||!this.sdk||!this.host?.isConnected())throw Error('SDK_COORDINATOR_OFFLINE');
+  const context=this.context,sdk=this.sdk;
+  this.busy=true;this.stopRequested=false;AppStorage.setOrCreate('indexerBusy',true);
+  try{
+   const decode=new util.TextDecoder('utf-8');
+   const packs=JSON.parse(decode.decodeToString(await context.resourceManager.getRawFileContent('reference-packs.json'))) as ReferencePack[];
+   const pack=packs.find(p=>p.manifest.contract.capability==='image.encode.v1');
+   const model=pack?.manifest.model;if(!model)throw Error('IMAGE_INDEX_MODEL_NOT_INSTALLED');
+   const picker=new photoAccessHelper.PhotoViewPicker(),selection=await picker.select({MIMEType:photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE,maxSelectNumber:query?1:8});
+   if(!selection.photoUris.length)return;
+   const index=await LocalImageIndex.open(context),records:ImageRecord[]=[];
+   for(const uri of selection.photoUris){
+    if(this.stopRequested||!this.foreground)throw Error('INDEX_INTERRUPTED');
+    const file=fileIo.openSync(uri,fileIo.OpenMode.READ_ONLY);let bytes:Uint8Array;
+    try{const size=fileIo.statSync(file.fd).size;if(size<=0||size>8388608)throw Error('IMAGE_SIZE_LIMIT');bytes=new Uint8Array(size);
+     if(fileIo.readSync(file.fd,bytes.buffer)!==size)throw Error('FILE_READ_INCOMPLETE');}finally{fileIo.closeSync(file);}
+    const id=util.generateRandomUUID(true),input=await sdk.registerInput(bytes,'image.raster');
+    try{
+     AppStorage.setOrCreate('indexerStatus','编码 '+(records.length+1)+' / '+selection.photoUris.length);
+     const workflow:SdkWorkflow={version:3,id,outputContract:'image.embedding',qualityTarget:'reference',nodes:[
+      {id:'encode',capability:'image.encode.v1',modelManifest:model,input,parameters:JSON.stringify(model),dependsOn:[]}]};
+     this.task=await sdk.submit(workflow,{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN',priority:query?'REMOTE_INTERACTIVE':'REMOTE_BATCH'});
+     if(this.stopRequested){await this.task.cancel();throw Error('INDEX_INTERRUPTED');}
+     const output=JSON.parse(decode.decodeToString((await this.task.result()).output)) as IndexEncoding;
+     if(!output.model||!sameModelV2(output.model,model)||!Array.isArray(output.vector)||output.vector.length!==model.dimension||
+       !output.vector.every((x:number)=>Number.isFinite(x))||Math.abs(output.vector.reduce((s:number,x:number)=>s+x*x,0)-1)>.002)throw Error('INDEX_ENCODING_INVALID');
+     if(!query){
+      const path=context.filesDir+'/indexed-'+input.contentHash;
+      if(!fileIo.accessSync(path)){
+       const stage=path+'-'+id+'.tmp';
+       try{this.save(stage,bytes);fileIo.renameSync(stage,path);}
+       finally{if(fileIo.accessSync(stage))fileIo.unlinkSync(stage);}
+      }
+     }
+     records.push({hash:input.contentHash,vector:output.vector});
+    }finally{sdk.releaseInput(input);this.task=null;}
+   }
+   if(this.stopRequested||!this.foreground)throw Error('INDEX_INTERRUPTED');
+   if(query){
+    const result=await index.query(model,records[0].vector);
+    AppStorage.setOrCreate('indexerImages',result.matches.map(m=>'file://'+context.filesDir+'/indexed-'+m.hash));
+    AppStorage.setOrCreate('indexerStatus','本地索引 v'+result.revision+' · '+result.matches.length+' 项匹配（按余弦相似度排序）');
+   }else{
+    const revision=await index.append(model,records);
+    AppStorage.setOrCreate('indexerStatus',model.modelId+' · 本地索引 v'+revision+' · 已处理 '+records.length+' 张');
+   }
+  }finally{this.busy=false;AppStorage.setOrCreate('indexerBusy',false);}
+ }
  async close():Promise<void>{await this.host?.close();}
 }
 export const indexer=new IndexerSession();
+interface IndexEncoding {model:ModelManifestV2;vector:number[];}
 export function showError(error:Error):void{AppStorage.setOrCreate('indexerStatus',error.message);}

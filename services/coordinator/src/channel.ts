@@ -1,18 +1,22 @@
+import {ControlHeartbeat} from './control-heartbeat';
+import {settleBatchCharge} from './batch-ready';
 import { Server } from 'node:https';
 import { createHash, randomUUID } from 'node:crypto';
 import { WebSocket, WebSocketServer } from 'ws';
-import { PrismaClient } from '../generated/client';
+import { Prisma,PrismaClient } from '../generated/client';
 import { canonical, MessageEnvelopeV2, validMessageEnvelopeV2, validVersionHelloV2, negotiateVersionV2,
   validAdmissionReplyV2, validExecutionReportV2, validAttemptStatusReplyV2, protocolId,validYieldNoticeV2,validProtocolErrorV2, AppIdentityV2 } from '@harmony/scheduler-core';
 import { CoordinatorStore } from './store';
 
 export interface Peer { groupId:string; holderInstanceId:string; deviceId:string; principalId:string; credentialId:string; app?:AppIdentityV2; }
 export interface ChannelHandler { validate:(payload:any)=>boolean; handle:(peer:Peer,payload:any,message:MessageEnvelopeV2)=>Promise<void>; }
-interface Session { socket:WebSocket; token:string; peer:Peer; hello:boolean; work:Promise<void>; queued:number; inFlight:Set<string>; }
+interface Session { heartbeat:ControlHeartbeat; recovered:boolean; outstandingQueries:Set<string>;busy:Set<string>;profileInstance?:string;profileEpoch?:number;lastProfileStamp?:number; socket:WebSocket; token:string; peer:Peer; hello:boolean; work:Promise<void>; queued:number; inFlight:Set<string>; }
 const exact=(v:any,keys:string[])=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&Object.keys(v).sort().join('|')===[...keys].sort().join('|');
 
 /** Bounded, event-driven control transport. Handlers must be durable and idempotent. */
 export class ControlChannel {
+  onUnstarted?:(tx:Prisma.TransactionClient,id:string)=>Promise<void>;
+  onUnavailable?:(peer:Peer)=>void;
   private readonly wss=new WebSocketServer({noServer:true,maxPayload:262144,perMessageDeflate:false});
   private readonly sessions=new Set<Session>();
   // A disconnected session can still be committing a handler. Drain it before closing the database.
@@ -54,9 +58,15 @@ export class ControlChannel {
           const row=await tx.attempt.findUnique({where:{id:p.attemptId}});
           if(!row||row.groupId!==peer.groupId||row.holderInstanceId!==peer.holderInstanceId)throw Error('ADMISSION_UNAUTHORIZED');
           if(row.recordJson!==null)throw Error('ADMISSION_CONFLICT');
+          if(p.reasonCode==='QUEUE_STARVED_NOT_STARTED'){
+            const offer=message.ackOf&&await tx.outbox.findUnique({where:{id:message.ackOf}});
+            if(!offer||offer.kind!=='DispatchOffer'||offer.attemptId!==row.id||offer.epoch!==message.coordinatorEpoch)throw Error('ADMISSION_CONFLICT');
+          }
           if(row.rejectionJson){if(canonical(JSON.parse(row.rejectionJson).reply)!==canonical(p))throw Error('ADMISSION_CONFLICT');return;}
           await tx.attempt.update({where:{id:row.id},data:{state:'REJECTED',rejectionJson:JSON.stringify({reply:p,receivedAt:Date.now(),messageId:message.messageId,traceId:message.traceId})}});
-          await tx.node.update({where:{id:row.nodeId},data:{state:'REJECTED'}});
+          await store.recordNodeFailure(tx,row.nodeId,row.id,'REJECTED');
+          if(p.reasonCode==='QUEUE_STARVED_NOT_STARTED')await this.onUnstarted?.(tx,row.id);
+          await settleBatchCharge(tx,row.id,0);
         });return;
       }
       const record=p.record;
@@ -68,7 +78,7 @@ export class ControlChannel {
       if(receipt.fence.holderInstanceId!==peer.holderInstanceId||receipt.fence.deviceId!==peer.deviceId)throw Error('RECEIPT_UNAUTHORIZED');
       const row=await db.attempt.findUnique({where:{id:receipt.attemptId}}),record=row?.recordJson?JSON.parse(row.recordJson):null;
       if(!record||record.allotmentId!==p.allotmentId||record.allotmentVersion!==p.allotmentVersion||record.leaseId!==p.leaseId)throw Error('RECEIPT_LEASE_MISMATCH');
-      await store.receive(peer.groupId,peer.holderInstanceId,receipt,epoch());
+      await store.receive(peer.groupId,peer.holderInstanceId,receipt,epoch(),p.resourceHeldMs);
     }});
     this.upgrade=(request,socket,head)=>{
       void this.track((async()=>{
@@ -83,11 +93,31 @@ export class ControlChannel {
     server.on('upgrade',this.upgrade);
   }
   register(type:string,handler:ChannelHandler){if(this.handlers.has(type))throw Error('HANDLER_EXISTS');this.handlers.set(type,handler);}
+  linkState(groupId:string,holderId:string,deviceInstance:string,ledgerEpoch:number){
+    const s=[...this.sessions].find(s=>s.socket.readyState===WebSocket.OPEN&&s.peer.groupId===groupId&&s.peer.holderInstanceId===holderId);
+    if(!s)return 'OFFLINE';
+    if(s.heartbeat.suspect)return 'SUSPECT';
+    if(!s.recovered||s.outstandingQueries.size||s.profileInstance!==deviceInstance||s.profileEpoch!==ledgerEpoch)return 'RECONCILING';
+    return 'ONLINE';
+  }
   private connected(socket:WebSocket,peer:Peer,token:string){
     for(const old of this.sessions)if(old.peer.groupId===peer.groupId&&old.peer.holderInstanceId===peer.holderInstanceId)old.socket.close(1008,'REPLACED');
-    const session:Session={socket,peer,token,hello:false,work:Promise.resolve(),queued:0,inFlight:new Set()};this.sessions.add(session);
+    const session:Session={heartbeat:new ControlHeartbeat(randomUUID()),recovered:false,outstandingQueries:new Set(),busy:new Set(),socket,peer,token,hello:false,work:Promise.resolve(),queued:0,inFlight:new Set()};this.sessions.add(session);
     const timer=setTimeout(()=>{if(!session.hello)socket.close(1008,'HELLO_TIMEOUT');},10000);timer.unref();
-    socket.on('close',()=>{clearTimeout(timer);this.sessions.delete(session);});socket.on('error',()=>{});
+    const probeTimer=setInterval(()=>{
+      if(!session.hello||socket.readyState!==WebSocket.OPEN)return;
+      const before=session.heartbeat.suspect;
+      const probe=session.heartbeat.tick(performance.now(),session.busy.size>0||session.outstandingQueries.size>0);
+      if(!probe)return;
+      if(session.heartbeat.expired){socket.terminate();return;}
+      if(before!==session.heartbeat.suspect){this.changed(peer.groupId);if(session.heartbeat.suspect)this.onUnavailable?.(peer);}
+      socket.ping(probe);
+    },250);probeTimer.unref();
+    socket.on('pong',bytes=>{
+      const suspect=session.heartbeat.suspect;
+      if(session.heartbeat.reply(bytes.toString(),performance.now())&&suspect)socket.close(1012,'RECONCILE');
+    });
+    socket.on('close',()=>{clearInterval(probeTimer);clearTimeout(timer);this.sessions.delete(session);if(!this.closing){this.changed(peer.groupId);if(![...this.sessions].some(s=>s.peer.holderInstanceId===peer.holderInstanceId&&s.peer.groupId===peer.groupId&&s.socket.readyState===WebSocket.OPEN))this.onUnavailable?.(peer);}});socket.on('error',()=>{});
     socket.on('message',(bytes,binary)=>{
       if(this.closing)return;
       if(binary){socket.close(1008,'TEXT_REQUIRED');return;}
@@ -132,6 +162,22 @@ export class ControlChannel {
       return false;
     });
     if(!duplicate){await handler.handle(s.peer,payload,m);await this.db.channelInbox.update({where:{id},data:{done:true}});if(!['Hello','Ack','TraceBatch'].includes(m.type))this.changed(s.peer.groupId);}
+    if(!duplicate&&m.type==='RecoveryRequest'){
+      const queries=await this.db.outbox.findMany({where:{groupId:s.peer.groupId,kind:'AttemptStatusQuery',epoch:this.epoch(),acked:false,superseded:false}});
+      const attempts=await this.db.attempt.findMany({where:{groupId:s.peer.groupId,holderInstanceId:s.peer.holderInstanceId},select:{id:true}});
+      const owned=new Set(attempts.map(a=>a.id));
+      for(const q of queries)if(owned.has(q.attemptId))s.outstandingQueries.add(JSON.parse(q.messageJson).messageId);
+      s.recovered=true;
+    }
+    if(!duplicate&&m.type==='DeviceProfile'){s.profileInstance=payload.deviceInstanceId;s.profileEpoch=payload.ledgerEpoch;
+      const stamp=payload.ownerActivity.sampledAt,age=Date.now()-stamp;
+      if(!s.heartbeat.suspect&&age>=0&&age<=payload.ownerActivity.ttlMs&&stamp>(s.lastProfileStamp??-1)){
+        s.lastProfileStamp=stamp;s.heartbeat.freshReport(performance.now());
+      }
+      if(payload.inFlight)s.busy=new Set(payload.inFlight.map((f:{attemptId:string})=>f.attemptId));}
+    if(m.type==='AttemptStatusReply'&&m.ackOf)s.outstandingQueries.delete(m.ackOf);
+    if(m.type==='AdmissionReply'&&payload.status==='ACCEPTED')s.busy.add(payload.attemptId);
+    if(m.type==='ExecutionReceipt'&&payload.receipt.resourcesSettled)s.busy.delete(payload.receipt.attemptId);
     if(m.type==='Hello')s.hello=true;
     if(m.type==='Ack')s.inFlight.delete(payload.messageId);
     await this.pump(s);
@@ -154,7 +200,7 @@ export class ControlChannel {
     const rows=await this.db.outbox.findMany({where:{groupId:s.peer.groupId,attemptId:{in:attempts.map(a=>a.id)},acked:false,superseded:false},orderBy:{sequence:'asc'},take:this.limits.inFlight});
     for(const row of rows){
       const message=JSON.parse(row.messageJson) as MessageEnvelopeV2;
-      if(s.inFlight.has(message.messageId))continue;
+      if(s.inFlight.has(message.messageId)||message.type==='DispatchOffer'&&s.heartbeat.suspect)continue;
       if(message.coordinatorEpoch!==this.epoch())continue;
       await this.send(s,message);s.inFlight.add(message.messageId);
       await this.db.outbox.update({where:{id:row.id},data:{deliveryCount:{increment:1}}});

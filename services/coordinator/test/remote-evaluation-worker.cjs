@@ -9,6 +9,7 @@ let worker,ledger,client,runs=0,dropped=false,online=false;
 process.on('message',async message=>{
  try{
   if(message.stop){await worker?.close();await client?.close();await ledger?.close();process.disconnect();return;}
+  if(message.profile){ledger.queueProfile(message.profile);await client.flush();return;}
   const c=message.config,request=allotmentTransport(c.connection);
   ledger=await DurableLedger.open(c.directory,c.identity,c.connection.certificate);
   const quota=new AllotmentClient(ledger,c.connection.credential,request,()=>({base:[],extra:c.executor.resources,leaseMs:300000}),()=>{});
@@ -23,7 +24,7 @@ process.on('message',async message=>{
    if(c.dropReport&&!dropped&&route.endsWith('/report')){dropped=true;throw Error('TEST_REPORT_DELIVERY_LOST');}
    return request(route,body);
   },{domain:c.connection.domain,deviceInstanceId:c.instance,ready:()=>online,authorize:async w=>w.coordinatorEpoch===c.epoch,onError:()=>{}});
-  client=new RecoveryClient(ledger,c.connection,()=>{},{dispatch:()=>{},state:ready=>{online=ready;if(ready)worker.notify();},evaluationChanged:()=>worker.notify()});
-  worker.start(100);client.start();process.send({ready:true});
+  client=new RecoveryClient(ledger,c.connection,()=>{},{dispatch:()=>{},state:ready=>{online=ready;if(ready){process.send({ready:true});worker.notify();}},evaluationChanged:()=>worker.notify()});
+  worker.start(100);client.start();
  }catch{process.send?.({failed:true});await worker?.close();await client?.close();await ledger?.close();process.disconnect();process.exitCode=1;}
 });

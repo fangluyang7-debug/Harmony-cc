@@ -3,6 +3,7 @@ import { TraceSpanV2, validTraceSpanV2, analyzeTrace, canonical, protocolId,proj
 import type { Peer } from './channel';
 import { randomUUID } from 'node:crypto';
 import { DispatchOfferV2 } from '@harmony/scheduler-core';
+import {observeExecution} from './performance-feedback';
 export class TraceService {
   readonly clockDomainId=randomUUID();
   constructor(private readonly db:PrismaClient){}
@@ -59,6 +60,7 @@ export class TraceService {
         if(old){if(canonical(JSON.parse(old.metadataJson))!==canonical(value))throw Error('TRACE_CONFLICT');continue;}
         if(await tx.traceSpan.count({where:{groupId:peer.groupId}})>=16384)throw Error('TRACE_CAPACITY');
         await tx.traceSpan.create({data:{id,groupId:peer.groupId,revision:span.snapshotVersion,metadataJson:JSON.stringify(value)}});
+        await observeExecution(tx,peer.groupId,peer.holderInstanceId,span);
       }
     });
   }
@@ -86,7 +88,7 @@ export class TraceService {
     }
     const {spans,causality}=projectTraceCausality(recorded,root?.span.spanId??null,evidence,transfers);
     for(const span of spans){const job=jobs.find(j=>j.id===span.attemptId),cost=job?.d.decisionEvidence;
-      if(cost?.snapshotVersion===span.snapshotVersion&&job!.d.offer.target.targetId===span.targetId&&['EXECUTE','QUEUE','PUBLISH'].includes(span.phase)){
+      if(cost?.snapshotVersion===span.snapshotVersion&&job!.d.offer.target.targetId===span.targetId&&span.reasonCode!=='LOCAL_PHASE_UNCLASSIFIED'&&['EXECUTE','QUEUE','PUBLISH'].includes(span.phase)){
         const predicted=cost.phaseCosts?.[span.phase];if(typeof predicted==='number'&&Number.isFinite(predicted)&&predicted>=0)span.predictedMs=predicted;
       }
     }

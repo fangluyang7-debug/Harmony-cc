@@ -1,7 +1,49 @@
 import { canonical } from './cost';
 import { AttemptRecordV2, ExecutionReceiptV2, equalFenceV2, validExecutionReceiptV2 } from './protocol-v2';
-import { AllotmentGrantV2, DispatchOfferV2, ResourceAmountV2, validAllotmentGrantV2, validDispatchOfferV2, validResourceVectorV2 } from './resources-v2';
+import { InFlightV2, NumericSampleV2, AllotmentGrantV2, DispatchOfferV2, ResourceAmountV2, validAllotmentGrantV2, validDispatchOfferV2, validResourceVectorV2 } from './resources-v2';
 
+interface RunStart {at:number;inputBucket:string;startup:string;}
+interface SettledTiming {duration:number;at:number;}
+/** Process-local evidence. Recovered entries retain occupancy, never an old monotonic origin. */
+export class RunTimings {
+  private starts=new Map<string,RunStart>();
+  private settled=new Map<string,SettledTiming[]>();
+  start(id:string,now:number,inputBytes?:number,startup:'COLD'|'WARM'|'UNKNOWN'='UNKNOWN'):void{
+    const inputBucket=inputBytes!==undefined&&Number.isSafeInteger(inputBytes)&&inputBytes>0?String(Math.floor(Math.log2(inputBytes))):'';
+    this.starts.set(id,{at:now,inputBucket,startup});
+  }
+  private key(e:LedgerEntryV2,start:RunStart):string{
+    const o=e.offer;
+    return [o.task.app.appInstanceId,canonical(o.target),canonical(o.task.contract),start.startup,start.inputBucket,canonical(o.task.inputs.map(r=>[r.schemaId,r.schemaVersion.toString(),start.inputBucket&&start.startup!=='UNKNOWN'?'':r.contentHash])),
+      o.task.parameters,canonical(o.resources),canonical(o.allowedConfigs),canonical(o.transferPlan.map(h=>[h.from,h.to,h.via])),o.task.resultDestination].map(v=>canonical(v)).join('|');
+  }
+  finish(e:LedgerEntryV2,now:number):void{
+    const start=this.starts.get(e.record.attemptId);this.starts.delete(e.record.attemptId);
+    if(start===undefined||now<=start.at||e.record.state!=='SUCCEEDED'||!e.record.resourcesSettled||e.offer.allowedConfigs.length!==1)return;
+    const key=this.key(e,start),history=(this.settled.get(key)??[]).filter(t=>now-t.at<60000).slice(-31);this.settled.delete(key);
+    if(this.settled.size>=128)this.settled.delete(Array.from(this.settled.keys())[0]);
+    history.push({duration:now-start.at,at:now});this.settled.set(key,history);
+  }
+  sample(entries:LedgerEntryV2[],now:number,sampledAt:number,domain:string):InFlightV2[]|undefined{
+    const live=entries.filter(e=>!e.record.resourcesSettled);
+    if(live.length>32||live.some(e=>!['ACCEPTED','RUNNING'].includes(e.record.state)))return undefined;
+    const source=domain==='REAL'?'MEASURED':'SIMULATED';
+    return live.map((e:LedgerEntryV2):InFlightV2=>{
+      const start=this.starts.get(e.record.attemptId),elapsed=start===undefined?null:Math.max(0,now-start.at);
+      const history=start===undefined||e.cancelRequested?[]:(this.settled.get(this.key(e,start))??[]).filter(t=>now>=t.at&&now-t.at<60000);
+      const durations=history.map(t=>t.duration).sort((a,b)=>a-b);
+      const residuals=elapsed===null?[]:durations.filter(d=>d>elapsed).map(d=>d-elapsed);
+      const remaining=residuals.length?residuals[Math.ceil(residuals.length/2)-1]:null;
+      const ttl=history.length?Math.min(15000,history[0].at+60000-now):15000;
+      const elapsedSample:NumericSampleV2={value:elapsed,source:elapsed===null?'UNKNOWN':source,sampledAt,ttlMs:15000,unit:'ms'};
+      const forecast:NumericSampleV2={value:remaining,source:remaining===null?'UNKNOWN':'PRIOR',sampledAt,ttlMs:remaining===null?15000:ttl,unit:'ms'};
+      const fact:InFlightV2={attemptId:e.record.attemptId,targetId:e.offer.target.targetId,state:e.record.state,resources:e.resources,elapsed:elapsedSample,remaining:forecast};
+      if(durations.length)fact.history={samples:durations.length,survivors:residuals.length,p90TotalMs:durations[Math.ceil(durations.length*.9)-1],
+        p90RemainingMs:residuals.length?residuals[Math.ceil(residuals.length*.9)-1]:null};
+      return fact;
+    });
+  }
+}
 export interface LedgerEntryV2 {
   offer:DispatchOfferV2; record:AttemptRecordV2; resources:ResourceAmountV2[];
   deadline:number; cancelRequested:boolean;

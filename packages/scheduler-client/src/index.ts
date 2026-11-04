@@ -1,9 +1,10 @@
+import type {ModelManifestV2} from '@harmony/scheduler-core';
 /** Public submission data contains no identity claims. Credentials bind the App on the server. */
 export interface SdkInput {contentHash:string;bytes:number;schemaId:string;schemaVersion:number;}
-export interface SdkNode {id:string;capability:string;input?:SdkInput;inputFrom?:string;parameters:string;dependsOn:string[];targetId?:string;}
+export interface SdkNode {modelManifest?:ModelManifestV2;id:string;capability:string;input?:SdkInput;inputFrom?:string;parameters:string;dependsOn:string[];targetId?:string;}
 export interface SdkWorkflow {version:3;id:string;outputContract:string;qualityTarget:string;nodes:SdkNode[];}
 export interface SdkAlternatives {version:3;id:string;outputContract:string;qualityTarget:string;alternatives:SdkWorkflow[];}
-export interface SubmitOptions {requestId:string;budgetMs:number;resultDestination:'ORIGIN';inputLocation?:'ORIGIN';}
+export interface SubmitOptions {priority?:'REMOTE_INTERACTIVE'|'REMOTE_BATCH';requestId:string;budgetMs:number;resultDestination:'ORIGIN';inputLocation?:'ORIGIN';}
 export interface SdkSubmission {workflow:SdkWorkflow|SdkAlternatives;options:SubmitOptions;}
 export interface SdkConfiguration {capacityWaitMs:number;}
 export interface SdkRef {artifactId:string;contentVersion:number;contentHash:string;schemaId:string;schemaVersion:number;}
@@ -11,7 +12,8 @@ export interface SdkDirectRoute {jobId:string;endpointId:string;}
 export interface SdkTicket {direct?:SdkDirectRoute;token:string;ref:SdkRef;bytes:number;expiresAt:number;operation:string;}
 export interface SdkPlan {jobId:string;targetId:string;deviceId:string;reason:string;inputTicket:SdkTicket;inputDelivery?:'LOCAL'|'RELAY'|'DIRECT';inputEndpointId?:string;inputTickets?:SdkTicket[];}
 export interface SdkInputTransfer {read:SdkTicket;write:SdkTicket;}
-export interface SdkStatus {inputTransfers?:SdkInputTransfer[];jobId:string;state:string;targetId:string;deviceId:string;traceId:string;outputTicket:SdkTicket|null;}
+export interface SdkReadyWait {queuedAt:number;endedAt:number;waitMs:number;priority:string;outcome:string;lastBlock:string|null;}
+export interface SdkStatus {readyWait?:SdkReadyWait|null;queueReason?:string;queuedAt?:number;inputTransfers?:SdkInputTransfer[];jobId:string;state:string;targetId:string;deviceId:string;traceId:string;outputTicket:SdkTicket|null;}
 export interface SdkResult {jobId:string;output:Uint8Array;status:SdkStatus;}
 /** Platform adapter owns trust, authenticated requests, bytes and the clock. No agent dependency. */
 export interface SdkSourceInterval {clockDomainId:string;startMono:number;endMono:number;}

@@ -4,7 +4,7 @@ import {execFileSync} from 'node:child_process';
 import {createPrivateKey,createPublicKey,sign,X509Certificate} from 'node:crypto';
 import {isIP,createConnection} from 'node:net';
 import {canonical} from '@harmony/scheduler-core';
-import {DataEndpointIdentity,ArtifactSchema,validDataEndpoint,transferDigest} from '@harmony/resource-transport';
+import {ArtifactChannel,DataEndpointIdentity,ArtifactSchema,validDataEndpoint,transferDigest} from '@harmony/resource-transport';
 import {RecoveryConnection} from './recovery-client';
 import {allotmentTransport} from './allotment-client';
 import {createSignedDataEndpoint} from './signed-data-endpoint';
@@ -48,7 +48,7 @@ export async function openDataHost(directory:string,connection:RecoveryConnectio
   }
   if(identity.host!==options.advertisedHost||!new X509Certificate(identity.certificate).publicKey.equals(createPublicKey(createPrivateKey(identity.key))))throw Error('DATA_HOST_IDENTITY_MISMATCH');
   const request=allotmentTransport(connection);let endpoint:DataEndpointIdentity|null=null;
-  const data=createSignedDataEndpoint({directory:path.join(storage,'cache'),domain:connection.domain,key:identity.key,certificate:identity.certificate,
+  const data=createSignedDataEndpoint({directory:path.join(directory,'data-endpoint','cache'),domain:connection.domain,key:identity.key,certificate:identity.certificate,
     coordinatorCertificate:connection.certificate,endpoint:()=>endpoint,schemas,
     onRejected:(authorizationId,code)=>request('/v2/data/rejections',{authorizationId,code}),
     onMissing:authorizationId=>request('/v2/data/missing',{authorizationId}),
@@ -59,12 +59,38 @@ export async function openDataHost(directory:string,connection:RecoveryConnectio
     const address=data.server.address();if(!address||typeof address==='string')throw Error('DATA_HOST_ADDRESS_INVALID');
     const host=isIP(options.advertisedHost)===6?'['+options.advertisedHost+']':options.advertisedHost;
     const proposal={address:'https://'+host+':'+address.port,certificate:identity.certificate};
+    // Older installations keyed their cache by advertised address. Remove a legacy object
+    // only after the stable cache has verified its bytes, or its own hard expiry passes.
+    for(const entry of fs.readdirSync(path.dirname(storage),{withFileTypes:true})){
+      if(!entry.isDirectory()||!/^[a-f0-9]{64}$/.test(entry.name))continue;
+      const legacyDir=path.join(path.dirname(storage),entry.name,'cache');
+      if(!fs.existsSync(legacyDir)||!fs.lstatSync(legacyDir).isDirectory())continue;
+      const legacy=new ArtifactChannel(legacyDir,connection.domain,async()=>{throw Error('LOCAL_CACHE_ONLY');},schemas);
+      legacy.sweep();
+      for(const d of legacy.snapshot().objects){
+        if(!legacy.available(d))continue;
+        try{
+          const bytes=await legacy.readForControl(d);data.channel.register(d);await data.channel.writeForControl(d,bytes);
+          legacy.forget(d);
+        }catch(error){
+          if(!(error instanceof Error)||!['ARTIFACT_CACHE_FULL','ARTIFACT_IDENTITY_CONFLICT','ARTIFACT_CONTENT_INVALID','ARTIFACT_CORRUPT'].includes(error.message))throw error;
+        }
+      }
+    }
     const register=async()=>{
       endpoint=null;
       const challenge=await request('/v2/data/endpoints/challenge',proposal) as {endpoint:DataEndpointIdentity};
       if(!validDataEndpoint(challenge.endpoint)||challenge.endpoint.certificate!==identity.certificate||challenge.endpoint.address!==proposal.address)throw Error('DATA_HOST_REGISTRATION_INVALID');
-      const signature=sign('sha256',Buffer.from(canonical(challenge)),identity.key).toString('base64');
-      const registered=await request('/v2/data/endpoints/register',{challenge,signature}) as DataEndpointIdentity;
+      const verified:string[]=[];
+      for(const d of data.channel.snapshot(challenge.endpoint.groupId).objects){
+        if(!data.channel.available(d))continue;
+        try{await data.channel.readForControl(d);}
+        catch(error){if(error instanceof Error&&['ARTIFACT_EXPIRED','ARTIFACT_CONTENT_INVALID'].includes(error.message))continue;throw error;}
+        verified.push(transferDigest(canonical([d.ref,d.bytes])));
+      }
+      const proof=verified.length?{challenge,verified}: {challenge};
+      const signature=sign('sha256',Buffer.from(canonical(verified.length?proof:challenge)),identity.key).toString('base64');
+      const registered=await request('/v2/data/endpoints/register',{...proof,signature}) as DataEndpointIdentity;
       if(canonical(registered)!==canonical(challenge.endpoint))throw Error('DATA_HOST_REGISTRATION_INVALID');endpoint=registered;
     };
     await register();

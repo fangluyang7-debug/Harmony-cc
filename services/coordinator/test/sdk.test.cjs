@@ -12,7 +12,7 @@ test('registered SDK, alternatives, shared quota, queued cancellation, callback 
   worker=await start('pc',{root,dir:r.config.dataDir,bootstrap,settings});
   await until(async()=>{try{return (await r.snapshots.build('sdk-group')).snapshot.candidates.length===2;}catch{return false;}});
   const invite=await r.auth.invite('sdk-group','app-owner','sdk-origin',r.url),owner=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:randomUUID()}),connection={address:r.url,certificate:invite.certificate,fingerprint:invite.fingerprint,credential:owner.credential,domain:'SIMULATED'};
-  const policy={label:'SDK fixture',allowedContracts:['text.count.v1'],maxConcurrent:1,resources:capacity,offlineBase:[],onlineExtra:[]};
+  const policy={batchWeight:2,label:'SDK fixture',allowedContracts:['text.count.v1'],maxConcurrent:1,resources:capacity,offlineBase:[],onlineExtra:[]};
   const ownerFile=path.join(r.config.dataDir,'owner.json'),policyFile=path.join(r.config.dataDir,'policy.json'),appFile=path.join(r.config.dataDir,'app.json');fs.writeFileSync(ownerFile,JSON.stringify({connection}));fs.writeFileSync(policyFile,JSON.stringify(policy));
   await new Promise((resolve,reject)=>execFile(process.execPath,[path.join(root,'services/pc-agent/dist/app-register-main.js'),ownerFile,policyFile,appFile],{windowsHide:true,timeout:30000},e=>e?reject(e):resolve()));
   const inviteFile=path.join(r.config.dataDir,'native-invitation.json');await new Promise((resolve,reject)=>execFile(process.execPath,[path.join(root,'services/pc-agent/dist/app-register-main.js'),ownerFile,policyFile,inviteFile,'--invite-only'],{windowsHide:true,timeout:30000},e=>e?reject(e):resolve()));const nativeInvite=JSON.parse(fs.readFileSync(inviteFile));assert.equal((await r.db.registeredInstallation.findUnique({where:{id:nativeInvite.registrationId}})).state,'INVITED');assert.equal(nativeInvite.credential,undefined);
@@ -33,9 +33,14 @@ test('registered SDK, alternatives, shared quota, queued cancellation, callback 
   assert.equal(JSON.parse(await client.resume(planned.jobId).cancel()).state,'CANCELLED');assert.equal((await client.resume(planned.jobId).status()).state,'CANCELLED');
   await assert.rejects(client.resume(planned.jobId).result(),/JOB_CANCELLED/);
   one.nodes[0].targetId='not-qualified';two.qualityTarget='reference';
-  const task=await client.submit({version:3,id:randomUUID(),outputContract:'text.counts',qualityTarget:'reference',alternatives:[one,two]},options());
+  const task=await client.submit({version:3,id:randomUUID(),outputContract:'text.counts',qualityTarget:'reference',alternatives:[one,two]},{...options(),priority:'REMOTE_BATCH'});
   const result=await new Promise((resolve,reject)=>task.onResult(resolve,reject));assert.deepEqual(JSON.parse(Buffer.from(result.output)),{characters:9,words:2,lines:1});
   const stored=await r.db.cpuJob.findUnique({where:{id:task.id}}),offer=JSON.parse(stored.metadataJson).offer;
+  assert.equal(offer.task.priority,'REMOTE_BATCH');
+  const charge=await r.db.batchCharge.findUniqueOrThrow({where:{id:task.id}});
+  assert.ok(charge.actualMs>0);assert.equal(charge.rate,.5);
+  const chargedApp=await r.db.registeredApp.findUniqueOrThrow({where:{id:charge.appId}});
+  assert.ok(Math.abs(chargedApp.batchService-charge.actualMs*charge.rate)<.001);
   assert.equal(offer.task.app.appInstanceId,config.identity.app.appInstanceId);assert.equal(offer.task.app.appId,config.identity.app.appId);assert.equal(await r.db.attempt.count({where:{id:task.id}}),1);
   assert.equal((await r.db.receipt.findUnique({where:{id:task.id}})).committed,true);
   const vectorInput=await client.registerInput(Buffer.from('{"dimension":2,"rows":[[3,4]]}'),'vector.input'),vector=make();vector.outputContract='vector.normalized';vector.nodes[0].capability='vector.normalize.v1';vector.nodes[0].input=vectorInput;

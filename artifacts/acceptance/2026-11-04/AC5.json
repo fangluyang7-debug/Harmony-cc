@@ -1,0 +1,306 @@
+{
+  "id": "AC5",
+  "title": "单一派发与有界规划",
+  "environment": {
+    "startedAt": "2026-11-04T12:39:56.897Z",
+    "node": "v22.18.0",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "commit": "94755dcc404c1c08f53335b0516bea5728bcb192",
+    "dirty": true,
+    "sourceDigest": "b6c0008f506e0aebf634b13a76c7e5a67cd079d0a76197e265b300073db4acf9"
+  },
+  "simulation": {
+    "result": "LISTED_CASES_PASS",
+    "coverage": "虚拟时钟覆盖预算回退；本机线性 DAG 规划耗时见 AC5.json。",
+    "suites": [
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "scripts/check-architecture.mjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 4317,
+        "cases": [],
+        "outputSha256": "71fa30ec94b8aefa1c64fdf7e2499d4c3694b95aa569ea9322088afe9347eec9"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "scripts/check-architecture.test.mjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 10591,
+        "cases": [
+          {
+            "name": "pure local export",
+            "result": "PASS"
+          },
+          {
+            "name": "comments are not dependencies",
+            "result": "PASS"
+          },
+          {
+            "name": "node IO import",
+            "result": "PASS"
+          },
+          {
+            "name": "Nest export",
+            "result": "PASS"
+          },
+          {
+            "name": "Prisma dynamic import",
+            "result": "PASS"
+          },
+          {
+            "name": "opaque dynamic import",
+            "result": "PASS"
+          },
+          {
+            "name": "require",
+            "result": "PASS"
+          },
+          {
+            "name": "import equals",
+            "result": "PASS"
+          },
+          {
+            "name": "ambient time",
+            "result": "PASS"
+          },
+          {
+            "name": "random alias",
+            "result": "PASS"
+          },
+          {
+            "name": "random computed",
+            "result": "PASS"
+          },
+          {
+            "name": "environment",
+            "result": "PASS"
+          },
+          {
+            "name": "concrete identity",
+            "result": "PASS"
+          },
+          {
+            "name": "v1 service import",
+            "result": "PASS"
+          },
+          {
+            "name": "v1 package import",
+            "result": "PASS"
+          },
+          {
+            "name": "R21 rejects candidate access, aliases and destructuring outside registered planning/read-only modules",
+            "result": "PASS"
+          },
+          {
+            "name": "R25 rejects literal identities in coordinator and SDK but accepts credential-derived identities",
+            "result": "PASS"
+          },
+          {
+            "name": "CLI rejects R21/R25 violation fixtures in a production-shaped tree",
+            "result": "PASS"
+          },
+          {
+            "name": "production tree passes and CLI exits successfully",
+            "result": "PASS"
+          },
+          {
+            "name": "ArkTS pure core rejects Kit IO and ambient clocks",
+            "result": "PASS"
+          },
+          {
+            "name": "ArkTS dependency scanner resolves ets and forbids client-to-agent/core-to-agent imports",
+            "result": "PASS"
+          },
+          {
+            "name": "ArkTS client and agent cannot hide a dependency through a shared ets bridge",
+            "result": "PASS"
+          },
+          {
+            "name": "real CLI rejects a relative v1 service import and core escape",
+            "result": "PASS"
+          },
+          {
+            "name": "a service cannot hide a v1 dependency behind another workspace package",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "c8c8d6b2bd67178a7f0952ff3fa275874e77965543b84fa39c713cdbaf68c80b"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/planning.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 19057,
+        "cases": [
+          {
+            "name": "pure planning does not touch I/O ports and returns bounded fallback on virtual time",
+            "result": "PASS"
+          },
+          {
+            "name": "device epoch freshness and target authorization affect the decision",
+            "result": "PASS"
+          },
+          {
+            "name": "App-bound candidates require the same authenticated installation even with an explicit target",
+            "result": "PASS"
+          },
+          {
+            "name": "origin sandbox costs zero transfer only for its holder; another holder on the same device pays both relay hops",
+            "result": "PASS"
+          },
+          {
+            "name": "placement follows measured costs across device identifiers d1 and remote",
+            "result": "PASS"
+          },
+          {
+            "name": "placement follows measured costs across device identifiers cloud-runtime and phone_7",
+            "result": "PASS"
+          },
+          {
+            "name": "placement follows measured costs across device identifiers phone_7 and cloud-runtime",
+            "result": "PASS"
+          },
+          {
+            "name": "explicit target is a planner constraint; qualified alternatives cannot bypass it",
+            "result": "PASS"
+          },
+          {
+            "name": "database projection is consistent and preflight rejects changed versions and revocation",
+            "result": "PASS"
+          },
+          {
+            "name": "local result publication stays private only for the authenticated App holder",
+            "result": "PASS"
+          },
+          {
+            "name": "fixed service placement requires the registered origin App holder and matching logical service",
+            "result": "PASS"
+          },
+          {
+            "name": "online slowdown uses a fresh alternate plan and keeps the primary when waiting is faster",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "5589a785078426b89c6822738cf2259372c4bf192aff8eb44e3271e2e0256466"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/sdk-host.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 35289,
+        "cases": [
+          {
+            "name": "registered App host qualifies and executes SDK work through the shared planner and durable ledger",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "32ab44fd01e4d58befd12f19ef5561624c0bdcdb20df1f938bad8c90df344c2c"
+      }
+    ],
+    "planningBenchmark": {
+      "measuredAt": "2026-11-04T12:50:37.890Z",
+      "node": "v22.18.0",
+      "cpu": "Intel(R) Core(TM) Ultra 7 155H",
+      "domain": "SIMULATED",
+      "clock": "performance.now",
+      "scope": "PlanningService.plan on one local device; four eligible targets per node, linear DAG, includes budget fallback",
+      "limits": {
+        "maxCandidates": 8,
+        "lookahead": 16,
+        "beamWidth": 8,
+        "planningBudgetMs": 20,
+        "switchCostMs": 0,
+        "hysteresisMs": 0
+      },
+      "warmups": 10,
+      "samplesPerSize": 100,
+      "results": [
+        {
+          "nodes": 1,
+          "p50Ms": 0.058299999916926026,
+          "p95Ms": 0.12410000001545995,
+          "maxMs": 0.5520000000251457,
+          "reasons": {
+            "LEGAL_SUGGESTION": 100
+          },
+          "budgetFallbacks": 0
+        },
+        {
+          "nodes": 4,
+          "p50Ms": 1.2390000000596046,
+          "p95Ms": 2.054700000095181,
+          "maxMs": 2.4317000000737607,
+          "reasons": {
+            "LEGAL_SUGGESTION": 100
+          },
+          "budgetFallbacks": 0
+        },
+        {
+          "nodes": 8,
+          "p50Ms": 3.4936999999918044,
+          "p95Ms": 4.516500000027008,
+          "maxMs": 5.639199999975972,
+          "reasons": {
+            "LEGAL_SUGGESTION": 100
+          },
+          "budgetFallbacks": 0
+        },
+        {
+          "nodes": 16,
+          "p50Ms": 12.194100000080653,
+          "p95Ms": 13.963699999963865,
+          "maxMs": 14.647400000016205,
+          "reasons": {
+            "LEGAL_SUGGESTION": 100
+          },
+          "budgetFallbacks": 0
+        }
+      ]
+    }
+  },
+  "real": {
+    "result": "NOT_RUN",
+    "pending": [
+      "决赛拓扑下的控制时延与规划耗时。"
+    ]
+  }
+}
