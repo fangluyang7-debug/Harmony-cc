@@ -54,7 +54,15 @@ test('integrated agent: trusted CPU qualification -> pinned artifacts -> WS disp
   await until(()=>dropped&&agent.ready&&!ledger.pendingMessages().some(m=>m.messageId===reportId));
   assert.equal(publishes,1);assert.equal(ledger.snapshot().entries.filter(e=>e.record.attemptId==='business').length,1);assert.deepEqual(occupiedV2(ledger.snapshot()),[]);
   const d=outputs.get('business'),result=await transfer(invite,r.artifacts.issue(d,peer,'READ'),pair.credential);assert.deepEqual(JSON.parse(result.bytes),{dimension:2,rows:[[.6,.8],[0,0]],norms:[5,0]});
-  await until(async()=>await r.db.traceSpan.count()>=5);const trace=await r.traces.read(peer,'trace-business');assert.deepEqual(trace.spans.map(s=>s.phase).sort(),['ADMIT','EXECUTE','LOAD','PUBLISH','QUEUE']);assert.equal(trace.analysis.issues.includes('ROOT_INCOMPLETE'),true);
+  await until(async()=>await r.db.traceSpan.count()>=7);const trace=await r.traces.read(peer,'trace-business');
+  assert.deepEqual(trace.spans.filter(s=>s.parentSpanId===null).map(s=>s.phase).sort(),['ADMIT','EXECUTE','LOAD','PUBLISH','QUEUE']);
+  const transfers=trace.spans.filter(s=>s.transferId);assert.deepEqual(transfers.map(s=>s.phase).sort(),['TRANSFER_RECV','TRANSFER_SEND']);
+  for(const phase of ['LOAD','PUBLISH']){
+   const parent=trace.spans.find(s=>s.phase===phase&&s.parentSpanId===null),children=trace.spans.filter(s=>s.parentSpanId===parent.spanId);
+   assert.ok(children.some(s=>s.transferId&&s.measurementScope==='FULL_TRANSFER'));
+   assert.ok(Math.abs(children.reduce((sum,s)=>sum+s.durationMs,0)-parent.durationMs)<.001);
+  }
+  assert.equal(trace.analysis.issues.includes('ROOT_INCOMPLETE'),true);
   assert.ok(!errors.some(e=>/CONFLICT|CORRUPT|UNAUTHORIZED|INVALID/.test(e)),errors.join(','));
   await agent.close();agent=null;await ledger.close();ledger=await DurableLedger.open(ledgerDir,identity,r.identity.cert);
   assert.equal(ledger.status(business.task.attemptId).state,'SUCCEEDED');assert.throws(()=>ledger.begin('business'),/NOT_STARTABLE/);assert.equal(publishes,1);

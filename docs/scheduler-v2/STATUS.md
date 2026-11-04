@@ -1197,3 +1197,22 @@ QUEUE 的 reasonCode 为 OBSERVED_<原因>，多种原因则 OBSERVED_MIXED_WAIT
 核心 47/47；PC 全量 46/46（含实际占用阻止第二任务及等待原因断言，`.test/s54-pc.log`）；之后新增实际 ArkTS MicroQueue 源码与 PC 的观测结果一致性测试，native-trace 文件 3/3，通过但不冒充原生运行。架构 24/24 通过。API 22 HAR 编译通过（`.test/s54-har.log`）；agent/probe 与正式 SDK 整图正在收尾，最终结果随后登记。模拟器和真机未运行。
 
 §54 最终整合：API 22 agent/probe 构建均通过（`.test/s54-agent.log`、`.test/s54-probe.log`）；正式 SDK 独立进程矩阵 **1/1**（`.test/s54-graph.log`，约 111 秒），覆盖成功、丢回执、直传隔离、容量和双图竞争。成功图均三个 attempt；中继满负例两个 attempt，明确 ARTIFACT_CACHE_FULL。尾部有一次 CONTROL_TRANSPORT_INTERRUPTED，进程退出码 0。未改业务预算。`git diff --check` 通过。随 `feat(s5): report observed queue blocking reasons` 提交，下一项仍是资源等待分段与真实结算关联，不把观测摘要当作 D2 等待估计。
+
+## 55. 全量回归与限定依赖证据核对（2026-11-04）
+
+§54 提交为 `14e5219`。在该运行时代码上执行协调者全量（`.test/s54-coordinator-full.log`）。首项 agent-integration 的旧断言要求追踪只有五个阶段，因新增 HTTP 子跨度和本地剩余区间而失败；独立复现确认是阶段列表断言，不是计算、提交或重启失效。更新断言为：五个顶层阶段保留、两个完整传输子跨度存在、LOAD/PUBLISH 子区间之和等于父阶段；保留丢 ACK、持久化重启及至多一次全部断言。修复后单例 1/1，约 8 秒。全量原始失败日志保留，完整结果随后登记。
+
+按 §50.2 先核对已有证据，不改变上游整体级别：
+
+| 下游所需子集 | 正式路径与当前证据 | 仍需补充/边界 |
+| --- | --- | --- |
+| D1 → B5 认证、完整性 | `artifacts.test.cjs` 验证协调者/PC HTTPS 的凭据、对象、操作、schema、哈希、期限与双跳；`direct-transfers.test.cjs` 验证独立端点的一次性授权和换代失效；本轮全量相应用例已通过 | 单物理机 TLS/进程证据，非实际 AP 隔离 |
+| D1 → B5 方向链路与并发 | `link-probe.test.cjs` 验证认证方向探测；PC `relay-links.test.cjs` 验证未知、有效期与网络换代；`direct-transfers.test.cjs` 实际占满四个中继槽位后拒绝业务请求且不核销授权，释放后成功；核心 planner 用例覆盖两跳成本与容量 | 新增更大并发矩阵仍按 S5 待办推进 |
+| D1 → C3 提交、引用与期限 | `sdk.test.cjs`、`workflow-process.test.cjs` 经正式 SDK/PlanningService、认证输入输出与真实回执；原期限和容量负例保持；`retention.test.cjs` 保护未结算读者 | SDK/PC 路径已测，鸿蒙运行仍待设备 |
+| D2 → B7 运行/占用/结算/原因 | PC scheduler 用例验证占用阻止后续准入、取消不提前释放；协调者 recovery/receipt/retention 用例验证未结算保护；§54 正式队列接入原因，TS/ArkTS 源码替身一致 | **尚未满足全部子集**：已运行时长、任务/资源池事实的持续认证上报与失效处理仍待补；观测摘要不是等待估计 |
+| D2 → B11 合格性与样本 | `profile-projection.test.cjs` 验证版本、陈旧/缺失证据拒绝及 executor/holder 换代失效；`remote-evaluation.test.cjs` 走独立进程/TLS 校准、丢响应重用已结算结果、恢复与取消；本轮相应用例通过 | 不能把现有零值先验当作在途等待实测；D2 需按来源/版本/有效期消费 |
+| D4 → A1/B4/C2/C3 | 核心 47/47、架构 24/24；实际额度与共享物理池用例、`apps.test.cjs` 跨安装 App 配额、正式 SDK 工作流；本轮已运行的对应测试通过 | **不是 D4 完成**：共同估计契约、并行竞争与预计释放不代替结算的新增验收仍待执行 |
+
+D1 自身的中继规划/追踪验收与 D4 自身验收不能由本表代替。B10 的资源等待关联仍在推进；不跳过 §50.2 的接续顺序。上表是证据核对，不是对任何整体工作包的新完成声明。
+
+§55 全量完成：协调者 **105/106，退出码 1，约 471 秒**；唯一失败为上述旧阶段列表断言。修复后 `node --test test/agent-integration.test.cjs` **1/1，退出码 0**。其余 105 项在同一运行时代码上通过，未将首轮日志改写为 106/106，也未额外重跑整套。`git diff --check` 通过。本次只更新集成断言及证据，随 `test(s5): verify nested trace coverage in agent integration` 提交。
