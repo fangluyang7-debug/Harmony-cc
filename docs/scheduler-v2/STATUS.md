@@ -1162,3 +1162,17 @@ PC 执行器将输入哈希校验纳入 LOAD，将输出哈希/允许 schema 校
 §51 最终针对性整合结果：完整构建后，`node --test --test-concurrency=1 test/workflow-process.test.cjs test/traces.test.cjs` **3/3，退出码 0**（约 73 秒）。覆盖独立进程正常直传、响应丢失、直连隔离、接收端/生产端缓存满、双图竞争；新增断言确认生产端缓存满后正式中继发布的 FULL_TRANSFER 子跨度位于 PUBLISH 内，且完整发布阶段仍有预测误差。中继全满负例只保留两个成功计算 attempt，在剩余 26,510 ms 时明确失败；该数值仅是本机预算记录。测试尾部出现一次 CONTROL_TRANSPORT_INTERRUPTED 通知，三项测试均通过。未执行协调者全量，不能以此替代全量结论。`git diff --check` 通过。
 
 下一项继续 B10：补齐阶段内非 HTTP 区间与资源等待的因果关联，并同步鸿蒙计量；当前已拆分 PC HTTP 不代表所有数据路径完整。随后按 §50.2 定义估计契约与登记上游子集证据，不跳过 D1/D4 验收。
+
+## 52. 提交及鸿蒙中继计量同步（2026-11-04）
+
+按用户明确要求，§49—51 代码、测试、接口说明与已确认的规格增补提交为 `342adf4`（`feat(s5): trace relay HTTP within execution phases`）。提交后继续 B10，没有等待额外确认；未推送。
+
+鸿蒙 NativeAgent 的中继 GET/PUT 接入 NativeTrace 传输子跨度，记录本地完整 HTTP 请求区间。输入长度/哈希校验仍在 LOAD 内；输出引用校验和本地保存仍在 PUBLISH 内。子跨度在阶段结束时绑定父 ID，失败也保留 HTTP 与阶段证据；阶段依赖只指向前一个阶段，不被子跨度改写。传输子跨度临时缓冲有界，不含票据、凭据或业务内容。当前没有把仅覆盖 HTTP 的鸿蒙子跨度宣称为含后续哈希计算的区间。
+
+新增基于实际 NativeTrace 源文件的转译替身测试 2/2：包含关系、阶段顺序、请求失败和原错误保持；这类测试不代替 ArkTS 编译。协议 T1/T2 503/352、架构 24/24 通过。
+
+环境已发生变化：本机 E:/DevEco/DevEco Studio 提供 HarmonyOS 6.0.2 / API 22。最新源码 `npm run harmony:v2:har` 编译通过，日志 `.test/s52-har-final.log`，约 34 秒；存在权限、弃用 API 和无签名配置警告，没有编译错误。此前 §44—51 的“API 22 环境待备”是历史状态，不再代表本次 HAR 编译状态。最初一次 HAR 仅包含 NativeTrace 修改；最终上述日志对应 NativeAgent 接入后的完整源码，不能混用。
+
+agent/probe 使用最终 HAR 的构建结果及 PC 全量结果随后登记。模拟器、真机保持暂停；编译不作为设备验收。B10 的非 HTTP 区间和资源等待关联仍待继续，D2/D4 估计契约未完成。
+
+§52 最终验证：PC 全量 **46/46**（`.test/s52-pc-final.log`）；最终 HAR 对应 agent/probe API 22 构建均通过（`.test/s52-agent-final.log`、`.test/s52-probe-final.log`），退出码均为 0。原生编译、替身语义与设备验收分别记录；没有启动模拟器或真机。`git diff --check` 通过。本节源码和测试随本次 `feat(s5): mirror relay tracing in Harmony host` 提交，提交号见 Git 日志。

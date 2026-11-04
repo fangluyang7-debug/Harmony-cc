@@ -127,3 +127,5 @@ SDK 结果重复读取和回调复用该任务对象已校验的字节。可用�
 PC 旧制品 HTTP 路径现在在 LOAD/PUBLISH 内上报传输子跨度：下载为 `TRANSFER_RECV / FULL_TRANSFER / RECEIVER`，上传为 `TRANSFER_SEND / FULL_TRANSFER / SENDER`，成功原因 `RELAY_HTTP_ROUND_TRIP`。区间覆盖本次调用的请求、响应及传输层完整性检查；每次实际请求生成独立 transferId，不复用票据或制品哈希，不记录凭据。输入哈希与输出引用校验仍包含在外层 LOAD/PUBLISH；请求失败同时记录失败子跨度和失败阶段，不改变结算行为。
 
 这些跨度复用已认证的执行追踪批次；与 `/v2/data/traces` 的授权绑定两端跨度分别记录。累计工作量只计算叶子跨度，外层发布阶段的预测误差仍按完整 PUBLISH 区间对照，不因新增子跨度而消失。尚未完成的跨域关联、外层阶段中未拆分的控制/本地处理区间以及资源等待继续保留计量缺口；不能将本次细分标为完整关键路径。当前仅接通 PC，鸿蒙对应细分待实现。
+
+鸿蒙 NativeAgent 同步记录中继 GET/PUT 的 FULL_TRANSFER 子跨度，并在 LOAD/PUBLISH 结束时绑定父阶段。该端的 HTTP 子跨度截至响应完成，后续输入长度/哈希校验包含在 LOAD 外层；HTTP 返回成功但校验失败时，LOAD 仍记录 PHASE_FAILED。传输子跨度不参与前后阶段依赖选择。
