@@ -43,7 +43,16 @@ export function analyzeTrace(spans:readonly TraceSpanV2[]){
     let value;
     if(children.has(id)){
       value=predecessor;for(const child of children.get(id)!){const f=finish(child);if(f.finish>value.finish)value=f;}
-      if(s.dependsOn.length)issues.add('CONTAINER_DEPENDENCY_UNRESOLVED');
+      if(s.dependsOn.length){
+        const nested=children.get(id)!.map(child=>byId.get(child)!).sort((a,b)=>a.startMono-b.startMono);
+        let end=s.startMono;
+        const covered=nested.every((child,i)=>{
+          const ordered=child.clockDomainId===s.clockDomainId&&Math.abs(child.startMono-end)<.001&&child.endMono<=s.endMono&&
+            (i===0?s.dependsOn:nested.slice(i-1,i).map(p=>p.spanId)).every(dep=>child.dependsOn.includes(dep));
+          end=child.endMono;return ordered;
+        })&&Math.abs(end-s.endMono)<.001;
+        if(!covered)issues.add('CONTAINER_DEPENDENCY_UNRESOLVED');
+      }
     }else{
       let offset=predecessor.finish;
       if(root&&root.clockDomainId===s.clockDomainId){

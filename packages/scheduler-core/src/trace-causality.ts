@@ -20,8 +20,39 @@ export function projectTraceCausality(recorded:readonly TraceSpanV2[],rootId:str
     }
     if(!links.some(l=>l.beforeSpanId===before.spanId&&l.afterSpanId===after.spanId))links.push({beforeSpanId:before.spanId,afterSpanId:after.spanId,reason});
   };
+  // Only partition a measured local phase when all recorded children are
+  // sequential HTTP intervals on exactly the same process clock. Complements
+  // are measured local time, not an assertion about CPU work or queueing.
+  for(const parent of [...spans]){
+    if(!['LOAD','PUBLISH'].includes(parent.phase)||parent.transferId!==null)continue;
+    const children=spans.filter(s=>s.parentSpanId===parent.spanId).sort((a,b)=>a.startMono-b.startMono);
+    if(!children.length)continue;
+    let cursor=parent.startMono;
+    if(children.some(c=>{
+      const invalid=c.clockDomainId!==parent.clockDomainId||c.attemptId!==parent.attemptId||c.startMono<cursor||c.endMono>parent.endMono||!c.transferId||c.measurementScope!=='FULL_TRANSFER';
+      cursor=c.endMono;return invalid;
+    })){missing.add('LOCAL_PHASE_PARTITION_UNPROVEN');continue;}
+    const pieces:TraceSpanV2[]=[];cursor=parent.startMono;
+    const remainder=(end:number)=>{
+      if(end>cursor){const id='remainder-'+parent.spanId+'-'+pieces.length;
+        pieces.push({...parent,spanId:id,parentSpanId:parent.spanId,dependsOn:[],startMono:cursor,endMono:end,durationMs:end-cursor,
+          predictedMs:null,reasonCode:'LOCAL_PHASE_UNCLASSIFIED',measurementScope:'LOCAL_INTERVAL',authoritativeSide:'SELF'});}
+    };
+    for(const child of children){remainder(child.startMono);pieces.push(child);cursor=child.endMono;}
+    remainder(parent.endMono);
+    if(pieces.some(c=>!protocolId(c.spanId)||byId.has(c.spanId)&&!children.includes(c))||spans.length+pieces.length-children.length>4096){missing.add('LOCAL_PHASE_PARTITION_LIMIT');continue;}
+    let predecessors=[...parent.dependsOn];
+    if(pieces.some((piece,i)=>new Set([...piece.dependsOn,...(i===0?parent.dependsOn:[pieces[i-1].spanId])]).size>64)){
+      missing.add('CAUSAL_DEPENDENCY_LIMIT');continue;
+    }
+    for(const piece of pieces){
+      for(const id of predecessors)if(!piece.dependsOn.includes(id))piece.dependsOn.push(id);
+      if(!byId.has(piece.spanId)){spans.push(piece);byId.set(piece.spanId,piece);}
+      predecessors=[piece.spanId];
+    }
+  }
   const phase=(attempt:string,name:string)=>{
-    const found=spans.filter(s=>s.attemptId===attempt&&s.phase===name&&s.spanId!==rootId);
+    const found=spans.filter(s=>s.attemptId===attempt&&s.phase===name&&s.spanId!==rootId&&s.reasonCode!=='LOCAL_PHASE_UNCLASSIFIED');
     if(found.length>1)missing.add('PHASE_AMBIGUOUS');return found.length===1?found[0]:undefined;
   };
   for(const job of jobs){
