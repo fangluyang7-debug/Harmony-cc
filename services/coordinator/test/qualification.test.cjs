@@ -24,18 +24,24 @@ test('committed same-bucket execution drift opens circuit and a new reference ge
   await service.advance(peer,target);assert.equal(await service.advance(peer,target),'ACTIVE');
   const job=JSON.parse((await r.db.calibrationJob.findUniqueOrThrow({where:{id:key}})).metadataJson);
   const {observeExecution}=require('../dist/performance-feedback');
+  const crop=(await require('@harmony/reference-capabilities').builtinReferencePacks()).find(pack=>pack.manifest.packId==='image.crop.v1');
+  assert.deepEqual(crop.manifest.contract.workModel,require('../../../capabilities/image.crop.v1/manifest.json').contract.workModel);
   let i=0;
   async function sample(ms,config='standard',committed=true){
    const id='obs-'+(++i),span={attemptId:id,traceId:id,snapshotVersion:1,phase:'EXECUTE',targetId:target,
     durationMs:ms,measurementScope:'LOCAL_INTERVAL',authoritativeSide:'SELF'};
    const data={traceId:id,holderId:'h1',input:{bytes:64},decisionEvidence:{executionIdentity:job.identity,calibrationGeneration:job.generation,snapshotVersion:1},
-    offer:{target:{targetId:target},task:{contract:p.executors[0].contract,parameters:'{}'},allowedConfigs:[config]}};
+    offer:{target:{targetId:target},task:{contract:crop.manifest.contract,parameters:crop.cases[i%crop.cases.length].parameters},allowedConfigs:[{id:config}]}};
    await r.db.cpuJob.create({data:{id,groupId:'g1',principalId:'p1',sourceHolderId:'h1',state:'DISPATCHED',metadataJson:JSON.stringify(data)}});
    await r.db.$transaction(async tx=>{await observeExecution(tx,'g1','h1',span);await observeExecution(tx,'g1','h1',span);});
    await r.db.receipt.create({data:{id,attemptId:id,recordJson:'{}',committed}});
   }
   for(const ms of [10,12,11,150,160])await sample(ms);
   await sample(180,'different');await sample(200,'standard',false);
+  const samples=JSON.parse((await r.db.costObservation.findUniqueOrThrow({where:{id:'execute:'+key}})).metadataJson).samples;
+  assert.equal(new Set(samples.map(s=>s.workKey)).size,1);
+  assert.equal(samples.filter(s=>s.configId==='different').length,1);
+  assert.equal(samples.filter(s=>s.configId==='standard').length,6);
   assert.equal(await service.advance(peer,target),'ACTIVE');
   await sample(170);
   assert.equal(await create().advance(peer,target),'SUSPENDED');

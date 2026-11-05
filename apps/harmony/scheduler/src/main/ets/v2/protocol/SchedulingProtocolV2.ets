@@ -9,7 +9,22 @@ export interface MessageEnvelopeV2 {
 export interface AppIdentityV2 { groupId: string; principalId: string; appId: string; appInstanceId: string; allowedContracts: string[]; }
 export interface ArtifactRefV2 { artifactId: string; contentVersion: number; contentHash: string; schemaId: string; schemaVersion: number; }
 export interface ArtifactGrantV2 { ref: ArtifactRefV2; groupId: string; ownerPrincipalId: string; ownerAppId: string; allowedAppInstanceIds: string[]; operations: string[]; expiresAt: number; }
+export interface WorkParameterV2 { name:string; bucketWidth?:number; }
+export interface WorkModelV2 { version:string; parameters:WorkParameterV2[]; }
+export function validWorkModelV2(model:WorkModelV2):boolean {
+  if(!exactV2(model,['version','parameters'])||!idV2(model.version)||!Array.isArray(model.parameters)||model.parameters.length>16)return false;
+  const names:string[]=[];
+  for(const rule of model.parameters){
+    if(!objectV2(rule))return false;
+    const width=Object.keys(rule).indexOf('bucketWidth')>=0;
+    if(!exactV2(rule,width?['name','bucketWidth']:['name'])||typeof rule.name!=='string'||!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(rule.name)||names.indexOf(rule.name)>=0)return false;
+    if(width&&(typeof rule.bucketWidth!=='number'||!Number.isFinite(rule.bucketWidth)||rule.bucketWidth<=0))return false;
+    names.push(rule.name);
+  }
+  return true;
+}
 export interface TaskContractV2 {
+  workModel?: WorkModelV2;
   serviceId?: string;
   contractId: string; version: number; capability: string; inputSchemas: string[]; outputSchemas: string[];
   sideEffectPolicy: string; interruptibility: string; maxNonPreemptibleMs: number | null;
@@ -103,7 +118,8 @@ export function allowsArtifactV2(grant: ArtifactGrantV2, caller: AppIdentityV2, 
 export function validTaskContractV2(v: TaskContractV2): boolean {
   const fields=['contractId','version','capability','inputSchemas','outputSchemas','sideEffectPolicy','interruptibility','maxNonPreemptibleMs'];
   if(objectV2(v)&&Object.keys(v).indexOf('serviceId')>=0)fields.push('serviceId');
-  return exactV2(v,fields)&&(fields.indexOf('serviceId')<0||idV2(v.serviceId!))&&
+  if(objectV2(v)&&Object.keys(v).indexOf('workModel')>=0)fields.push('workModel');
+  return exactV2(v,fields)&&(fields.indexOf('workModel')<0||validWorkModelV2(v.workModel!))&&(fields.indexOf('serviceId')<0||idV2(v.serviceId!))&&
     idV2(v.contractId)&&integerV2(v.version,1)&&idV2(v.capability)&&idsV2(v.inputSchemas,64)&&idsV2(v.outputSchemas,64)&&v.outputSchemas.length>0&&
     ['PURE','IDEMPOTENT_WRITE','TRANSACTIONAL','NO_REPLAY'].indexOf(v.sideEffectPolicy)>=0&&['CHECKPOINT','CANCEL_RESTART','NON_INTERRUPTIBLE'].indexOf(v.interruptibility)>=0&&
     (v.maxNonPreemptibleMs===null||timeV2(v.maxNonPreemptibleMs));

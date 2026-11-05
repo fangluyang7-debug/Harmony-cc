@@ -377,6 +377,16 @@
           ],
           "description": "Required; milliseconds. null only where explicitly allowed. Missing is rejected."
         },
+        "workModel": {
+          "type": "object", "additionalProperties": false, "required": ["version", "parameters"],
+          "properties": {
+            "version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"},
+            "parameters": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {
+              "type": "object", "additionalProperties": false, "required": ["name"],
+              "properties": {"name": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]{0,63}$"}, "bucketWidth": {"type": "number", "exclusiveMinimum": 0}}
+            }}
+          }
+        },
         "serviceId": {
           "type": "string",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",

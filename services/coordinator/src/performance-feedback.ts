@@ -1,8 +1,7 @@
-import {createHash} from 'node:crypto';
-import {canonical,TraceSpanV2} from '@harmony/scheduler-core';
+import {canonical,workKeyV2,TraceSpanV2} from '@harmony/scheduler-core';
 import {Prisma,PrismaClient} from '../generated/client';
 
-interface Observation {id:string;bucket:string;ms:number;}
+interface Observation {id:string;bucket?:string;workKey?:string;configId?:string;ms:number;}
 interface Window {identity:string;generation:number;samples:Observation[];}
 export async function observeExecution(tx:Prisma.TransactionClient,group:string,holder:string,span:TraceSpanV2){
   if(span.phase!=='EXECUTE'||span.measurementScope!=='LOCAL_INTERVAL'||span.authoritativeSide!=='SELF'||span.durationMs<=0)return;
@@ -20,9 +19,11 @@ export async function observeExecution(tx:Prisma.TransactionClient,group:string,
   let window:Window=stored?JSON.parse(stored.metadataJson):{identity:job.identity,generation:job.generation,samples:[]};
   if(window.identity!==job.identity||window.generation!==job.generation)window={identity:job.identity,generation:job.generation,samples:[]};
   if(window.samples.some(s=>s.id===row.id))return;
-  const bucket=createHash('sha256').update(canonical([data.offer.allowedConfigs[0],data.offer.task.contract,
-    data.offer.task.parameters,Math.floor(Math.log2(Math.max(1,data.input.bytes)))])).digest('hex');
-  window.samples.push({id:row.id,bucket,ms:span.durationMs});window.samples=window.samples.slice(-32);
+  let workKey:string;
+  try{workKey=workKeyV2(data.offer.task.contract,data.offer.task.parameters,data.input.bytes);}catch{return;}
+  const configId=data.offer.allowedConfigs[0].id;
+  if(typeof configId!=='string')return;
+  window.samples.push({id:row.id,workKey,configId,ms:span.durationMs});window.samples=window.samples.slice(-32);
   const fields={groupId:group,revision:job.generation,metadataJson:JSON.stringify(window)};
   await tx.costObservation.upsert({where:{id},create:{id,...fields},update:fields});
 }
@@ -35,7 +36,9 @@ export async function sustainedDrift(db:PrismaClient,targetKey:string,identity:s
   const successful=new Set(receipts.map(r=>r.id)),buckets=new Map<string,number[]>();
   for(const s of window.samples){
     if(!successful.has(s.id))continue;
-    const values=buckets.get(s.bucket)??[];values.push(s.ms);buckets.set(s.bucket,values);
+    const key=s.workKey&&s.configId?canonical([s.workKey,s.configId]):s.bucket;
+    if(!key)continue;
+    const values=buckets.get(key)??[];values.push(s.ms);buckets.set(key,values);
   }
   for(const values of buckets.values()){
     if(values.length<6)continue;

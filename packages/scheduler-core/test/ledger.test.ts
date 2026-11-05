@@ -1,3 +1,4 @@
+import { workKeyV2 } from '../src/capability-cost-model';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { RunTimings, newLedgerV2, requestGrantV2, installGrantV2, admitV2, occupiedV2, vectorSumV2, recoverLedgerV2 } from '../src/ledger-v2';
@@ -51,7 +52,7 @@ test('live timings compare like-for-like completed work, expire and never free o
  expect(sample(115).elapsed.value).toBe(15);expect(sample(115).remaining.value).toBe(25);
  expect(sample(145).remaining.value).toBeNull();expect(entry.record.resourcesSettled).toBe(false);
  entry.cancelRequested=true;expect(sample(120).remaining.value).toBeNull();
- entry.cancelRequested=false;entry.offer.task.parameters='different';expect(sample(120).remaining.value).toBeNull();
+ entry.cancelRequested=false;entry.offer.task.parameters='different';expect(sample(120).remaining.value).toBe(20);
  entry.offer.task.parameters=offer.task.parameters;timing.start(entry.record.attemptId,61000);
  expect(sample(61001).remaining.value).toBeNull();
 });
@@ -79,4 +80,16 @@ test('known startup state and verified input size distinguish comparable executi
  };
  expect(estimate(1500,'COLD')).toBe(40);expect(estimate(2048,'COLD')).toBeNull();
  expect(estimate(1500,'WARM')).toBeNull();expect(estimate(1500,'UNKNOWN')).toBeNull();
+});
+
+test('work buckets use contract dimensions, quality steps and byte ranges',()=>{
+ const contract=setup().offer.task.contract;
+ const model={version:'crop-v1',parameters:[{name:'targetSize'},{name:'jpegQuality',bucketWidth:10}]};
+ const key=(x:number,size:number,q:number,bytes:number)=>workKeyV2({...contract,workModel:model},JSON.stringify({box:{x},targetSize:size,jpegQuality:q}),bytes);
+ expect(key(0,32,80,10)).toBe(key(1,32,89,15));
+ expect(key(0,32,80,10)).not.toBe(key(0,64,80,10));
+ expect(key(0,32,80,10)).not.toBe(key(0,32,90,10));
+ expect(workKeyV2(contract,'{}',0)).toBe(workKeyV2(contract,'{"box":5}',1));
+ expect(key(0,32,80,10)).not.toBe(key(0,32,80,16));
+ expect(()=>workKeyV2({...contract,workModel:{...model,parameters:[{name:'x',bucketWidth:0}]}},'{}',1)).toThrow('COST_MODEL_INVALID');
 });

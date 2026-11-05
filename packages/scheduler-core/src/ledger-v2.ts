@@ -1,7 +1,13 @@
+import { costConfiguration } from './capability-cost-model';
 import { canonical } from './cost';
-import { AttemptRecordV2, ExecutionReceiptV2, equalFenceV2, validExecutionReceiptV2 } from './protocol-v2';
+import { WorkModelV2, AttemptRecordV2, ExecutionReceiptV2, equalFenceV2, validExecutionReceiptV2 } from './protocol-v2';
 import { InFlightV2, NumericSampleV2, AllotmentGrantV2, DispatchOfferV2, ResourceAmountV2, validAllotmentGrantV2, validDispatchOfferV2, validResourceVectorV2 } from './resources-v2';
 
+// Invalid business parameters retain exact identity so a timing sample cannot leak into a valid bucket.
+function timingConfiguration(parameters:string,model?:WorkModelV2):string {
+  try{return canonical(costConfiguration(model?JSON.parse(parameters):null,model));}
+  catch{return 'invalid:'+parameters;}
+}
 interface RunStart {at:number;inputBucket:string;startup:string;}
 interface SettledTiming {duration:number;at:number;}
 /** Process-local evidence. Recovered entries retain occupancy, never an old monotonic origin. */
@@ -15,7 +21,7 @@ export class RunTimings {
   private key(e:LedgerEntryV2,start:RunStart):string{
     const o=e.offer;
     return [o.task.app.appInstanceId,canonical(o.target),canonical(o.task.contract),start.startup,start.inputBucket,canonical(o.task.inputs.map(r=>[r.schemaId,r.schemaVersion.toString(),start.inputBucket&&start.startup!=='UNKNOWN'?'':r.contentHash])),
-      o.task.parameters,canonical(o.resources),canonical(o.allowedConfigs),canonical(o.transferPlan.map(h=>[h.from,h.to,h.via])),o.task.resultDestination].map(v=>canonical(v)).join('|');
+      timingConfiguration(o.task.parameters,o.task.contract.workModel),canonical(o.resources),canonical(o.allowedConfigs),canonical(o.transferPlan.map(h=>[h.from,h.to,h.via])),o.task.resultDestination].map(v=>canonical(v)).join('|');
   }
   finish(e:LedgerEntryV2,now:number):void{
     const start=this.starts.get(e.record.attemptId);this.starts.delete(e.record.attemptId);

@@ -3,6 +3,7 @@
   "contract": {
     "contractId": "image.crop.contract",
     "version": 1,
+    "workModel": {"version":"crop-cost-v1","parameters":[{"name":"targetSize"},{"name":"jpegQuality","bucketWidth":10}]},
     "capability": "image.crop.v1",
     "inputSchemas": [
       "image.raster"

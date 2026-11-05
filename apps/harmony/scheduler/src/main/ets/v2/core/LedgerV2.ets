@@ -1,11 +1,27 @@
 import { canonical } from './CanonicalV2';
-import { AttemptRecordV2, ExecutionReceiptV2, equalFenceV2, validExecutionReceiptV2 } from '../protocol/SchedulingProtocolV2';
+import { WorkModelV2, AttemptRecordV2, ExecutionReceiptV2, equalFenceV2, validExecutionReceiptV2 } from '../protocol/SchedulingProtocolV2';
 import { InFlightV2, NumericSampleV2, AllotmentGrantV2, DispatchOfferV2, ResourceAmountV2, validAllotmentGrantV2, validDispatchOfferV2, validResourceVectorV2 } from '../protocol/ResourcesV2';
 
 export interface LedgerIdentityV2 { groupId:string;deviceId:string;holderInstanceId:string;appInstanceId:string|null; }
 export interface GrantRequestV2 { id:string;started:number; }
 export interface LedgerAdmissionResultV2 { state:LedgerStateV2;entry:LedgerEntryV2;existing:boolean; }
 export interface LedgerPoolStateV2 { resourcePoolId:string;admissionLimit:number;occupied:number;draining:boolean; }
+// Invalid business parameters retain exact identity so a timing sample cannot leak into a valid bucket.
+function timingConfiguration(parameters:string,model?:WorkModelV2):string {
+  if(!model)return 'size-only-v1';
+  try{
+    const input=JSON.parse(parameters) as Record<string,Object|null>;
+    const values:Record<string,Object|null>={};
+    for(const rule of model.parameters){
+      const value=input[rule.name];
+      if(rule.bucketWidth!==undefined)values[rule.name]=typeof value==='number'&&Number.isFinite(value)?Math.floor(value/rule.bucketWidth):null;
+      else if(value===undefined||value===null)values[rule.name]=null;
+      else if(typeof value==='boolean'||typeof value==='number'||(typeof value==='string'&&value.length<=128))values[rule.name]=value;
+      else return 'invalid:'+parameters;
+    }
+    return canonical(values);
+  }catch{return 'invalid:'+parameters;}
+}
 interface RunStart {at:number;inputBucket:string;startup:string;}
 interface SettledTiming {duration:number;at:number;}
 /** Process-local evidence. Recovered entries retain occupancy, never an old monotonic origin. */
@@ -19,7 +35,7 @@ export class RunTimings {
   private key(e:LedgerEntryV2,start:RunStart):string{
     const o=e.offer;
     return [o.task.app.appInstanceId,canonical(o.target),canonical(o.task.contract),start.startup,start.inputBucket,canonical(o.task.inputs.map(r=>[r.schemaId,r.schemaVersion.toString(),start.inputBucket&&start.startup!=='UNKNOWN'?'':r.contentHash])),
-      o.task.parameters,canonical(o.resources),canonical(o.allowedConfigs),canonical(o.transferPlan.map(h=>[h.from,h.to,h.via])),o.task.resultDestination].map(v=>canonical(v)).join('|');
+      timingConfiguration(o.task.parameters,o.task.contract.workModel),canonical(o.resources),canonical(o.allowedConfigs),canonical(o.transferPlan.map(h=>[h.from,h.to,h.via])),o.task.resultDestination].map(v=>canonical(v)).join('|');
   }
   finish(e:LedgerEntryV2,now:number):void{
     const start=this.starts.get(e.record.attemptId);this.starts.delete(e.record.attemptId);

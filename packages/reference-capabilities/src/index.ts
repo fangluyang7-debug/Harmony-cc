@@ -22,7 +22,7 @@ export function builtinCpuPacks():ReferencePack[]{return [
   pack('text.count.v1','text.input','text.counts',{text:'Hello Harmony\n资源协同'},{characters:18,words:3,lines:2},128)
 ];}
 export async function builtinReferencePacks():Promise<ReferencePack[]>{
- const manifest:CapabilityPackV2={packId:'image.crop.v1',contract:{contractId:'image.crop.contract',version:1,capability:'image.crop.v1',inputSchemas:['image.raster'],outputSchemas:['image.raster'],sideEffectPolicy:'PURE',interruptibility:'CANCEL_RESTART',maxNonPreemptibleMs:null},
+ const manifest:CapabilityPackV2={packId:'image.crop.v1',contract:{contractId:'image.crop.contract',version:1,workModel:{version:'crop-cost-v1',parameters:[{name:'targetSize'},{name:'jpegQuality',bucketWidth:10}]},capability:'image.crop.v1',inputSchemas:['image.raster'],outputSchemas:['image.raster'],sideEffectPolicy:'PURE',interruptibility:'CANCEL_RESTART',maxNonPreemptibleMs:null},
  executorIds:['harmony.cpu.v1','sharp.crop.v1'],model:null,suiteId:'crop.geometry-colour.v1',qualityThreshold:.98,resourceLimit:structuredClone(cpuResources)};
  return [...builtinCpuPacks(),await cropEvaluationPack(manifest)];
 }
