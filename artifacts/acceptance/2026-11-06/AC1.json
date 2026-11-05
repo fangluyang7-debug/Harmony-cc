@@ -1,0 +1,327 @@
+{
+  "id": "AC1",
+  "title": "App 解耦",
+  "environment": {
+    "startedAt": "2026-11-05T18:03:12.354Z",
+    "node": "v22.18.0",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "commit": "214b6e5f78815b14aefbff6b54ea6027d13db287",
+    "dirty": false,
+    "sourceDigest": "bf110623808f23187f9b28180f4c69cbb4f3fa244eb3711abaf8d1e393e54f4a"
+  },
+  "simulation": {
+    "result": "LISTED_CASES_PASS",
+    "coverage": "参考包按契约检查成功输出和预期拒绝；S4 保存接入前后的核心摘要，三条图像路径使用替身编码器。",
+    "suites": [
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "scripts/check-architecture.mjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 6194,
+        "cases": [],
+        "outputSha256": "58b56ee890e62a83bd07087a77f241ddddce25f5ddaeeacc2f832935d45a0f7e"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "scripts/check-architecture.test.mjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 12453,
+        "cases": [
+          {
+            "name": "pure local export",
+            "result": "PASS"
+          },
+          {
+            "name": "comments are not dependencies",
+            "result": "PASS"
+          },
+          {
+            "name": "node IO import",
+            "result": "PASS"
+          },
+          {
+            "name": "Nest export",
+            "result": "PASS"
+          },
+          {
+            "name": "Prisma dynamic import",
+            "result": "PASS"
+          },
+          {
+            "name": "opaque dynamic import",
+            "result": "PASS"
+          },
+          {
+            "name": "require",
+            "result": "PASS"
+          },
+          {
+            "name": "import equals",
+            "result": "PASS"
+          },
+          {
+            "name": "ambient time",
+            "result": "PASS"
+          },
+          {
+            "name": "random alias",
+            "result": "PASS"
+          },
+          {
+            "name": "random computed",
+            "result": "PASS"
+          },
+          {
+            "name": "environment",
+            "result": "PASS"
+          },
+          {
+            "name": "concrete identity",
+            "result": "PASS"
+          },
+          {
+            "name": "v1 service import",
+            "result": "PASS"
+          },
+          {
+            "name": "v1 package import",
+            "result": "PASS"
+          },
+          {
+            "name": "R21 rejects candidate access, aliases and destructuring outside registered planning/read-only modules",
+            "result": "PASS"
+          },
+          {
+            "name": "R25 rejects literal identities in coordinator and SDK but accepts credential-derived identities",
+            "result": "PASS"
+          },
+          {
+            "name": "CLI rejects R21/R25 violation fixtures in a production-shaped tree",
+            "result": "PASS"
+          },
+          {
+            "name": "production tree passes and CLI exits successfully",
+            "result": "PASS"
+          },
+          {
+            "name": "ArkTS pure core rejects Kit IO and ambient clocks",
+            "result": "PASS"
+          },
+          {
+            "name": "ArkTS dependency scanner resolves ets and forbids client-to-agent/core-to-agent imports",
+            "result": "PASS"
+          },
+          {
+            "name": "ArkTS client and agent cannot hide a dependency through a shared ets bridge",
+            "result": "PASS"
+          },
+          {
+            "name": "real CLI rejects a relative v1 service import and core escape",
+            "result": "PASS"
+          },
+          {
+            "name": "a service cannot hide a v1 dependency behind another workspace package",
+            "result": "PASS"
+          },
+          {
+            "name": "executor dispatch files use registered capability names only inside implementations",
+            "result": "PASS"
+          },
+          {
+            "name": "reference implementations cannot import execution implementations",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "74eaf9b733a4b017ad6cc992f6654d19dd7f04485147c557c19ce9125388d2e0"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "scripts/check-s4-core-baseline.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 117,
+        "cases": [],
+        "outputSha256": "c6e744a9c13fe3232438c46497c68252856c3f52dc549cd512aaeb67ce564abd"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/sdk-host.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 76627,
+        "cases": [
+          {
+            "name": "registered App host qualifies and executes SDK work through the shared planner and durable ledger",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "5e0d409aa22a19ddab9a5905f24cabb684ef46d3d5b37cc3ae677d94a19b5b67"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/qualification.test.cjs",
+          "test/reference-suites.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 75714,
+        "cases": [
+          {
+            "name": "committed same-bucket execution drift opens circuit and a new reference generation restores it",
+            "result": "PASS"
+          },
+          {
+            "name": "fresh CANARY evidence remains usable while the next case runs; a failed reference still suspends it",
+            "result": "PASS"
+          },
+          {
+            "name": "trusted calibration uses real CPU and durable quota before automatic CANARY/ACTIVE; restart, pause, expiry and scoped evidence",
+            "result": "PASS"
+          },
+          {
+            "name": "missing pack, malformed output, budget exhaustion and unknown settlement never qualify; failures cool down",
+            "result": "PASS"
+          },
+          {
+            "name": "calibration loop bounds work, prevents overlap, refreshes failed targets and rotates fairly",
+            "result": "PASS"
+          },
+          {
+            "name": "qualification read is scoped to holder and invalidated when executor is removed",
+            "result": "PASS"
+          },
+          {
+            "name": "coordinator owns calibration loop lifecycle and enumerates only active credentials",
+            "result": "PASS"
+          },
+          {
+            "name": "a proven pre-admission evaluation refusal preserves fresh CANARY quality without promotion",
+            "result": "PASS"
+          },
+          {
+            "name": "qualification accepts a matching FAILED code and defers interrupted or unstarted evaluation",
+            "result": "PASS"
+          },
+          {
+            "name": "new unlabelled packs fail installation and lifecycle fixtures are confined to the simulated domain",
+            "result": "PASS"
+          },
+          {
+            "name": "installed text, vector and crop suites bind each contract case to output or a settled rejection",
+            "result": "PASS"
+          },
+          {
+            "name": "reference scoring helpers distinguish exact, continuous and conditional invariant checks",
+            "result": "PASS"
+          },
+          {
+            "name": "versioned encoding suites require genuine boundary inputs and declared expected vectors",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "565f356581c715f13c76c16f3ec90664dda29dc001c33f1fc2fc40c150429828"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "tests/sdk/native-image-encoder.test.cjs",
+          "tests/sdk/indexer-storage.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 871,
+        "cases": [
+          {
+            "name": "Indexer keeps committed revisions across reopen and isolates the full model space",
+            "result": "PASS"
+          },
+          {
+            "name": "converted artifact is hash-bound; native adapter validates tensors and emits the registered space",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "f062d37fbd811e00ff3a923867732bf5491acf73db418aa957b671072b3a5ab4"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": ".",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "services/api-server/test/image-search-v2.test.cjs"
+        ],
+        "env": {
+          "HARMONY_IMAGE_TEAM_TEST": "1"
+        },
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 28736,
+        "cases": [
+          {
+            "name": "business session searches pinned vector and image spaces across index activation",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "4ffc59c58f624bb9d850019c42c2605d2f6a8abb6aba396d3e4e42943542fe60"
+      }
+    ]
+  },
+  "real": {
+    "result": "NOT_RUN",
+    "pending": [
+      "两个独立 App 同机切换、共享 HAR、真实输入输出。"
+    ]
+  }
+}

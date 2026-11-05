@@ -1,0 +1,134 @@
+{
+  "physicalAcceptance": "NOT_RUN",
+  "referenceRasterCeilingBytes": 65536,
+  "agents": [
+    {
+      "agent": "pc",
+      "startedAt": "2026-11-05T16:07:56.144Z",
+      "finishedAt": "2026-11-05T16:08:53.920Z",
+      "domain": "SIMULATED",
+      "packs": [
+        {
+          "capability": "image.crop.v1",
+          "passedCases": 6,
+          "quality": 1
+        },
+        {
+          "capability": "text.count.v1",
+          "passedCases": 15,
+          "quality": 1
+        },
+        {
+          "capability": "vector.normalize.v1",
+          "passedCases": 5,
+          "quality": 1
+        }
+      ],
+      "checks": [
+        {
+          "name": "01 pairing, credential binding and one-use invitation",
+          "result": "PASS"
+        },
+        {
+          "name": "02 profile schema, unknown values and monotonic sequence",
+          "result": "PASS"
+        },
+        {
+          "name": "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+          "result": "PASS"
+        },
+        {
+          "name": "03b PC crop dispatched by PlanningService; geometry/colour checked; malformed crop settles as failed",
+          "result": "PASS"
+        },
+        {
+          "name": "04 same attempt with a new messageId returns existing admission/result without executing twice",
+          "result": "PASS"
+        },
+        {
+          "name": "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+          "result": "PASS"
+        },
+        {
+          "name": "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+          "result": "PASS"
+        },
+        {
+          "name": "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+          "result": "PASS"
+        },
+        {
+          "name": "08 revoked credential cannot reconnect or publish new telemetry",
+          "result": "PASS"
+        }
+      ]
+    },
+    {
+      "agent": "harmony-emulator",
+      "startedAt": "2026-11-05T16:17:17.783Z",
+      "finishedAt": "2026-11-05T16:18:37.930Z",
+      "domain": "SIMULATED",
+      "api": 24,
+      "hapSha256": "7819a2d25acb69f14d01b4b2d1de8ba64117c5db4c34c6720a8d80077772c75c",
+      "packs": [
+        {
+          "capability": "image.crop.v1",
+          "passedCases": 6,
+          "quality": 1
+        },
+        {
+          "capability": "text.count.v1",
+          "passedCases": 15,
+          "quality": 1
+        },
+        {
+          "capability": "vector.normalize.v1",
+          "passedCases": 5,
+          "quality": 1
+        }
+      ],
+      "checks": [
+        {
+          "name": "01 pairing, credential binding and one-use invitation",
+          "result": "PASS"
+        },
+        {
+          "name": "02 profile schema, unknown values and monotonic sequence",
+          "result": "PASS"
+        },
+        {
+          "name": "03 qualified dispatch, atomic admission, execution and artifact result via PlanningService",
+          "result": "PASS"
+        },
+        {
+          "name": "03b ImageKit crop dispatched by PlanningService; geometry/colour checked; malformed crop settles as failed",
+          "result": "PASS"
+        },
+        {
+          "name": "03c emulator lifecycle: background stops admission, foreground resumes qualified contribution",
+          "result": "PASS"
+        },
+        {
+          "name": "04 same attempt with a new messageId returns existing admission/result without executing twice",
+          "result": "PASS"
+        },
+        {
+          "name": "05 changed attempt input is ATTEMPT_CONFLICT; foreign fence cannot commit",
+          "result": "PASS"
+        },
+        {
+          "name": "06 owner activity sends YieldNotice, stops admission, and cancellation retains resources until settlement",
+          "result": "PASS"
+        },
+        {
+          "name": "07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity",
+          "result": "PASS"
+        },
+        {
+          "name": "08 revoked credential cannot reconnect or publish new telemetry",
+          "result": "PASS"
+        }
+      ]
+    }
+  ]
+}

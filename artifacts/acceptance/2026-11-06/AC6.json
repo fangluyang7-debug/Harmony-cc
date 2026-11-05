@@ -1,0 +1,144 @@
+{
+  "id": "AC6",
+  "title": "自动接入与反馈",
+  "environment": {
+    "startedAt": "2026-11-05T18:03:12.354Z",
+    "node": "v22.18.0",
+    "platform": "win32",
+    "arch": "x64",
+    "osRelease": "10.0.26200",
+    "commit": "214b6e5f78815b14aefbff6b54ea6027d13db287",
+    "dirty": false,
+    "sourceDigest": "bf110623808f23187f9b28180f4c69cbb4f3fa244eb3711abaf8d1e393e54f4a"
+  },
+  "simulation": {
+    "result": "LISTED_CASES_PASS",
+    "coverage": "性能漂移和时钟变化使用受控输入。",
+    "suites": [
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/qualification.test.cjs",
+          "test/reference-suites.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 75714,
+        "cases": [
+          {
+            "name": "committed same-bucket execution drift opens circuit and a new reference generation restores it",
+            "result": "PASS"
+          },
+          {
+            "name": "fresh CANARY evidence remains usable while the next case runs; a failed reference still suspends it",
+            "result": "PASS"
+          },
+          {
+            "name": "trusted calibration uses real CPU and durable quota before automatic CANARY/ACTIVE; restart, pause, expiry and scoped evidence",
+            "result": "PASS"
+          },
+          {
+            "name": "missing pack, malformed output, budget exhaustion and unknown settlement never qualify; failures cool down",
+            "result": "PASS"
+          },
+          {
+            "name": "calibration loop bounds work, prevents overlap, refreshes failed targets and rotates fairly",
+            "result": "PASS"
+          },
+          {
+            "name": "qualification read is scoped to holder and invalidated when executor is removed",
+            "result": "PASS"
+          },
+          {
+            "name": "coordinator owns calibration loop lifecycle and enumerates only active credentials",
+            "result": "PASS"
+          },
+          {
+            "name": "a proven pre-admission evaluation refusal preserves fresh CANARY quality without promotion",
+            "result": "PASS"
+          },
+          {
+            "name": "qualification accepts a matching FAILED code and defers interrupted or unstarted evaluation",
+            "result": "PASS"
+          },
+          {
+            "name": "new unlabelled packs fail installation and lifecycle fixtures are confined to the simulated domain",
+            "result": "PASS"
+          },
+          {
+            "name": "installed text, vector and crop suites bind each contract case to output or a settled rejection",
+            "result": "PASS"
+          },
+          {
+            "name": "reference scoring helpers distinguish exact, continuous and conditional invariant checks",
+            "result": "PASS"
+          },
+          {
+            "name": "versioned encoding suites require genuine boundary inputs and declared expected vectors",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "565f356581c715f13c76c16f3ec90664dda29dc001c33f1fc2fc40c150429828"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/sdk-host.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 76627,
+        "cases": [
+          {
+            "name": "registered App host qualifies and executes SDK work through the shared planner and durable ledger",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "5e0d409aa22a19ddab9a5905f24cabb684ef46d3d5b37cc3ae677d94a19b5b67"
+      },
+      {
+        "category": "SIMULATED",
+        "cwd": "services/coordinator",
+        "command": [
+          "node",
+          "--test",
+          "--test-concurrency=1",
+          "--test-reporter=tap",
+          "test/direct-transfers.test.cjs"
+        ],
+        "env": {},
+        "result": "PASS",
+        "exitCode": 0,
+        "signal": null,
+        "durationMs": 17097,
+        "cases": [
+          {
+            "name": "independent endpoint processes consume single-use scoped grants online and invalidate network epochs",
+            "result": "PASS"
+          }
+        ],
+        "outputSha256": "5f48b3fd7f06bbbe2e08be21725466bf7b995f2a7f538e22096c55757581abb8"
+      }
+    ]
+  },
+  "real": {
+    "result": "NOT_RUN",
+    "pending": [
+      "真实模型测量、热降频及断路恢复。"
+    ]
+  }
+}
