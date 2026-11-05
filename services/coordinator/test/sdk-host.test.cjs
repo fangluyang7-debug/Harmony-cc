@@ -124,14 +124,24 @@ test('registered App host qualifies and executes SDK work through the shared pla
     if(inject){
       const target=profile.executors.find(e=>e.contract.capability==='text.count.v1');
       for(const pool of profile.pools){const resource=target.resources.find(r=>r.resourcePoolId===pool.resourcePoolId);if(resource)pool.occupied={...pool.occupied,value:resource.amount};}
-      const remaining={value:1600,unit:'ms',source:'SIMULATED',sampledAt:profile.ownerActivity.sampledAt,ttlMs:4000};
+      const remaining={value:4500,unit:'ms',source:'SIMULATED',sampledAt:profile.ownerActivity.sampledAt,ttlMs:4000};
       profile.inFlight=[{attemptId:'fixture-running',targetId:target.target.targetId,state:'RUNNING',resources:target.resources,elapsed:{...remaining,value:200},remaining}];
       profile.credits.forEach(c=>c.slots=0);
     }
     return publish(profile);
   };
   const busyId=randomUUID(),busyInput=await sdk.registerInput(Buffer.from(JSON.stringify({text:'busy'})+' '.repeat(1024)),'text.input');
-  await host.tick(false);await remoteHost.tick(false);
+  // A tick can join an already running sample. Start the measured submission only
+  // once the coordinator has published both the injected occupancy and the alternative.
+  let observed=false;
+  for(const end=Date.now()+45000;Date.now()<end&&!observed;){
+   await host.tick(false);await remoteHost.tick(false);
+   const candidates=(await r.snapshots.build(group)).snapshot.candidates.filter(c=>c.capability==='text.count.v1');
+   observed=candidates.some(c=>c.holderInstanceId===peer.holderInstanceId&&c.availability?.reason==='RESOURCE_CAPACITY'&&c.availability.resourceWait.value>0&&c.costEvidence?.compute.value===localCost)&&
+    candidates.some(c=>c.holderInstanceId===remoteHolder&&c.costEvidence?.compute.value===remoteCost);
+   if(!observed)await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  assert.equal(observed,true,'published busy host and slower alternative must be visible before submitting');
   const {dispatchDiagnostics}=require('../dist/dispatch-diagnostics');
   const waitDeadline=Date.now()+15000;
   const work=sdk.submit({version:3,id:busyId,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input:busyInput,parameters:'{}',dependsOn:[]}]},{requestId:busyId,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});

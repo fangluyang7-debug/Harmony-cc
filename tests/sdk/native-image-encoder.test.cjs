@@ -12,9 +12,10 @@ test('converted artifact is hash-bound; native adapter validates tensors and emi
   await fs.writeFile(file,JSON.stringify(cfg));await fs.writeFile(path.join(dir,'converted.ms'),weights);
   await fs.writeFile(path.join(dir,'suite.json'),JSON.stringify({model,executorIds:['harmony.image.cpu.v1'],minimumCosine:.98,memoryBytes:67108864,cases:[{id:'red',imageBase64:png,vector:[.6,.8]}]}));
   const pack=await packageImageEncoder(file,dir);assert.deepEqual(pack.manifest.model,model);
-  let predictions=0,releases=0;
+  let predictions=0,releases=0,clock=0;
+  const setupSamples=[];
   const adapter={
-    '../platform/NativeTransport':{bytes:s=>Buffer.from(s),hash,text:v=>Buffer.from(v).toString()},
+    '../platform/NativeTransport':{bytes:s=>Buffer.from(s),hash,text:v=>Buffer.from(v).toString(),monotonic:()=>++clock},
     '../protocol/ResourcesV2':require('@harmony/scheduler-core'),
     '@kit.ImageKit':{image:{PixelMapFormat:{RGBA_8888:1},createImageSource:()=>({
       getImageInfo:async()=>({size:{width:1,height:1}}),release:async()=>{releases++;},
@@ -32,8 +33,9 @@ test('converted artifact is hash-bound; native adapter validates tensors and emi
   const js=require('esbuild').transformSync(source,{loader:'ts',format:'cjs'}).code,native={exports:{}};
   new Function('module','require',js)(native,id=>{assert.ok(adapter[id],id);return adapter[id];});
   const encode=(expected=model)=>native.exports.encodeImage({resourceManager:{getRawFileContent:async f=>new Uint8Array(await fs.readFile(path.join(dir,f)))}},
-    new Uint8Array(Buffer.from(png,'base64')),JSON.stringify(expected),model,()=>false);
+    new Uint8Array(Buffer.from(png,'base64')),JSON.stringify(expected),model,()=>false,ms=>setupSamples.push(ms));
   assert.deepEqual(JSON.parse(Buffer.from(await encode())),{model,vector:[.6,.8]});assert.equal(releases,2);
+  assert.deepEqual(setupSamples,[2]);
   await assert.rejects(encode({...model,version:'other'}),/MODEL_MISMATCH/);
   await fs.writeFile(path.join(dir,'image-encoder.ms'),'different');await assert.rejects(encode(),/MODEL_DIGEST/);
   assert.equal(predictions,1);
