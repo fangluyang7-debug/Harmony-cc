@@ -11,6 +11,7 @@ export interface PoolV2 {
 export interface ModelManifestV2 { modelId:string; version:string; weightsHash:string; preprocessVersion:string; embeddingKind:string; dimension:number; dtype:string; normalization:string; }
 export interface ExecutionConfigV2 { id:string; threads:number; batchSize:number; quality:string; }
 export interface ExecutorV2 {
+  startup?:string;
   target:TargetV2; contract:TaskContractV2; model:ModelManifestV2|null; resources:ResourceAmountV2[]; configurations:ExecutionConfigV2[];
   compute:NumericSampleV2; queue:NumericSampleV2; cold:NumericSampleV2; publish:NumericSampleV2; uncertainty:NumericSampleV2;
 }
@@ -48,7 +49,7 @@ export interface DispatchOfferV2 {
   allotmentId:string;allotmentVersion:number;leaseMs:number;transferPlan:TransferHopV2[];dependencies:DependencyV2[];reasonCode:string;
 }
 export interface AdmissionReplyV2 {attemptId:string;holderInstanceId:string;status:string;reasonCode:string|null;record:AttemptRecordV2|null;wait:NumericSampleV2;}
-export interface ExecutionReportV2 {resourceHeldMs?:number;receipt:ExecutionReceiptV2;allotmentId:string;allotmentVersion:number;leaseId:string;actualModel:ModelManifestV2|null;timings:NumericSampleV2[];}
+export interface ExecutionReportV2 {overheadMs?:number;startup?:string;resourceHeldMs?:number;receipt:ExecutionReceiptV2;allotmentId:string;allotmentVersion:number;leaseId:string;actualModel:ModelManifestV2|null;timings:NumericSampleV2[];}
 export interface YieldNoticeV2 {attemptId:string;kind:string;releaseMs:NumericSampleV2;checkpoint:ArtifactRefV2|null;reasonCode:string;}
 export interface AttemptStatusReplyV2 {attemptId:string;record:AttemptRecordV2|null;}
 export interface CapabilityPackV2 {packId:string;contract:TaskContractV2;executorIds:string[];model:ModelManifestV2|null;suiteId:string;qualityThreshold:number;resourceLimit:ResourceAmountV2[];}
@@ -90,7 +91,9 @@ export function validModelManifestV2(v:ModelManifestV2):boolean{return exact(v,[
 export function sameModelV2(a:ModelManifestV2|null,b:ModelManifestV2|null):boolean{return a===null||b===null?a===b:validModelManifestV2(a)&&validModelManifestV2(b)&&a.modelId===b.modelId&&a.version===b.version&&a.weightsHash===b.weightsHash&&a.preprocessVersion===b.preprocessVersion&&a.embeddingKind===b.embeddingKind&&a.dimension===b.dimension&&a.dtype===b.dtype&&a.normalization===b.normalization;}
 export function validExecutionConfigV2(v:ExecutionConfigV2):boolean{return exact(v,['id','threads','batchSize','quality'])&&id(v.id)&&integer(v.threads,1)&&v.threads<=256&&integer(v.batchSize,1)&&v.batchSize<=1024&&id(v.quality);}
 export function validExecutorV2(v:ExecutorV2):boolean{
-  return exact(v,['target','contract','model','resources','configurations','compute','queue','cold','publish','uncertainty'])&&validTargetV2(v.target)&&validTaskContractV2(v.contract)&&
+  const fields=['target','contract','model','resources','configurations','compute','queue','cold','publish','uncertainty'];
+  if(v?.startup!==undefined){if(!['COLD','WARM','UNKNOWN'].includes(v.startup))return false;fields.push('startup');}
+  return exact(v,fields)&&validTargetV2(v.target)&&validTaskContractV2(v.contract)&&
     (v.model===null||validModelManifestV2(v.model))&&validResourceVectorV2(v.resources)&&v.resources.length>0&&v.resources.every((r:ResourceAmountV2)=>v.target.resourcePoolIds.includes(r.resourcePoolId))&&
     Array.isArray(v.configurations)&&v.configurations.length>0&&v.configurations.length<=64&&v.configurations.every((c:ExecutionConfigV2)=>validExecutionConfigV2(c))&&unique(v.configurations.map((c:ExecutionConfigV2)=>c.id))&&
     [v.compute,v.queue,v.cold,v.publish,v.uncertainty].every((s:NumericSampleV2)=>validNumericSampleV2(s)&&s.unit==='ms');
@@ -120,7 +123,7 @@ export function validDeviceProfileV2(v:DeviceProfileV2):boolean{
       (f.history.survivors===0?f.history.p90RemainingMs===null:f.history.p90RemainingMs!==null&&nonnegative(f.history.p90RemainingMs)))&&id(f.targetId)&&
       ['ACCEPTED','RUNNING'].includes(f.state)&&validResourceVectorV2(f.resources)&&
       [f.elapsed,f.remaining].every((s:NumericSampleV2)=>validNumericSampleV2(s)&&s.unit==='ms'))||
-      !unique(v.inFlight.map((f:InFlightV2)=>f.attemptId)))return false;
+      !unique(v.inFlight.map((f:InFlightV2)=>f.attemptId))||v.inFlight.some((f:InFlightV2)=>v.queued?.some((q:QueuedFactV2)=>q.attemptId===f.attemptId)))return false;
   }
   return exact(v,fields)&&
     [v.deviceId,v.deviceInstanceId,v.holderInstanceId].every((s:string)=>id(s))&&integer(v.ledgerEpoch,1)&&integer(v.sequence,1)&&['REAL','SIMULATED'].includes(v.domain)&&
@@ -145,6 +148,7 @@ export function validDispatchOfferV2(v:DispatchOfferV2):boolean{
 }
 export function validAdmissionReplyV2(v:AdmissionReplyV2):boolean{return exact(v,['attemptId','holderInstanceId','status','reasonCode','record','wait'])&&id(v.attemptId)&&id(v.holderInstanceId)&&['ACCEPTED','REJECTED'].includes(v.status)&&(v.reasonCode===null||id(v.reasonCode))&&validNumericSampleV2(v.wait)&&v.wait.unit==='ms'&&(v.status==='ACCEPTED'?validAttemptRecordV2(v.record!)&&v.record!.attemptId===v.attemptId&&v.record!.holderInstanceId===v.holderInstanceId:v.record===null&&v.reasonCode!==null);}
 export function validExecutionReportV2(v:ExecutionReportV2):boolean{const keys=['receipt','allotmentId','allotmentVersion','leaseId','actualModel','timings'];
+  if(v?.overheadMs!==undefined){if(!Number.isFinite(v.overheadMs)||v.overheadMs<0||!['COLD','WARM'].includes(v.startup??''))return false;keys.push('overheadMs','startup');}
   if(v?.resourceHeldMs!==undefined){if(!Number.isFinite(v.resourceHeldMs)||v.resourceHeldMs<0)return false;keys.push('resourceHeldMs');}
   return exact(v,keys)&&validExecutionReceiptV2(v.receipt)&&id(v.allotmentId)&&integer(v.allotmentVersion,1)&&id(v.leaseId)&&(v.actualModel===null||validModelManifestV2(v.actualModel))&&Array.isArray(v.timings)&&v.timings.length<=32&&v.timings.every((s:NumericSampleV2)=>validNumericSampleV2(s)&&s.unit==='ms');}
 export function validYieldNoticeV2(v:YieldNoticeV2):boolean{return exact(v,['attemptId','kind','releaseMs','checkpoint','reasonCode'])&&id(v.attemptId)&&['CHECKPOINT','RESTART','DRAINING'].includes(v.kind)&&validNumericSampleV2(v.releaseMs)&&v.releaseMs.unit==='ms'&&(v.checkpoint===null||validArtifactRefV2(v.checkpoint))&&(v.kind!=='CHECKPOINT'||v.checkpoint!==null)&&id(v.reasonCode);}

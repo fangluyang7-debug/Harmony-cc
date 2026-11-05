@@ -10,7 +10,7 @@ const peer={groupId:'g1',holderInstanceId:'h1',deviceId:'device1',principalId:'p
 const policy={maxRuns:12,maxDurationMs:60000,maxBytes:100000,maxConcurrent:1,caseTimeoutMs:4000,canarySamples:1,activeSamples:2,evidenceTtlMs:200,cooldownMs:20};
 const key=JSON.stringify(['g1','h1','target1']);
 function packFor(p){const e=p.executors[0],input=Buffer.from('{"dimension":2,"rows":[[3,4]]}');
- return {manifest:{packId:'normalize.v1',contract:e.contract,executorIds:[e.target.executorId],model:e.model,suiteId:'normalize-suite.v1',qualityThreshold:1,resourceLimit:e.resources},
+ return {simulationFixture:true,manifest:{packId:'normalize.v1',contract:e.contract,executorIds:[e.target.executorId],model:e.model,suiteId:'normalize-suite.v1',qualityThreshold:1,resourceLimit:e.resources},
  cases:[{id:'normal',input,parameters:'{}',config:e.configurations[0],maxOutputBytes:4096}],evaluate:async(_test,bytes)=>JSON.parse(bytes).rows[0][0]===.6?1:0};}
 const contribution={minimumBattery:20,maximumTemperature:3,allowMetered:false,priority:'REMOTE_INTERACTIVE',requireForeground:true};
 
@@ -31,7 +31,7 @@ test('committed same-bucket execution drift opens circuit and a new reference ge
    const id='obs-'+(++i),span={attemptId:id,traceId:id,snapshotVersion:1,phase:'EXECUTE',targetId:target,
     durationMs:ms,measurementScope:'LOCAL_INTERVAL',authoritativeSide:'SELF'};
    const data={traceId:id,holderId:'h1',input:{bytes:64},decisionEvidence:{executionIdentity:job.identity,calibrationGeneration:job.generation,snapshotVersion:1},
-    offer:{target:{targetId:target},task:{contract:crop.manifest.contract,parameters:crop.cases[i%crop.cases.length].parameters},allowedConfigs:[{id:config}]}};
+    offer:{target:{targetId:target},task:{contract:crop.manifest.contract,parameters:crop.cases[i%2].parameters},allowedConfigs:[{id:config}]}};
    await r.db.cpuJob.create({data:{id,groupId:'g1',principalId:'p1',sourceHolderId:'h1',state:'DISPATCHED',metadataJson:JSON.stringify(data)}});
    await r.db.$transaction(async tx=>{await observeExecution(tx,'g1','h1',span);await observeExecution(tx,'g1','h1',span);});
    await r.db.receipt.create({data:{id,attemptId:id,recordJson:'{}',committed}});
@@ -42,6 +42,15 @@ test('committed same-bucket execution drift opens circuit and a new reference ge
   assert.equal(new Set(samples.map(s=>s.workKey)).size,1);
   assert.equal(samples.filter(s=>s.configId==='different').length,1);
   assert.equal(samples.filter(s=>s.configId==='standard').length,6);
+  const {computeHistory}=require('../dist/performance-feedback'),when=Date.now();
+  assert.deepEqual(await computeHistory(r.db,key,job.identity,when),[],'unsplit EXECUTE cannot seed a compute estimate');
+  await r.db.receipt.updateMany({data:{overheadMs:2,startup:'COLD'}});
+  const [summary]=await computeHistory(r.db,key,job.identity,when);
+  assert.deepEqual([summary.count,summary.p50Ms,summary.p90Ms,summary.coldP50Ms],[5,10,158,2]);
+  const row=await r.db.costObservation.findUniqueOrThrow({where:{id:'execute:'+key}}),window=JSON.parse(row.metadataJson);
+  window.samples.slice(0,3).forEach(s=>s.observedAt=when-660000);
+  await r.db.costObservation.update({where:{id:row.id},data:{metadataJson:JSON.stringify(window)}});
+  assert.deepEqual(await computeHistory(r.db,key,job.identity,when),[],'old observations expire individually');
   assert.equal(await service.advance(peer,target),'ACTIVE');
   await sample(170);
   assert.equal(await create().advance(peer,target),'SUSPENDED');
@@ -174,5 +183,31 @@ test('a proven pre-admission evaluation refusal preserves fresh CANARY quality w
   const evidence=await dir.qualification(peer,'target1');assert.equal(evidence.admission.quality.value,1);assert.equal(evidence.admission.reasonCode,'EVALUATION_NOT_RUN');
   assert.equal(await service.advance(peer,'target1'),'CANARY');assert.equal(runs,2,'resource refusal must back off');
   now+=policy.evidenceTtlMs+1;assert.equal(await service.advance(peer,'target1'),'SUSPENDED','expired evidence is never retained');
+ }finally{await r.close();}
+});
+
+test('qualification accepts a matching FAILED code and defers interrupted or unstarted evaluation',async()=>{
+ const r=await runtime();let now=100,next;
+ try{
+  const profileValue=profile(),dir=new DeviceDirectory(r.db,'SIMULATED',()=>now);await dir.ingest(peer,profileValue);
+  const pack=packFor(profileValue);pack.cases[0].expect={kind:'REJECT',errorCode:'VECTOR_INVALID'};
+  pack.evaluate=async()=>{throw Error('REJECT_SHOULD_NOT_COMPARE_OUTPUT');};
+  const runner={run:async permit=>({settled:true,permitId:permit.id,domain:'SIMULATED',durationMs:0,output:Buffer.alloc(0),...next}),reconcile:async()=>null};
+  const service=new QualificationService(r.db,dir,[pack],runner,policy,async()=>null,()=>now);
+  for(const deferred of [{notRun:true},{interrupted:true},{errorCode:'CPU_PROCESS_FAILED'}]){
+   next=deferred;assert.equal(await service.advance(peer,'target1'),'WAITING_RESOURCE');now+=policy.cooldownMs+1;
+  }
+  next={errorCode:'UNEXPECTED_CODE'};assert.equal(await service.advance(peer,'target1'),'SUSPENDED');now+=policy.cooldownMs+1;
+  next={errorCode:'VECTOR_INVALID'};await service.advance(peer,'target1');assert.equal(await service.advance(peer,'target1'),'ACTIVE');
+ }finally{await r.close();}
+});
+
+test('new unlabelled packs fail installation and lifecycle fixtures are confined to the simulated domain',async()=>{
+ const r=await runtime();try{
+  const pack=packFor(profile()),runner={run:async()=>{throw Error('UNUSED');},reconcile:async()=>null};
+  const install=(domain,p)=>new QualificationService(r.db,new DeviceDirectory(r.db,domain),[p],runner,policy,async()=>null);
+  assert.throws(()=>install('REAL',pack),/TRUSTED_PACK_COVERAGE/);
+  assert.throws(()=>install('SIMULATED',{...pack,simulationFixture:undefined}),/TRUSTED_PACK_COVERAGE/);
+  assert.doesNotThrow(()=>install('SIMULATED',pack));
  }finally{await r.close();}
 });

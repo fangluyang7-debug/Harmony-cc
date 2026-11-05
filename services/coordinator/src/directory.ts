@@ -1,6 +1,7 @@
+import {computeHistory} from './performance-feedback';
 import { createHash } from 'node:crypto';
 import { Prisma, PrismaClient } from '../generated/client';
-import { availability, canonical, DeviceProfileV2, DispatchOfferV2, ExecutorV2, validDeviceProfileV2, sampleUsableV2, PlanningSnapshot, PlacementCandidate, DeviceResources, CapabilityAdmissionV2, validCapabilityAdmissionV2 } from '@harmony/scheduler-core';
+import { CostEstimatePolicy,availability, canonical, DeviceProfileV2, DispatchOfferV2, ExecutorV2, validDeviceProfileV2, sampleUsableV2, PlanningSnapshot, PlacementCandidate, DeviceResources, CapabilityAdmissionV2, validCapabilityAdmissionV2 } from '@harmony/scheduler-core';
 import { Peer } from './channel';
 import type {PlacementLink} from '@harmony/scheduler-core';
 
@@ -105,7 +106,7 @@ export class DeviceDirectory {
         pool.admissionLimit.value!-pool.occupied.value!-(reserved.get(r.resourcePoolId)??0)>=r.amount;
     });
   }
-  async snapshot(groupId:string,policyVersion:string,version:number,policy:ContributionPolicy,db:Prisma.TransactionClient=this.db):Promise<PlanningSnapshot>{
+  async snapshot(groupId:string,policyVersion:string,version:number,policy:ContributionPolicy,db:Prisma.TransactionClient=this.db,estimatePolicy?:CostEstimatePolicy):Promise<PlanningSnapshot>{
     const excludedTargets:NonNullable<PlanningSnapshot['excludedTargets']>=[];
     const now=this.now(),profiles=await this.profiles(groupId,db),candidates:PlacementCandidate[]=[],resources:DeviceResources[]=[];
     const capacity=new Map<string,{deviceId:string;poolId:string;total:number|null;occupied:number|null;sampledAt:number;ttlMs:number;kind:string}>();
@@ -132,7 +133,30 @@ export class DeviceDirectory {
         c.total=Math.max(0,Math.min(physical,...pools.map(pool=>pool!.total.value!))-hidden-base);
       }
     }
-    for(const c of capacity.values())resources.push({deviceId:c.deviceId,resourcePoolId:c.poolId,available:c.total===null||c.occupied===null?null:Math.max(0,c.total-c.occupied),availableMemoryBytes:null,availableSlots:null,observedAt:c.sampledAt,ttlMs:c.ttlMs});
+    const inFlight:NonNullable<PlanningSnapshot['inFlight']>=[],queued:NonNullable<PlanningSnapshot['queued']>=[];
+    const projected=new Set<string>();
+    for(const profile of profiles){
+      const live=profile.inFlight;
+      const connection=this.controlState?.(groupId,profile.holderInstanceId,profile.deviceInstanceId,profile.ledgerEpoch);
+      if((connection===undefined||connection==='ONLINE')&&live!==undefined&&profile.pools.every(pool=>!pool.draining&&sampleUsableV2(pool.occupied,now,this.domain)&&sampleUsableV2(pool.admissionLimit,now,this.domain)&&live.reduce((sum,f)=>sum+(f.resources.find(r=>r.resourcePoolId===pool.resourcePoolId)?.amount??0),0)===pool.occupied.value)){
+        projected.add(profile.holderInstanceId);
+        for(const f of live){
+          const contract=profile.executors.find(e=>e.target.targetId===f.targetId)?.contract;
+          const overdue=contract?.interruptibility==='NON_INTERRUPTIBLE'&&contract.maxNonPreemptibleMs!==null&&sampleUsableV2(f.elapsed,now,this.domain)&&f.elapsed.value!>contract.maxNonPreemptibleMs;
+          inFlight.push({deviceId:profile.deviceId,holderInstanceId:profile.holderInstanceId,targetId:f.targetId,resources:f.resources,overdue,releaseAt:{...f.remaining,value:f.remaining.value===null?null:f.remaining.sampledAt+f.remaining.value}});
+        }
+      }
+      for(const q of profile.queued??[]){
+        const job=await db.cpuJob.findUnique({where:{id:q.attemptId}});
+        const data=job?.groupId===groupId?JSON.parse(job.metadataJson):null;
+        const selected=data?.holderId===profile.holderInstanceId&&data.offer?.target.targetId===q.targetId?data.plan?.decision?.suggestion?.[0]:null;
+        const duration=selected?selected.executionMs-(selected.policyQueueMs??0):null;
+        const value=typeof duration==="number"&&Number.isFinite(duration)&&duration>=0?duration:null;
+        queued.push({deviceId:profile.deviceId,holderInstanceId:profile.holderInstanceId,targetId:q.targetId,resources:q.resources,priority:q.priority,attemptId:q.attemptId,elapsedMs:q.elapsed.value??0,holdEstimate:{unit:'ms',value,source:value===null?'UNKNOWN':'PRIOR',sampledAt:q.elapsed.sampledAt,ttlMs:q.elapsed.ttlMs}});
+      }
+    }
+    for(const f of inFlight)for(const d of f.resources){const pool=capacity.get(JSON.stringify([f.deviceId,d.resourcePoolId]));if(pool?.occupied!==null&&pool)pool.occupied-=d.amount;}
+    for(const c of capacity.values())resources.push({deviceId:c.deviceId,resourcePoolId:c.poolId,capacity:c.total,available:c.total===null||c.occupied===null?null:Math.max(0,c.total-c.occupied),availableMemoryBytes:null,availableSlots:null,observedAt:c.sampledAt,ttlMs:c.ttlMs});
     for(const p of profiles){
       const connection=this.controlState?.(groupId,p.holderInstanceId,p.deviceInstanceId,p.ledgerEpoch);
       const gate=connection&&connection!=='ONLINE'?'CONTROL_'+connection:this.reason(p,policy,now);
@@ -149,23 +173,28 @@ export class DeviceDirectory {
         if(!qualification||!validCapabilityAdmissionV2(qualification)||qualification.groupId!==groupId||qualification.holderInstanceId!==p.holderInstanceId||
           qualification.targetId!==e.target.targetId||qualification.revision!==state!.revision||!['CANARY','ACTIVE'].includes(qualification.state)||qualification.identity!==executorIdentity(e)||qualification.domain!==this.domain)continue;
         // The published candidate must expire when ANY gating signal expires, even without another heartbeat.
-        const times=[e.compute,e.queue,e.cold,e.publish,e.uncertainty,qualification.quality,p.ownerActivity,p.powerSave,
+        const times=[qualification.quality,p.ownerActivity,p.powerSave,
           ...(policy.requireForeground?[p.foreground]:[]),...(policy.minimumBattery!==null?[p.battery,...(p.battery.value!==null&&p.battery.value<policy.minimumBattery?[p.charging]:[])]:[]),
           ...(policy.maximumTemperature!==null?[p.temperature]:[]),...e.resources.flatMap(r=>{const pool=p.pools.find(x=>x.resourcePoolId===r.resourcePoolId)!;return [pool.admissionLimit,pool.occupied];})];
         if(times.some(s=>!sampleUsableV2(s,now,this.domain)))continue;
+        const projects=projected.has(p.holderInstanceId);
         if(e.resources.some(r=>{
           const pool=p.pools.find(x=>x.resourcePoolId===r.resourcePoolId)!;
           // Finishing an attempt can release occupied units, but cannot raise the owner's admission ceiling.
-          return pool.admissionLimit.value!<r.amount||(!p.inFlight&&(pool.draining||pool.admissionLimit.value!-pool.occupied.value!<r.amount));
+          return pool.admissionLimit.value!<r.amount||pool.draining||(!projects&&pool.admissionLimit.value!-pool.occupied.value!<r.amount&&p.inFlight===undefined);
         }))continue;
         const ram=e.resources.filter(r=>p.pools.some(pool=>pool.resourcePoolId===r.resourcePoolId&&pool.kind==='RAM_BYTES')).reduce((n,r)=>n+r.amount,0);
-        const freeRam=p.pools.filter(pool=>pool.kind==='RAM_BYTES'&&e.resources.some(r=>r.resourcePoolId===pool.resourcePoolId)).reduce((n,pool)=>n+pool.admissionLimit.value!-pool.occupied.value!,0);
+        const freeRam=p.pools.filter(pool=>pool.kind==='RAM_BYTES'&&e.resources.some(r=>r.resourcePoolId===pool.resourcePoolId)).reduce((n,pool)=>n+pool.admissionLimit.value!-(projects?0:pool.occupied.value!),0);
         const categoryCapacity=p.credits.filter(c=>c.priority!=='ORIGIN_INTERACTIVE').map(c=>({...c,availability:availability(p,e,c.priority,version,now)}));
-        candidates.push({categoryCapacity,availability:availability(p,e,policy.priority,version,now),targetId:e.target.targetId,deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,executorId:e.target.executorId,capability:e.contract.capability,
+        const holderCapacity=e.resources.map(r=>{const pool=p.pools.find(x=>x.resourcePoolId===r.resourcePoolId)!;return {resourcePoolId:r.resourcePoolId,amount:Math.max(0,pool.admissionLimit.value!-(projects?0:pool.occupied.value!))};});
+        const slots=Math.min(...e.resources.filter(r=>r.amount>0).map(r=>Math.floor(holderCapacity.find(h=>h.resourcePoolId===r.resourcePoolId)!.amount/r.amount)));
+        candidates.push({queueObserved:p.queued!==undefined,holderCapacity,...(projects&&Number.isFinite(slots)?{projectedSlots:slots}:{}),categoryCapacity,availability:availability(p,e,policy.priority,version,now),targetId:e.target.targetId,deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,executorId:e.target.executorId,capability:e.contract.capability,
           ...(installation?{appInstanceId:installation.id}:{}),
           resourcePoolIds:e.target.resourcePoolIds,resourceDemand:e.resources,modelManifest:e.model,requiredMemoryBytes:ram,
           ...(e.contract.serviceId?{serviceId:e.contract.serviceId}:{}),trusted:true,source:this.domain,observedAt:now,ttlMs:Math.max(0,Math.min(...times.map(s=>s.sampledAt+s.ttlMs))-now),availableSlots:p.credits.find(c=>c.priority===policy.priority)!.slots,
-          availableMemoryBytes:freeRam,quality:qualification.quality.value,computeMs:e.compute.value,queueMs:e.queue.value,coldMs:e.cold.value,publishMs:e.publish.value!,uncertaintyMs:e.uncertainty.value!});
+          availableMemoryBytes:freeRam,quality:qualification.quality.value,computeMs:null,queueMs:null,coldMs:null,publishMs:null,uncertaintyMs:null,
+          costEvidence:{compute:e.compute,cold:e.cold,publish:e.publish},configId:e.configurations[0]?.id,startup:e.startup,
+          computeSamples:await computeHistory(db,JSON.stringify([groupId,p.holderInstanceId,e.target.targetId]),qualification.identity,now,estimatePolicy)});
       }
     }
     const reportedLinks=profiles.flatMap(p=>p.links).filter(l=>sampleUsableV2(l.fixedMs,now,this.domain)&&sampleUsableV2(l.bytesPerSecond,now,this.domain));
@@ -180,6 +209,6 @@ export class DeviceDirectory {
       const endpoint=endpoints.find(e=>e.holderInstanceId===candidate.holderInstanceId);
       if(endpoint)candidate.dataEndpoint={id:endpoint.id,epoch:endpoint.epoch};
     }
-    return {groupId,policyVersion,version,domain:this.domain,capturedAt:now,devices:profiles.map(p=>({deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,deviceInstanceId:p.deviceInstanceId,ledgerEpoch:p.ledgerEpoch,sampledAt:p.ownerActivity.sampledAt,ttlMs:p.ownerActivity.ttlMs})),resources,candidates,links,excludedTargets};
+    return {groupId,policyVersion,version,domain:this.domain,capturedAt:now,devices:profiles.map(p=>({deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,deviceInstanceId:p.deviceInstanceId,ledgerEpoch:p.ledgerEpoch,sampledAt:p.ownerActivity.sampledAt,ttlMs:p.ownerActivity.ttlMs})),resources,candidates,links,excludedTargets,inFlight,queued};
   }
 }

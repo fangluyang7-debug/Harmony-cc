@@ -3,7 +3,7 @@ import {BatchReadyQueue,chargeBatch,readyWait} from './batch-ready';
 import {dispatchDiagnostics} from './dispatch-diagnostics';
 import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
-import { DeviceProfileV2, canonical, DispatchOfferV2, sampleUsableV2, protocolId, PlacementRequest, SnapshotDecision } from '@harmony/scheduler-core';
+import { DeviceProfileV2, workKeyV2, canonical, DispatchOfferV2, sampleUsableV2, protocolId, PlacementRequest, SnapshotDecision } from '@harmony/scheduler-core';
 import { ArtifactChannel, ArtifactDescriptor } from '@harmony/resource-transport';
 import { builtinCpuPacks, ReferencePack } from '@harmony/reference-capabilities';
 import { PrismaClient } from '../generated/client';
@@ -21,7 +21,7 @@ interface StartContext {until:number;jobId:string;stage?:string;retries?:number;
 interface JobData {sourcePeer?:Peer;backupOf?:string;duplicateBudgetMs?:number;resultReceivedAt?:number;delivery?:{id:string;senderHolderId:string;senderEndpointId:string;senderEpoch:string;relay?:boolean;preparation?:{at:number;remainingMs:number;uploadMs?:number;downloadMs?:number;estimatedMs:number|null;reservedTailMs:number;relaySlots:number;reason:string};failure?:{authorizationId:string;endpointId:string;at:number;reason:string}};retainOutput?:{id:string;epoch:string};sourceAttemptId?:string;sourceNodeId?:string;offer:DispatchOfferV2;holderId:string;input:ArtifactDescriptor;output:ArtifactDescriptor|null;traceId:string;
   budgetMs:number;deadlineAt:number;fingerprint?:string;choices?:{request:PlacementRequest;parameters:string}[];
   request:PlacementRequest;plan:SnapshotDecision;planTiming:{start:number;end:number;clockDomainId?:string};
-  decisionEvidence?:{executionIdentity?:string;calibrationGeneration?:number;snapshotVersion:number;policyVersion:string;profileSequence:number;profileSampledAt:number;resultDelivery:string;phaseCosts?:{EXECUTE:number|null;QUEUE:number|null;PUBLISH:number|null}};}
+  decisionEvidence?:{executionIdentity?:string;calibrationGeneration?:number;snapshotVersion:number;policyVersion:string;profileSequence:number;profileSampledAt:number;resultDelivery:string;inFlightP90?:{attemptId:string;p90RemainingMs:number|null}[];plannedStartMs?:number;plannedResourceWaitMs?:number;costSource?:string;costConfidence?:string;phaseCosts?:{EXECUTE:number|null;QUEUE:number|null;PUBLISH:number|null}};}
 /** First usable single-node submission path. Uses qualified available targets, with an optional explicit target. */
 class ResourceRetry extends Error {
   constructor(readonly delayMs:number){super('NO_LEGAL_PLAN');}
@@ -89,7 +89,7 @@ export class CpuJobs {
     if(!graph?.source&&registered&&registered.ownerPrincipalId===artifact.ownerPrincipalId&&registered.bytes===artifact.bytes&&registered.expiresAt<artifact.expiresAt)artifact.expiresAt=registered.expiresAt;
     // S1 has one fixed relay path. The planner prices input -> worker -> relay;
     // subsequent source polling/download is not claimed as an end-to-end estimate.
-    const request:PlacementRequest={recoveryFromDeviceId:graph?.excludedDeviceId,priority:input.priority??'REMOTE_INTERACTIVE',nodes:[{id:'compute',capability:input.capability,...(pack.manifest.contract.serviceId?{serviceId:pack.manifest.contract.serviceId}:{}),dependencies:[],inputs:[artifact.ref.artifactId],
+    const request:PlacementRequest={recoveryFromDeviceId:graph?.excludedDeviceId,priority:input.priority??'REMOTE_INTERACTIVE',nodes:[{id:'compute',workKey:workKeyV2(pack.manifest.contract,parameters,artifact.bytes),capability:input.capability,...(pack.manifest.contract.serviceId?{serviceId:pack.manifest.contract.serviceId}:{}),dependencies:[],inputs:[artifact.ref.artifactId],
       // Reference numeric/text transforms: bound expansion conservatively rather
       // than pricing every tiny vector result as the global 8 MiB limit.
       // Raster expansion depends on crop/resize parameters; retain its declared maximum.
@@ -108,7 +108,7 @@ export class CpuJobs {
       request.artifacts[0].replicas=[{deviceId:parent.offer.target.deviceId,holderInstanceId:parent.holderId,readMs:0,transferOperation:'WRITE',endpointId:parent.retainOutput.id,endpointEpoch:parent.retainOutput.epoch}];
     }
     if(graph?.retain){request.nodes[0].output.retainAtExecutor=true;request.finalDestination=undefined;}
-    const choices=variants?.map(v=>{const r=structuredClone(request);r.nodes[0].baselineTargetId=v.targetId??'';r.nodes[0].allowedTargetIds=v.targetId?[v.targetId]:undefined;return {request:r,parameters:v.parameters};});
+    const choices=variants?.map(v=>{const r=structuredClone(request);r.nodes[0].workKey=workKeyV2(pack.manifest.contract,v.parameters,artifact.bytes);r.nodes[0].baselineTargetId=v.targetId??'';r.nodes[0].allowedTargetIds=v.targetId?[v.targetId]:undefined;return {request:r,parameters:v.parameters};});
     const planned=await this.choose(peer,request,choices?.map(c=>c.request),undefined,id),{profile,executor,grant,decision,planTiming}=planned;
     const selectedRequest=choices?.[planned.selected]?.request??request,selectedParameters=choices?.[planned.selected]?.parameters??parameters;
     const offer:DispatchOfferV2={task:{groupId:peer.groupId,sessionId:null,originDeviceId:peer.deviceId,resultDestination:peer.deviceId,workflowId:graph?.workflowId??id,nodeId:graph?.nodeId??'compute',attemptId:id,
@@ -170,7 +170,7 @@ export class CpuJobs {
   private evidence(p:Awaited<ReturnType<CpuJobs['choose']>>){
     const placement=p.decision.decision.suggestion?.[0];
     return {snapshotVersion:p.decision.snapshotVersion,policyVersion:p.decision.policyVersion,profileSequence:p.profile.sequence,profileSampledAt:p.profile.ownerActivity.sampledAt,
-      resultDelivery:'SOURCE_PULL_NOT_ESTIMATED',executionIdentity:p.executionIdentity,calibrationGeneration:p.calibrationGeneration,phaseCosts:placement?.phaseCosts};
+      resultDelivery:'SOURCE_PULL_NOT_ESTIMATED',executionIdentity:p.executionIdentity,calibrationGeneration:p.calibrationGeneration,inFlightP90:p.profile.inFlight?.filter(f=>f.history&&f.resources.some(d=>p.executor.resources.some(e=>e.resourcePoolId===d.resourcePoolId))).map(f=>({attemptId:f.attemptId,p90RemainingMs:f.history!.p90RemainingMs})),plannedStartMs:placement?.startMs,plannedResourceWaitMs:placement?.dagResourceWaitMs,costSource:placement?.costSource,costConfidence:placement?.costConfidence,phaseCosts:placement?.phaseCosts};
   }
   private localInput(peer:Peer,d:JobData){return !d.delivery&&d.request.inputRelayId!==undefined&&d.holderId===peer.holderInstanceId&&d.offer.task.app.appInstanceId===peer.app?.appInstanceId;}
   private localOutput(peer:Peer,d:JobData){return d.holderId===peer.holderInstanceId&&d.offer.task.app.appInstanceId===peer.app?.appInstanceId&&d.request.localResultHolderId===peer.holderInstanceId;}
@@ -531,6 +531,21 @@ export class CpuJobs {
           }
         },data.backupOf);}catch(error){
           if(error instanceof Error&&error.message==='ALLOTMENT_UNAVAILABLE'){
+            const placement=data.plan?.decision.suggestion?.[0];
+            if(wait&&placement&&(placement.dagResourceWaitMs||placement.policyQueueMs)&&replans<8){
+              let wake!:()=>void;const changed=new Promise<void>(resolve=>{wake=resolve;});
+              const unwatch=this.profiles.watch(peer.groupId,data.holderId,wake);let timer:ReturnType<typeof setTimeout>|undefined;
+              try{
+                const duration=Math.min(wait.until-Date.now(),data.deadlineAt-Date.now()-100,(placement.startMs??0)+placement.uncertaintyMs+1000);
+                if(duration>0&&!await this.db.$transaction(tx=>this.directory.hasDispatchCredit(tx,data.offer,data.holderId))){
+                  dispatchDiagnostics.record({at:Date.now(),kind:'PLANNED_WAIT',groupId:peer.groupId,holderId:data.holderId,jobId:id,durationMs:duration});
+                  const started=performance.now();
+                  await Promise.race([changed,new Promise<void>(resolve=>{timer=setTimeout(resolve,duration);})]);
+                  await this.traces.control(data.offer,data.traceId,data.plan.snapshotVersion,"QUEUE",started,performance.now(),null,(placement.dagResourceWaitMs??0)+(placement.policyQueueMs??0),"PLANNED_WAIT").catch(()=>{});
+                }
+              }finally{unwatch();if(timer)clearTimeout(timer);}
+              if(await this.resetUndispatched(id))return this.startAttempt(peer,id,replans+1,wait);
+            }
             await this.resetUndispatched(id);throw error;
           }
           if(error instanceof Error&&error.message==='PLAN_STALE'){

@@ -9,7 +9,7 @@ process.on('message',async m=>{try{let value;
   if(host.config.connection.domain!=='SIMULATED')throw Error('FIXTURE_DOMAIN');
   // Freeze only the synthetic selection prior; automatic calibration must not
   // race this deterministic topology fixture. Engine timings remain measured.
-  if(!host.fixtureCosts){host.fixtureCosts=new Map();const executor=host.executor.bind(host);host.executor=(capability,now)=>{const result=executor(capability,now),fixed=host.fixtureCosts.get(capability);if(fixed!==undefined)result.compute={...result.compute,value:fixed,sampledAt:now};return result;};}
+  if(!host.fixtureCosts){host.fixtureCosts=new Map();const executor=host.executor.bind(host);host.executor=(capability,now)=>{const result=executor(capability,now),fixed=host.fixtureCosts.get(capability);if(fixed!==undefined){result.compute={...result.compute,value:fixed,source:'PRIOR',sampledAt:now};result.cold={...result.cold,value:0,source:'PRIOR',sampledAt:now};}return result;};}
   host.fixtureCosts.set('text.count.v1',m.value);await host.tick();value=true;
  }else if(m.action==='pause'){host.config.contribution.ownerMode='paused';await host.tick();value=true;
  }else if(m.action==='evict-ref'){

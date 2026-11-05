@@ -91,6 +91,15 @@ test('database projection is consistent and preflight rejects changed versions a
     await views.replace(f.snapshot,f.policy);const built=await views.build('g1');
     const decision=service.plan(built.snapshot,f.request,built.policy,f.clock);
     assert.equal(await service.preflight('g1',decision,f.request,f.clock),true);
+    const timed=structuredClone(f.snapshot),candidate=timed.candidates[0],amount={resourcePoolId:'memory',amount:10};
+    candidate.resourceDemand=[amount];timed.resources[0].available=10;
+    const sample={value:300,source:'PRIOR',unit:'ms',sampledAt:100,ttlMs:1000};
+    timed.inFlight=[{deviceId:'d1',holderInstanceId:'h',targetId:'target1',overdue:false,resources:[amount],releaseAt:sample}];
+    await views.replace(timed,f.policy);const current=await views.build('g1');
+    const original=service.plan(current.snapshot,f.request,f.policy,f.clock),later={...f.clock,now:120};
+    assert.equal(original.decision.suggestion[0].startMs,200);
+    assert.equal(service.plan(current.snapshot,f.request,f.policy,later).decision.suggestion[0].startMs,180);
+    assert.equal(await service.preflight('g1',original,f.request,later),true);
     f.policy.revoked=true;await views.replace(f.snapshot,f.policy);
     assert.equal(await service.preflight('g1',decision,f.request,f.clock),false);
     await assert.rejects(new SnapshotBuilder(db,'REAL').build('g1'),/SNAPSHOT_CORRUPT/);
@@ -148,4 +157,53 @@ test('online slowdown uses a fresh alternate plan and keeps the primary when wai
   assert.equal(JSON.parse(second.recoveryEstimateJson).reason,'ALTERNATIVE_FASTER');
   assert.equal(await r.db.outbox.count(),0);
  }finally{await r.close();}
+});
+
+test('planning resolves fresh matching costs, falls back to calibration and rejects expired evidence',()=>{
+ const f=fixture(),c=f.snapshot.candidates[0],node=f.request.nodes[0];
+ const ms=value=>({value,unit:'ms',source:'SIMULATED',sampledAt:100,ttlMs:900});
+ c.costEvidence={compute:ms(40),cold:ms(5),publish:ms(1)};c.configId='main';c.startup='COLD';node.workKey='work';
+ c.computeSamples=[{workKey:'work',configId:'main',startup:'COLD',count:3,p50Ms:12,p90Ms:19,coldP50Ms:3,observedAt:100,ttlMs:300}];
+ const run=()=>new PlanningService(null).plan(f.snapshot,f.request,f.policy,f.clock).decision;
+ let a=run().suggestion[0];assert.equal(a.costSource,'MEASURED');assert.equal(a.costConfidence,'LOW');assert.equal(a.uncertaintyMs,7);assert.equal(a.phaseCosts.EXECUTE,15);
+ c.startup='WARM';assert.equal(run().suggestion[0].costSource,'PRIOR');c.startup='COLD';
+ c.configId='other';assert.equal(run().suggestion[0].costSource,'PRIOR');c.configId='main';
+ c.computeSamples[0].count=2;assert.equal(run().suggestion[0].costSource,'PRIOR');c.computeSamples[0].count=3;
+ node.workKey='other';a=run().suggestion[0];assert.equal(a.costSource,'PRIOR');assert.equal(a.uncertaintyMs,20);
+ c.costEvidence.cold.ttlMs=1;f.clock.now=102;assert.equal(run().rejections[0].code,'COST_UNKNOWN');
+});
+
+test('flight and equal-priority queue share one reservation calendar; unknown waits stay scoped to their pools',()=>{
+ const f=fixture(),c=f.snapshot.candidates[0],node=f.request.nodes[0];const amount={resourcePoolId:'memory',amount:100};
+ const ms=value=>({value,source:value===null?'UNKNOWN':'PRIOR',unit:'ms',sampledAt:100,ttlMs:900});
+ Object.assign(c,{resourceDemand:[amount],holderInstanceId:'h',projectedSlots:1,holderCapacity:[amount],availability:{targetId:c.targetId,poolIds:['memory'],reason:'RESOURCE_CAPACITY',snapshotVersion:1,resourceWait:ms(200),policyWait:ms(null)},queueMs:0});
+ f.snapshot.devices[0].holderInstanceId='h';f.snapshot.resources[0].available=100;
+ f.snapshot.inFlight=[{deviceId:'d1',holderInstanceId:'h',targetId:'target1',resources:[amount],releaseAt:ms(300),overdue:false}];
+ const q={deviceId:'d1',holderInstanceId:'h',targetId:'target1',priority:'REMOTE_INTERACTIVE',resources:[amount],attemptId:'q',elapsedMs:1,holdEstimate:ms(300)};f.snapshot.queued=[q];
+ const run=()=>new PlanningService(null).plan(f.snapshot,f.request,f.policy,f.clock).decision;
+ let a=run().suggestion[0];assert.equal(a.startMs,500);assert.equal(a.dagResourceWaitMs,200);assert.equal(a.policyQueueMs,300);
+ q.priority='REMOTE_BATCH';a=run().suggestion[0];assert.equal(a.startMs,200);
+ f.request.remainingBudgetMs=150;assert.equal(run().rejections[0].retryAfterMs,200);f.request.remainingBudgetMs=1000;
+ q.priority='REMOTE_INTERACTIVE';q.holdEstimate=ms(null);assert.equal(run().rejections[0].code,'POLICY_WAIT_UNKNOWN');
+ q.resources=[{resourcePoolId:'other',amount:1}];q.targetId='other';assert.equal(run().suggestion[0].startMs,200);
+ f.snapshot.inFlight[0].releaseAt=ms(null);assert.equal(run().rejections[0].code,'RESOURCE_WAIT_UNKNOWN');
+});
+
+test('choose an occupied RAM target only while its release is usable, then serialize two jobs in the shared pool',()=>{
+ const f=fixture(),busy=f.snapshot.candidates[0],ram={resourcePoolId:'memory',amount:100};
+ const ms=value=>({value,unit:'ms',source:value===null?'UNKNOWN':'PRIOR',sampledAt:100,ttlMs:1000});
+ Object.assign(busy,{computeMs:50,resourceDemand:[ram],requiredMemoryBytes:100,projectedSlots:1,holderInstanceId:'h1',holderCapacity:[ram],
+  availability:{targetId:'target1',poolIds:['memory'],reason:'RESOURCE_CAPACITY',snapshotVersion:1,resourceWait:ms(200),policyWait:ms(null)}});
+ f.snapshot.devices[0].holderInstanceId='h1';f.snapshot.resources[0].available=100;
+ const idle={...busy,targetId:'target2',holderInstanceId:'h2',deviceId:'d2',computeMs:400,availability:undefined};
+ f.snapshot.candidates.push(idle);f.policy.allowedTargetIds.push('target2');
+ f.snapshot.devices.push({...f.snapshot.devices[0],deviceId:'d2',holderInstanceId:'h2'});f.snapshot.resources.push({...f.snapshot.resources[0],deviceId:'d2'});
+ const live={deviceId:'d1',holderInstanceId:'h1',targetId:'target1',resources:[ram],releaseAt:ms(300),overdue:false};f.snapshot.inFlight=[live];
+ const first=f.request.nodes[0];first.inputs=[];first.memoryBytes=100;
+ f.request.nodes.push({...first,id:'n2',output:{id:'second',bytes:10}});
+ Object.assign(f.request,{networkAllowed:true,privacy:'AUTHORIZED_REMOTE',finalDestination:undefined});
+ const run=()=>new PlanningService(null).plan(f.snapshot,f.request,f.policy,f.clock).decision;
+ const placed=run().suggestion;assert.deepEqual(placed.map(a=>[a.targetId,a.startMs]),[['target1',200],['target1',250]]);
+ live.releaseAt=ms(null);assert.deepEqual(run().suggestion.map(a=>a.targetId),['target2','target2']);
+ live.releaseAt=ms(300);live.overdue=true;assert.equal(run().rejections.find(r=>r.targetId==='target1').code,'RESOURCE_WAIT_UNKNOWN');
 });

@@ -16,7 +16,8 @@ for(const cuda of [false,true])test('installed PC image adapter qualifies and se
   await fs.writeFile(script,initial);
   const encoder=await openImageEncoder(file,process.execPath,script,cuda);
   if(cuda)encoder.gpu.freeBytes=async()=>4194304; // SIMULATED resource sensor in this fixture only.
-  r=await runtime({cpuHost:true,referencePacks:[...require('@harmony/reference-capabilities').builtinCpuPacks(),encoder.pack]});
+  // This suite exercises the installed model, including cancellation while it owns the single CPU slot.
+  r=await runtime({cpuHost:true,referencePacks:[encoder.pack]});
   const capacity=[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:268435456},...(cuda?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:1048576}]:[])];
   const invite=await r.auth.invite('team','owner','pc',r.url),pair=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:'pc-holder'});
   const identity={groupId:'team',deviceId:'pc',holderInstanceId:'pc-holder',appInstanceId:null},directory=path.join(r.config.dataDir,'host');

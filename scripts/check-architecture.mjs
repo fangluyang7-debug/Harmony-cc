@@ -5,6 +5,8 @@ import ts from 'typescript';
 
 const root = path.resolve(fileURLToPath(new URL('../', import.meta.url)));
 export const rules = JSON.parse(fs.readFileSync(path.join(root,'scripts/architecture-rules.json'),'utf8'));
+const capabilitiesDir=path.join(root,'capabilities');
+const packIds=new Set(['image.encode','image.encode.v1',...fs.readdirSync(capabilitiesDir).filter(name=>fs.existsSync(path.join(capabilitiesDir,name,'manifest.json'))).map(name=>JSON.parse(fs.readFileSync(path.join(capabilitiesDir,name,'manifest.json'),'utf8')).packId)]);
 const slash = s => s.replaceAll('\\','/');
 const within = (file,dir) => file===dir || file.startsWith(dir+'/');
 
@@ -15,6 +17,10 @@ export function inspectSource(source, file, core, config=rules) {
   const dependency=n=>{
     if(!n||!ts.isStringLiteralLike(n)){fail(n??ast,'DYNAMIC_DEPENDENCY');return;}
     imports.push(n.text);
+    if((config.referenceRoots??[]).some(dir=>within(slash(file),dir))){
+      const resolved=path.posix.normalize(path.posix.join(path.posix.dirname(slash(file)),slash(n.text)));
+      if((config.executorImplementationRoots??[]).some(dir=>within(resolved,dir)))fail(n,'REFERENCE_IMPORTS_EXECUTOR');
+    }
     if(core&&!n.text.startsWith('.'))fail(n,'CORE_EXTERNAL_DEPENDENCY');
     if(config.forbiddenServicePaths.some(p=>slash(n.text).includes(p)))fail(n,'V1_DEPENDENCY');
   };
@@ -23,6 +29,7 @@ export function inspectSource(source, file, core, config=rules) {
   const candidateScope=config.candidateSelectionRoot&&within(filename,config.candidateSelectionRoot)&&!(config.candidateReaders??[]).includes(filename);
   const literal=n=>ts.isStringLiteralLike(n)||ts.isNumericLiteral(n)||n.kind===ts.SyntaxKind.NullKeyword;
   function visit(n){
+    if(config.executorDispatchRoots?.includes(filename)&&ts.isStringLiteralLike(n)&&packIds.has(n.text))fail(n,"HARDCODED_EXECUTOR");
     if(candidateScope&&((ts.isPropertyAccessExpression(n)&&n.name.text==='candidates')||
       (ts.isElementAccessExpression(n)&&n.argumentExpression&&name(n.argumentExpression)==='candidates')||
       (ts.isBindingElement(n)&&name(n.propertyName??n.name)==='candidates')))fail(n,'DISPATCH_OUTSIDE_PLANNING');

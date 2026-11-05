@@ -69,6 +69,7 @@ export class PlanningService {
     dispatchDiagnostics.record({at:Date.now(),kind:"PREFLIGHT",groupId,jobId,version:expected.snapshotVersion,snapshotVersion:snapshot.version});
     if(expected.groupId!==groupId||expected.domain!==snapshot.domain||snapshot.version!==expected.snapshotVersion||policy.version!==expected.policyVersion||policy.revoked||!expected.decision.suggestion)return false;
     const current=this.plan(snapshot,request,policy,clock);
-    return !!current.decision.suggestion&&JSON.stringify(current.decision.suggestion)===JSON.stringify(expected.decision.suggestion);
+    const placement=(a:NonNullable<typeof current.decision.suggestion>[number])=>[a.nodeId,a.targetId,a.deviceId,a.executorId,a.inputSourceHolderId,a.inputSourceEndpointId,a.inputSourceEndpointEpoch,a.inputRelayId,a.inputEndpointId,a.inputEndpointEpoch,a.inputEndpointOperation,a.outputEndpointId,a.outputEndpointEpoch];
+    return !!current.decision.suggestion&&JSON.stringify(current.decision.suggestion.map(placement))===JSON.stringify(expected.decision.suggestion.map(placement));
   }
 }

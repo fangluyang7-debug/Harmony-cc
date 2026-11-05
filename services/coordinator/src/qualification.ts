@@ -3,13 +3,14 @@ import { PrismaClient } from '../generated/client';
 import { CapabilityPackV2, CapabilityAdmissionV2, ExecutorV2, ExecutionConfigV2, canonical, sameModelV2, validCapabilityPackV2, validExecutionConfigV2, sampleUsableV2, vectorFitsV2 } from '@harmony/scheduler-core';
 import { DeviceDirectory, executorIdentity } from './directory';
 import { Peer } from './channel';
+import {isLegacyEncodingSuite,validateCoverage} from '@harmony/reference-capabilities';
 import {sustainedDrift} from './performance-feedback';
 import type { EvaluationPermit, EvaluationResult } from '@harmony/resource-transport';
 export type { EvaluationPermit, EvaluationResult } from '@harmony/resource-transport';
 
-export interface EvaluationCase {id:string;input:Buffer;parameters:string;config:ExecutionConfigV2;maxOutputBytes:number;}
+export interface EvaluationCase {covers?:string[];expect?:{kind:'OUTPUT'}|{kind:'REJECT';errorCode:string};expected?:unknown;id:string;input:Buffer;parameters:string;config:ExecutionConfigV2;maxOutputBytes:number;}
 /** Installed by the host, never constructed from a device advertisement or an HTTP payload. */
-export interface TrustedPack {manifest:CapabilityPackV2;cases:EvaluationCase[];evaluate:(test:EvaluationCase,output:Buffer)=>Promise<number>;}
+export interface TrustedPack {simulationFixture?:true;manifest:CapabilityPackV2;cases:EvaluationCase[];evaluate:(test:EvaluationCase,output:Buffer)=>Promise<number>;}
 export interface EvaluationPolicy {maxRuns:number;maxDurationMs:number;maxBytes:number;maxConcurrent:number;caseTimeoutMs:number;canarySamples:number;activeSamples:number;evidenceTtlMs:number;cooldownMs:number;}
 /** Adapter MUST enforce permit scope and real quota, persist attempt identity, and only return after engine settlement. */
 export interface EvaluationRunner {
@@ -34,6 +35,8 @@ export class QualificationService {
       const pack={manifest:structuredClone(original.manifest),cases:original.cases.map(c=>({...structuredClone(c),input:Buffer.from(c.input)})),evaluate:original.evaluate};
       if(!validCapabilityPackV2(pack.manifest)||pack.manifest.contract.sideEffectPolicy!=='PURE'||pack.cases.length<1||pack.cases.length>128||new Set(pack.cases.map(c=>c.id)).size!==pack.cases.length||
         pack.cases.some(c=>!c.id||!validExecutionConfigV2(c.config)||c.input.length>8388608||!Number.isSafeInteger(c.maxOutputBytes)||c.maxOutputBytes<1||c.maxOutputBytes>8388608))throw Error('TRUSTED_PACK_INVALID');
+      const fixture=original.simulationFixture===true&&this.directory.domain==='SIMULATED';
+      if(!fixture&&!isLegacyEncodingSuite(original))validateCoverage(pack.manifest,pack.cases);
       for(const c of pack.cases)JSON.parse(c.parameters);
       return {pack,digest:digest({manifest:pack.manifest,cases:pack.cases.map(c=>({...c,input:inputHash(c.input)}))})};
     });
@@ -121,7 +124,7 @@ export class QualificationService {
       const latest=await this.db.calibrationJob.findUniqueOrThrow({where:{id}});job.paused=JSON.parse(latest.metadataJson).paused;
       const current=(await this.directory.profiles(peer.groupId)).find(p=>p.holderInstanceId===peer.holderInstanceId);
       if(!current||current.ledgerEpoch!==profile.ledgerEpoch||!current.executors.some(e=>executorIdentity(e)===identity))return this.publish(peer,targetId,job,'SUSPENDED','EVIDENCE_INVALIDATED');
-      if(result.notRun===true){
+      if(result.notRun===true||result.interrupted===true||['CPU_FAILED','CPU_PROCESS_FAILED','EXECUTION_FAILED','EVALUATION_SETTLEMENT_UNKNOWN'].includes(result.errorCode??'')){
         if(result.output.length!==0||result.durationMs!==0)throw Error('EVALUATION_REPORT_INVALID');
         job.runs--;job.durationMs-=permit.timeoutMs;job.bytes-=bytes;job.retryAt=this.now()+this.policy.cooldownMs;
         const retained=job.quality!==null&&job.expiresAt>this.now()&&job.next>=Math.max(pack.cases.length,this.policy.canarySamples);
@@ -132,7 +135,7 @@ export class QualificationService {
       const afterGate=await this.gate(peer,executor);if(afterGate)return this.publish(peer,targetId,job,'WAITING_'+afterGate,'EVALUATION_'+afterGate+'_REQUIRED');
       let quality=NaN;
       if(Buffer.isBuffer(result.output)&&result.output.length<=permit.maxOutputBytes&&Number.isFinite(result.durationMs)&&result.durationMs>=0&&result.durationMs<=permit.timeoutMs){
-        try{quality=await pack.evaluate(test,result.output);}catch{/* Malformed output fails the suite. */}
+        try{quality=test.expect?.kind==='REJECT'?(result.errorCode===test.expect.errorCode&&result.output.length===0?1:0):result.errorCode?0:await pack.evaluate(test,result.output);}catch{/* Malformed output fails the suite. */}
       }
       if(!Number.isFinite(quality)||quality<pack.manifest.qualityThreshold||quality>1){
         job.quality=null;job.next=0;job.expiresAt=0;job.cooldownUntil=this.now()+this.policy.cooldownMs;return this.publish(peer,targetId,job,'SUSPENDED','QUALITY_EVALUATION_FAILED');

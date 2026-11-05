@@ -27,10 +27,10 @@ export class TraceService {
       metadataJson:JSON.stringify({readers:[d.offer.task.app.principalId],transferActor:peer.holderInstanceId,span})},update:{}});return {recorded:true};
   }
   /** Trusted coordinator spans, separate from holder-authenticated telemetry. */
-  async control(offer:DispatchOfferV2,traceId:string,snapshotVersion:number,phase:string,startMono:number,endMono:number,transferId:string|null=null){
+  async control(offer:DispatchOfferV2,traceId:string,snapshotVersion:number,phase:string,startMono:number,endMono:number,transferId:string|null=null,predictedMs:number|null=null,reasonCode:string|null=null){
     const span:TraceSpanV2={traceId,spanId:randomUUID(),parentSpanId:null,dependsOn:[],transferId,
       workflowId:offer.task.workflowId,nodeId:offer.task.nodeId,attemptId:offer.task.attemptId,targetId:offer.target.targetId,
-      deviceInstanceId:this.clockDomainId,phase,durationMs:endMono-startMono,snapshotVersion,predictedMs:null,reasonCode:null,
+      deviceInstanceId:this.clockDomainId,phase,durationMs:endMono-startMono,snapshotVersion,predictedMs,reasonCode,
       startMono,endMono,clockDomainId:this.clockDomainId,measurementScope:'LOCAL_INTERVAL',authoritativeSide:'SELF'};
     if(!validTraceSpanV2(span))throw Error('TRACE_INVALID');
     await this.db.traceSpan.create({data:{id:JSON.stringify([offer.task.groupId,traceId,span.spanId]),groupId:offer.task.groupId,revision:snapshotVersion,

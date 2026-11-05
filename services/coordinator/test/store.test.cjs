@@ -82,6 +82,9 @@ test('only authorized current attempt/fence/target results commit',async()=>{
     assert.equal(await store.receive('g1','h1',receipt,1),'COMMITTED');
     assert.equal((await db.node.findFirst()).state,'COMMITTED');
     assert.equal((await db.receipt.findFirst()).committed,true);
+    await store.receive('g1','h1',receipt,1,undefined,4,'COLD');
+    await store.receive('g1','h1',receipt,1,undefined,6,'COLD');
+    const enriched=await db.receipt.findFirst();assert.equal(enriched.overheadMs,4);assert.equal(enriched.startup,'COLD');
     assert.equal(await store.receive('g1','h1',receipt,1),'COMMITTED');
     await assert.rejects(store.receive('g1','h1',{...receipt,outputs:[]},1),/RECEIPT_CONFLICT/);
   }finally{await db.$disconnect();}

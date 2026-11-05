@@ -87,11 +87,13 @@ test('registered App host qualifies and executes SDK work through the shared pla
     while(Date.now()<limit){
       await host.tick(false);await remoteHost.tick(false);
       const candidates=(await r.snapshots.build(group)).snapshot.candidates;
-      if(candidates.some(c=>c.holderInstanceId===peer.holderInstanceId&&c.computeMs===localCost)&&candidates.some(c=>c.holderInstanceId===remoteHolder&&c.capability==='text.count.v1'&&c.computeMs===remoteCost)){seen=true;break;}
+      if(candidates.some(c=>c.holderInstanceId===peer.holderInstanceId&&c.costEvidence?.compute.value===localCost)&&candidates.some(c=>c.holderInstanceId===remoteHolder&&c.capability==='text.count.v1'&&c.costEvidence?.compute.value===remoteCost)){seen=true;break;}
       await new Promise(resolve=>setTimeout(resolve,200));
     }
-    assert.ok(seen,JSON.stringify({message:'both real hosts must qualify with the controlled cost estimates',errors,candidates:(await r.snapshots.build(group)).snapshot.candidates.map(c=>({holder:c.holderInstanceId,compute:c.computeMs,capability:c.capability}))}));
-    const choiceId=randomUUID(),chosen=await sdk.submit({version:3,id:choiceId,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:choiceId,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
+    assert.ok(seen,JSON.stringify({message:'both real hosts must qualify with the controlled cost estimates',errors,candidates:(await r.snapshots.build(group)).snapshot.candidates.map(c=>({holder:c.holderInstanceId,compute:c.costEvidence?.compute.value,capability:c.capability}))}));
+    // Exercise the calibration fallback using an input size with no committed timing history.
+    const choiceInput=await sdk.registerInput(Buffer.from(JSON.stringify({text:'App host'})+' '.repeat(local?128:512)),'text.input');
+    const choiceId=randomUUID(),chosen=await sdk.submit({version:3,id:choiceId,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input:choiceInput,parameters:'{}',dependsOn:[]}]},{requestId:choiceId,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
     const chosenResult=await chosen.result();assert.equal(chosenResult.status.deviceId,local?device:remoteDevice);
     const metadata=JSON.parse((await r.db.cpuJob.findUnique({where:{id:choiceId}})).metadataJson);
     const relayedInput=r.artifacts.available(metadata.input);
@@ -112,5 +114,35 @@ test('registered App host qualifies and executes SDK work through the shared pla
     }
     assert.ok(feedback?.ms>0,'authenticated EXECUTE trace reaches the target cost bucket');
   }
+  localCost=10;remoteCost=10000;
+  // Inject only the earlier occupancy. The profile, dispatch transaction and CPU job use the real host connection.
+  let inject=true;const publish=host.agent.publishProfile.bind(host.agent);
+  host.agent.publishProfile=async profile=>{
+    if(inject){
+      const target=profile.executors.find(e=>e.contract.capability==='text.count.v1');
+      for(const pool of profile.pools){const resource=target.resources.find(r=>r.resourcePoolId===pool.resourcePoolId);if(resource)pool.occupied={...pool.occupied,value:resource.amount};}
+      const remaining={value:1600,unit:'ms',source:'SIMULATED',sampledAt:profile.ownerActivity.sampledAt,ttlMs:4000};
+      profile.inFlight=[{attemptId:'fixture-running',targetId:target.target.targetId,state:'RUNNING',resources:target.resources,elapsed:{...remaining,value:200},remaining}];
+      profile.credits.forEach(c=>c.slots=0);
+    }
+    return publish(profile);
+  };
+  const busyId=randomUUID(),busyInput=await sdk.registerInput(Buffer.from(JSON.stringify({text:'busy'})+' '.repeat(1024)),'text.input');
+  await host.tick(false);await remoteHost.tick(false);
+  const {dispatchDiagnostics}=require('../dist/dispatch-diagnostics');
+  const waitDeadline=Date.now()+15000;
+  const work=sdk.submit({version:3,id:busyId,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input:busyInput,parameters:'{}',dependsOn:[]}]},{requestId:busyId,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
+  const releaseBusyHost=async()=>{
+    while(Date.now()<waitDeadline&&!dispatchDiagnostics.recent(group).some(d=>d.jobId===busyId&&d.kind==='PLANNED_WAIT'))await new Promise(resolve=>setTimeout(resolve,30));
+    const waited=dispatchDiagnostics.recent(group).some(d=>d.jobId===busyId&&d.kind==='PLANNED_WAIT');
+    const dispatched=await r.db.attempt.findUnique({where:{id:busyId}});
+    inject=false;await host.tick(false);
+    assert.equal(waited,true,'planner selected the occupied host and waited on its reported capacity');
+    assert.equal(dispatched,null,'predicted release alone never persists an offer');
+  };
+  const [busyTask]=await Promise.all([work,releaseBusyHost()]);
+  assert.equal((await busyTask.result()).status.deviceId,device);
+  const spans=(await r.db.traceSpan.findMany({where:{groupId:group}})).map(row=>JSON.parse(row.metadataJson).span);
+  assert.ok(spans.some(s=>s?.attemptId===busyId&&s.phase==='QUEUE'&&s.reasonCode==='PLANNED_WAIT'&&s.predictedMs>0&&s.durationMs>=0));
  }finally{await remoteHost?.close();await host?.close();await r.close();}
 });

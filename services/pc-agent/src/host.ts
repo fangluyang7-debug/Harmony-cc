@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { AppIdentityV2, canonical, DeviceProfileV2, DispatchOfferV2, ExecutorV2, NumericSampleV2, occupiedV2, ResourceAmountV2 } from '@harmony/scheduler-core';
-import { ReferencePack, builtinCpuPacks, cpuResources, cpuConfiguration, packDigest, digest } from '@harmony/reference-capabilities';
+import {cpuRegistry} from './executors/registry';
+import { ReferencePack, builtinReferencePacks, cpuResources, cpuConfiguration, packDigest, digest } from '@harmony/reference-capabilities';
 import { DurableLedger } from './durable-ledger';
 import { PcAgent } from './agent';
 import { CalibrationExecutor } from './calibration-executor';
@@ -37,7 +38,7 @@ export class CpuHost {
   private stopped=false;private timer:NodeJS.Timeout|undefined;private pending:Promise<void>|undefined;
   private limits:ResourceAmountV2[]=[];private owner:'IDLE'|'ACTIVE'|'UNKNOWN'='UNKNOWN';
   private readonly instance=randomUUID();
-  private readonly costs=new Map<string,{value:number;at:number}>();
+  private readonly costs=new Map<string,{value:number;overhead?:number;at:number}>();
   private clockOffset=0;
   private readonly relayLinks:RelayLinks;
   private readonly peerLinks:PeerLinks;
@@ -71,10 +72,10 @@ export class CpuHost {
       try{fs.writeFileSync(fd,bytes);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
       fs.renameSync(temporary,target);
   }
-  private constructor(readonly ledger:DurableLedger,private readonly config:CpuHostConfig,private readonly onError:(e:unknown)=>void){
-    this.packs=[...builtinCpuPacks(),...(config.imageEncoder?[config.imageEncoder.pack]:[]),...(config.fixedServices??[]).map(s=>s.pack)];
+  private constructor(readonly ledger:DurableLedger,private readonly config:CpuHostConfig,private readonly onError:(e:unknown)=>void,builtins:ReferencePack[]){
+    this.packs=[...builtins,...(config.imageEncoder?[config.imageEncoder.pack]:[]),...(config.fixedServices??[]).map(s=>s.pack)];
     if(new Set(this.packs.map(p=>p.manifest.contract.capability)).size!==this.packs.length)throw Error('SERVICE_CAPABILITY_CONFLICT');
-    const request=allotmentTransport(config.connection),packs=this.packs,installed=new Map(packs.flatMap(p=>p.cases.map(c=>[packDigest(p)+':'+c.id,c] as const)));
+    const request=allotmentTransport(config.connection),packs=this.packs,byDigest=new Map(packs.map(p=>[packDigest(p),p])),installed=new Map([...byDigest].flatMap(([hash,p])=>p.cases.map(c=>[hash+':'+c.id,c] as const)));
     this.relayLinks=new RelayLinks(config.identity.deviceId,config.connection.domain,request);
     this.peerLinks=new PeerLinks(config.identity.deviceId,request);
     const context=async()=>{
@@ -82,7 +83,7 @@ export class CpuHost {
       return {coordinatorEpoch:this.agent.coordinatorEpoch,online:true,ownerIdle:true,admissionLimit:this.limits};
     };
     const evaluator=new CalibrationExecutor(ledger,path.join(config.directory,'calibration'),config.connection.domain,installed,async(permit,executor)=>{
-      const state=ledger.snapshot(),grant=state.grant,pack=packs.find(p=>packDigest(p)===permit.packDigest),test=pack?.cases.find(c=>c.id===permit.caseId);
+      const state=ledger.snapshot(),grant=state.grant,pack=byDigest.get(permit.packDigest),test=pack?.cases.find(c=>c.id===permit.caseId);
       if(!grant||!test)throw Error('CALIBRATION_NOT_READY');
       const offer:DispatchOfferV2={task:{groupId:state.groupId,sessionId:null,originDeviceId:state.deviceId,resultDestination:state.deviceId,
         workflowId:'eval-'+permit.id,nodeId:'reference',attemptId:permit.id,coordinatorEpoch:this.agent.coordinatorEpoch,planRevision:1,
@@ -93,7 +94,7 @@ export class CpuHost {
       return offer;
     },context,(offer,input,signal)=>this.executeService(offer,input,signal),config.imageEncoder);
     const run=evaluator.runInstalled.bind(evaluator);
-    evaluator.runInstalled=async(permit,executor,signal)=>{const result=await run(permit,executor,signal);if(result.output.length)this.costs.set(executor.contract.capability,{value:result.durationMs,at:Date.now()});return result;};
+    evaluator.runInstalled=async(permit,executor,signal)=>{const result=await run(permit,executor,signal);if(result.output.length)this.costs.set(executor.contract.capability,{value:result.durationMs-(result.overheadMs??0),overhead:result.overheadMs,at:Date.now()});return result;};
     // Authorization and the input ticket share one authenticated response. Consume once;
     // older coordinators keep using the separate input endpoint.
     const inputTickets=new Map<string,any>();
@@ -173,7 +174,7 @@ export class CpuHost {
       !Number.isSafeInteger(p.maxCpuThreads)||p.maxCpuThreads<1||!Number.isSafeInteger(p.maxMemoryBytes)||p.maxMemoryBytes<67108864||!Number.isSafeInteger(p.reserveMemoryBytes)||p.reserveMemoryBytes<0)throw Error('HOST_CONFIG_INVALID');
     const ledger=await DurableLedger.open(config.directory,config.identity,config.connection.certificate);
     try{
-      const host=new CpuHost(ledger,config,onError);
+      const host=new CpuHost(ledger,config,onError,await builtinReferencePacks());
       if(config.identity.appInstanceId!==null){
         const policy=JSON.parse(await appRequest(config.connection)('/v2/apps/me',null)) as NonNullable<CpuHost['appPolicy']> & {identity:{appInstanceId:string;groupId:string;allowedContracts:string[]}};
         if(policy.identity.appInstanceId!==config.identity.appInstanceId||policy.identity.groupId!==config.identity.groupId)throw Error('APP_HOST_IDENTITY_MISMATCH');
@@ -187,10 +188,10 @@ export class CpuHost {
     const prior=(value:number|null,sampledAt=now):NumericSampleV2=>({value,source:value===null?'UNKNOWN':'PRIOR',sampledAt,ttlMs:3600000,unit:'ms'});
     const gpu=pack===this.config.imageEncoder?.pack&&!!this.config.imageEncoder.gpu;
     const resources=pack.manifest.resourceLimit.filter(r=>gpu||!['gpu','vram'].includes(r.resourcePoolId));
-    const executorId=pack===this.config.imageEncoder?.pack?(gpu?cudaExecutorId:imageExecutorId):'node.cpu.v1';
-    return {target:{targetId:(gpu?'cuda-':'cpu-')+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
+    const executorId=pack===this.config.imageEncoder?.pack?(gpu?cudaExecutorId:imageExecutorId):(cpuRegistry.executorId(capability)??'node.cpu.v1');
+    return {startup:pack.manifest.contract.serviceId?"UNKNOWN":"COLD",target:{targetId:(gpu?'cuda-':'cpu-')+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
       executorId,executorVersion:'1',backend:gpu?'CUDA':pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
-      resources:structuredClone(resources),configurations:[{...pack.cases[0].config}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(0),cold:prior(0),publish:prior(0),uncertainty:prior(0)};
+      resources:structuredClone(resources),configurations:[{...pack.cases[0].config}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(null),cold:prior(cost?.overhead??0,cost?cost.at+this.clockOffset:now),publish:prior(0),uncertainty:prior(null)};
   }
   private async sample(syncSettings=true){
     try{

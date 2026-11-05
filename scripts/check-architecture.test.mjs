@@ -77,3 +77,15 @@ test('a service cannot hide a v1 dependency behind another workspace package',()
     assert.ok(checkArchitecture(dir).errors.some(e=>e.includes('TRANSITIVE_V1_DEPENDENCY')));
   }finally{if(path.resolve(dir).startsWith(path.resolve(os.tmpdir())+path.sep+'architecture-fixture-'))fs.rmSync(dir,{recursive:true,force:true});}
 });
+
+test('executor dispatch files use registered capability names only inside implementations',()=>{
+ const body="if(capability==='text.count.v1')run()";
+ assert.ok(inspectSource(body,'services/pc-agent/src/cpu-child.ts',false).errors.some(e=>e.includes('HARDCODED_EXECUTOR')));
+ assert.deepEqual(inspectSource(body,'services/pc-agent/src/executors/count.ts',false).errors,[]);
+});
+
+test('reference implementations cannot import execution implementations',()=>{
+ const file='packages/reference-capabilities/src/check.ts';
+ assert.ok(inspectSource("import {run} from '../../../services/pc-agent/src/executors/count';",file,false).errors.some(e=>e.includes('REFERENCE_IMPORTS_EXECUTOR')));
+ assert.deepEqual(inspectSource("import {canonical} from '@harmony/scheduler-core';",file,false).errors,[]);
+});

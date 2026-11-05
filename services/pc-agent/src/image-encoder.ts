@@ -52,6 +52,7 @@ export async function openImageEncoder(suite:string,command:string,script:string
   return {pack,gpu,async execute(offer,input,signal){
     const expected=JSON.parse(offer.task.parameters);
     if(offer.target.executorId!==executorId||offer.target.backend!==(cuda?'CUDA':'CPU')||!expected||!sameModelV2(expected,model))throw Error('ENCODER_SCOPE');
+    if(!input.length)throw Error('IMAGE_INVALID');
     const bytes=await run(command,args,input,pack.maxOutputBytes,signal);
     if(!await cpuSchemas.get('image.embedding:1')!(bytes))throw Error('ENCODER_OUTPUT_INVALID');
     const output=JSON.parse(bytes.toString('utf8')),actual=output.model;

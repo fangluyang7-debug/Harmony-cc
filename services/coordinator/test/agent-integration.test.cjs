@@ -32,7 +32,7 @@ test('integrated agent: trusted CPU qualification -> pinned artifacts -> WS disp
    write:async(bytes,schemaId,offer)=>{publishes++;const ref={artifactId:'out-'+offer.task.attemptId,contentVersion:1,contentHash:digest(bytes),schemaId,schemaVersion:1};
     const d={...descriptor,ref,bytes:bytes.length};r.artifacts.register(d);outputs.set(offer.task.attemptId,d);return {endpoint:invite,ticket:r.artifacts.issue(d,peer,'WRITE'),credential:pair.credential};}});
   const context=()=>({coordinatorEpoch:r.epoch,online:true,ownerIdle:true,admissionLimit:grant.extra});
-  const pack={manifest:{packId:'normalize',contract:executor.contract,executorIds:[executor.target.executorId],model:null,suiteId:'reference1',qualityThreshold:1,resourceLimit:executor.resources},
+  const pack={simulationFixture:true,manifest:{packId:'normalize',contract:executor.contract,executorIds:[executor.target.executorId],model:null,suiteId:'reference1',qualityThreshold:1,resourceLimit:executor.resources},
    cases:[{id:'reference',input,parameters:'{}',config,maxOutputBytes:4096}],evaluate:async(_c,b)=>canonical(JSON.parse(b))===canonical({dimension:2,rows:[[.6,.8],[0,0]],norms:[5,0]})?1:0};
   const packDigest=digest(Buffer.from(canonical({manifest:pack.manifest,cases:pack.cases.map(c=>({...c,input:digest(c.input)}))})));
   const evaluator=new CalibrationExecutor(ledger,path.join(r.config.dataDir,'evaluation'),'SIMULATED',new Map([[packDigest+':reference',pack.cases[0]]]),async permit=>{const o=offerFor(permit.id);o.leaseMs=permit.timeoutMs;return o;},async()=>context());

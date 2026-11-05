@@ -5,12 +5,12 @@ export interface EvaluationPermit {
   id:string;groupId:string;holderInstanceId:string;targetId:string;identity:string;packDigest:string;caseId:string;
   inputHash:string;config:ExecutionConfigV2;maxOutputBytes:number;timeoutMs:number;domain:'REAL'|'SIMULATED';
 }
-export interface EvaluationResult {notRun?:true;settled:true;output:Buffer;durationMs:number;permitId:string;domain:'REAL'|'SIMULATED';}
+export interface EvaluationResult {errorCode?:string;interrupted?:true;overheadMs?:number;notRun?:true;settled:true;output:Buffer;durationMs:number;permitId:string;domain:'REAL'|'SIMULATED';}
 export interface EvaluationWork {
   permit:EvaluationPermit;executor:ExecutorV2;coordinatorEpoch:number;ledgerEpoch:number;deviceInstanceId:string;
   expiresAt:number;mode:'RUN'|'RECONCILE';
 }
-export interface EvaluationReport {notRun?:true;settled:true;output:string;durationMs:number;permitId:string;domain:'REAL'|'SIMULATED';}
+export interface EvaluationReport {errorCode?:string;interrupted?:true;overheadMs?:number;notRun?:true;settled:true;output:string;durationMs:number;permitId:string;domain:'REAL'|'SIMULATED';}
 export const evaluationOutputLimit=65536;
 const keys=(v:object,names:string[])=>Object.keys(v).sort().join('|')===names.sort().join('|');
 export function validEvaluationPermit(v:any):v is EvaluationPermit {
@@ -26,10 +26,13 @@ export function validEvaluationWork(v:any):v is EvaluationWork {
     [v.coordinatorEpoch,v.ledgerEpoch,v.expiresAt].every(n=>Number.isSafeInteger(n)&&n>0)&&protocolId(v.deviceInstanceId)&&['RUN','RECONCILE'].includes(v.mode);
 }
 export function decodeEvaluationReport(v:any,permit:EvaluationPermit):EvaluationResult {
-  if(!v||!keys(v,v.notRun===undefined?['settled','output','durationMs','permitId','domain']:['settled','output','durationMs','permitId','domain','notRun'])||v.settled!==true||v.permitId!==permit.id||v.domain!==permit.domain||
+  if(!v||!keys(v,['settled','output','durationMs','permitId','domain',...(v.notRun===undefined?[]:['notRun']),...(v.errorCode===undefined?[]:['errorCode']),...(v.interrupted===undefined?[]:['interrupted']),...(v.overheadMs===undefined?[]:['overheadMs'])])||v.settled!==true||v.permitId!==permit.id||v.domain!==permit.domain||
     !Number.isFinite(v.durationMs)||v.durationMs<0||typeof v.output!=='string'||v.output.length>Math.ceil(permit.maxOutputBytes/3)*4)throw Error('EVALUATION_REPORT_INVALID');
   if(v.notRun!==undefined&&(v.notRun!==true||v.output!==''||v.durationMs!==0))throw Error('EVALUATION_REPORT_INVALID');
+  if(v.overheadMs!==undefined&&(v.notRun||!Number.isFinite(v.overheadMs)||v.overheadMs<0||v.overheadMs>v.durationMs))throw Error("EVALUATION_REPORT_INVALID");
+  if(v.errorCode!==undefined&&(!protocolId(v.errorCode)||v.output!==''||v.notRun||v.interrupted))throw Error('EVALUATION_REPORT_INVALID');
+  if(v.interrupted!==undefined&&(v.interrupted!==true||v.notRun||v.output!==''))throw Error('EVALUATION_REPORT_INVALID');
   const output=Buffer.from(v.output,'base64');
   if(output.length>permit.maxOutputBytes||output.toString('base64')!==v.output)throw Error('EVALUATION_REPORT_INVALID');
-  return {...(v.notRun===true?{notRun:true as const}:{}),settled:true,output,durationMs:v.durationMs,permitId:permit.id,domain:permit.domain};
+  return {...(v.errorCode?{errorCode:v.errorCode}:{}),...(v.interrupted?{interrupted:true as const}:{}),...(v.overheadMs!==undefined?{overheadMs:v.overheadMs}:{}),...(v.notRun===true?{notRun:true as const}:{}),settled:true,output,durationMs:v.durationMs,permitId:permit.id,domain:permit.domain};
 }

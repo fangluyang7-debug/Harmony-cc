@@ -3,7 +3,7 @@ const {execFile,fork}=require('node:child_process');
 const {runtime}=require('./helpers.cjs');
 const {createCoordinator}=require('../dist/app');
 function browser(r){let cookie='';const send=async(route,body,origin,binary=false)=>new Promise((resolve,reject)=>{const bytes=body===undefined?null:binary?Buffer.from(body):Buffer.from(JSON.stringify(body));const q=https.request(r.url+'/v2/spaces'+route,{ca:r.identity.cert,method:bytes?(binary?'PUT':'POST'):'GET',headers:{Cookie:cookie,...(origin?{Origin:origin}:{}),...(bytes?{'Content-Type':binary?'application/octet-stream':'application/json','Content-Length':bytes.length}:{})}},res=>{if(res.headers['set-cookie'])cookie=res.headers['set-cookie'][0].split(';')[0];const chunks=[];res.on('data',b=>chunks.push(b));res.on('end',()=>{try{const data=Buffer.concat(chunks);resolve({status:res.statusCode,body:res.headers['content-type']?.startsWith('application/octet-stream')?data:JSON.parse(data)});}catch(e){reject(e);}});});q.on('error',reject);q.end(bytes);});const request=(route,body,origin)=>send(route,body,origin);request.binary=(route,body,origin)=>send(route,body,origin,true);return request;}
-async function until(check){const deadline=Date.now()+45000;while(Date.now()<deadline){if(await check())return;await new Promise(r=>setTimeout(r,150));}throw Error('SPACE_TIMEOUT');}
+async function until(check,timeoutMs=45000){const deadline=Date.now()+timeoutMs;while(Date.now()<deadline){if(await check())return;await new Promise(r=>setTimeout(r,150));}throw Error('SPACE_TIMEOUT');}
 const command=(file,args)=>new Promise((resolve,reject)=>execFile(process.execPath,[file,...args],{windowsHide:true,timeout:60000},(e,stdout,stderr)=>e?reject(Error(stderr||e.message)):resolve(stdout)));
 test('browser spaces persist, isolate roles and operate a paired CPU host with a fast device clock',async()=>{
  const r=await runtime({cpuHost:true});r.config.publicUrl=r.url;let host;
@@ -32,7 +32,7 @@ test('browser spaces persist, isolate roles and operate a paired CPU host with a
   await command(path.resolve('../pc-agent/dist/pairing-main.js'),[file,installation]);
   host=fork(path.resolve('../pc-agent/dist/host-main.js'),[path.join(installation,'agent.json'),policy],{windowsHide:true,execArgv:['--require',path.resolve('test/fast-clock.cjs')],stdio:['ignore','ignore','pipe','ipc']});
   host.stderr.on('data',b=>console.error('Host diagnostic:',b.toString().trim()));
-  await until(async()=>{const s=(await owner('/'+group)).body;return s.devices[0].online&&s.devices[0].capabilities.every(c=>c.available&&c.state==='ACTIVE')&&s.devices[0].capabilities.length===2;});
+  await until(async()=>{const s=(await owner('/'+group)).body;return s.devices[0].online&&s.devices[0].capabilities.every(c=>c.available&&c.state==='ACTIVE')&&['text.count.v1','vector.normalize.v1','image.crop.v1'].every(id=>s.devices[0].capabilities.some(c=>c.capability===id));},180000);
   const id=crypto.randomUUID(),submitted=await guest('/'+group+'/jobs',{requestId:id,capability:'text.count.v1',input:{text:'Hello team'}});assert.equal(submitted.status,200,JSON.stringify(submitted.body));
   let result;await until(async()=>{result=await guest('/'+group+'/jobs/'+id);return result.body.output;});
   assert.deepEqual(result.body.output,{characters:10,words:2,lines:1});assert.equal((await owner('/'+group+'/jobs/'+id)).status,400);

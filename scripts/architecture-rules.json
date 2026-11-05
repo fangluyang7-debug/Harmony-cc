@@ -1,4 +1,7 @@
 {
+  "referenceRoots": ["packages/reference-capabilities/src"],
+  "executorImplementationRoots": ["services/pc-agent/src/executors","apps/harmony/scheduler/src/main/ets/v2/host/executors"],
+  "executorDispatchRoots": ["services/pc-agent/src/cpu-engine.ts","services/pc-agent/src/cpu-child.ts","services/pc-agent/src/execution-runtime.ts","apps/harmony/scheduler/src/main/ets/v2/host/NativeAgent.ets"],
   "coreRoots": [
     "packages/scheduler-core/src",
     "apps/harmony/scheduler/src/main/ets/v2/core",

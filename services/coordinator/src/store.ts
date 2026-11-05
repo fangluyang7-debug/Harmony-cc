@@ -210,7 +210,7 @@ export class CoordinatorStore {
       await tx.outbox.update({where:{id:query.id},data:{acked:true}});
     });
   }
-  async receive(groupId:string,holderInstanceId:string,receipt:ExecutionReceiptV2,currentEpoch:number,resourceHeldMs?:number):Promise<'COMMITTED'|'RECONCILE'> {
+  async receive(groupId:string,holderInstanceId:string,receipt:ExecutionReceiptV2,currentEpoch:number,resourceHeldMs?:number,overheadMs?:number,startup?:string):Promise<'COMMITTED'|'RECONCILE'> {
     if(!validExecutionReceiptV2(receipt))throw new Error('RECEIPT_INVALID');
     return this.db.$transaction(async tx=>{
       const row=await tx.attempt.findUnique({where:{id:receipt.attemptId}});
@@ -221,6 +221,10 @@ export class CoordinatorStore {
       if(committed?.committed){
         const prior=JSON.parse(committed.recordJson) as ExecutionReceiptV2;
         if(canonical({...prior,resourcesSettled:receipt.resourcesSettled})!==canonical(receipt)||prior.resourcesSettled&&!receipt.resourcesSettled)throw new Error('RECEIPT_CONFLICT');
+        // Recovery can commit before the authenticated report with optional timing arrives.
+        if(committed.overheadMs===null&&overheadMs!==undefined&&Number.isFinite(overheadMs)&&overheadMs>=0&&['COLD','WARM'].includes(startup??'')&&receipt.coordinatorEpoch===currentEpoch&&record?.coordinatorEpoch===currentEpoch){
+          await tx.receipt.update({where:{id:row.id},data:{overheadMs,startup}});
+        }
         if(!prior.resourcesSettled&&receipt.resourcesSettled){
           if(receipt.coordinatorEpoch!==currentEpoch||!record)return 'RECONCILE';
           await tx.receipt.update({where:{id:row.id},data:{recordJson:JSON.stringify(receipt)}});
@@ -279,7 +283,7 @@ export class CoordinatorStore {
           expected.ownerPrincipalId!==task.app.principalId||receipt.outputs.length!==1||
           !task.contract.outputSchemas.includes(expected.ref.schemaId)||canonical(expected.ref)!==canonical(receipt.outputs[0]))throw Error('RACE_OUTPUT_SCOPE');
       }
-      await tx.receipt.upsert({where:{id:receipt.attemptId},create:{id:receipt.attemptId,attemptId:row.id,recordJson:JSON.stringify(receipt),committed:true},update:{committed:true,recordJson:JSON.stringify(receipt)}});
+      await tx.receipt.upsert({where:{id:receipt.attemptId},create:{id:receipt.attemptId,attemptId:row.id,recordJson:JSON.stringify(receipt),committed:true,overheadMs,startup},update:{overheadMs,startup,committed:true,recordJson:JSON.stringify(receipt)}});
       await tx.attempt.update({where:{id:row.id},data:{state:receipt.state,recordJson:JSON.stringify({...record,state:receipt.state,resourcesSettled:receipt.resourcesSettled,receipt})}});
       await tx.node.update({where:{id:row.nodeId},data:{state:'COMMITTED',currentAttemptId:row.id,winnerAttemptId:row.id}});
       const other=row.id===node.backupAttemptId?node.primaryAttemptId:node.backupAttemptId;

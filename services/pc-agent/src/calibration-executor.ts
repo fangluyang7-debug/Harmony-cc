@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { performance } from 'node:perf_hooks';
 import { DispatchOfferV2, ExecutionConfigV2, ExecutorV2, canonical } from '@harmony/scheduler-core';
 import { DurableLedger } from './durable-ledger';
 import { ExecutionPorts, PcExecutionRuntime } from './execution-runtime';
@@ -41,10 +40,10 @@ export class CalibrationExecutor {
     if(offer.task.attemptId!==permit.id||offer.task.groupId!==permit.groupId||canonical(offer.target)!==canonical(executor.target)||canonical(offer.task.contract)!==canonical(executor.contract)||
       canonical(offer.resources)!==canonical(executor.resources)||offer.task.inputs.length!==1||offer.task.inputs[0].contentHash!==permit.inputHash||
       offer.task.parameters!==installed.parameters||canonical(offer.allowedConfigs)!==canonical([permit.config])||offer.leaseMs>permit.timeoutMs)throw Error('EVALUATION_OFFER_SCOPE');
-    const start=performance.now();
-    const runtime=new PcExecutionRuntime(this.ledger,{authorize:this.authorize,imageEncoder:this.imageEncoder,fixedService:this.fixedService,read:async()=>Buffer.from(installed.input),publish:async(output,schemaId)=>{
+    let executionMs:number|undefined,overheadMs:number|undefined;
+    const runtime=new PcExecutionRuntime(this.ledger,{measuredExecution:(wall,overhead)=>{executionMs=wall;overheadMs=overhead;},authorize:this.authorize,imageEncoder:this.imageEncoder,fixedService:this.fixedService,read:async()=>Buffer.from(installed.input),publish:async(output,schemaId)=>{
       if(output.length>permit.maxOutputBytes)throw Error('EVALUATION_OUTPUT_LIMIT');
-      const report={permitId:permit.id,domain:this.domain,durationMs:performance.now()-start,output:output.toString('base64'),hash:hash(output)};
+      const report={permitId:permit.id,domain:this.domain,durationMs:executionMs,overheadMs,output:output.toString('base64'),hash:hash(output)};
       const temporary=filename+'.tmp',fd=fs.openSync(temporary,'wx',0o600);
       try{fs.writeFileSync(fd,JSON.stringify(report));fs.fsyncSync(fd);}finally{fs.closeSync(fd);}fs.renameSync(temporary,filename);
       return {artifactId:permit.id,contentVersion:1,contentHash:report.hash,schemaId,schemaVersion:1};
@@ -64,11 +63,11 @@ export class CalibrationExecutor {
       return {notRun:true,settled:true,permitId:permit.id,domain:this.domain,output:Buffer.alloc(0),durationMs:0};
     }
     const record=this.ledger.status(permit.id);if(!record?.resourcesSettled||permit.domain!==this.domain||record.groupId!==permit.groupId||record.holderInstanceId!==permit.holderInstanceId||record.receipt?.actualTarget.targetId!==permit.targetId)return null;
-    if(record.receipt?.state!=='SUCCEEDED')return {settled:true,permitId:permit.id,domain:this.domain,output:Buffer.alloc(0),durationMs:0};
+    if(record.receipt?.state!=='SUCCEEDED')return {...(record.receipt?.state==='FAILED'&&record.receipt.errorCode?{errorCode:record.receipt.errorCode}:{interrupted:true as const}),settled:true,permitId:permit.id,domain:this.domain,output:Buffer.alloc(0),durationMs:0};
     try{
       const saved=JSON.parse(fs.readFileSync(this.filename(permit.id),'utf8')),output=Buffer.from(saved.output,'base64');
       if(saved.permitId!==permit.id||saved.domain!==this.domain||output.length>permit.maxOutputBytes||hash(output)!==saved.hash||!record.receipt.outputs.some(r=>r.contentHash===saved.hash)||!Number.isFinite(saved.durationMs)||saved.durationMs<0)return null;
-      return {settled:true,permitId:permit.id,domain:this.domain,output,durationMs:saved.durationMs};
+      return {settled:true,permitId:permit.id,domain:this.domain,output,durationMs:saved.durationMs,...(saved.overheadMs===undefined?{}:{overheadMs:saved.overheadMs})};
     }catch{return null;}
   }
 }

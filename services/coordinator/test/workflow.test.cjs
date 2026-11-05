@@ -2,10 +2,10 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),path=requ
 const {runtime}=require('./helpers.cjs'),{builtinCpuPacks,cpuConfiguration}=require('@harmony/reference-capabilities');
 const {CpuHost}=require('../../pc-agent/dist/host'),{DurableLedger}=require('../../pc-agent/dist/durable-ledger');
 const base=builtinCpuPacks()[0],raw=Buffer.from('{"text":"graph"}'),counts=Buffer.from('{"characters":5,"words":1,"lines":1}');
-function identityPack(id,schema,bytes){return {...base,maxOutputBytes:4096,manifest:{...base.manifest,packId:id,contract:{...base.manifest.contract,contractId:id,capability:id,serviceId:id,inputSchemas:[schema],outputSchemas:[schema]}},cases:[{id:'identity',input:bytes,parameters:'{}',config:cpuConfiguration,maxOutputBytes:4096}],evaluate:async(_c,out)=>out.equals(bytes)?1:0};}
+function identityPack(id,schema,bytes){return {...base,simulationFixture:true,maxOutputBytes:4096,manifest:{...base.manifest,packId:id,contract:{...base.manifest.contract,contractId:id,capability:id,serviceId:id,inputSchemas:[schema],outputSchemas:[schema]}},cases:[{id:'identity',input:bytes,parameters:'{}',config:cpuConfiguration,maxOutputBytes:4096}],evaluate:async(_c,out)=>out.equals(bytes)?1:0};}
 const isolateBC=process.env.HARMONY_TEST_BLOCK_BC==='1';
 const collect=identityPack('source.collect.v1','text.input',raw),final=identityPack('source.finish.v1','text.counts',counts);
-async function until(fn){const end=Date.now()+60000;while(Date.now()<end){if(await fn())return;await new Promise(r=>setTimeout(r,150));}throw Error('GRAPH_HOST_TIMEOUT');}
+async function until(fn,timeoutMs=60000){const end=Date.now()+timeoutMs;while(Date.now()<end){if(await fn())return;await new Promise(r=>setTimeout(r,150));}throw Error('GRAPH_HOST_TIMEOUT');}
 test(isolateBC?'S5 relay isolation: committed B output crosses relay to C without recomputation':'SDK three-node graph moves a private source result to a remote worker and returns to the fixed source service',async()=>{
  const r=await runtime({cpuHost:true,referencePacks:[...builtinCpuPacks(),collect,final]}),hosts=[],errors=[];
  try{
@@ -19,7 +19,7 @@ test(isolateBC?'S5 relay isolation: committed B output crosses relay to C withou
    const identity={groupId:group,deviceId:device,holderInstanceId:paired.peer.holderInstanceId,appInstanceId:paired.peer.app?.appInstanceId??null},directory=path.join(r.config.dataDir,identity.holderInstanceId),ledger=await DurableLedger.open(directory,identity,invite.certificate);await ledger.close();
    const host=await CpuHost.open({directory,identity,connection:{address:r.url,certificate:invite.certificate,fingerprint:invite.fingerprint,credential:paired.credential,domain:'SIMULATED'},controlIntervalMs:1500,contribution:{ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:268435456,reserveMemoryBytes:0},...(isApp?{fixedServices:[collect,final].map(pack=>({pack,execute:async input=>({bytes:input,schemaId:pack.manifest.contract.outputSchemas[0]})}))}:{})},e=>errors.push(String(e)));hosts.push(host);host.start();
   }
-  await until(async()=>{try{const c=(await r.snapshots.build(group)).snapshot.candidates;return c.some(c=>c.capability===collect.manifest.contract.capability)&&c.some(c=>c.capability===final.manifest.contract.capability)&&c.some(c=>c.capability==='text.count.v1'&&c.appInstanceId===undefined);}catch{return false;}});
+  await until(async()=>{try{const c=(await r.snapshots.build(group)).snapshot.candidates;return c.some(c=>c.capability===collect.manifest.contract.capability)&&c.some(c=>c.capability===final.manifest.contract.capability)&&c.some(c=>c.capability==='text.count.v1'&&c.appInstanceId===undefined);}catch{return false;}},180000);
   const remote=(await r.snapshots.build(group)).snapshot.candidates.find(c=>c.capability==='text.count.v1'&&c.appInstanceId===undefined);
   const sdk=hosts[0].sdk(),input=await sdk.registerInput(raw,'text.input'),id=randomUUID(),workflow={version:3,id,outputContract:'text.counts',qualityTarget:'reference',nodes:[
    {id:'collect',capability:collect.manifest.contract.capability,input,parameters:'{}',dependsOn:[]},

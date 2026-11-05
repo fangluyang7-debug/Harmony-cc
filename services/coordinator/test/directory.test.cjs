@@ -15,11 +15,13 @@ test('profile evidence, identity and revision are validated; discovery cannot au
   // A qualified test fixture stands in for B11, explicitly in the simulated domain.
   await qualifySimulated(r.db,p);
   assert.equal((await dir.snapshot('g1','p1',1,policy)).candidates.length,1);
+  for(const name of ['compute','uncertainty','queue'])p.executors[0][name]={...p.executors[0][name],source:'UNKNOWN',value:null};p.sequence++;await dir.ingest(peer,p);
+  const evidence=(await dir.snapshot('g1','p1',1,policy)).candidates[0];assert.ok(evidence);assert.equal(evidence.computeMs,null);assert.equal(evidence.costEvidence.compute.source,'UNKNOWN');
   now=1200;assert.equal((await dir.snapshot('g1','p1',1,policy)).candidates.length,0);now=100;
   await assert.rejects(dir.ingest({...peer,deviceId:'different'},p),/PROFILE_INVALID/);
   const changed=structuredClone(p);changed.ownerActivity.value='ACTIVE';await assert.rejects(dir.ingest(peer,changed),/PROFILE_REPLAY/);
-  changed.sequence=2;await dir.ingest(peer,changed);assert.equal((await dir.snapshot('g1','p1',2,policy)).candidates.length,0);
-  const fake=fixture();fake.sequence=3;fake.ownerActivity.source='MEASURED';await assert.rejects(dir.ingest(peer,fake),/DOMAIN/);
+  changed.sequence=p.sequence+1;await dir.ingest(peer,changed);assert.equal((await dir.snapshot('g1','p1',2,policy)).candidates.length,0);
+  const fake=fixture();fake.sequence=changed.sequence+1;fake.ownerActivity.source='MEASURED';await assert.rejects(dir.ingest(peer,fake),/DOMAIN/);
  }finally{await r.close();}
 });
 test('battery, temperature, foreground, power and owner signals change eligibility without invented zeros',async()=>{
@@ -44,6 +46,12 @@ test('same-device App contribution ceilings are not mistaken for the shared phys
   assert.equal((await dir.snapshot('g1','p1',1,policy)).resources.find(r=>r.resourcePoolId===poolId).available,1,'one occupied App leaves the other physical slot available');
   b.sequence++;b.pools[0].occupied.value=1;await dir.ingest({...peer,holderInstanceId:'h2'},b);
   assert.equal((await dir.snapshot('g1','p1',1,policy)).resources.find(r=>r.resourcePoolId===poolId).available,0,'two occupied holders exhaust the device');
+  a.sequence++;a.inFlight=[{attemptId:'running',targetId:a.executors[0].target.targetId,state:'RUNNING',resources:[{resourcePoolId:poolId,amount:1}],elapsed:{...pool.occupied,unit:'ms',value:10},remaining:{...pool.occupied,unit:'ms',value:200}}];await dir.ingest(peer,a);
+  const projected=await dir.snapshot('g1','p1',1,policy);
+  assert.equal(projected.resources.find(r=>r.resourcePoolId===poolId).available,1,'only the reconciled holder projects a future release');
+  assert.equal(projected.inFlight.length,1);assert.equal(projected.inFlight[0].releaseAt.value,pool.occupied.sampledAt+200);
+  a.sequence++;a.inFlight=[];await dir.ingest(peer,a);
+  assert.equal((await dir.snapshot('g1','p1',1,policy)).resources.find(r=>r.resourcePoolId===poolId).available,0,'unexplained occupied units stay deducted');
   const invite=await r.auth.invite('g2','p2','device1',r.url),other=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:'h3'});
   await r.allotments.confirmDevice('device1',[{resourcePoolId:poolId,amount:3}],[{groupId:'g1',holderInstanceId:'h1',appInstanceId:null},{groupId:'g1',holderInstanceId:'h2',appInstanceId:null},{groupId:'g2',holderInstanceId:'h3',appInstanceId:null}]);
   await r.allotments.issue(other.peer,{ledgerEpoch:1,leaseRequestId:'hidden',leaseMs:30000,base:[],extra:[{resourcePoolId:poolId,amount:1}]});

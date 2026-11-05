@@ -1,5 +1,5 @@
 import { ModelCompatibility, compatibleModel } from './protocol-v1';
-import { ModelManifestV2, ResourceAmountV2, sameModelV2 } from './resources-v2';
+import { NumericSampleV2, ModelManifestV2, ResourceAmountV2, sameModelV2 } from './resources-v2';
 
 import type {AvailabilityEstimate} from './availability';
 import {sampleUsableV2} from './resources-v2';
@@ -11,7 +11,11 @@ export interface QualityEvidence {
 export interface PlacementReplica { deviceId: string; readMs: number | null; holderInstanceId?:string; localOnly?:boolean; transferOperation?:'READ'|'WRITE'; endpointId?:string;endpointEpoch?:string; }
 export interface PlacementArtifact { id: string; bytes: number; replicas: PlacementReplica[]; }
 export interface PlacementLink { from: string; to: string; bytesPerSecond: number; fixedMs: number; effective: boolean; observedAt: number; ttlMs: number; source: 'REAL' | 'SIMULATED'; endpointId?:string; endpointEpoch?:string; endpointOperation?:'READ'|'WRITE'; fromHolderInstanceId?:string; toHolderInstanceId?:string; }
+export interface ComputeSample { workKey:string;configId:string;startup:string;count:number;p50Ms:number;p90Ms:number;coldP50Ms:number;observedAt:number;ttlMs:number; }
 export interface PlacementCandidate {
+  costEvidence?:{compute:NumericSampleV2;cold:NumericSampleV2;publish:NumericSampleV2};
+  queueObserved?:boolean;projectedSlots?:number;holderCapacity?:ResourceAmountV2[];
+  configId?:string;startup?:string;computeSamples?:ComputeSample[];costSource?:string;costConfidence?:string;
   /** Authenticated endpoint projection; never accepted from a self-reported executor. */
   categoryCapacity?:{priority:string;slots:number;availability:AvailabilityEstimate}[];
   availability?:AvailabilityEstimate;
@@ -27,9 +31,10 @@ export interface PlacementCandidate {
   targetId: string; resourcePoolIds: string[]; deviceId: string; executorId: string; capability: string; trusted: boolean; source: 'REAL' | 'SIMULATED';
   observedAt: number; ttlMs: number; availableSlots: number; availableMemoryBytes: number;
   quality: number | null; computeMs: number | null; queueMs: number | null; coldMs: number | null;
-  uncertaintyMs: number; publishMs: number; model?: ModelCompatibility;
+  uncertaintyMs: number|null; publishMs: number|null; model?: ModelCompatibility;
 }
 export interface PlacementNode {
+  workKey?:string;
   serviceId?:string;
   allowedTargetIds?: string[];
   modelManifest?:ModelManifestV2|null;
@@ -40,6 +45,7 @@ export interface PlacementNode {
   candidates: PlacementCandidate[];
 }
 export interface PlacementRequest {
+  initialOccupancy?:Occupancy[];queuedOccupancy?:Occupancy[];
   recoveryFromDeviceId?:string;
   priority?:'REMOTE_INTERACTIVE'|'REMOTE_BATCH';
   snapshotVersion?:number;
@@ -59,14 +65,34 @@ export interface PlacementRequest {
   materializeOutputsAt?: string;
 }
 export interface PlannerLimits { maxCandidates: number; lookahead: number; beamWidth: number; planningBudgetMs: number; switchCostMs: number; hysteresisMs: number; }
-export interface DeviceResources { deviceId: string; resourcePoolId: string; availableMemoryBytes: number | null; availableSlots: number | null; available?:number|null; observedAt: number; ttlMs: number; }
-export interface PlannerAssignment { phaseCosts?:{EXECUTE:number;QUEUE:number;PUBLISH:number}; inputSourceHolderId?:string;inputSourceEndpointId?:string;inputSourceEndpointEpoch?:string; inputRelayId?:string;inputUploadMs?:number;inputDownloadMs?:number; outputEndpointId?:string; outputEndpointEpoch?:string; inputEndpointOperation?:'READ'|'WRITE'; inputEndpointId?:string; inputEndpointEpoch?:string; policyQueueMs?:number; dagResourceWaitMs?:number; startMs?:number; finishMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
+export interface DeviceResources { capacity?:number|null; deviceId: string; resourcePoolId: string; availableMemoryBytes: number | null; availableSlots: number | null; available?:number|null; observedAt: number; ttlMs: number; }
+export interface PlannerAssignment { costSource?:string;costConfidence?:string; phaseCosts?:{EXECUTE:number;QUEUE:number;PUBLISH:number}; inputSourceHolderId?:string;inputSourceEndpointId?:string;inputSourceEndpointEpoch?:string; inputRelayId?:string;inputUploadMs?:number;inputDownloadMs?:number; outputEndpointId?:string; outputEndpointEpoch?:string; inputEndpointOperation?:'READ'|'WRITE'; inputEndpointId?:string; inputEndpointEpoch?:string; policyQueueMs?:number; dagResourceWaitMs?:number; startMs?:number; finishMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
 export interface PlannerRejection { retryAfterMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; code: string; }
 export interface WorkflowPlacementDecision { status: 'ready' | 'blocked'; baseline: PlannerAssignment[] | null; suggestion: PlannerAssignment[] | null;
   baselineMs: number | null; suggestionMs: number | null; rejections: PlannerRejection[]; truncated: number; planningMs: number; reason: string; }
-interface Occupancy {key:string;start:number;end:number;amount:number;}
-interface PoolDemand {key:string;amount:number;capacity:number;}
+export function poolOccupancyKey(deviceId:string,poolId:string,holderId?:string):string {
+  return JSON.stringify([deviceId,poolId,holderId??null]);
+}
+export interface Occupancy {key:string;start:number;end:number;amount:number;}
+export interface PoolDemand {key:string;amount:number;capacity:number;}
 interface Beam { assignments: PlannerAssignment[]; artifacts: Map<string, PlacementArtifact>; ready:Map<string,number>; completed:Map<string,number>; occupancy:Occupancy[]; cost: number; }
+
+  /** Earliest feasible interval in this beam; no execution or reservation side effects. */
+export function earliestFeasibleV2(occupancy:Occupancy[],demands:PoolDemand[],earliest:number,duration:number):number {
+    let start=earliest;
+    for(let i=0;i<=occupancy.length;i++){
+      let move=start;
+      for(const demand of demands){
+        const overlaps=occupancy.filter(o=>o.key===demand.key&&o.end>start&&o.start<start+duration);
+        for(const time of [start,...overlaps.map(o=>Math.max(start,o.start))]){
+          const active=overlaps.filter(o=>o.start<=time&&o.end>time);
+          if(active.reduce((sum,o)=>sum+o.amount,0)+demand.amount>demand.capacity)move=Math.max(move,Math.min(...active.map(o=>o.end)));
+        }
+      }
+      if(move===start)return start;start=move;
+    }
+    return Infinity;
+  }
 
 export class WorkflowPlacementPlanner {
   constructor(private readonly limits: PlannerLimits, private readonly clock: () => number) {
@@ -84,7 +110,7 @@ export class WorkflowPlacementPlanner {
     const pending=request.nodes.filter(n=>!request.committedNodeIds.includes(n.id));
     const known=new Set(request.committedNodeIds);
     for(const node of pending){if(known.has(node.id)||node.dependencies.some(id=>!known.has(id)))return result(null,null,'DEPENDENCY_ORDER_INVALID');known.add(node.id);}
-    const initial:Beam={assignments:[],cost:0,ready:new Map(),completed:new Map(request.committedNodeIds.map(id=>[id,0])),occupancy:[],artifacts:new Map([...request.artifacts,...request.committedArtifacts].map(a=>[a.id,a]))};
+    const initial:Beam={assignments:[],cost:0,ready:new Map(),completed:new Map(request.committedNodeIds.map(id=>[id,0])),occupancy:[...(request.initialOccupancy??[])],artifacts:new Map([...request.artifacts,...request.committedArtifacts].map(a=>[a.id,a]))};
     const legal=new Map<string,PlacementCandidate[]>();
     for(const node of pending){
       const candidates=node.candidates.filter(c=>{const code=this.reject(node,c,request);if(code){
@@ -92,7 +118,7 @@ export class WorkflowPlacementPlanner {
           const delay=code==='RESOURCE_CAPACITY'&&sample?.value?sample.sampledAt+sample.value-request.now:0;
           rejections.push({targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,code,...(delay>0?{retryAfterMs:delay}:{})});
         }return !code;})
-        .sort((a,b)=>(a.computeMs!+a.queueMs!+a.coldMs!+a.uncertaintyMs)-(b.computeMs!+b.queueMs!+b.coldMs!+b.uncertaintyMs)||a.targetId.localeCompare(b.targetId));
+        .sort((a,b)=>(a.computeMs!+a.queueMs!+a.coldMs!+a.uncertaintyMs!)-(b.computeMs!+b.queueMs!+b.coldMs!+b.uncertaintyMs!)||a.targetId.localeCompare(b.targetId));
       const selected=candidates.slice(0,this.limits.maxCandidates);
       const baseline=candidates.find(c=>c.targetId===node.baselineTargetId);
       if(baseline&&!selected.includes(baseline))selected[selected.length-1]=baseline;
@@ -106,7 +132,13 @@ export class WorkflowPlacementPlanner {
     for(const node of pending){
       if(this.clock()-started>=this.limits.planningBudgetMs)return result(baseline,baseline,'PLANNING_BUDGET_BASELINE');
       const next:Beam[]=[];
-      for(const state of beam)for(const c of legal.get(node.id)!){const candidate=this.extend(state,node,c,request);if(candidate)next.push(candidate);else rejections.push({targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,code:'DATA_UNREACHABLE_OR_BUDGET'});}
+      for(const state of beam)for(const c of legal.get(node.id)!){const candidate=this.extend(state,node,c,request);if(candidate)next.push(candidate);else {
+          const demands=this.demands(c,node,request),available=earliestFeasibleV2(state.occupancy,demands,0,1);
+          const withQueue=earliestFeasibleV2([...state.occupancy,...request.queuedOccupancy??[]],demands,0,1);
+          const code=!Number.isFinite(available)?'RESOURCE_WAIT_UNKNOWN':!Number.isFinite(withQueue)?'POLICY_WAIT_UNKNOWN':'DATA_UNREACHABLE_OR_BUDGET';
+          const retryAfterMs=c.availability?.resourceWait.value?c.availability.resourceWait.sampledAt+c.availability.resourceWait.value-request.now:0;
+          rejections.push({targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,code,...(code==='DATA_UNREACHABLE_OR_BUDGET'&&retryAfterMs>0?{retryAfterMs}:{})});
+        }}
       beam=next.sort((a,b)=>a.cost-b.cost||JSON.stringify(a.assignments).localeCompare(JSON.stringify(b.assignments))).slice(0,this.limits.beamWidth);
       if(!beam.length)return result(baseline,baseline,baseline?'BASELINE_ONLY':'NO_LEGAL_PLAN');
     }
@@ -127,15 +159,17 @@ export class WorkflowPlacementPlanner {
     const requiredMemory = c.requiredMemoryBytes ?? node.memoryBytes;
     if(!Number.isSafeInteger(requiredMemory)||requiredMemory<0||
       (node.maxMemoryBytes!==undefined&&(!Number.isSafeInteger(node.maxMemoryBytes)||node.maxMemoryBytes<0||requiredMemory>node.maxMemoryBytes)))return 'EXECUTOR_MEMORY_LIMIT';
+    if(c.costEvidence&&[c.computeMs,c.coldMs,c.uncertaintyMs,c.publishMs].some(n=>n===null||!Number.isFinite(n)||n<0))return 'COST_UNKNOWN';
     const a=c.availability;
     if(a){
       if(a.snapshotVersion!==r.snapshotVersion||a.targetId!==c.targetId||a.poolIds.length!==c.resourcePoolIds.length||
         !c.resourcePoolIds.every(id=>a.poolIds.includes(id)))return 'AVAILABILITY_SCOPE_MISMATCH';
       if(!sampleUsableV2(a.resourceWait,r.now,r.domain))return 'RESOURCE_WAIT_UNKNOWN';
-      if(a.reason==='RESOURCE_CAPACITY'||a.resourceWait.value!==0)return 'RESOURCE_CAPACITY';
-      if(a.reason==='LOCAL_QUEUE_PENDING')return 'POLICY_WAIT_UNKNOWN';
-      if(a.reason!=='AVAILABLE')return 'NO_CATEGORY_CREDIT';
-      if(!sampleUsableV2(a.policyWait,r.now,r.domain)||a.policyWait.value!==c.queueMs)return 'POLICY_WAIT_UNKNOWN';
+      if(a.blockingReason&&c.projectedSlots)return 'RESOURCE_WAIT_UNKNOWN';
+      if(!c.projectedSlots&&(a.reason==='RESOURCE_CAPACITY'||a.resourceWait.value!==0))return 'RESOURCE_CAPACITY';
+      if(a.reason==='LOCAL_QUEUE_PENDING'&&!r.queuedOccupancy)return 'POLICY_WAIT_UNKNOWN';
+      if(a.reason==='NO_CATEGORY_CREDIT'||(!r.initialOccupancy&&a.reason!=='AVAILABLE'))return 'NO_CATEGORY_CREDIT';
+      if((!r.queuedOccupancy||c.queueObserved===false)&&(!sampleUsableV2(a.policyWait,r.now,r.domain)||a.policyWait.value!==c.queueMs))return 'POLICY_WAIT_UNKNOWN';
     }
     if(!Number.isFinite(node.memoryBytes)||node.memoryBytes<0||!Number.isFinite(c.availableSlots)||!Number.isFinite(c.availableMemoryBytes)||c.availableSlots<1||c.availableMemoryBytes<requiredMemory)return 'CAPACITY_UNAVAILABLE';
     if(!c.targetId || !c.resourcePoolIds.length || new Set(c.resourcePoolIds).size!==c.resourcePoolIds.length)return 'RESOURCE_POOLS_INVALID';
@@ -157,7 +191,7 @@ export class WorkflowPlacementPlanner {
         if(required.direction==='higher'?evidence.value<required.value:evidence.value>required.value)return 'QUALITY_REQUIREMENT_UNMET';
       }
     } else if(!Number.isFinite(node.minimumQuality)||c.quality===null||!Number.isFinite(c.quality)||c.quality<node.minimumQuality)return 'QUALITY_UNKNOWN_OR_LOW';
-    if([c.computeMs,c.queueMs,c.coldMs,c.uncertaintyMs,c.publishMs].some(n=>n===null||!Number.isFinite(n)||n<0))return 'COST_UNKNOWN';
+    if([c.computeMs,c.queueMs,c.coldMs,c.uncertaintyMs!,c.publishMs].some(n=>n===null||!Number.isFinite(n)||n<0))return 'COST_UNKNOWN';
     return null;
   }
   /** Price a fixed producer's publication; it never selects or dispatches another executor. */
@@ -192,27 +226,12 @@ export class WorkflowPlacementPlanner {
     const result:PoolDemand[]=[{key:'target:'+c.targetId,amount:1,capacity:c.availableSlots}];
     for(const poolId of c.resourcePoolIds){
       const pool=r.deviceResources.find(p=>p.deviceId===c.deviceId&&p.resourcePoolId===poolId)!;
-      const key=c.deviceId+':'+poolId;
+      const key=poolOccupancyKey(c.deviceId,poolId);
       if(c.resourceDemand)result.push({key,amount:c.resourceDemand.find(d=>d.resourcePoolId===poolId)!.amount,capacity:pool.available!});
       else result.push({key:key+':slots',amount:1,capacity:pool.availableSlots!},{key:key+':memory',amount:c.requiredMemoryBytes??node.memoryBytes,capacity:pool.availableMemoryBytes!});
     }
+    if(c.holderCapacity)for(const d of c.resourceDemand??[])result.push({key:poolOccupancyKey(c.deviceId,d.resourcePoolId,c.holderInstanceId),amount:d.amount,capacity:c.holderCapacity.find(p=>p.resourcePoolId===d.resourcePoolId)!.amount});
     return result;
-  }
-  /** Earliest feasible interval in this beam; no execution or reservation side effects. */
-  private earliest(occupancy:Occupancy[],demands:PoolDemand[],earliest:number,duration:number):number {
-    let start=earliest;
-    for(let i=0;i<=occupancy.length;i++){
-      let move=start;
-      for(const demand of demands){
-        const overlaps=occupancy.filter(o=>o.key===demand.key&&o.end>start&&o.start<start+duration);
-        for(const time of [start,...overlaps.map(o=>Math.max(start,o.start))]){
-          const active=overlaps.filter(o=>o.start<=time&&o.end>time);
-          if(active.reduce((sum,o)=>sum+o.amount,0)+demand.amount>demand.capacity)move=Math.max(move,Math.min(...active.map(o=>o.end)));
-        }
-      }
-      if(move===start)return start;start=move;
-    }
-    return Infinity;
   }
   private extend(state:Beam,node:PlacementNode,c:PlacementCandidate,r:PlacementRequest):Beam|null {
     let inputSourceHolderId:string|undefined,inputSourceEndpointId:string|undefined,inputSourceEndpointEpoch:string|undefined;
@@ -233,19 +252,22 @@ export class WorkflowPlacementPlanner {
     if(localResult)output.replicas[0].holderInstanceId=c.holderInstanceId;
     const publication=r.materializeOutputsAt&&!localResult&&!retained?this.transfer(output,r.materializeOutputsAt,r):0;
     if(publication===null)return null;
-    const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs+publication,duration=execution+c.uncertaintyMs;
+    const execution=c.computeMs!+c.queueMs!+c.coldMs!+c.publishMs!+publication,duration=execution+c.uncertaintyMs!;
     const relayDemands:PoolDemand[]=inputRelayId&&r.relayCapacity?[{key:'relay:'+inputRelayId,amount:1,capacity:r.relayCapacity.availableSlots}]:[];
-    const transferStart=this.earliest(state.occupancy,relayDemands,ready,transfer);
+    const transferStart=earliestFeasibleV2(state.occupancy,relayDemands,ready,transfer);
     const demands=this.demands(c,node,r),arrival=transferStart+transfer;
     // Policy queueing precedes admission and holds no pool. DAG reservations only cover execution.
     const queued=c.availability?c.queueMs!:0;
-    const start=this.earliest(state.occupancy,demands,arrival+queued,duration-queued),end=start+duration-queued;
+    const resourceStart=earliestFeasibleV2(state.occupancy,demands,arrival+queued,duration-queued);
+    const start=r.queuedOccupancy?earliestFeasibleV2([...state.occupancy,...r.queuedOccupancy],demands,arrival+queued,duration-queued):resourceStart;
+    if(!Number.isFinite(start))return null;
+    const end=start+duration-queued,policyWait=start-resourceStart+queued;
     const cost=Math.max(state.cost,end);if(cost>r.remainingBudgetMs)return null;
     artifacts.set(node.output.id,r.materializeOutputsAt&&!localResult&&!retained?{...output,replicas:[{deviceId:r.materializeOutputsAt,readMs:0}]}:output);
     const completed=new Map(state.completed);completed.set(node.id,end);
     const availability=new Map(state.ready);availability.set(node.output.id,end);
     return {cost,artifacts,ready:availability,completed,occupancy:[...state.occupancy,...relayDemands.map(d=>({key:d.key,start:transferStart,end:transferStart+transfer,amount:d.amount})),...demands.map(d=>({key:d.key,start,end,amount:d.amount}))],
-      assignments:[...state.assignments,{...(inputSourceHolderId?{inputSourceHolderId,inputSourceEndpointId,inputSourceEndpointEpoch}:{}),...(inputRelayId?{inputRelayId,inputUploadMs,inputDownloadMs}:{}),...(retained?{outputEndpointId:c.dataEndpoint!.id,outputEndpointEpoch:c.dataEndpoint!.epoch}:{}),...(inputEndpointId?{inputEndpointId,inputEndpointEpoch,inputEndpointOperation}:{}),...(c.availability?{policyQueueMs:queued,dagResourceWaitMs:start-arrival-queued}:{}),targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,phaseCosts:{EXECUTE:c.computeMs!,QUEUE:c.queueMs!,PUBLISH:c.publishMs+publication},inputTransferMs:transfer,executionMs:execution,uncertaintyMs:c.uncertaintyMs,startMs:start,finishMs:end}]};
+      assignments:[...state.assignments,{...(inputSourceHolderId?{inputSourceHolderId,inputSourceEndpointId,inputSourceEndpointEpoch}:{}),...(inputRelayId?{inputRelayId,inputUploadMs,inputDownloadMs}:{}),...(retained?{outputEndpointId:c.dataEndpoint!.id,outputEndpointEpoch:c.dataEndpoint!.epoch}:{}),...(inputEndpointId?{inputEndpointId,inputEndpointEpoch,inputEndpointOperation}:{}),...(c.availability?{policyQueueMs:policyWait,dagResourceWaitMs:resourceStart-arrival-queued}:{}),targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,...(c.costSource?{costSource:c.costSource,costConfidence:c.costConfidence}:{}),phaseCosts:{EXECUTE:c.computeMs!+c.coldMs!,QUEUE:r.initialOccupancy?start-arrival:c.queueMs!,PUBLISH:c.publishMs!+publication},inputTransferMs:transfer,executionMs:execution+policyWait-queued,uncertaintyMs:c.uncertaintyMs!,startMs:start,finishMs:end}]};
   }
   private finish(state:Beam|null,nodes:PlacementNode[],r:PlacementRequest):Beam|null {
     if(!state||!r.finalDestination||!nodes.length)return state;

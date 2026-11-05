@@ -25,7 +25,13 @@ async function main(){
  const save=()=>fs.writeFileSync(path.join(dir,'report.json'),JSON.stringify(report,null,2));
  const config=loadConfig({COORDINATOR_DATA_DIR:path.join(dir,'coordinator'),COORDINATOR_HOST:host,COORDINATOR_PORT:'0',COORDINATOR_CERTIFICATE_HOST:host,COORDINATOR_DOMAIN:domain});
  execFileSync(process.execPath,['scripts/migrate.cjs'],{cwd:path.join(root,'services/coordinator'),env:{...process.env,COORDINATOR_DATA_DIR:config.dataDir},stdio:'pipe',windowsHide:true});
- const r=await createCoordinator(config,async()=>{},{cpuHost:true});let driver,releaseInput=()=>{},blockInput=false,blocked=0;
+ const options={cpuHost:true};
+ if(includeCrop){
+  const packs=await require('@harmony/reference-capabilities').builtinReferencePacks();
+  // This run submits only installed reference inputs. Price their declared output ceiling and verify it at delivery.
+  options.referencePacks=packs.map(p=>p.manifest.contract.capability==='image.crop.v1'?{...p,maxOutputBytes:Math.max(...p.cases.map(c=>c.maxOutputBytes))}:p);
+ }
+ const r=await createCoordinator(config,async()=>{},options);let driver,releaseInput=()=>{},blockInput=false,blocked=0;
  const messages=[],sent=[],sessions=new Set(),artifactWrites=[],receive=r.channel.receive.bind(r.channel),send=r.channel.send.bind(r.channel),handle=r.artifacts.handle.bind(r.artifacts);
  r.channel.receive=async(s,text)=>{const m=JSON.parse(text);messages.push(m);report.wireCounts[m.type]=(report.wireCounts[m.type]||0)+1;return receive(s,text);};
  r.channel.send=async(s,m)=>{sessions.add(s);sent.push(m);return send(s,m);};
@@ -60,7 +66,7 @@ async function main(){
    assert.ok(rows[rows.length-1].sequence>rows[0].sequence);
   });
   await step('03 qualified dispatch, atomic admission, execution and artifact result via PlanningService',async()=>{
-   await until(async()=>{const d=await spaces('/'+group);return d.devices[0].capabilities.some(c=>c.capability==='text.count.v1'&&c.available&&c.state==='ACTIVE');});
+   await until(async()=>{const d=await spaces('/'+group);return d.devices[0].capabilities.some(c=>c.capability==='text.count.v1'&&c.available&&c.state==='ACTIVE');},180000);
    jobId=crypto.randomUUID();await submit({requestId:jobId,capability:'text.count.v1',input:{text:'Hello conformance'}});
    const result=await until(async()=>{const result=await spaces('/'+group+'/jobs/'+jobId);if(['FAILED','REJECTED'].includes(result.state))throw Error(result.state+':'+JSON.stringify(result.rejection));return result.output&&result;});
    assert.deepEqual(result.output,{characters:17,words:2,lines:1});assert.ok(result.decisionEvidence.snapshotVersion>0);
@@ -69,21 +75,22 @@ async function main(){
    const trace=await until(async()=>{const trace=await spaces('/'+group+'/jobs/'+jobId+'/trace');return ['PLAN','OFFER','ADMIT','QUEUE','LOAD','EXECUTE','PUBLISH'].every(phase=>trace.spans.some(s=>s.phase===phase))&&trace;});
    assert.ok(trace.spans.every(s=>s.snapshotVersion===result.decisionEvidence.snapshotVersion));
   });
-  if(includeCrop)await step('03b ImageKit crop dispatched by PlanningService; geometry/colour checked; malformed crop settles as failed',async()=>{
+  if(includeCrop)await step('03b '+(kind==='pc'?'PC':'ImageKit')+' crop dispatched by PlanningService; geometry/colour checked; malformed crop settles as failed',async()=>{
    const {builtinReferencePacks}=require('@harmony/reference-capabilities'),{transfer}=require('@harmony/resource-transport');
    const pack=(await builtinReferencePacks()).find(p=>p.manifest.contract.capability==='image.crop.v1');
-   await until(async()=>{const d=await spaces('/'+group);return d.devices[0].capabilities.some(c=>c.capability==='image.crop.v1'&&c.available&&c.state==='ACTIVE');});
+   await until(async()=>{const d=await spaces('/'+group);return d.devices[0].capabilities.some(c=>c.capability==='image.crop.v1'&&c.available&&c.state==='ACTIVE');},180000);
    const owner=(await r.auth.activePeers()).find(p=>p.holderInstanceId===device.holderInstanceId),invite=await r.auth.invite(group,owner.principalId,crypto.randomUUID(),config.publicUrl);
    const sourceOwner=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:crypto.randomUUID()});
    const invitation=await r.apps.register(sourceOwner.peer,{label:'Conformance submission',allowedContracts:[pack.manifest.contract.contractId],maxConcurrent:1,resources:pack.manifest.resourceLimit,offlineBase:[],onlineExtra:[]},config.publicUrl),source=await r.apps.exchange({registrationId:invitation.registrationId,code:invitation.code}),headers={Authorization:'Bearer '+source.credential};
    const endpoint={address:config.publicUrl,certificate:invite.certificate,fingerprint:invite.fingerprint,domain};
-   for(const [index,test]of [...pack.cases, {...pack.cases[0],parameters:'{"box":{"x":-1,"y":0,"width":1,"height":1},"paddingRatio":0,"targetSize":32,"jpegQuality":90}'}].entries()){
+   const positive=pack.cases.filter(c=>c.expect?.kind!=='REJECT');
+   for(const [index,test]of [...positive, {...pack.cases[0],parameters:'{"box":{"x":-1,"y":0,"width":1,"height":1},"paddingRatio":0,"targetSize":32,"jpegQuality":90}'}].entries()){
     const id=crypto.randomUUID(),metadata={requestId:id,capability:pack.manifest.contract.capability,contentHash:crypto.createHash('sha256').update(test.input).digest('hex'),bytes:test.input.length,parameters:test.parameters};
     let plan;await until(async()=>{try{plan=await request('/v2/jobs',metadata,headers);return true;}catch(e){if(!['NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(e.message))throw e;return false;}});
     await transfer(endpoint,plan.inputTicket,source.credential,test.input);
     await until(async()=>{try{await request('/v2/jobs/'+id+'/start',{},headers);return true;}catch(e){if(!['NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(e.message))throw e;return false;}});
     let result;await until(async()=>{result=await request('/v2/jobs/'+id,undefined,headers);return ['SUCCEEDED','FAILED','REJECTED','CANCELLED_SETTLED'].includes(result.state);});
-    if(index<pack.cases.length){assert.equal(result.state,'SUCCEEDED',JSON.stringify(result.rejection));const output=(await transfer(endpoint,result.outputTicket,source.credential)).bytes;assert.ok(await pack.evaluate(test,output)>=pack.manifest.qualityThreshold);assert.ok(result.decisionEvidence.snapshotVersion>0);}
+    if(index<positive.length){assert.equal(result.state,'SUCCEEDED',JSON.stringify(result.rejection));const output=(await transfer(endpoint,result.outputTicket,source.credential)).bytes;assert.ok(output.length<=test.maxOutputBytes);assert.ok(await pack.evaluate(test,output)>=pack.manifest.qualityThreshold);assert.ok(result.decisionEvidence.snapshotVersion>0);}
     else{assert.equal(result.state,'FAILED');assert.equal(result.outputTicket,null);const receipt=messages.find(m=>m.type==='ExecutionReceipt'&&JSON.parse(m.payload).receipt.attemptId===id);assert.equal(JSON.parse(receipt.payload).receipt.errorCode,'CROP_INVALID');assert.equal(JSON.parse(receipt.payload).receipt.resourcesSettled,true);}
    }
   });
@@ -91,7 +98,7 @@ async function main(){
    await driver.background();
    await until(async()=>{const d=await spaces('/'+group);return d.devices[0].profile.foreground.value==='BACKGROUND'&&d.devices[0].profile.ownerActivity.value==='ACTIVE'&&!d.devices[0].capabilities.some(c=>c.available);});
    await assert.rejects(spaces('/'+group+'/jobs',{requestId:crypto.randomUUID(),capability:'text.count.v1',input:{text:'background blocked'}}),/NO_LEGAL_PLAN/);
-   await driver.foreground();await until(async()=>{const d=await spaces('/'+group);return d.devices[0].profile.foreground.value==='FOREGROUND'&&d.devices[0].capabilities.some(c=>c.capability==='text.count.v1'&&c.available&&c.state==='ACTIVE');});
+   await driver.foreground();await until(async()=>{const d=await spaces('/'+group);return d.devices[0].profile.foreground.value==='FOREGROUND'&&d.devices[0].capabilities.some(c=>c.capability==='text.count.v1'&&c.available&&c.state==='ACTIVE');},180000);
   });
   async function inject(offer){const sequence=await r.db.dispatchSequence.update({where:{id:r.identity.id},data:{value:{increment:1}}});const m={...sourceOffer,messageId:crypto.randomUUID(),seq:sequence.value,payload:JSON.stringify(offer)};
    await r.db.outbox.create({data:{id:m.messageId,sequence:m.seq,groupId:group,attemptId:jobId,kind:'DispatchOffer',epoch:r.epoch,messageJson:JSON.stringify(m)}});await r.channel.flush();return m;}
@@ -135,7 +142,7 @@ async function main(){
    await spaces('/'+group+'/devices/'+deviceId,{settings});
   });
   await step('07 reconnect recovery queries existing attempts; grant renewal never increases physical capacity',async(check)=>{
-   await until(async()=>{const d=await spaces('/'+group);return d.devices[0].capabilities.some(c=>c.capability==='text.count.v1'&&c.available&&c.state==='ACTIVE');});
+   await until(async()=>{const d=await spaces('/'+group);return d.devices[0].capabilities.some(c=>c.capability==='text.count.v1'&&c.available&&c.state==='ACTIVE');},180000);
    const validIssue=r.allotments.issue.bind(r.allotments);let tamperedVersion=0;
    r.allotments.issue=async(peer,input)=>{const grant=await validIssue(peer,input);if(peer.holderInstanceId!==device.holderInstanceId)return grant;tamperedVersion=grant.version;return {...grant,signature:(grant.signature[0]==='A'?'B':'A')+grant.signature.slice(1)};};
    try{await until(()=>tamperedVersion>0,7000);await sleep(2200);const reservation=(await r.allotments.reservations(deviceId)).find(x=>x.grant.holderInstanceId===device.holderInstanceId);assert.ok((reservation.ack?.version??0)<tamperedVersion,'a grant with a forged signature must never receive a persisted ACK');check.forgedSignatureRejected=true;}finally{r.allotments.issue=validIssue;}

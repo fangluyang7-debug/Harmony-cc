@@ -6,7 +6,7 @@ test('fixed service uses only origin App credentials, shared qualification, plan
  const secret=randomUUID();let calls=0,host,r;
  const server=http.createServer((req,res)=>{
   if(req.headers.authorization!=='Bearer '+secret){res.writeHead(401);res.end();return;}
-  const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{calls++;const {text}=JSON.parse(Buffer.concat(chunks));res.setHeader('content-type','application/json');res.end(JSON.stringify({characters:Array.from(text).length,words:text.trim()?text.trim().split(/\s+/u).length:0,lines:text.length?text.split(/\r\n|\r|\n/u).length:0}));});
+  const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{calls++;let text;try{({text}=JSON.parse(Buffer.concat(chunks)));}catch{res.writeHead(400);res.end();return;}res.setHeader('content-type','application/json');res.end(JSON.stringify({characters:Array.from(text).length,words:text.trim()?text.trim().split(/\s+/u).length:0,lines:text.length?text.split(/\r\n|\r|\n/u).length:0}));});
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const base=builtinCpuPacks().find(p=>p.manifest.contract.capability==='text.count.v1');
@@ -21,7 +21,7 @@ test('fixed service uses only origin App credentials, shared qualification, plan
   const ledger=await DurableLedger.open(directory,identity,invite.certificate);await ledger.close();
   const errors=[];
   host=await CpuHost.open({directory,identity,connection:{address:r.url,certificate:invite.certificate,fingerprint:invite.fingerprint,credential:registered.credential,domain:'SIMULATED'},controlIntervalMs:2000,contribution:{ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:268435456,reserveMemoryBytes:0},fixedServices:[{pack,execute:async(input,_parameters,signal)=>{
-   const response=await fetch('http://127.0.0.1:'+server.address().port,{method:'POST',headers:{authorization:'Bearer '+secret},body:input,signal});if(!response.ok)throw Error('SERVICE_REJECTED');return {bytes:Buffer.from(await response.arrayBuffer()),schemaId:'text.counts'};
+   const response=await fetch('http://127.0.0.1:'+server.address().port,{method:'POST',headers:{authorization:'Bearer '+secret},body:input,signal});if(response.status===400)throw Error('TEXT_INVALID');if(!response.ok)throw Error('SERVICE_REJECTED');return {bytes:Buffer.from(await response.arrayBuffer()),schemaId:'text.counts'};
   }}]},e=>errors.push(String(e)));host.start();
   const deadline=Date.now()+45000;let ready=false;
   while(Date.now()<deadline){try{if((await r.snapshots.build(group)).snapshot.candidates.some(c=>c.serviceId==='fixture.text.service')){ready=true;break;}}catch{}await new Promise(resolve=>setTimeout(resolve,200));}

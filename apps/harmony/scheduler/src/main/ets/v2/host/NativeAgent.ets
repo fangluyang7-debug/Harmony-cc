@@ -1,4 +1,5 @@
-import { encodeImage } from './ImageEncoder';
+import {executeLocal,encoderCapability} from './executors/Registry';
+import {EngineResult} from './executors/Types';
 import { NativePeerLinks } from '../platform/NativePeerLinks';
 import { HarmonySdkPort } from '../client/HarmonySdkPort';
 import { SchedulerSdk, SdkInput } from '../client/SchedulerSdk';
@@ -8,7 +9,6 @@ import { common } from '@kit.AbilityKit';
 import { webSocket, http } from '@kit.NetworkKit';
 import { hilog, hidebug } from '@kit.PerformanceAnalysisKit';
 import { batteryInfo, power, thermal } from '@kit.BasicServicesKit';
-import { cropImage } from './ImageCrop';
 import { NativeTrace } from './NativeTrace';
 import { AgentStoreV2, AgentSnapshotV2, AgentChangeV2 } from '../agent/AgentStoreV2';
 import { AgentJournalV2, agentMessageV2, bindAgentJournalV2, receiveAgentMessageV2, validateAgentOfferV2, statusPayloadV2 } from '../agent/AgentJournalV2';
@@ -29,6 +29,7 @@ interface DisplayMutation {version?:number;text?:string;}
 interface AppPolicy {identity:AppIdentityV2;offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
 export interface ReferenceCase {id:string;input:string;parameters:string;config:ExecutionConfigV2;maxOutputBytes:number;}
 export interface ReferencePack {manifest:CapabilityPackV2;digest:string;cases:ReferenceCase[];}
+function referenceBytes(encoded:string):Uint8Array{return encoded.length?base64.decodeSync(encoded):new Uint8Array(0);}
 interface Identity {version:number;domain:string;coordinatorId:string;epoch:number;}
 interface AckPayload {messageId:string;}
 interface Settings {settings:Contribution|null;}
@@ -39,12 +40,8 @@ interface OutputTicket {ticket:Ticket;delivery?:string;}
 interface Permit {id:string;groupId:string;holderInstanceId:string;targetId:string;identity:string;packDigest:string;caseId:string;inputHash:string;config:ExecutionConfigV2;maxOutputBytes:number;timeoutMs:number;domain:string;}
 interface Work {permit:Permit;executor:ExecutorV2;coordinatorEpoch:number;ledgerEpoch:number;deviceInstanceId:string;expiresAt:number;mode:string;}
 interface Claim {work:Work|null;}
-interface EvaluationReport {notRun?:boolean;settled:boolean;permitId:string;domain:string;output:string;durationMs:number;}
-interface TextInput {text:string;}
-interface TextOutput {characters:number;words:number;lines:number;}
-interface VectorInput {dimension:number;rows:number[][];}
-interface VectorOutput {dimension:number;rows:number[][];norms:number[];}
-export interface EngineResult {data:Uint8Array;schemaId:string;}
+interface CalibrationCost {compute:NumericSampleV2;cold:NumericSampleV2;}
+interface EvaluationReport {overheadMs?:number;errorCode?:string;interrupted?:boolean;notRun?:boolean;settled:boolean;permitId:string;domain:string;output:string;durationMs:number;}
 interface Probe {relayId:string;padding:string;}
 interface Observation {bytes:number;durationMs:number;}
 interface ProtocolError {version:number;code:string;retryable:boolean;messageId:string;}
@@ -100,7 +97,7 @@ export class NativeAgent {
  private timings=new RunTimings();
  private queueStarted=new Set<string>();
  private links:LinkV2[]=[];
- private costs=new Map<string,number>();
+ private costs=new Map<string,CalibrationCost>();
  private totalRam:number|null=null;
  private availableRam:number|null=null;
  private powerSaving:string|null=null;
@@ -224,10 +221,10 @@ export class NativeAgent {
  private sample(value:number|null,unit:string,source:string='PRIOR'):NumericSampleV2{return {value,unit,source:value===null?'UNKNOWN':source,sampledAt:this.transport.now(),ttlMs:15000};}
  private status(value:string|null,source:string='PRIOR'):StateSampleV2{return {value,unit:'state',source:value===null?'UNKNOWN':source,sampledAt:this.transport.now(),ttlMs:15000};}
  private executors():ExecutorV2[]{return this.packs.map((pack:ReferencePack):ExecutorV2=>{
-  const encoder=pack.manifest.contract.capability==='image.encode.v1';
+  const encoder=pack.manifest.contract.capability===encoderCapability;
   const executorId=encoder?'harmony.image.cpu.v1':'harmony.cpu.v1';
   const resources=pack.manifest.resourceLimit.filter((r:ResourceAmountV2)=>!encoder||r.resourcePoolId==='cpu'||r.resourcePoolId==='ram');
-  return {target:{targetId:'harmony-'+hash(bytes(this.installation.paired.peer.holderInstanceId+':'+pack.manifest.contract.capability)).slice(0,32),deviceId:this.installation.paired.peer.deviceId,executorId,executorVersion:'1',backend:pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:['cpu','ram'],stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,resources,configurations:[pack.cases[0].config],compute:this.sample(this.costs.get(pack.manifest.contract.capability)??null,'ms',this.installation.bootstrap.domain==='REAL'?'MEASURED':'SIMULATED'),queue:this.sample(0,'ms'),cold:this.sample(0,'ms'),publish:this.sample(0,'ms'),uncertainty:this.sample(0,'ms')} as ExecutorV2;});}
+  return {startup:encoder?'COLD':'UNKNOWN',target:{targetId:'harmony-'+hash(bytes(this.installation.paired.peer.holderInstanceId+':'+pack.manifest.contract.capability)).slice(0,32),deviceId:this.installation.paired.peer.deviceId,executorId,executorVersion:'1',backend:pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:['cpu','ram'],stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,resources,configurations:[pack.cases[0].config],compute:this.costs.get(pack.manifest.contract.capability)?.compute??this.sample(null,'ms'),queue:this.sample(null,'ms'),cold:this.costs.get(pack.manifest.contract.capability)?.cold??this.sample(null,'ms'),publish:this.sample(0,'ms'),uncertainty:this.sample(null,'ms','UNKNOWN')} as ExecutorV2;});}
   private async profile():Promise<void>{
   await this.store.change(new HostChange(s=>{
    if(s.journal.outbox.some(m=>m.type==='DeviceProfile'))return;const used=occupiedV2(s.state),limits=this.limits();
@@ -271,8 +268,8 @@ export class NativeAgent {
  setForeground(foreground:boolean):void {this.foreground=foreground;void (async()=>{if(!foreground)await this.yield();if(this.ready)await this.profile();})().catch((e:Error)=>this.error(e as Error));}
  private async yield():Promise<void>{await this.store.change(new HostChange(s=>{for(const id of this.running){const entry=s.state.entries.find(e=>e.record.attemptId===id);if(!entry||entry.record.resourcesSettled||entry.cancelRequested)continue;s.state=cancelAttemptV2(s.state,id);const notice:YieldNoticeV2={attemptId:id,kind:'RESTART',releaseMs:this.sample(null,'ms'),checkpoint:null,reasonCode:'OWNER_ACTIVE'};this.enqueue(s,'YieldNotice',notice);}}));await this.flush();}
  private digest(offer:DispatchOfferV2):string{const t=offer.task;const value:TaskDigest={inputs:t.inputs,contract:t.contract,parameters:t.parameters,allowedTargetIds:t.allowedTargetIds,allowedConfigurations:t.allowedConfigurations};return hash(bytes(canonical(value)));}
- private report(s:AgentSnapshotV2,receipt:ExecutionReceiptV2,resourceHeldMs?:number):void{const entry=s.state.entries.find(e=>e.record.attemptId===receipt.attemptId)!;const record=entry.record;
-  const actualModel=receipt.state==='SUCCEEDED'&&entry.offer.target.executorId==='harmony.image.cpu.v1'?JSON.parse(entry.offer.task.parameters) as ModelManifestV2:null;const report:ExecutionReportV2={receipt,allotmentId:record.allotmentId,allotmentVersion:record.allotmentVersion,leaseId:record.leaseId,actualModel,timings:[]};if(resourceHeldMs!==undefined)report.resourceHeldMs=resourceHeldMs;this.enqueue(s,'ExecutionReceipt',report);}
+ private report(s:AgentSnapshotV2,receipt:ExecutionReceiptV2,resourceHeldMs?:number,overheadMs?:number):void{const entry=s.state.entries.find(e=>e.record.attemptId===receipt.attemptId)!;const record=entry.record;
+  const actualModel=receipt.state==='SUCCEEDED'&&entry.offer.target.executorId==='harmony.image.cpu.v1'?JSON.parse(entry.offer.task.parameters) as ModelManifestV2:null;const report:ExecutionReportV2={receipt,allotmentId:record.allotmentId,allotmentVersion:record.allotmentVersion,leaseId:record.leaseId,actualModel,timings:[]};if(resourceHeldMs!==undefined)report.resourceHeldMs=resourceHeldMs;if(overheadMs!==undefined){report.overheadMs=overheadMs;report.startup='COLD';}this.enqueue(s,'ExecutionReceipt',report);}
  private waitTurn(offer:DispatchOfferV2):Promise<void>{this.waitReasons.set(offer.task.attemptId,new QueueHistory());const queued=JSON.parse(JSON.stringify(offer)) as DispatchOfferV2;queued.task.budget.deadlineAt=monotonic()+Math.max(0,offer.task.budget.deadlineAt-this.transport.now());this.queue.enqueue(queued,monotonic());return new Promise<void>((resolve,reject)=>{this.waiting.set(offer.task.attemptId,{workflowId:offer.task.workflowId,resolve,reject});this.pumpQueue();});}
  private pumpQueue():void{
   for(const id of this.queue.expired(monotonic())){this.queue.removeWaiting(id);this.waiting.get(id)?.reject(Error('QUEUE_STARVED'));this.waiting.delete(id);}
@@ -326,30 +323,28 @@ export class NativeAgent {
   if(service){const entry=this.store.read().state.entries.find(e=>e.record.attemptId===id);if(!entry||this.policy===null||entry.offer.task.app.appInstanceId!==this.policy.identity.appInstanceId||entry.offer.task.originDeviceId!==this.installation.paired.peer.deviceId||canonical(entry.offer.task.contract)!==canonical(service.pack.manifest.contract))throw Error('SERVICE_SCOPE');
    const result=await service.execute(new Uint8Array(input),parameters,()=>this.cancelled(id));if(result.data.byteLength<1||result.data.byteLength>8388608||!entry.offer.task.contract.outputSchemas.includes(result.schemaId))throw Error('SERVICE_OUTPUT_INVALID');return result;
   }
-  if(capability==='image.encode.v1'){
-   const pack=this.packs.find(p=>p.manifest.contract.capability===capability);
-   if(!pack||!pack.manifest.model)throw Error('ENCODER_MODEL_REQUIRED');
-   return {data:await encodeImage(this.context,input,parameters,pack.manifest.model,()=>this.cancelled(id)),schemaId:'image.embedding'};
-  }
-  if(capability==='image.crop.v1')return {data:await cropImage(input,parameters),schemaId:'image.raster'};
-  if(capability==='text.count.v1'){const v=JSON.parse(text(input)) as TextInput;if(Object.keys(v).join('|')!=='text'||typeof v.text!=='string')throw Error('TEXT_INVALID');const output:TextOutput={characters:Array.from(v.text).length,words:v.text.trim()?v.text.trim().split(/\s+/u).length:0,lines:v.text.length?v.text.split(/\r\n|\r|\n/u).length:0};return {data:bytes(JSON.stringify(output)),schemaId:'text.counts'};}
-  if(capability==='vector.normalize.v1'){const v=JSON.parse(text(input)) as VectorInput;if(Object.keys(v).sort().join('|')!=='dimension|rows'||!Number.isSafeInteger(v.dimension)||v.dimension<1||v.dimension>65536||!Array.isArray(v.rows)||v.rows.length>100000||v.rows.some(r=>!Array.isArray(r)||r.length!==v.dimension||r.some(n=>!Number.isFinite(n))))throw Error('VECTOR_INVALID');const output:VectorOutput={dimension:v.dimension,rows:[],norms:[]};for(const row of v.rows){const norm=Math.hypot(...row);if(!Number.isFinite(norm))throw Error('VECTOR_NORM_INVALID');output.norms.push(norm);output.rows.push(row.map(n=>norm===0?0:n/norm));}return {data:bytes(JSON.stringify(output)),schemaId:'vector.normalized'};}
-  throw Error('CAPABILITY_UNSUPPORTED');
+  const pack=this.packs.find(p=>p.manifest.contract.capability===capability);
+  return executeLocal(capability,{context:this.context,input,parameters,model:pack?.manifest.model??null,cancelled:()=>this.cancelled(id)});
+
  }
  private cancelled(id:string):boolean{const e=this.store.read().state.entries.find(x=>x.record.attemptId===id);return !e||e.cancelRequested||monotonic()>=e.deadline||!this.idle();}
  private async execute(offer:DispatchOfferV2,ticket:Ticket|null,test:ReferenceCase|null,trace:NativeTrace|null=null):Promise<EvaluationReport|null>{
-  const id=offer.task.attemptId,start=monotonic();let outputs:ArtifactRefV2[]=[],state='FAILED',errorCode:string|null=null,report:EvaluationReport|null=null,phase='LOAD',phaseStart=monotonic();
+  const id=offer.task.attemptId;let overheadMs:number|undefined;let outputs:ArtifactRefV2[]=[],state='FAILED',errorCode:string|null=null,report:EvaluationReport|null=null,phase='LOAD',phaseStart=monotonic();
   try{
    let input:Uint8Array;
-   if(test!==null)input=base64.decodeSync(test.input);else{if(ticket===null||ticket.operation!=='READ'||canonical(ticket.ref)!==canonical(offer.task.inputs[0]))throw Error('ARTIFACT_SCOPE');const local=offer.transferPlan.length===0&&this.inputs!==null;if(local&&(offer.task.app.appInstanceId!==this.policy?.identity.appInstanceId||offer.task.originDeviceId!==this.installation.paired.peer.deviceId))throw Error('LOCAL_INPUT_SCOPE');const cached=local?await this.inputs!.read(ticket.ref.contentHash):null;if(local&&cached===null)throw Error('SDK_INPUT_NOT_REGISTERED');const download=async():Promise<Uint8Array>=>await this.transport.request('/v2/artifacts/'+ticket!.ref.artifactId+'/'+ticket!.ref.contentVersion,null,http.RequestMethod.GET,{'Authorization':'Bearer '+ticket!.token,'X-Device-Credential':this.transport.credential});input=cached??(trace===null?await download():await trace.transfer('READ',download));if(input.byteLength!==ticket.bytes)throw Error('TRANSFER_SIZE');}
+   if(test!==null)input=referenceBytes(test.input);else{if(ticket===null||ticket.operation!=='READ'||canonical(ticket.ref)!==canonical(offer.task.inputs[0]))throw Error('ARTIFACT_SCOPE');const local=offer.transferPlan.length===0&&this.inputs!==null;if(local&&(offer.task.app.appInstanceId!==this.policy?.identity.appInstanceId||offer.task.originDeviceId!==this.installation.paired.peer.deviceId))throw Error('LOCAL_INPUT_SCOPE');const cached=local?await this.inputs!.read(ticket.ref.contentHash):null;if(local&&cached===null)throw Error('SDK_INPUT_NOT_REGISTERED');const download=async():Promise<Uint8Array>=>await this.transport.request('/v2/artifacts/'+ticket!.ref.artifactId+'/'+ticket!.ref.contentVersion,null,http.RequestMethod.GET,{'Authorization':'Bearer '+ticket!.token,'X-Device-Credential':this.transport.credential});input=cached??(trace===null?await download():await trace.transfer('READ',download));if(input.byteLength!==ticket.bytes)throw Error('TRANSFER_SIZE');}
    if(hash(input)!==offer.task.inputs[0].contentHash)throw Error('INPUT_HASH');trace?.add(phase,phaseStart,monotonic());phaseStart=-1;if(this.cancelled(id))throw Error('CANCELLED_SETTLED');
-   await this.store.change(new HostChange(s=>{s.state=startAttemptV2(s.state,id,monotonic());}));const computeStart=monotonic();this.timings.start(id,computeStart,input.byteLength,offer.target.executorId==='harmony.image.cpu.v1'?'COLD':'UNKNOWN');phase='EXECUTE';phaseStart=computeStart;const result=await this.engine(offer.task.contract.capability,input,offer.task.parameters,id);this.costs.set(offer.task.contract.capability,monotonic()-computeStart);trace?.add(phase,phaseStart,monotonic());phaseStart=-1;if(this.cancelled(id))throw Error('CANCELLED_SETTLED');phase='PUBLISH';phaseStart=monotonic();
-   if(test!==null){if(result.data.byteLength>test.maxOutputBytes)throw Error('EVALUATION_OUTPUT_LIMIT');report={settled:true,permitId:id,domain:this.installation.bootstrap.domain,output:base64.encodeToStringSync(result.data),durationMs:monotonic()-start};await this.db.put('evaluation:'+id,JSON.stringify(report));outputs=[{artifactId:id,contentVersion:1,contentHash:hash(result.data),schemaId:result.schemaId,schemaVersion:1}];}
+   await this.store.change(new HostChange(s=>{s.state=startAttemptV2(s.state,id,monotonic());}));const computeStart=monotonic();this.timings.start(id,computeStart,input.byteLength,offer.target.executorId==='harmony.image.cpu.v1'?'COLD':'UNKNOWN');phase='EXECUTE';phaseStart=computeStart;const result=await this.engine(offer.task.contract.capability,input,offer.task.parameters,id);const executeEnd=monotonic(),wall=executeEnd-computeStart;
+   if(result.overheadMs!==undefined&&Number.isFinite(result.overheadMs)&&result.overheadMs>=0&&result.overheadMs<=wall)overheadMs=result.overheadMs;
+   if(test!==null){const compute=this.sample(wall-(overheadMs??0),'ms','PRIOR'),cold=this.sample(overheadMs??0,'ms','PRIOR');compute.ttlMs=3600000;cold.ttlMs=3600000;this.costs.set(offer.task.contract.capability,{compute,cold});}
+   trace?.add(phase,phaseStart,executeEnd);phaseStart=-1;if(this.cancelled(id))throw Error('CANCELLED_SETTLED');phase='PUBLISH';phaseStart=monotonic();
+   if(test!==null){if(result.data.byteLength>test.maxOutputBytes)throw Error('EVALUATION_OUTPUT_LIMIT');report={settled:true,permitId:id,domain:this.installation.bootstrap.domain,output:base64.encodeToStringSync(result.data),durationMs:wall};if(overheadMs!==undefined)report.overheadMs=overheadMs;await this.db.put('evaluation:'+id,JSON.stringify(report));outputs=[{artifactId:id,contentVersion:1,contentHash:hash(result.data),schemaId:result.schemaId,schemaVersion:1}];}
    else{const publish:PublishInput={bytes:result.data.byteLength,contentHash:hash(result.data),schemaId:result.schemaId};const destination=await this.transport.json('/v2/executions/'+id+'/output',publish) as OutputTicket;const t=destination.ticket;if(t.operation!=='WRITE'||t.bytes!==result.data.byteLength||t.ref.contentHash!==hash(result.data)||t.ref.schemaId!==result.schemaId)throw Error('ARTIFACT_SCOPE');if(destination.delivery==='LOCAL'){if(this.inputs===null||this.policy?.identity.appInstanceId!==offer.task.app.appInstanceId||offer.task.originDeviceId!==this.installation.paired.peer.deviceId)throw Error('LOCAL_OUTPUT_SCOPE');await this.inputs.stage(t.ref.contentHash,t.bytes,result.data);}else{const upload=async():Promise<Uint8Array>=>await this.transport.request('/v2/artifacts/'+t.ref.artifactId+'/'+t.ref.contentVersion,null,http.RequestMethod.PUT,{'Authorization':'Bearer '+t.token,'X-Device-Credential':this.transport.credential,'Content-Type':'application/octet-stream'},result.data);if(trace===null)await upload();else await trace.transfer('WRITE',upload);}outputs=[t.ref];}
    trace?.add(phase,phaseStart,monotonic());phaseStart=-1;state='SUCCEEDED';
   }catch(e){if(phaseStart>=0)trace?.add(phase,phaseStart,monotonic(),'PHASE_FAILED');errorCode=/^[A-Z_]+$/.test((e as Error).message)?(e as Error).message:'EXECUTION_FAILED';if(this.cancelled(id)||errorCode==='CANCELLED_SETTLED')state='CANCELLED_SETTLED';}
-  await this.store.change(new HostChange(s=>{const entry=s.state.entries.find(x=>x.record.attemptId===id)!;const receipt:ExecutionReceiptV2={attemptId:id,coordinatorEpoch:offer.task.coordinatorEpoch,planRevision:offer.task.planRevision,fence:entry.record.fence,state,resourcesSettled:true,outputs,actualTarget:offer.target,actualConfiguration:offer.allowedConfigs[0].id,errorCode};s.state=settleAttemptV2(s.state,receipt);if(test===null){const admittedAt=entry.deadline-Math.min(offer.leaseMs,offer.task.budget.remainingMs);this.report(s,receipt,entry.record.ledgerEpoch===s.state.ledgerEpoch?Math.max(0,monotonic()-admittedAt):undefined);}}));
+  await this.store.change(new HostChange(s=>{const entry=s.state.entries.find(x=>x.record.attemptId===id)!;const receipt:ExecutionReceiptV2={attemptId:id,coordinatorEpoch:offer.task.coordinatorEpoch,planRevision:offer.task.planRevision,fence:entry.record.fence,state,resourcesSettled:true,outputs,actualTarget:offer.target,actualConfiguration:offer.allowedConfigs[0].id,errorCode};s.state=settleAttemptV2(s.state,receipt);if(test===null){const admittedAt=entry.deadline-Math.min(offer.leaseMs,offer.task.budget.remainingMs);this.report(s,receipt,entry.record.ledgerEpoch===s.state.ledgerEpoch?Math.max(0,monotonic()-admittedAt):undefined,overheadMs);}}));
   const settled=this.store.read().state.entries.find(e=>e.record.attemptId===id);if(settled)this.timings.finish(settled,monotonic());
+  if(test!==null&&report===null){report={settled:true,permitId:id,domain:this.installation.bootstrap.domain,output:'',durationMs:0};if(state==='FAILED'&&errorCode)report.errorCode=errorCode;else report.interrupted=true;await this.db.put('evaluation:'+id,JSON.stringify(report));}
   await this.ackQuota();await this.flush();return report;
  }
  private executorDigest(e:ExecutorV2):string{const value:ExecutorDigest={target:e.target,contract:e.contract,model:e.model,resources:e.resources,configurations:e.configurations};return hash(bytes(canonical(value)));}
@@ -358,9 +353,9 @@ export class NativeAgent {
   try{
    const work=(await this.transport.json('/v2/evaluations/claim',{} as Record<string,Object>) as Claim).work;if(work===null)return;
    const permit=work.permit,pack=this.packs.find(x=>x.digest===permit.packDigest),test=pack?.cases.find(x=>x.id===permit.caseId),state=this.store.read().state;
-   if(pack===undefined||test===undefined||permit.groupId!==state.groupId||permit.holderInstanceId!==state.holderInstanceId||permit.domain!==this.installation.bootstrap.domain||permit.identity!==this.executorDigest(work.executor)||hash(base64.decodeSync(test.input))!==permit.inputHash||canonical(permit.config)!==canonical(test.config)||permit.maxOutputBytes!==test.maxOutputBytes||work.deviceInstanceId!==this.instance||work.ledgerEpoch!==state.ledgerEpoch)throw Error('EVALUATION_UNAUTHORIZED');
+   if(pack===undefined||test===undefined||permit.groupId!==state.groupId||permit.holderInstanceId!==state.holderInstanceId||permit.domain!==this.installation.bootstrap.domain||permit.identity!==this.executorDigest(work.executor)||hash(referenceBytes(test.input))!==permit.inputHash||canonical(permit.config)!==canonical(test.config)||permit.maxOutputBytes!==test.maxOutputBytes||work.deviceInstanceId!==this.instance||work.ledgerEpoch!==state.ledgerEpoch)throw Error('EVALUATION_UNAUTHORIZED');
    const old=state.entries.find(x=>x.record.attemptId===permit.id);let report:EvaluationReport|null=null;
-   if(old?.record.resourcesSettled){const saved=await this.db.get('evaluation:'+permit.id);if(saved!==null)report=JSON.parse(saved) as EvaluationReport;else report={settled:true,permitId:permit.id,domain:permit.domain,output:'',durationMs:0};}
+   if(old?.record.resourcesSettled){const saved=await this.db.get('evaluation:'+permit.id);if(saved!==null)report=JSON.parse(saved) as EvaluationReport;else {report={settled:true,permitId:permit.id,domain:permit.domain,output:'',durationMs:0};const receipt=old.record.receipt;if(receipt?.state==='FAILED'&&receipt.errorCode)report.errorCode=receipt.errorCode;else report.interrupted=true;}}
    else if(work.mode==='RUN'&&old===undefined){
     const g=state.grant!;
     const offer:DispatchOfferV2={task:{groupId:state.groupId,sessionId:null,originDeviceId:state.deviceId,resultDestination:state.deviceId,workflowId:'eval-'+permit.id,nodeId:'reference',attemptId:permit.id,coordinatorEpoch:work.coordinatorEpoch,planRevision:1,app:this.policy?.identity??{groupId:state.groupId,principalId:state.holderInstanceId,appId:state.holderInstanceId,appInstanceId:state.holderInstanceId,allowedContracts:[pack.manifest.contract.contractId]},contract:pack.manifest.contract,budget:{remainingMs:permit.timeoutMs,deadlineAt:work.expiresAt},inputs:[{artifactId:'eval-input-'+permit.id,contentVersion:1,contentHash:permit.inputHash,schemaId:pack.manifest.contract.inputSchemas[0],schemaVersion:1}],allowedTargetIds:[work.executor.target.targetId],qualityTarget:'reference',privacy:'LOCAL_ONLY',priority:'REMOTE_BATCH',parameters:test.parameters,allowedConfigurations:[test.config.id],businessIdempotencyKey:null},target:work.executor.target,resources:work.executor.resources,allowedConfigs:[test.config],allotmentId:g.allotmentId,allotmentVersion:g.version,leaseMs:Math.min(permit.timeoutMs,Math.max(1,work.expiresAt-this.transport.now())),transferPlan:[],dependencies:[],reasonCode:'REFERENCE_EVALUATION'};

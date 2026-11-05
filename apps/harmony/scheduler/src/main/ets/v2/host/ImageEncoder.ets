@@ -1,16 +1,18 @@
 import { common } from '@kit.AbilityKit';
 import { image } from '@kit.ImageKit';
 import mindSporeLite from '@ohos.ai.mindSporeLite';
-import { bytes, hash, text } from '../platform/NativeTransport';
+import { bytes, hash, text,monotonic } from '../platform/NativeTransport';
 import { ModelManifestV2, sameModelV2 } from '../protocol/ResourcesV2';
 
 interface Conversion {size:number;inputLayout:string;convertedSha256:string;preprocessVersion:string;}
 interface VectorOutput {model:ModelManifestV2;vector:number[];}
 
 export async function encodeImage(context:common.UIAbilityContext,input:Uint8Array,parameters:string,
- model:ModelManifestV2,cancelled:()=>boolean):Promise<Uint8Array>{
+ model:ModelManifestV2,cancelled:()=>boolean,measuredSetup?:(ms:number)=>void):Promise<Uint8Array>{
  const requested=JSON.parse(parameters) as ModelManifestV2;
+ if(!input.byteLength)throw Error('IMAGE_INVALID');
  if(!requested||!sameModelV2(requested,model))throw Error('ENCODER_MODEL_MISMATCH');
+ const readStart=monotonic();
  const conversion=JSON.parse(text(await context.resourceManager.getRawFileContent('image-encoder.json'))) as Conversion;
  const size=conversion.size;
  if(!Number.isInteger(size)||size<1||size>1024||conversion.inputLayout!=='RGB_UINT8_NHWC_RESIZE'||
@@ -18,6 +20,7 @@ export async function encodeImage(context:common.UIAbilityContext,input:Uint8Arr
  const weights=await context.resourceManager.getRawFileContent('image-encoder.ms');
  if(hash(weights)!==conversion.convertedSha256)throw Error('ENCODER_MODEL_DIGEST');
  if(cancelled())throw Error('CANCELLED_SETTLED');
+ const readMs=monotonic()-readStart;
  const src=image.createImageSource(input.slice().buffer as ArrayBuffer);
  let pixels:image.PixelMap|null=null;
  const rgb=new Uint8Array(size*size*3);
@@ -33,7 +36,9 @@ export async function encodeImage(context:common.UIAbilityContext,input:Uint8Arr
  }finally{await pixels?.release();await src.release();}
  if(cancelled())throw Error('CANCELLED_SETTLED');
  const runtime:mindSporeLite.Context={target:['cpu'],cpu:{threadNum:1,threadAffinityMode:mindSporeLite.ThreadAffinityMode.NO_AFFINITIES,precisionMode:'enforce_fp32'}};
+ const loadStart=monotonic();
  const engine=await mindSporeLite.loadModelFromBuffer(weights.slice().buffer as ArrayBuffer,runtime);
+ measuredSetup?.(readMs+(monotonic()-loadStart));
  const inputs=engine.getInputs();
  if(inputs.length!==1||inputs[0].dtype!==mindSporeLite.DataType.NUMBER_TYPE_UINT8||inputs[0].shape.join(',')!==[1,size,size,3].join(','))throw Error('ENCODER_INPUT_LAYOUT');
  inputs[0].setData(rgb.buffer as ArrayBuffer);

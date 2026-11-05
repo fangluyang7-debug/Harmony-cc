@@ -15,7 +15,7 @@ async function main(){
   const invitation=await r.auth.invite(group,randomUUID(),device,r.url),bootstrap=path.join(dir,'worker.json');
   await r.allotments.confirmDevice(device,[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:268435456}],[{groupId:group,holderInstanceId:holder,appInstanceId:null}]);
   fs.writeFileSync(bootstrap,JSON.stringify({invitation,holderInstanceId:holder,domain:'SIMULATED'}));worker=await start('pc',{root,dir,bootstrap,settings});
-  await until(async()=>{try{return (await r.snapshots.build(group)).snapshot.candidates.length===2;}catch{return false;}});
+  await until(async()=>{try{const candidates=(await r.snapshots.build(group)).snapshot.candidates;return ['text.count.v1','vector.normalize.v1'].every(capability=>candidates.some(c=>c.capability===capability));}catch{return false;}});
   const ownerInvite=await r.auth.invite(group,randomUUID(),randomUUID(),r.url),owner=await r.auth.exchange({inviteId:ownerInvite.inviteId,code:ownerInvite.code,holderInstanceId:randomUUID()});
   if(localHost)await r.allotments.confirmDevice(owner.peer.deviceId,[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:268435456}],[{groupId:group,holderInstanceId:owner.peer.holderInstanceId,appInstanceId:null}]);
   const appInvite=await r.apps.register(owner.peer,{label:'Native SDK probe',allowedContracts:['text.count.v1','vector.normalize.v1'],maxConcurrent:1,resources:[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:67108864}],offlineBase:[],onlineExtra:localHost?[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:67108864}]:[]},r.url);

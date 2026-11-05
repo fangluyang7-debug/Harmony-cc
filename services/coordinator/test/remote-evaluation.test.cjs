@@ -15,7 +15,7 @@ async function setup(){
  const directory=new DeviceDirectory(r.db,'SIMULATED',()=>100);await directory.ingest(pair.peer,profile);
  await r.allotments.confirmDevice('device1',executor.resources,[{groupId:'g1',holderInstanceId:'h1',appInstanceId:null}]);
  const input=Buffer.from('{"dimension":2,"rows":[[3,4],[0,0]]}'),config=executor.configurations[0];
- const pack={manifest:{packId:'normalize',contract:executor.contract,executorIds:[executor.target.executorId],model:null,suiteId:'reference',qualityThreshold:1,resourceLimit:executor.resources},
+ const pack={simulationFixture:true,manifest:{packId:'normalize',contract:executor.contract,executorIds:[executor.target.executorId],model:null,suiteId:'reference',qualityThreshold:1,resourceLimit:executor.resources},
   cases:[{id:'reference',input,parameters:'{}',config,maxOutputBytes:4096}],evaluate:async(_t,b)=>canonical(JSON.parse(b))===canonical({dimension:2,rows:[[.6,.8],[0,0]],norms:[5,0]})?1:0};
  const packDigest=hash(Buffer.from(canonical({manifest:pack.manifest,cases:pack.cases.map(c=>({...c,input:hash(c.input)}))})));
  const permit=()=>({id:crypto.randomUUID(),groupId:'g1',holderInstanceId:'h1',targetId:'target1',identity:executorIdentity(executor),packDigest,caseId:'reference',inputHash:hash(input),config,maxOutputBytes:4096,timeoutMs:5000,domain:'SIMULATED'});

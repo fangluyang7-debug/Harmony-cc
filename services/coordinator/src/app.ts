@@ -208,6 +208,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     if(relayData)directTransfers.configureRelay({endpoint:relayEndpoint,available:d=>artifacts.available(d),slots:()=>artifacts.availableTransferSlots,bytes:()=>artifacts.availableCacheBytes});
     const allotments=new AllotmentIssuer(db,identity.key,()=>epoch);
     const channel=new ControlChannel(app.getHttpServer(),db,store,()=>ready,()=>epoch,options.authenticate??(token=>auth.authenticate(token)),undefined,groupId=>{events.changed(groupId);graphs.changed(groupId);jobs.batch.changed(groupId);},error=>options.onError?.(error));
+    channel.onSettlement=peer=>profiles.changed(peer.groupId,peer.holderInstanceId);
     directory.controlState=(group,holder,instance,epoch)=>channel.linkState(group,holder,instance,epoch);
     const retention=new ArtifactRetention(db,directTransfers,artifacts);
     const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks,directTransfers),graphs=new WorkflowJobs(db,jobs,apps,artifacts,referencePacks,retention),sdk=new SdkJobs(jobs,referencePacks,graphs,retention);
@@ -233,7 +234,9 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       await store.recover(epoch);await recover(db,epoch);ready=true;retention.start();await jobs.batch.restore();
       if(options.cpuHost){
         for(const groupId of new Set((await auth.activePeers()).map(p=>p.groupId)))await configureCpuGroup(groupId);
-        startCalibration({packs:referencePacks,policy:{maxRuns:8,maxDurationMs:120000,maxBytes:1048576,maxConcurrent:1,caseTimeoutMs:15000,canarySamples:1,activeSamples:2,evidenceTtlMs:3600000,cooldownMs:5000},
+        const maxRuns=Math.max(8,...referencePacks.map(pack=>pack.cases.length+2)),caseTimeoutMs=15000;
+        const maxBytes=Math.max(16777216,...referencePacks.map(pack=>pack.cases.reduce((sum,c)=>sum+c.input.length+c.maxOutputBytes,0)));
+        startCalibration({packs:referencePacks,policy:{maxRuns,maxDurationMs:maxRuns*caseTimeoutMs,maxBytes,maxConcurrent:1,caseTimeoutMs,canarySamples:1,activeSamples:2,evidenceTtlMs:3600000,cooldownMs:5000},
           gate:async()=>null,onError:()=>{},intervalMs:1000});
       }
       const stopping=await db.sdkWorkflowJob.findMany({where:{state:'CANCEL_REQUESTED'},select:{groupId:true},distinct:['groupId']});

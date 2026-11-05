@@ -21,11 +21,12 @@ export class ExecutionTrace {
       if(samples?.length)span.queueSamples=samples;
       // Telemetry must not prevent execution or alter settlement.
       try{this.buffer.emit(span);this.previous=spanId;}catch{this.buffer.dropped++;}
+      return span.durationMs;
     };
   }
-  async segment<T>(phase:string,work:()=>Promise<T>):Promise<T>{
+  async segment<T>(phase:string,work:()=>Promise<T>,measured?:(ms:number)=>void):Promise<T>{
     const id=randomUUID(),parent=this.activeSpan,end=this.begin(phase,id);this.activeSpan=id;
-    try{const result=await work();end();return result;}catch(error){end('PHASE_FAILED');throw error;}finally{this.activeSpan=parent;}
+    try{const result=await work();const duration=end();if(duration!==undefined)measured?.(duration);return result;}catch(error){end('PHASE_FAILED');throw error;}finally{this.activeSpan=parent;}
   }
   /** One local HTTP request, including response and integrity validation. Never records tickets. */
   async transfer<T>(operation:'READ'|'WRITE',work:()=>Promise<T>):Promise<T>{

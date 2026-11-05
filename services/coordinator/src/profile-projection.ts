@@ -1,6 +1,6 @@
 import {dispatchDiagnostics} from './dispatch-diagnostics';
 import { Prisma, PrismaClient } from '../generated/client';
-import { DeviceProfileV2, PlanningPolicy, protocolId, WorkflowPlacementPlanner } from '@harmony/scheduler-core';
+import { costEstimatePolicy,DeviceProfileV2, PlanningPolicy, protocolId, WorkflowPlacementPlanner } from '@harmony/scheduler-core';
 import { ContributionPolicy, DeviceDirectory } from './directory';
 import { SnapshotBuilder } from './planning';
 import type { Peer } from './channel';
@@ -15,6 +15,12 @@ function validPolicy(p:ContributionPolicy):boolean {
 
 /** Authenticated profile and planning projection commit together, before the channel ACK. */
 export class ProfileProjection {
+  private readonly listeners=new Map<string,Set<()=>void>>();
+  watch(group:string,holder:string,wake:()=>void){
+    const key=JSON.stringify([group,holder]),listeners=this.listeners.get(key)??new Set<()=>void>();listeners.add(wake);this.listeners.set(key,listeners);
+    return ()=>{listeners.delete(wake);if(!listeners.size)this.listeners.delete(key);};
+  }
+  changed(group:string,holder:string){for(const wake of this.listeners.get(JSON.stringify([group,holder]))??[])wake();}
   constructor(private readonly db:PrismaClient,private readonly directory:DeviceDirectory,private readonly snapshots:SnapshotBuilder){}
   /** Trusted local administration only. Pairing alone does not authorize targets or pick a contribution policy. */
   async configure(groupId:string,policy:PlanningPolicy,contribution:ContributionPolicy,onlyReplacePolicyVersion?:string):Promise<void>{
@@ -43,6 +49,7 @@ export class ProfileProjection {
       if(!saved.contributionPolicy)return; // A-stage snapshots are not silently opted in.
       return this.publish(tx,peer.groupId,saved.policy,saved.contributionPolicy,row.revision+1);
     });
+    if(version!==undefined)this.changed(peer.groupId,peer.holderInstanceId);
     if(version!==undefined)dispatchDiagnostics.record({at:Date.now(),kind:"SNAPSHOT_REFRESH",groupId:peer.groupId,holderId:peer.holderInstanceId,source:"PROFILE",snapshotVersion:version});
   }
   /** Called by a future trusted evidence service after a qualification change; never accepts device self-approval. */
@@ -57,7 +64,7 @@ export class ProfileProjection {
     dispatchDiagnostics.record({at:Date.now(),kind:"SNAPSHOT_REFRESH",groupId,source,jobId,snapshotVersion:version});
   }
   private async publish(tx:Prisma.TransactionClient,groupId:string,policy:PlanningPolicy,contribution:ContributionPolicy,version:number){
-    const snapshot=await this.directory.snapshot(groupId,policy.version,version,contribution,tx);
+    const snapshot=await this.directory.snapshot(groupId,policy.version,version,contribution,tx,costEstimatePolicy(policy.costEstimate));
     await this.snapshots.replace(snapshot,policy,tx,contribution);
     return version;
   }

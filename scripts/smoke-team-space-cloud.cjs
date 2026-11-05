@@ -24,7 +24,7 @@ async function main(){
   connection=JSON.parse(fs.readFileSync(path.join(installation,'agent.json'))).connection;
   host=fork(path.join(root,'services/pc-agent/dist/host-main.js'),[path.join(installation,'agent.json'),policy],{windowsHide:true,stdio:['ignore','ignore','pipe','ipc']});
   host.stderr.on('data',b=>{if(errors.length<12){const message=b.toString().trim();errors.push(message);console.log('Agent diagnostic: '+message);}});
-  await until(async()=>{const d=await api('/'+spaceId);return d.devices[0].capabilities.length===2&&d.devices[0].capabilities.every(c=>c.available&&c.state==='ACTIVE');});
+  await until(async()=>{const d=await api('/'+spaceId);return ['text.count.v1','vector.normalize.v1','image.crop.v1'].every(id=>d.devices[0].capabilities.some(c=>c.capability===id))&&d.devices[0].capabilities.every(c=>c.available&&c.state==='ACTIVE');});
   console.log('Automatic qualification passed. Submitting real CPU work.');
   const id=crypto.randomUUID();await api('/'+spaceId+'/jobs',{requestId:id,capability:'text.count.v1',input:{text:'Hello cloud'}});
   let result;await until(async()=>{result=await api('/'+spaceId+'/jobs/'+id);return !!result.output;});assert.deepEqual(result.output,{characters:11,words:2,lines:1});

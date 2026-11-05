@@ -6,9 +6,10 @@ const clamp=(v:number,min:number,max:number):number=>Math.min(max,Math.max(min,v
 export async function cropImage(input:Uint8Array,parameters:string):Promise<Uint8Array>{
  const p=JSON.parse(parameters) as CropParameters,b=p.box;
  if(!b||![b.x,b.y,b.width,b.height,p.paddingRatio].every(Number.isFinite)||b.x<0||b.y<0||b.width<=0||b.height<=0||b.x+b.width>1||b.y+b.height>1||p.paddingRatio<0||p.paddingRatio>.5||!Number.isSafeInteger(p.targetSize)||p.targetSize<32||p.targetSize>1024||!Number.isSafeInteger(p.jpegQuality)||p.jpegQuality<40||p.jpegQuality>95)throw Error('CROP_INVALID');
- const source=image.createImageSource(input.buffer as ArrayBuffer);let pixels:image.PixelMap|null=null,canvas:image.PixelMap|null=null;const packer=image.createImagePacker();
+ if(!input.byteLength)throw Error('IMAGE_INVALID');
+ let source:image.ImageSource;try{source=image.createImageSource(input.buffer as ArrayBuffer);}catch{throw Error('IMAGE_INVALID');}let pixels:image.PixelMap|null=null,canvas:image.PixelMap|null=null;const packer=image.createImagePacker();
  try{
-  const info=await source.getImageInfo();const width=info.size.width,height=info.size.height;if(width*height>16777216||!width||!height)throw Error('IMAGE_INVALID');
+  const info=await source.getImageInfo().catch(()=>{throw Error('IMAGE_INVALID');});const width=info.size.width,height=info.size.height;if(width*height>16777216||!width||!height)throw Error('IMAGE_INVALID');
   pixels=await source.createPixelMap({editable:true,desiredPixelFormat:image.PixelMapFormat.RGBA_8888});
   const cx=(b.x+b.width/2)*width,cy=(b.y+b.height/2)*height,side=Math.min(Math.max(b.width*width,b.height*height)*(1+p.paddingRatio*2),Math.max(width,height));
   const left=clamp(Math.round(cx-side/2),0,width-1),top=clamp(Math.round(cy-side/2),0,height-1),cropWidth=clamp(Math.round(cx+side/2),left+1,width)-left,cropHeight=clamp(Math.round(cy+side/2),top+1,height)-top;

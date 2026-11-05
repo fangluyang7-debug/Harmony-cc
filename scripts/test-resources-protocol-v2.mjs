@@ -30,8 +30,15 @@ for(const source of sources){
  profile.inFlight[0].history.survivors=5;assert.equal(api.validDeviceProfileV2(profile),false);cases++;
  delete profile.inFlight[0].history;
  profile.inFlight[0].state='QUEUED';assert.equal(api.validDeviceProfileV2(profile),false);cases++;
+ const conflict=JSON.parse(JSON.stringify(profile));conflict.queued[0].attemptId=conflict.inFlight[0].attemptId;
+ assert.equal(api.validDeviceProfileV2(conflict),false);cases++;
  const report=load('fixtures/t2/valid/ExecutionReport.json');report.resourceHeldMs=12;
  assert.equal(api.validExecutionReportV2(report),true);cases++;
+ report.overheadMs=8;report.startup='COLD';const reportSchema=ajv.getSchema('urn:scheduling:v2:resources#/definitions/ExecutionReport');
+ assert.ok(api.validExecutionReportV2(report)&&reportSchema(report));cases++;
+ delete report.startup;assert.ok(!api.validExecutionReportV2(report)&&!reportSchema(report));cases++;
+ report.startup='WARM';report.overheadMs=-1;assert.ok(!api.validExecutionReportV2(report)&&!reportSchema(report));cases++;
+ delete report.startup;delete report.overheadMs;
  report.resourceHeldMs=-1;assert.equal(api.validExecutionReportV2(report),false);cases++;
  const admission=load('fixtures/t2/valid/CapabilityAdmission.json');
  const schema=ajv.getSchema('urn:scheduling:v2:resources#/definitions/CapabilityAdmission');

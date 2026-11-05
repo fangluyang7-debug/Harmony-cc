@@ -24,6 +24,7 @@ export class ControlChannel {
   private closing=false;
   private readonly handlers=new Map<string,ChannelHandler>();
   private readonly upgrade:(request:any,socket:any,head:Buffer)=>void;
+  onSettlement?:(peer:Peer)=>void;
   constructor(private readonly server:Server,private readonly db:PrismaClient,private readonly store:CoordinatorStore,
     private readonly ready:()=>boolean,private readonly epoch:()=>number,private readonly authenticate:(token:string)=>Promise<Peer>,
     readonly limits={queuedMessages:64,bufferedBytes:1048576,inFlight:64},private readonly changed:(groupId:string)=>void=()=>{},private readonly onError:(error:unknown)=>void=()=>{}){
@@ -78,7 +79,8 @@ export class ControlChannel {
       if(receipt.fence.holderInstanceId!==peer.holderInstanceId||receipt.fence.deviceId!==peer.deviceId)throw Error('RECEIPT_UNAUTHORIZED');
       const row=await db.attempt.findUnique({where:{id:receipt.attemptId}}),record=row?.recordJson?JSON.parse(row.recordJson):null;
       if(!record||record.allotmentId!==p.allotmentId||record.allotmentVersion!==p.allotmentVersion||record.leaseId!==p.leaseId)throw Error('RECEIPT_LEASE_MISMATCH');
-      await store.receive(peer.groupId,peer.holderInstanceId,receipt,epoch(),p.resourceHeldMs);
+      await store.receive(peer.groupId,peer.holderInstanceId,receipt,epoch(),p.resourceHeldMs,p.overheadMs,p.startup);
+      this.onSettlement?.(peer);
     }});
     this.upgrade=(request,socket,head)=>{
       void this.track((async()=>{

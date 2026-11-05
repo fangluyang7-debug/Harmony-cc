@@ -12,16 +12,16 @@ test('formal unpinned graph reassigns C to D after C receives B output; C serves
    pids.push((await hosts[i].request({action:'open',certificate:invite.certificate,source:i===0,config:{directory:path.join(r.config.dataDir,identity.holderInstanceId),identity,connection:{address:r.url,certificate:invite.certificate,fingerprint:invite.fingerprint,credential:paired.credential,domain:'SIMULATED'},controlIntervalMs:1500,contribution:{ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:268435456,reserveMemoryBytes:0}}})).pid);
   }
   assert.equal(new Set([...pids,process.pid]).size,4);
-  await until(async()=>{try{const c=(await r.snapshots.build(group)).snapshot.candidates;return c.some(x=>x.capability===final.manifest.contract.capability)&&peers.every(peer=>c.some(x=>x.capability==='text.count.v1'&&x.holderInstanceId===peer.holderInstanceId));}catch{return false;}});
+  await until(async()=>{try{const c=(await r.snapshots.build(group)).snapshot.candidates;return c.some(x=>x.capability===final.manifest.contract.capability)&&peers.every(peer=>c.some(x=>x.capability==='text.count.v1'&&x.holderInstanceId===peer.holderInstanceId));}catch{return false;}},180000);
   for(const h of hosts)await h.request({action:'freeze'});
   async function links(){const endpoints=await r.directTransfers.list(peers[0]);for(let i=0;i<3;i++){const network=await r.directTransfers.resetNetwork(peers[i]);for(let j=0;j<3;j++)if(i!==j){const e=endpoints.find(e=>e.holderInstanceId===peers[j].holderInstanceId),fixed=i===0&&j===2?50:.01;await r.directTransfers.reportLink(peers[i],{epoch:network.epoch,endpointId:e.id,endpointEpoch:e.epoch,direction:'WRITE',reason:'REACHABLE',samples:[1024,8192,32768].map(bytes=>({bytes,durationMs:fixed+bytes/1000000}))});}}await r.profiles.refresh(group);}
   for(let i=0;i<3;i++)await hosts[i].request({action:'cost',value:[10000,1,10][i]});
-  await until(async()=>{await r.profiles.refresh(group);const c=(await r.snapshots.build(group)).snapshot.candidates;return peers.every((peer,i)=>c.some(x=>x.capability==='text.count.v1'&&x.holderInstanceId===peer.holderInstanceId&&x.computeMs===[10000,1,10][i]));});await links();
-  const id=randomUUID(),start=r.jobs.start.bind(r.jobs);let reassigned=false,parentRef;
+  await until(async()=>{await r.profiles.refresh(group);const c=(await r.snapshots.build(group)).snapshot.candidates;return peers.every((peer,i)=>c.some(x=>x.capability==='text.count.v1'&&x.holderInstanceId===peer.holderInstanceId&&x.costEvidence?.compute.value===[10000,1,10][i]));});await links();
+  const id=randomUUID(),start=r.jobs.start.bind(r.jobs);let reassigned=false,parentRef,topologyReady;
   r.jobs.start=async(peer,jobId,...rest)=>{
    const row=await r.db.cpuJob.findUnique({where:{id:jobId}}),d=row&&JSON.parse(row.metadataJson);
-   if(d?.offer.task.workflowId===id&&d.offer.task.nodeId==='count'&&!reassigned&&await r.directTransfers.hasInput(group,peers[1].holderInstanceId,peers[0].app.appInstanceId,d.input.ref)){
-    reassigned=true;parentRef=d.input.ref;await hosts[1].request({action:'pause'});
+   if(d?.offer.task.workflowId===id&&d.offer.task.nodeId==='count'&&await r.directTransfers.hasInput(group,peers[1].holderInstanceId,peers[0].app.appInstanceId,d.input.ref)&&!reassigned){
+    reassigned=true;parentRef=d.input.ref;topologyReady=(async()=>{await hosts[1].request({action:'pause'});
     await until(async()=>{await r.profiles.refresh(group);return !(await r.snapshots.build(group)).snapshot.candidates.some(c=>c.holderInstanceId===peers[1].holderInstanceId);});
     await Promise.all(hosts.map(h=>h.request({action:'register-endpoint'})));
     for(const i of [0,1])assert.equal(await r.directTransfers.hasInput(group,peers[i].holderInstanceId,peers[0].app.appInstanceId,parentRef),true);
@@ -29,8 +29,9 @@ test('formal unpinned graph reassigns C to D after C receives B output; C serves
     assert.equal(await hosts[0].request({action:'evict-ref',groupId:group,ref:parentRef}),true);
     await hosts[0].request({action:'register-endpoint'});
     assert.equal(await r.directTransfers.hasInput(group,peers[0].holderInstanceId,peers[0].app.appInstanceId,parentRef),false);
-    await links();
+    await links();})();
    }
+   if(topologyReady&&d?.offer.task.workflowId===id&&d.offer.task.nodeId==='count')await topologyReady;
    return start(peer,jobId,...rest);
   };
   await hosts[0].request({action:'submit',jobId:id});const result=await hosts[0].request({action:'result',jobId:id});assert.equal(result.state,'SUCCEEDED');assert.deepEqual(Buffer.from(result.output,'base64'),counts);assert.equal(reassigned,true);

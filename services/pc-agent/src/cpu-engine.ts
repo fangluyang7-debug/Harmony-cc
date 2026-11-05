@@ -1,3 +1,4 @@
+import {cpuRegistry} from './executors/registry';
 import { fork, ForkOptions } from 'node:child_process';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -7,7 +8,8 @@ import { ExecutionConfigV2, validExecutionConfigV2 } from '@harmony/scheduler-co
 export interface CpuResult {bytes:Buffer;hash:string;schemaId:string;durationMs:number;backend:'CPU';}
 /** Every invocation owns one disposable process; abort resolves only after its exit event. */
 export function executeCpu(capability:string,input:Buffer,parameters:unknown,config:ExecutionConfigV2,signal:AbortSignal):Promise<CpuResult>{
-  if(!validExecutionConfigV2(config)||input.length>8388608||!['image.crop.v1','vector.normalize.v1','text.count.v1'].includes(capability))return Promise.reject(Error('CPU_REQUEST_INVALID'));
+  if(!validExecutionConfigV2(config)||input.length>8388608)return Promise.reject(Error('CPU_REQUEST_INVALID'));
+  if(!cpuRegistry.has(capability))return Promise.reject(Error('CAPABILITY_UNSUPPORTED'));
   if(signal.aborted)return Promise.reject(Error('CANCELLED_SETTLED'));
   return new Promise((resolve,reject)=>{
     const options:ForkOptions&{windowsHide:boolean}={windowsHide:true,stdio:['ignore','ignore','ignore','ipc'],execArgv:['--max-old-space-size=256']};

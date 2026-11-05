@@ -89,6 +89,8 @@ model DispatchSequence {
 }
 
 model Receipt {
+  overheadMs Float?
+  startup String?
   id String @id
   attemptId String
   recordJson String

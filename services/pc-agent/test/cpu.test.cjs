@@ -50,3 +50,11 @@ test('execution runtime persists before computing, verifies artifacts, returns t
   const changed=structuredClone(offer);changed.task.parameters='{"different":true}';await assert.rejects(restored.run(changed,config),/CONFLICT/);
  }finally{await runtime.close();await ledger.close();}
 });
+
+test('registered child executors reject duplicate and unknown registrations',async()=>{
+ const {ExecutorRegistry}=require('../dist/executors/registry'),registry=new ExecutorRegistry(),run=async()=>({output:Buffer.from('ok'),schemaId:'sample'});
+ registry.register('fourth',async()=>run);
+ assert.equal(await registry.load('fourth'),run);
+ assert.throws(()=>registry.register('fourth',async()=>run),/EXECUTOR_DUPLICATE/);
+ await assert.rejects(registry.load('missing'),/CAPABILITY_UNSUPPORTED/);
+});

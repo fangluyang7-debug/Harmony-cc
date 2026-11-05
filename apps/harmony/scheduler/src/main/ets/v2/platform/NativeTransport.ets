@@ -12,7 +12,7 @@ export const bytes=(text:string):Uint8Array=>new util.TextEncoder().encodeInto(t
 export const text=(data:Uint8Array):string=>util.TextDecoder.create('utf-8').decodeToString(data);
 export const base64=new util.Base64Helper();
 export const hex=(data:Uint8Array):string=>Array.from(data).map(n=>n.toString(16).padStart(2,'0')).join('');
-export function hash(data:Uint8Array):string {const md=cryptoFramework.createMd('SHA256');md.updateSync({data});return hex(md.digestSync().data);}
+export function hash(data:Uint8Array):string {const md=cryptoFramework.createMd('SHA256');if(data.byteLength>0)md.updateSync({data});return hex(md.digestSync().data);}
 export function hashBytes(data:Uint8Array):Uint8Array {const md=cryptoFramework.createMd('SHA256');md.updateSync({data});return md.digestSync().data;}
 export const monotonic=():number=>systemDateTime.getUptime(systemDateTime.TimeType.STARTUP,false);
 interface UnsignedGrant {allotmentId:string;groupId:string;deviceId:string;holderInstanceId:string;appInstanceId:string|null;ledgerEpoch:number;coordinatorEpoch:number;version:number;base:ResourceAmountV2[];extra:ResourceAmountV2[];leaseRequestId:string;leaseMs:number;}

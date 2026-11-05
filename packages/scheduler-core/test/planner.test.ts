@@ -1,4 +1,4 @@
-import { WorkflowPlacementPlanner, PlacementCandidate, PlacementRequest, authorizePlacement, PlacementRollout } from '../src/planner';
+import { earliestFeasibleV2,poolOccupancyKey,WorkflowPlacementPlanner, PlacementCandidate, PlacementRequest, authorizePlacement, PlacementRollout } from '../src/planner';
 const limits={maxCandidates:8,lookahead:16,beamWidth:8,planningBudgetMs:20,switchCostMs:5,hysteresisMs:10};
 const now=10000;
 const candidate=(deviceId:string,computeMs:number):PlacementCandidate=>({targetId:deviceId,resourcePoolIds:['shared'],deviceId,executorId:deviceId,capability:'crop',trusted:true,source:'REAL',
@@ -224,4 +224,14 @@ test('snapshot wait contract rejects mismatches, forecasts and expiry; policy qu
  c.availability.targetId=c.targetId;c.availability.reason='RESOURCE_CAPACITY';c.availability.resourceWait.value=5;
  expect(run().suggestion).toBeNull();expect(run().rejections[0].retryAfterMs).toBe(5);
  r.now+=101;expect(run().rejections[0].retryAfterMs).toBeUndefined();
+});
+
+test('reservations use independent physical and holder pool identities and adjacent intervals share a boundary',()=>{
+ const physical=poolOccupancyKey('device:a','ram'),other=poolOccupancyKey('device','a:ram');
+ expect(other).not.toBe(physical);expect(poolOccupancyKey('device:a','ram','one')).not.toBe(physical);
+ const demands=[{key:physical,amount:1,capacity:1}];
+ const running={key:physical,amount:1,start:0,end:200},queued={key:physical,amount:1,start:200,end:500};
+ expect(earliestFeasibleV2([running],demands,0,50)).toBe(200);
+ expect(earliestFeasibleV2([running,queued],demands,0,50)).toBe(500);
+ expect(earliestFeasibleV2([{...queued,key:other,end:Infinity}],demands,0,50)).toBe(0);
 });

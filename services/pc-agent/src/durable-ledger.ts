@@ -131,10 +131,10 @@ export class DurableLedger {
     if(!record)throw Error('ATTEMPT_UNKNOWN');if(record.resourcesSettled)return;
     const channel=clone(this.channel);channel.outbox.push(journalMessage(channel,this.state.groupId,this.state.holderInstanceId,'YieldNotice',notice));this.commit(this.state,channel);
   }
-  private addReport(channel:ChannelJournal,state:LedgerStateV2,receipt:ExecutionReceiptV2,resourceHeldMs?:number,actualModel:ModelManifestV2|null=null){
+  private addReport(channel:ChannelJournal,state:LedgerStateV2,receipt:ExecutionReceiptV2,resourceHeldMs?:number,actualModel:ModelManifestV2|null=null,overheadMs?:number){
     if(channel.outbox.some(m=>m.type==='ExecutionReceipt'&&JSON.parse(m.payload).receipt.attemptId===receipt.attemptId))return;
     const record=state.entries.find(e=>e.record.attemptId===receipt.attemptId)!.record;
-    channel.outbox.push(journalMessage(channel,state.groupId,state.holderInstanceId,'ExecutionReceipt',{receipt,resourceHeldMs,allotmentId:record.allotmentId,allotmentVersion:record.allotmentVersion,leaseId:record.leaseId,actualModel,timings:[]}));
+    channel.outbox.push(journalMessage(channel,state.groupId,state.holderInstanceId,'ExecutionReceipt',{receipt,resourceHeldMs,...(overheadMs!==undefined?{overheadMs,startup:"COLD"}:{}),allotmentId:record.allotmentId,allotmentVersion:record.allotmentVersion,leaseId:record.leaseId,actualModel,timings:[]}));
   }
   queueTrace(spans:TraceSpanV2[]){
     if(this.channel.outbox.length>=32)throw Error('TRACE_BACKPRESSURE');
@@ -146,7 +146,7 @@ export class DurableLedger {
   cancel(attemptId:string){this.commit(cancelAttemptV2(this.state,attemptId));}
   expire(){for(const e of this.state.entries)if(!e.record.resourcesSettled&&this.clock()>=e.deadline&&!e.cancelRequested)this.cancel(e.record.attemptId);}
   /** Only a locally confirmed engine settlement may invoke this method, never a network timeout. */
-  settle(receipt:ExecutionReceiptV2,delivery:'BUSINESS'|'EVALUATION'='BUSINESS',actualModel:ModelManifestV2|null=null){
+  settle(receipt:ExecutionReceiptV2,delivery:'BUSINESS'|'EVALUATION'='BUSINESS',actualModel:ModelManifestV2|null=null,overheadMs?:number){
     const next=settleAttemptV2(this.state,receipt),channel=clone(this.channel);
     // Reference evaluation results use the durable permit-report protocol. A
     // successful reference is not a missing business dispatch to reconcile.
@@ -154,7 +154,7 @@ export class DurableLedger {
       if(receipt.coordinatorEpoch===channel.epoch&&channel.dispatches?.some(d=>d.attemptId===receipt.attemptId)){
         const e=next.entries.find(entry=>entry.record.attemptId===receipt.attemptId)!;
         const admittedAt=e.deadline-Math.min(e.offer.leaseMs,e.offer.task.budget.remainingMs);
-        this.addReport(channel,next,receipt,e.record.ledgerEpoch===next.ledgerEpoch?Math.max(0,this.clock()-admittedAt):undefined,actualModel);
+        this.addReport(channel,next,receipt,e.record.ledgerEpoch===next.ledgerEpoch?Math.max(0,this.clock()-admittedAt):undefined,actualModel,overheadMs);
       }
       else if(!channel.outbox.some(m=>m.type==='RecoveryRequest'))channel.outbox.push(journalMessage(channel,next.groupId,next.holderInstanceId,'RecoveryRequest',{}));
     }

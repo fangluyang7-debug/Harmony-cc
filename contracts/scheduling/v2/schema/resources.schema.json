@@ -249,6 +249,7 @@
     "Executor": {
       "type": "object",
       "properties": {
+        "startup": {"type":"string","enum":["COLD","WARM","UNKNOWN"]},
         "target": {
           "$ref": "urn:scheduling:v2#/definitions/Target"
         },
@@ -938,6 +939,7 @@
       "additionalProperties": false
     },
     "ExecutionReport": {
+      "dependencies": {"startup":["overheadMs"],"overheadMs":["startup"]},
       "type": "object",
       "properties": {
         "receipt": {
@@ -966,6 +968,8 @@
             }
           ]
         },
+        "startup": {"type":"string","enum":["COLD","WARM"]},
+        "overheadMs": {"type":"number","minimum":0},
         "resourceHeldMs": {"type":"number","minimum":0},
         "timings": {
           "type": "array",

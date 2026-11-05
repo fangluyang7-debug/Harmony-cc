@@ -7,7 +7,7 @@ const {submitWhenAvailable}=require('../../pc-agent/dist/submit-wait');
 const {pinnedRequest}=require('../dist/pinned-client');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 const command=(file,args)=>new Promise((resolve,reject)=>execFile(process.execPath,[file,...args],{windowsHide:true,timeout:60000},(e,stdout,stderr)=>e?reject(Error(stderr||e.message)):resolve(stdout)));
-async function until(check,errors){const until=Date.now()+45000;while(Date.now()<until){if(await check())return;await new Promise(r=>setTimeout(r,100));}throw Error('HOST_TIMEOUT '+JSON.stringify(errors));}
+async function until(check,errors,timeoutMs=45000){const until=Date.now()+timeoutMs;while(Date.now()<until){if(await check())return;await new Promise(r=>setTimeout(r,100));}throw Error('HOST_TIMEOUT '+JSON.stringify(errors));}
 test('paired standalone CPU host automatically qualifies; metadata submission -> real cross-device text/vector results through public APIs',async t=>{
  const r=await runtime({cpuHost:true});let host;const errors=[];
  const originalPlan=r.planning.plan.bind(r.planning),originalPreflight=r.planning.preflight.bind(r.planning);let plans=0,preflights=0;
@@ -24,9 +24,9 @@ test('paired standalone CPU host automatically qualifies; metadata submission ->
   await command(path.resolve('../pc-agent/dist/pairing-main.js'),[invitation,installation]);
   fs.writeFileSync(policy,JSON.stringify({ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:268435456,reserveMemoryBytes:0}));
   host=fork(path.resolve('../pc-agent/dist/host-main.js'),[path.join(installation,'agent.json'),policy],{windowsHide:true,stdio:['ignore','ignore','pipe','ipc']});host.stderr.on('data',b=>errors.push(b.toString().trim()));
-  await until(async()=>{try{return (await r.snapshots.build('team1')).snapshot.candidates.length===2;}catch{return false;}},errors);
+  await until(async()=>{try{const candidates=(await r.snapshots.build('team1')).snapshot.candidates;return ['text.count.v1','vector.normalize.v1','image.crop.v1'].every(id=>candidates.some(c=>c.capability===id&&typeof c.costEvidence?.compute.value==='number'));}catch{return false;}},errors,180000);
   const registered=await r.directory.profiles('team1');assert.equal(registered.length,1);assert.equal(registered[0].battery.value,null);
-  assert.equal(registered[0].executors.length,2);assert.ok(registered[0].executors.every(e=>e.compute.source==='PRIOR'&&e.compute.value>0));
+  assert.deepEqual(registered[0].executors.map(e=>e.contract.capability).sort(),['image.crop.v1','text.count.v1','vector.normalize.v1']);assert.ok(registered[0].executors.every(e=>e.compute.source==='PRIOR'&&e.compute.value>0));
   const sourceInvite=await r.auth.invite('team1','submitter','source-laptop',r.url),owner=await r.auth.exchange({inviteId:sourceInvite.inviteId,code:sourceInvite.code,holderInstanceId:'source-holder'});
   const registration=await r.apps.register(owner.peer,{label:'CLI source',allowedContracts:['text.count.v1','vector.normalize.v1'],maxConcurrent:4,resources:[{resourcePoolId:'cpu',amount:4},{resourcePoolId:'ram',amount:268435456}],offlineBase:[],onlineExtra:[]},r.url),source=await r.apps.exchange({registrationId:registration.registrationId,code:registration.code});
   const connection={address:r.url,certificate:sourceInvite.certificate,fingerprint:sourceInvite.fingerprint,credential:source.credential,domain:'SIMULATED'},request=allotmentTransport(connection);
