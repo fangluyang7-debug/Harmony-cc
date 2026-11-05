@@ -3,6 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ExecutionConfigV2, validExecutionConfigV2 } from '@harmony/scheduler-core';
 
+/** durationMs is monotonic time inside the child executor, excluding process startup, result encoding and IPC. */
 export interface CpuResult {bytes:Buffer;hash:string;schemaId:string;durationMs:number;backend:'CPU';}
 /** Every invocation owns one disposable process; abort resolves only after its exit event. */
 export function executeCpu(capability:string,input:Buffer,parameters:unknown,config:ExecutionConfigV2,signal:AbortSignal):Promise<CpuResult>{

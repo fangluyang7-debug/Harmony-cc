@@ -32,7 +32,8 @@ process.once('message',async(raw:any)=>{
       if(!v||Object.keys(v).join('|')!=='text'||typeof v.text!=='string')throw Error('TEXT_INVALID');
       output=Buffer.from(JSON.stringify({characters:Array.from(v.text).length,words:v.text.trim()?v.text.trim().split(/\s+/u).length:0,lines:v.text.length?v.text.split(/\r\n|\r|\n/u).length:0}));schemaId='text.counts';
     }else throw Error('CAPABILITY_UNSUPPORTED');
+    const durationMs=performance.now()-started;
     if(output.length>8388608)throw Error('OUTPUT_TOO_LARGE');
-    process.send?.({ok:true,output:output.toString('base64'),hash:createHash('sha256').update(output).digest('hex'),schemaId,durationMs:performance.now()-started},()=>process.disconnect());
+    process.send?.({ok:true,output:output.toString('base64'),hash:createHash('sha256').update(output).digest('hex'),schemaId,durationMs},()=>process.disconnect());
   }catch(error){process.send?.({ok:false,error:error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'CPU_FAILED'},()=>process.disconnect());}
 });
