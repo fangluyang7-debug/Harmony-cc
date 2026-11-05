@@ -143,7 +143,7 @@ export class WorkflowJobs {
   for(const node of data.nodes){
    if(node.state==='SUBMITTED'){
     const serving=await this.jobs.winnerFor(data.peer,node.jobId);
-    const status=await this.jobs.status(data.peer,serving),output=await this.jobs.graphOutput(data.peer,serving);
+    const status=await this.jobs.status(data.peer,serving,false),output=await this.jobs.graphOutput(data.peer,serving);
     if(output){node.jobId=serving;node.state='COMMITTED';node.output=output.descriptor;node.local=output.local;}
     else if(['CANCELLED_SETTLED','YIELDED','REJECTED'].includes(status.state)&&await this.restartSettledOrUnstarted(id,data,node))continue;
     else if(['FAILED','REJECTED','CANCELLED','CANCELLED_SETTLED','YIELDED','SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING'].includes(status.state)){const needsReconciliation=['SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING'].includes(status.state);
@@ -162,7 +162,7 @@ export class WorkflowJobs {
       data.failure={code:'SDK_MODEL_MISMATCH',reason:'REGISTERED_MODEL_CHANGED',nodeId:n.id};await this.stop(id,data,'FAILED');return;
      }
      const assignment=data.plan.decision.suggestion!.find(a=>a.nodeId===n.id)!;
-     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:!!assignment.outputEndpointId&&data.workflow.nodes.some(child=>child.inputFrom===n.id&&data.plan.decision.suggestion?.find(a=>a.nodeId===child.id)?.inputEndpointOperation==='WRITE'),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
+     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:!!assignment.outputEndpointId&&data.workflow.nodes.some(child=>child.inputFrom===n.id&&data.plan.decision.suggestion?.find(a=>a.nodeId===child.id)?.inputEndpointOperation==='WRITE'),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
      state.state='SUBMITTED';await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
     }
     if(await this.jobs.graphInput(data.peer,state.jobId,source))continue;
@@ -177,7 +177,7 @@ export class WorkflowJobs {
   const last=data.nodes[data.nodes.length-1],assignment=data.plan.decision.suggestion!.find(a=>a.nodeId===last.id)!;
   const inputTransfers:SdkInputTransfer[]=[];
   for(const n of data.workflow.nodes){const s=data.nodes.find(s=>s.id===n.id)!;if(row.state!=='ACTIVE'||s.state!=='SUBMITTED')continue;const source=n.inputFrom?data.nodes.find(s=>s.id===n.inputFrom)!.output!:data.inputs[n.id];const transfer=await this.jobs.graphInput(peer,s.jobId,source,false);if(transfer)inputTransfers.push(transfer);}
-  const output=row.state==='SUCCEEDED'&&!data.resultReceivedAt&&last.output&&this.artifacts.lookup(peer.groupId,last.output.ref)?this.artifacts.issue(last.output,peer,'READ'):null;
+  const output=row.state==='SUCCEEDED'&&!data.resultReceivedAt&&last.output&&this.artifacts.lookup(peer.groupId,last.output.ref)?this.artifacts.issueStatusRead(last.output,peer):null;
   const actual=last.state==='COMMITTED'?await this.db.attempt.findUnique({where:{id:last.jobId},select:{offerJson:true}}):null;
   const target=actual?.offerJson?JSON.parse(actual.offerJson).target:assignment;
   return {jobId:id,state:row.state,rejection:data.failure??null,targetId:target.targetId,deviceId:target.deviceId,traceId:id,outputTicket:output,inputTransfers,nodes:data.nodes.map(n=>({id:n.id,jobId:n.jobId,state:n.state,yieldedAttempts:n.yieldedAttempts??[],reassignedAttempts:n.reassignedAttempts??[]})),plan:data.plan};

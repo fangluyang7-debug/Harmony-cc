@@ -560,7 +560,7 @@ export class CpuJobs {
     }
     await this.flush();return this.status(peer,id);
   }
-  async status(peer:Peer,id:string){
+  async status(peer:Peer,id:string,withOutputTicket=true){
     const d=await this.owned(peer,id),attempt=await this.db.attempt.findUnique({where:{id}}),receipt=await this.db.receipt.findUnique({where:{id}});
     const result=receipt?JSON.parse(receipt.recordJson):null;
     const committed=receipt?.committed===true&&result?.state==='SUCCEEDED'&&d.output&&result.outputs.some((r:any)=>canonical(r)===canonical(d.output!.ref));
@@ -570,7 +570,7 @@ export class CpuJobs {
       readyWait:row.readyWaitJson?JSON.parse(row.readyWaitJson):null,decisionEvidence:d.decisionEvidence??null,
       rejection:attempt?.rejectionJson?JSON.parse(attempt.rejectionJson):null,
       dispatch:{coordinatorEpoch:d.offer.task.coordinatorEpoch,planRevision:d.offer.task.planRevision,allotmentId:d.offer.allotmentId,allotmentVersion:d.offer.allotmentVersion},
-      outputTicket:committed&&!d.resultReceivedAt&&d.output&&this.artifacts.lookup(peer.groupId,d.output.ref)&&(this.artifacts.available(d.output)||this.localOutput(peer,d))?this.artifacts.issue(d.output,peer,'READ'):null};
+      outputTicket:withOutputTicket&&committed&&!d.resultReceivedAt&&d.output&&this.artifacts.lookup(peer.groupId,d.output.ref)&&(this.artifacts.available(d.output)||this.localOutput(peer,d))?this.artifacts.issueStatusRead(d.output,peer):null};
   }
   async cancel(peer:Peer,id:string){
     const data=await this.owned(peer,id);

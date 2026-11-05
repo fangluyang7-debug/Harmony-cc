@@ -113,6 +113,9 @@ test('registered App host qualifies and executes SDK work through the shared pla
       await new Promise(resolve=>setTimeout(resolve,100));
     }
     assert.ok(feedback?.ms>0,'authenticated EXECUTE trace reaches the target cost bucket');
+    const receipt=await r.db.receipt.findUniqueOrThrow({where:{id:choiceId}});
+    assert.equal(receipt.startup,'COLD');assert.ok(Number.isFinite(receipt.overheadMs)&&receipt.overheadMs>=0&&receipt.overheadMs<=feedback.ms);
+    const compute=feedback.ms-receipt.overheadMs;assert.ok(compute>0&&Math.abs(compute+receipt.overheadMs-feedback.ms)<1e-6,'split exactly accounts for the authenticated EXECUTE interval');
   }
   localCost=10;remoteCost=10000;
   // Inject only the earlier occupancy. The profile, dispatch transaction and CPU job use the real host connection.

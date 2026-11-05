@@ -22,7 +22,7 @@ function save(file:string,value:unknown){const temporary=file+'.'+randomUUID()+'
 /** Dedicated bounded data cache. No business credentials or transfer tokens are persisted. */
 export class ArtifactChannel {
   private readonly objects=new Map<string,ArtifactDescriptor>();
-  private readonly tickets=new Map<string,{descriptor:ArtifactDescriptor;peer:ArtifactPeer;operation:'READ'|'WRITE';expiresAt:number}>();
+  private readonly tickets=new Map<string,{descriptor:ArtifactDescriptor;peer:ArtifactPeer;operation:'READ'|'WRITE';expiresAt:number;statusToken?:string}>();
   private readonly busy=new Set<string>();
   private active=0;
   private generation=0;
@@ -84,6 +84,15 @@ export class ArtifactChannel {
     return grant;
   }
   snapshot(groupId?:string){return {generation:this.generation,objects:[...this.objects.values()].filter(d=>!groupId||d.groupId===groupId).map(d=>structuredClone(d))};}
+  /** Polls for the same result can share one still-valid, peer-bound read grant. */
+  issueStatusRead(d:ArtifactDescriptor,peer:ArtifactPeer):ArtifactTicket {
+    const now=this.now();
+    if(canonical(this.objects.get(key(d)))===canonical(d))for(const grant of this.tickets.values()){
+      if(!grant.statusToken||grant.expiresAt<=now||grant.peer.groupId!==peer.groupId||grant.peer.principalId!==peer.principalId||grant.peer.holderInstanceId!==peer.holderInstanceId)continue;
+      if(canonical(grant.descriptor)===canonical(d)&&(grant.expiresAt>=Math.min(d.expiresAt,now+1000)||this.tickets.size>=this.limits.maxTokens))return {token:grant.statusToken,ref:d.ref,bytes:d.bytes,expiresAt:grant.expiresAt,operation:'READ'};
+    }
+    const ticket=this.issue(d,peer,'READ');this.tickets.get(hash(ticket.token))!.statusToken=ticket.token;return ticket;
+  }
   /** Owner-authorized exact-object removal; an in-flight transfer or changed snapshot defers it. */
   forget(d:ArtifactDescriptor,generation=this.generation){
     const id=key(d);if(generation!==this.generation||this.active||this.busy.has(id)||canonical(this.objects.get(id))!==canonical(d))return false;
