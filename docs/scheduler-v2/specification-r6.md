@@ -351,6 +351,7 @@ flowchart LR
 | --- | --- | --- |
 | 消息信封 | `messageId`、`type`、`groupId`、`senderInstanceId`、`coordinatorEpoch`、`seq`、`ackOf`、`traceId` | 去重、排序、确认、追踪 |
 | App 身份 | `appId`、`appInstanceId`、认证主体、允许的能力与版本 | 授权与配额；自报的 `appId` 不能作为信任依据 |
+| 任务契约 | 可选 workModel 声明成本模型版本、参与估计的参数和数值分档宽度。没有声明时按输入字节分档。 | 协调者执行耗时统计和代理在途剩余估计 |
 | 任务实例 | `groupId`、`sessionId`、`originDeviceId`、`resultDestination`、`workflowId` / `nodeId` / `attemptId`、`planRevision`、预算、输入引用、位置约束、质量与隐私策略、优先级类别 | 规划、恢复、结果路由 |
 | 等价路径 | `alternativesId`、`outputContract`、`qualityTarget`、`alternatives[]`（每条是一个工作流 DAG） | 规划；输出契约或质量目标不一致时拒绝提交 |
 | attempt 记录（执行方持久化） | 认证域、attemptId、持有者/账本代次、planRevision、coordinatorEpoch、执行摘要（输入引用、契约、参数、目标、允许配置）、allotmentId/版本、leaseId、fence、业务幂等键（适用时）、状态（ACCEPTED、RUNNING、SUCCEEDED、FAILED、CANCELLED_SETTLED、YIELDED、SIDE_EFFECT_UNKNOWN）、回执 | 幂等、恢复对账；各状态的资源结算独立记录 |
