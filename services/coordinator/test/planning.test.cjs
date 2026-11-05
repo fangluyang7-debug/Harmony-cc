@@ -183,7 +183,8 @@ test('flight and equal-priority queue share one reservation calendar; unknown wa
  const run=()=>new PlanningService(null).plan(f.snapshot,f.request,f.policy,f.clock).decision;
  let a=run().suggestion[0];assert.equal(a.startMs,500);assert.equal(a.dagResourceWaitMs,200);assert.equal(a.policyQueueMs,300);
  q.priority='REMOTE_BATCH';a=run().suggestion[0];assert.equal(a.startMs,200);
- f.request.remainingBudgetMs=150;assert.equal(run().rejections[0].retryAfterMs,200);f.request.remainingBudgetMs=1000;
+ f.request.remainingBudgetMs=150;assert.equal(run().rejections[0].retryAfterMs,200);
+ f.request.remainingBudgetMs=1;assert.equal(run().rejections[0].retryAfterMs,undefined);f.request.remainingBudgetMs=1000;
  q.priority='REMOTE_INTERACTIVE';q.holdEstimate=ms(null);assert.equal(run().rejections[0].code,'POLICY_WAIT_UNKNOWN');
  q.resources=[{resourcePoolId:'other',amount:1}];q.targetId='other';assert.equal(run().suggestion[0].startMs,200);
  f.snapshot.inFlight[0].releaseAt=ms(null);assert.equal(run().rejections[0].code,'RESOURCE_WAIT_UNKNOWN');

@@ -132,13 +132,11 @@ export class WorkflowPlacementPlanner {
     for(const node of pending){
       if(this.clock()-started>=this.limits.planningBudgetMs)return result(baseline,baseline,'PLANNING_BUDGET_BASELINE');
       const next:Beam[]=[];
-      for(const state of beam)for(const c of legal.get(node.id)!){const candidate=this.extend(state,node,c,request);if(candidate)next.push(candidate);else {
-          const demands=this.demands(c,node,request),available=earliestFeasibleV2(state.occupancy,demands,0,1);
-          const withQueue=earliestFeasibleV2([...state.occupancy,...request.queuedOccupancy??[]],demands,0,1);
-          const code=!Number.isFinite(available)?'RESOURCE_WAIT_UNKNOWN':!Number.isFinite(withQueue)?'POLICY_WAIT_UNKNOWN':'DATA_UNREACHABLE_OR_BUDGET';
-          const retryAfterMs=c.availability?.resourceWait.value?c.availability.resourceWait.sampledAt+c.availability.resourceWait.value-request.now:0;
-          rejections.push({targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,code,...(code==='DATA_UNREACHABLE_OR_BUDGET'&&retryAfterMs>0?{retryAfterMs}:{})});
-        }}
+      for(const state of beam)for(const c of legal.get(node.id)!){
+        const rejected:PlannerRejection={targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,code:'DATA_UNREACHABLE_OR_BUDGET'};
+        const candidate=this.extend(state,node,c,request,rejected);
+        if(candidate)next.push(candidate);else rejections.push(rejected);
+      }
       beam=next.sort((a,b)=>a.cost-b.cost||JSON.stringify(a.assignments).localeCompare(JSON.stringify(b.assignments))).slice(0,this.limits.beamWidth);
       if(!beam.length)return result(baseline,baseline,baseline?'BASELINE_ONLY':'NO_LEGAL_PLAN');
     }
@@ -233,7 +231,7 @@ export class WorkflowPlacementPlanner {
     if(c.holderCapacity)for(const d of c.resourceDemand??[])result.push({key:poolOccupancyKey(c.deviceId,d.resourcePoolId,c.holderInstanceId),amount:d.amount,capacity:c.holderCapacity.find(p=>p.resourcePoolId===d.resourcePoolId)!.amount});
     return result;
   }
-  private extend(state:Beam,node:PlacementNode,c:PlacementCandidate,r:PlacementRequest):Beam|null {
+  private extend(state:Beam,node:PlacementNode,c:PlacementCandidate,r:PlacementRequest,rejection?:PlannerRejection):Beam|null {
     let inputSourceHolderId:string|undefined,inputSourceEndpointId:string|undefined,inputSourceEndpointEpoch:string|undefined;
     let inputRelayId:string|undefined,inputUploadMs:number|undefined,inputDownloadMs:number|undefined;
     let inputEndpointId:string|undefined,inputEndpointEpoch:string|undefined,inputEndpointOperation:'READ'|'WRITE'|undefined;
@@ -260,9 +258,17 @@ export class WorkflowPlacementPlanner {
     const queued=c.availability?c.queueMs!:0;
     const resourceStart=earliestFeasibleV2(state.occupancy,demands,arrival+queued,duration-queued);
     const start=r.queuedOccupancy?earliestFeasibleV2([...state.occupancy,...r.queuedOccupancy],demands,arrival+queued,duration-queued):resourceStart;
-    if(!Number.isFinite(start))return null;
+    if(!Number.isFinite(start)){
+      if(rejection)rejection.code=Number.isFinite(resourceStart)?'POLICY_WAIT_UNKNOWN':'RESOURCE_WAIT_UNKNOWN';
+      return null;
+    }
     const end=start+duration-queued,policyWait=start-resourceStart+queued;
-    const cost=Math.max(state.cost,end);if(cost>r.remainingBudgetMs)return null;
+    const cost=Math.max(state.cost,end);
+    if(cost>r.remainingBudgetMs){
+      const sample=c.availability?.resourceWait,release=sample?.value?sample.sampledAt+sample.value-r.now:0;
+      if(rejection&&release>0&&start>arrival&&Math.max(state.cost,end-(start-arrival))<=r.remainingBudgetMs)rejection.retryAfterMs=release;
+      return null;
+    }
     artifacts.set(node.output.id,r.materializeOutputsAt&&!localResult&&!retained?{...output,replicas:[{deviceId:r.materializeOutputsAt,readMs:0}]}:output);
     const completed=new Map(state.completed);completed.set(node.id,end);
     const availability=new Map(state.ready);availability.set(node.output.id,end);
