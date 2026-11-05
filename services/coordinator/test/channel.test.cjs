@@ -146,3 +146,22 @@ test('busy socket with missing pongs stops being eligible while its ledger occup
   assert.deepEqual((await r.directory.profiles('g1'))[0].inFlight,profile.inFlight);
  }finally{ws?.terminate();await r.close();}
 });
+
+test('a heartbeat publishes its new facts once and changes the automatic target policy only on discovery or removal',async()=>{
+ const r=await runtime({cpuHost:true,authenticate});let ws;
+ try{
+  ws=await connect(r);ws.send(JSON.stringify(envelope(r,'hello-config',1)));await ws.next();
+  const configure=r.profiles.configure.bind(r.profiles);let configured=0;
+  r.profiles.configure=async(...args)=>{configured++;return configure(...args);};
+  const p=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DeviceProfile.json'));
+  p.executors[0].contract.capability='text.count.v1';
+  async function publish(id,seq){
+   ws.send(JSON.stringify(envelope(r,id,seq,'DeviceProfile',p)));
+   for(;;){const m=await ws.next();if(m.type==='ProtocolError')throw Error(m.payload);if(m.ackOf===id)return;}
+  }
+  await publish('first-profile',2);assert.equal(configured,1);
+  p.sequence++;await publish('same-targets',3);assert.equal(configured,1);
+  p.sequence++;p.executors=[];await publish('no-targets',4);assert.equal(configured,2);
+  assert.deepEqual((await r.snapshots.build(peer.groupId)).policy.allowedTargetIds,[]);
+ }finally{ws?.terminate();await r.close();}
+});

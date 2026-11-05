@@ -1,4 +1,4 @@
-import {computeHistory} from './performance-feedback';
+import {computeHistories} from './performance-feedback';
 import { createHash } from 'node:crypto';
 import { Prisma, PrismaClient } from '../generated/client';
 import { CostEstimatePolicy,availability, canonical, DeviceProfileV2, DispatchOfferV2, ExecutorV2, validDeviceProfileV2, sampleUsableV2, PlanningSnapshot, PlacementCandidate, DeviceResources, CapabilityAdmissionV2, validCapabilityAdmissionV2 } from '@harmony/scheduler-core';
@@ -109,6 +109,12 @@ export class DeviceDirectory {
   async snapshot(groupId:string,policyVersion:string,version:number,policy:ContributionPolicy,db:Prisma.TransactionClient=this.db,estimatePolicy?:CostEstimatePolicy):Promise<PlanningSnapshot>{
     const excludedTargets:NonNullable<PlanningSnapshot['excludedTargets']>=[];
     const now=this.now(),profiles=await this.profiles(groupId,db),candidates:PlacementCandidate[]=[],resources:DeviceResources[]=[];
+    const admissions=await db.capabilityState.findMany({where:{groupId},select:{id:true,revision:true,metadataJson:true}});
+    const states=new Map(admissions.map(row=>[row.id,{revision:row.revision,admission:JSON.parse(row.metadataJson) as CapabilityAdmissionV2}]));
+    const identities=new Map<string,string>();
+    for(const [key,state] of states)if(state.admission&&validCapabilityAdmissionV2(state.admission)&&['CANARY','ACTIVE'].includes(state.admission.state))identities.set(key,state.admission.identity);
+    const histories=await computeHistories(db,groupId,identities,now,estimatePolicy);
+    const installations=await db.registeredInstallation.findMany({where:{groupId},select:{id:true,holderInstanceId:true,deviceId:true,state:true}});
     const capacity=new Map<string,{deviceId:string;poolId:string;total:number|null;occupied:number|null;sampledAt:number;ttlMs:number;kind:string}>();
     for(const p of profiles)for(const pool of p.pools){
       const key=JSON.stringify([p.deviceId,pool.resourcePoolId]),old=capacity.get(key);
@@ -160,7 +166,7 @@ export class DeviceDirectory {
     for(const p of profiles){
       const connection=this.controlState?.(groupId,p.holderInstanceId,p.deviceInstanceId,p.ledgerEpoch);
       const gate=connection&&connection!=='ONLINE'?'CONTROL_'+connection:this.reason(p,policy,now);
-      const installation=await db.registeredInstallation.findFirst({where:{groupId,holderInstanceId:p.holderInstanceId}});
+      const installation=installations.find(i=>i.holderInstanceId===p.holderInstanceId);
       if(installation&&(installation.state!=='ACTIVE'||installation.deviceId!==p.deviceId))continue;
       if(gate&&!(gate==='NO_CREDIT'&&(p.inFlight!==undefined||p.credits.some(c=>c.priority!=='ORIGIN_INTERACTIVE'&&c.slots>0)))){
         for(const e of p.executors)excludedTargets.push({deviceId:p.deviceId,targetId:e.target.targetId,executorId:e.target.executorId,
@@ -168,8 +174,8 @@ export class DeviceDirectory {
         continue;
       }
       for(const e of p.executors){
-        const state=await db.capabilityState.findUnique({where:{id:JSON.stringify([groupId,p.holderInstanceId,e.target.targetId])}});
-        const qualification=state?JSON.parse(state.metadataJson):null;
+        const targetKey=JSON.stringify([groupId,p.holderInstanceId,e.target.targetId]),state=states.get(targetKey);
+        const qualification=state?.admission;
         if(!qualification||!validCapabilityAdmissionV2(qualification)||qualification.groupId!==groupId||qualification.holderInstanceId!==p.holderInstanceId||
           qualification.targetId!==e.target.targetId||qualification.revision!==state!.revision||!['CANARY','ACTIVE'].includes(qualification.state)||qualification.identity!==executorIdentity(e)||qualification.domain!==this.domain)continue;
         // The published candidate must expire when ANY gating signal expires, even without another heartbeat.
@@ -194,7 +200,7 @@ export class DeviceDirectory {
           ...(e.contract.serviceId?{serviceId:e.contract.serviceId}:{}),trusted:true,source:this.domain,observedAt:now,ttlMs:Math.max(0,Math.min(...times.map(s=>s.sampledAt+s.ttlMs))-now),availableSlots:p.credits.find(c=>c.priority===policy.priority)!.slots,
           availableMemoryBytes:freeRam,quality:qualification.quality.value,computeMs:null,queueMs:null,coldMs:null,publishMs:null,uncertaintyMs:null,
           costEvidence:{compute:e.compute,cold:e.cold,publish:e.publish},configId:e.configurations[0]?.id,startup:e.startup,
-          computeSamples:await computeHistory(db,JSON.stringify([groupId,p.holderInstanceId,e.target.targetId]),qualification.identity,now,estimatePolicy)});
+          computeSamples:histories.get(targetKey)});
       }
     }
     const reportedLinks=profiles.flatMap(p=>p.links).filter(l=>sampleUsableV2(l.fixedMs,now,this.domain)&&sampleUsableV2(l.bytesPerSecond,now,this.domain));

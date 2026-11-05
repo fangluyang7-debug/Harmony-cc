@@ -27,24 +27,52 @@ export async function observeExecution(tx:Prisma.TransactionClient,group:string,
   const fields={groupId:group,revision:job.generation,metadataJson:JSON.stringify(window)};
   await tx.costObservation.upsert({where:{id},create:{id,...fields},update:fields});
 }
-export async function computeHistory(tx:Prisma.TransactionClient,key:string,identity:string,now:number,policy:CostEstimatePolicy=costEstimatePolicy()):Promise<ComputeSample[]>{
-  const row=await tx.costObservation.findUnique({where:{id:'execute:'+key}});
-  if(!row)return [];
-  const window:Window=JSON.parse(row.metadataJson),job=await tx.calibrationJob.findUnique({where:{id:key}});
-  const calibration=job&&JSON.parse(job.metadataJson);
-  if(calibration?.identity!==identity||window.identity!==identity||window.generation!==calibration.generation)return [];
-  const ttl=policy.sampleTtlMs,live=window.samples.slice(-policy.windowSamples).filter(s=>s.observedAt!==undefined&&s.observedAt<=now&&now-s.observedAt<=ttl&&s.workKey&&s.configId);
-  const receipts=await tx.receipt.findMany({where:{id:{in:live.map(s=>s.id)},committed:true,overheadMs:{not:null}}});
+type SplitReceipt={id:string;overheadMs:number|null;startup:string|null};
+
+function summarize(samples:Observation[],receipts:Map<string,SplitReceipt>,policy:CostEstimatePolicy):ComputeSample[]{
   const groups=new Map<string,{workKey:string;configId:string;startup:string;times:number[];overheads:number[];oldest:number}>();
-  for(const s of live){
-    const r=receipts.find(r=>r.id===s.id);if(!r?.startup||r.overheadMs===null||r.overheadMs<0||r.overheadMs>s.ms)continue;
-    const id=canonical([s.workKey,s.configId,r.startup]);
-    const g=groups.get(id)??{workKey:s.workKey!,configId:s.configId!,startup:r.startup,times:[],overheads:[],oldest:s.observedAt!};
-    g.times.push(s.ms-r.overheadMs);g.overheads.push(r.overheadMs);g.oldest=Math.min(g.oldest,s.observedAt!);groups.set(id,g);
+  for(const sample of samples){
+    const receipt=receipts.get(sample.id);
+    if(!receipt?.startup||receipt.overheadMs===null||receipt.overheadMs<0||receipt.overheadMs>sample.ms)continue;
+    const id=canonical([sample.workKey,sample.configId,receipt.startup]);
+    const group=groups.get(id)??{workKey:sample.workKey!,configId:sample.configId!,startup:receipt.startup,times:[],overheads:[],oldest:sample.observedAt!};
+    group.times.push(sample.ms-receipt.overheadMs);group.overheads.push(receipt.overheadMs);
+    group.oldest=Math.min(group.oldest,sample.observedAt!);groups.set(id,group);
   }
-  const rank=(values:number[],q:number)=>values.sort((a,b)=>a-b)[Math.ceil(values.length*q)-1];
-  return [...groups.values()].filter(g=>g.times.length>=policy.minSamples).slice(-16).map(g=>({workKey:g.workKey,configId:g.configId,startup:g.startup,count:g.times.length,p50Ms:rank(g.times,.5),p90Ms:rank(g.times,.9),coldP50Ms:rank(g.overheads,.5),observedAt:g.oldest,ttlMs:ttl}));
+  const rank=(values:number[],q:number)=>values[Math.ceil(values.length*q)-1];
+  return [...groups.values()].filter(g=>g.times.length>=policy.minSamples).slice(-16).map(g=>{
+    g.times.sort((a,b)=>a-b);g.overheads.sort((a,b)=>a-b);
+    return {workKey:g.workKey,configId:g.configId,startup:g.startup,count:g.times.length,p50Ms:rank(g.times,.5),p90Ms:rank(g.times,.9),coldP50Ms:rank(g.overheads,.5),observedAt:g.oldest,ttlMs:policy.sampleTtlMs};
+  });
 }
+
+/** Share one consistent read across the targets in this group snapshot. */
+export async function computeHistories(tx:Prisma.TransactionClient,groupId:string,identities:Map<string,string>,now:number,policy:CostEstimatePolicy=costEstimatePolicy()){
+  const histories=new Map<string,ComputeSample[]>();
+  const stored=await tx.costObservation.findMany({where:{groupId,id:{startsWith:'execute:'}},select:{id:true,metadataJson:true}});
+  if(!stored.length)return histories;
+  const jobs=await tx.calibrationJob.findMany({where:{groupId},select:{id:true,metadataJson:true}});
+  const calibrations=new Map(jobs.map(r=>[r.id,JSON.parse(r.metadataJson)]));
+  const windows=new Map<string,Observation[]>(),attempts=new Set<string>();
+  for(const row of stored){
+    const key=row.id.slice('execute:'.length),identity=identities.get(key),calibration=calibrations.get(key);
+    if(!identity||calibration?.identity!==identity)continue;
+    const window:Window=JSON.parse(row.metadataJson);
+    if(window.identity!==identity||window.generation!==calibration.generation)continue;
+    const live=window.samples.slice(-policy.windowSamples).filter(s=>s.workKey&&s.configId&&s.observedAt!==undefined&&s.observedAt<=now&&now-s.observedAt<=policy.sampleTtlMs);
+    if(live.length<policy.minSamples)continue;
+    windows.set(key,live);for(const sample of live)attempts.add(sample.id);
+  }
+  const ids=[...attempts],receipts=new Map<string,SplitReceipt>();
+  // Keep SQLite bind parameter counts bounded even in a large group.
+  for(let i=0;i<ids.length;i+=500){
+    const batch=await tx.receipt.findMany({where:{id:{in:ids.slice(i,i+500)},committed:true,overheadMs:{not:null}},select:{id:true,overheadMs:true,startup:true}});
+    for(const receipt of batch)receipts.set(receipt.id,receipt);
+  }
+  for(const [key,window] of windows)histories.set(key,summarize(window,receipts,policy));
+  return histories;
+}
+
 export async function sustainedDrift(db:PrismaClient,targetKey:string,identity:string,generation:number){
   const stored=await db.costObservation.findUnique({where:{id:'execute:'+targetKey}});
   if(!stored||stored.revision!==generation)return false;

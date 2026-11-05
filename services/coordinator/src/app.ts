@@ -30,9 +30,9 @@ import { TeamSpaces } from './spaces';
 import {TelemetryView} from './telemetry-view';
 import { AppRegistry } from './apps';
 import { SdkJobs } from './sdk';
-import type { ExecutorV2 } from '@harmony/scheduler-core';
+import type { DeviceProfileV2,ExecutorV2 } from '@harmony/scheduler-core';
 import { ArtifactChannel, ArtifactSchema,createSignedDataHandler,DataEndpointIdentity } from '@harmony/resource-transport';
-import { validDeviceProfileV2, validResourceVectorV2, validAllotmentAckV2, protocolId } from '@harmony/scheduler-core';
+import { canonical,validDeviceProfileV2, validResourceVectorV2, validAllotmentAckV2, protocolId } from '@harmony/scheduler-core';
 
 export async function createCoordinator(config:CoordinatorConfig, recover:(db:PrismaClient,epoch:number)=>Promise<void>=async()=>{},options:{onError?:(error:unknown)=>void;authenticate?:(token:string)=>Promise<Peer>;artifactSchemas?:ReadonlyMap<string,ArtifactSchema>;cpuHost?:boolean;referencePacks?:ReferencePack[]}={}){
   const unlock=await acquireProcessLock(config.dataDir);
@@ -218,14 +218,17 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk,groupId=>directTransfers.dashboard(groupId),telemetry);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
     auth.onRevoked(id=>channel.revoke(id));
-    const configureCpuGroup=async(groupId:string)=>{
+    const configureCpuGroup=async(groupId:string,alreadyProjected=false)=>{
       const existing=await db.group.findUnique({where:{id:groupId}});
-      if(existing&&JSON.parse(existing.metadataJson).policy?.version!=='cpu-host-v1'){await profiles.refresh(groupId);return;}
+      const saved=existing&&JSON.parse(existing.metadataJson);
+      if(saved&&saved.policy?.version!=='cpu-host-v1'){if(!alreadyProjected&&saved.contributionPolicy)await profiles.refresh(groupId);return;}
       const packs=referencePacks,targets=(await directory.profiles(groupId)).flatMap(p=>p.executors.filter(e=>packs.some(pack=>pack.manifest.contract.capability===e.contract.capability)).map(e=>e.target.targetId));
-      await profiles.configure(groupId,{version:'cpu-host-v1',revoked:false,allowedTargetIds:targets,limits:{maxCandidates:64,lookahead:16,beamWidth:8,planningBudgetMs:20,switchCostMs:0,hysteresisMs:0}},
-        {minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE',requireForeground:true},'cpu-host-v1');
+      const policy={version:'cpu-host-v1',revoked:false,allowedTargetIds:targets.sort(),limits:{maxCandidates:64,lookahead:16,beamWidth:8,planningBudgetMs:20,switchCostMs:0,hysteresisMs:0}};
+      const contribution={minimumBattery:null,maximumTemperature:null,allowMetered:true,priority:'REMOTE_INTERACTIVE' as const,requireForeground:true};
+      if(alreadyProjected&&saved&&canonical(saved.policy)===canonical(policy)&&canonical(saved.contributionPolicy)===canonical(contribution))return;
+      await profiles.configure(groupId,policy,contribution,'cpu-host-v1');
     };
-    channel.register('DeviceProfile',{validate:validDeviceProfileV2,handle:async(peer,payload)=>{await profiles.ingest(peer,payload);if(options.cpuHost)await configureCpuGroup(peer.groupId);if(payload.inFlight?.some((f:{history?:unknown})=>f.history))await jobs.assessSlow(peer.groupId,payload).catch(error=>options.onError?.(error));}});
+    channel.register('DeviceProfile',{validate:validDeviceProfileV2,handle:async(peer,payload)=>{await profiles.ingest(peer,payload);if(options.cpuHost)await configureCpuGroup(peer.groupId,true);if(payload.inFlight?.some((f:{history?:unknown})=>f.history))await jobs.assessSlow(peer.groupId,payload).catch(error=>options.onError?.(error));}});
     channel.register('TraceBatch',{validate:p=>p&&Object.keys(p).join('|')==='spans'&&Array.isArray(p.spans),handle:(peer,p)=>traces.ingest(peer,p.spans)});
     let restoration:Promise<void>|undefined;
     const restore=()=>restoration??(restoration=(async()=>{
@@ -253,10 +256,12 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       });
       const published=new Map<string,string>();
       calibration=new QualificationLoop(service,{targets:async()=>{
-        const targets=[];
+        const targets=[],groups=new Map<string,Map<string,DeviceProfileV2>>();
         for(const peer of await auth.activePeers()){
-          const profile=(await directory.profiles(peer.groupId)).find(p=>p.holderInstanceId===peer.holderInstanceId&&p.deviceId===peer.deviceId);
-          for(const executor of profile?.executors??[])targets.push({peer,targetId:executor.target.targetId});
+          let holders=groups.get(peer.groupId);
+          if(!holders){holders=new Map((await directory.profiles(peer.groupId)).map(p=>[p.holderInstanceId,p]));groups.set(peer.groupId,holders);}
+          const profile=holders.get(peer.holderInstanceId);
+          if(profile?.deviceId===peer.deviceId)for(const executor of profile.executors)targets.push({peer,targetId:executor.target.targetId});
         }
         return targets;
       },refresh:async groupId=>{
