@@ -7,7 +7,7 @@
 | 最近核对 | 2026-11-04 工作树，§81。`4e0157e` 和 §48 是历史交接快照；本轮改动尚未推送。 |
 | 主部署 | 局域网 PC 协调者（`npm run coordinator:lan`），云端协调者为非主线 |
 | 当前切片 | S5—S8 本机基础链路已接通。覆盖边界及复现入口见[软件覆盖清单](S5-S8-软件覆盖与设备验收清单.md)。 |
-| 下一步 | 核对全量回归和 AC1—AC8，按 §3 分别安排 API 22、真实 X6 模型和物理设备验收。 |
+| 下一步 | **先按 §82 实施用户 2026-11-05 确认的能力包与完成时间估计修订**（顺序 Q1-4 → Q2-1 → Q2-2 → Q2-3 → Q2-4，Q1-1/Q1-2/Q1-3 可并行），每条附实施记录；随后核对全量回归和 AC1—AC8，按 §3 分别安排 API 22、真实 X6 模型和物理设备验收。 |
 | 当前测试规则 | 本轮以本机软件验证为主。模拟域与真实域分开登记，真机验收后置。 |
 | 鸿蒙运行验证 | §77 已完成 API 24 专用模拟器的原生展示及协议一致性。§78—81 的后续变更按各节列出编译与测试范围。正式 API 22 构建和对应设备运行待复验。 |
 | 鸿蒙改动范围 | 共享 HAR、SoleAI、indexer 与 agent 按需联动；SDK 语义一致性和 ArkTS 编译分别验收。 |
@@ -1444,3 +1444,212 @@ SoleAI 的 v2 图像检索结果可生成只读文字摘要，邀请同组指定
 最终执行 npm run acceptance:report，21 套命令全部通过，跨项去重后 114 个具名用例/协议检查。第一次与正在运行的 Prisma 测试同时发起构建，Windows 拒绝替换占用的引擎 DLL；待进程退出后，完整命令成功。报告路径 artifacts/acceptance/2026-11-04/SUMMARY.md；AC1—AC8 的 real 状态均为 NOT_RUN。当前 API 24 展示端 HAP 已重新构建并在专用模拟器确认五项界面行为，另跑共享协议及裁剪、前后台 10/10。相同 HAR 的探针在原生 Ark 运行时完成账本 30 个 fixture 并恢复持久 outbox；验证同池干扰、独立池通行、所有者活动门控和未开始排队过期。原生补充证据关联当前 HAP SHA-256。测试结束后关闭专用模拟器，未操作物理设备。日志 .test/s81-acceptance-current.log、s81-screen.log、s81-screen-conformance.log、s81-native-queue.log。
 
 最后复核了协调器拒绝记录的幂等性。已拒绝的尝试在状态同步或迟到回报后仍保留原身份和结论。协调器 TypeScript 编译通过，存储和恢复状态回归 15/15，见 .test/s81-store-closeout.log。
+
+## 82. 用户确认的能力包与完成时间估计修订方案（2026-11-05）
+
+来源：[文档 37](../37-五个疑问核对与调度链路修订建议-20261104.md) 疑问一、二的代码核对；用户 2026-11-05 确认两点：(1) 在途任务占用的目标**不得因此被强制拒绝**，否则无法动态调度；(2) 按本节修改。**状态：方案已确认，待实施、待验收。** 本节只登记方案，不代表代码已修改或测试通过；§81 的回归结果继续保留。实施者每完成一条，在本节对应条目后追加"实施记录"（提交号、测试命令与结果、未验证项），并按 R24 更新 §1/§2 对应行（A1、B7、C4a、D2、D4）。
+
+核对基线：`d125b17` 工作树。本节引用的行号以该基线为准，实施前先 `git status` 核对。
+
+**修订记录（2026-11-05 评审，已采纳并改写正文）**：对照代码核实后修正九处——①预约表时间坐标改为相对规划起点，不用绝对时间（§3）；②排队任务改为逐个放入预约表，不再按时长累加（§4）；③共享物理设备按 holder 逐个对账，不可投影的占用保持静态扣减（§3）；④`startupMs` 改名 `overheadMs`，EXECUTE 的预测值与跨度测量范围一致（§5、§2）；⑤桶键去掉哈希、配置维度在样本层匹配、DAG 上界与实际字节的匹配策略（§1、§2）；⑥分布估计写成明确策略与匹配条件（§2）；⑦文本性质公式与前提改正（§8）；⑧覆盖标签绑定断言，区分合法边界成功与非法输入正确拒绝（§7）；⑨参考答案独立性与 property 套件身份（§7）。
+**第二轮（2026-11-05 复审，已采纳）**：⑩目录层过滤：`directory.ts:152` 把 `queue/uncertainty` 放在准入门 `times` 中，改为 UNKNOWN 会在进规划器前就丢掉候选，必须区分"准入证据"与"可推导成本"（§2）；⑪忙设备内存门：`directory.ts:162` 与 `planner.ts:140` 仍按静态剩余内存拒绝，内存同样按"可投影进区间、不可投影静态扣减"处理，并明确删除 `planner.ts:136/138` 的旧门（§3）；⑫缺 `overheadMs` 的样本不参与拆分估计，不得与代理 `cold` 相加（§5）；⑬样本 TTL 逐条剔除后再统计，`NORMAL` 只是策略标签（§2）；⑭`policyQueueMs` 两次 `earliest` 必须同输入，Infinity 走拒绝分支（§4）；⑮REJECT 判定须贯通回执错误码，`notRun`/超时/取消不得算正确拒绝（§7）；⑯Q1/Q2 共享执行链的接口先冻结再并行（§13）；⑰DAG 上界回退校准可能使整图因预算被拒，登记为接受的保守代价（§2）。
+
+目标与执行顺序：**Q1-4 → Q2-1 → Q2-2 → Q2-3 → Q2-4 → Q1-1 → Q1-2 → Q1-3 →（可选）Q1-5**。理由：Q1-4 定义成本桶键，Q2-1/Q2-3 的估计与 §76 的漂移窗口都依赖它；Q2-2 是用户的核心诉求，但其预算判断需要 Q2-1 给出的 `uncertainty`；Q1-1/Q1-2/Q1-3 不依赖估计链路，可由第二人在独立 worktree 并行（R20）；两组共享 PC 执行链，并行前先按 §13 冻结 `CpuResult.durationMs` 接口，再按 §13 的文件归属表分工。
+
+### 0. 总则（对本节全部条目生效）
+
+1. 估计只影响选路与期限判断；能否启动仍由执行方在实际额度账本内原子准入决定（规格 §10.0 说明 4、R8、R9）。本节任何"预计释放""预计开始"都不得释放或预留真实资源。
+2. 每个估计值都是 `NumericSampleV2`，带 `source/sampledAt/ttlMs`；没有样本写 `UNKNOWN`，不填 0，不把 PRIOR 标成 MEASURED（R5、R6）。
+3. 新增协议字段只允许可选字段（D10）；每个新字段都要有读取它并改变行为的消费者和测试（R14），每项功能有正例与拒绝例（R15）。
+4. 核心保持零 I/O、不含具体名称（R3、R4）；所有选择仍只在 `PlanningService` 内发生（R21）。
+5. PC 与鸿蒙语义一致；鸿蒙未实现的部分在 §14 登记，不得静默跳过（R22）。
+6. 现有 §44–§47 的追踪与分段误差口径不变：`decisionEvidence.phaseCosts` 与 span `predictedMs` 必须使用本节解析后的估计值，误差报告才有意义。
+
+### 1. Q1-4 契约 `workModel` 与统一成本桶键（前置）
+
+**问题（核对）**：§76 的样本桶用 `task.parameters` 原文参与哈希（`services/coordinator/src/performance-feedback.ts:27-28`）；代理侧在途残差历史的键同样含 `o.task.parameters` 原文（`packages/scheduler-core/src/ledger-v2.ts` `RunTimings.key`）。裁剪的 `box` 每次不同，等于每个请求自成一桶：漂移判断永远凑不满 6 个样本，在途剩余估计永远 UNKNOWN。v1 曾有 `costModel`（文档 34），v2 的 `TaskContractV2` 没有。
+
+**修改**：
+- `TaskContractV2.workModel?: CapabilityCostModel`（`packages/scheduler-core/src/protocol-v2.ts:12-16`；校验 `:103-109` 按 `serviceId` 的方式接受可选键）。ArkTS `v2/protocol/SchedulingProtocolV2.ets` 同步；T1 fixture 增加含/不含 `workModel` 的正反例，`npm run protocol:v2:test`。
+- 核心新增纯函数 `workKeyV2(contract, parameters, inputBytes): string`（放 `capability-cost-model.ts`）：直接返回 `canonical([contractId, version, costConfiguration(JSON.parse(parameters), contract.workModel), floor(log2(max(1, inputBytes)))])` 作为键，**不做哈希**——核心禁止 `node:crypto`（R3），该字符串长度已受 `costConfiguration` 的参数上限约束，可直接作 Map 键；协调者落库若需定长 ID，在服务层再哈希。配置维度不进 `workKey`，样本按 `(workKey, configId)` 存取（§2）。`costConfiguration` 已存在并已解释 `bucketWidth`。
+- 消费者：`observeExecution` 的样本改为记录两个独立字段 `workKey = workKeyV2(contract, parameters, input.bytes)` 与 `configId = allowedConfigs[0].id`（不再合并成一个哈希，否则规划端按 `workKey` 查不到）；`RunTimings.key` 中的参数项改为 `costConfiguration(parameters, contract.workModel)` 的 canonical；Harmony `LedgerV2.ets` 对应键同改（无 ArkTS `costConfiguration` 时登记 §14）。
+- 能力包声明：`image.crop.v1` 声明 `{version:'crop-cost-v1', parameters:[{name:'targetSize'},{name:'jpegQuality',bucketWidth:10}]}`（文档 34 原规则）；`text.count.v1`、`vector.normalize.v1` 不声明（按字节分档）；`image.encode.v1` 不声明（参数即模型清单，canonical 后稳定）。
+
+**测试**：核心——同能力不同 `box` 同桶；不同 `targetSize` 不同桶；未声明时只按字节；`workModel` 非法 → `COST_MODEL_INVALID`。协调者——两次不同 `box` 的裁剪提交后，`costObservation` 同 `(workKey, configId)` 样本数为 2；同 `workKey` 不同 `configId` 分开计数。
+
+### 2. Q2-1 `compute` / `uncertainty` 的分布估计
+
+**问题（核对）**：候选 `computeMs = e.compute.value`（`services/coordinator/src/directory.ts:168`），而代理的 `compute` 是最近一次校准的单个耗时（PC `host.ts:96`、`:193`；鸿蒙 `NativeAgent.ets:346` 另把业务耗时写入同一个槽）；`uncertainty` 两端都填 `PRIOR 0`。§76 的 32 样本窗只用于漂移判断，不用于估计。`cost.ts:11` 的 `accumulate()`（EWMA 均值+偏差）v2 未使用。
+
+**不变量**：估计来源优先级固定为 同条件已提交实测（≥3）> 本机校准（PRIOR）> UNKNOWN（§7.1.3）；`uncertainty` 与 `compute` 同源，不得一个 MEASURED 一个编造。
+
+**修改**：
+- 快照候选新增 `computeSamples?: {workKey:string; configId:string; startup:'COLD'|'WARM'|'UNKNOWN'; count:number; p50Ms:number; p90Ms:number; observedAt:number; ttlMs:number}[]`（≤16 条）。`directory.snapshot()` 从 `costObservation` 聚合：只计 `receipt.committed` 的样本（沿用 `sustainedDrift` 的过滤），窗口 `identity/generation` 必须等于当前 `calibrationJob`，否则不聚合。`workKey` = Q1-4 的键；`startup` 取回执是否带 `overheadMs` 及代理上报的启动状态（§5）。
+- **目录层过滤必须先改**（否则本条没有执行机会）：`directory.ts:152` 的 `times` 数组同时承担"候选是否可发布"与"候选 TTL"两个作用，且包含 `e.queue`、`e.uncertainty`。改为两组：**准入证据** = `qualification.quality`、`ownerActivity`、`powerSave`、策略要求的电量/温度/前台、各池 `admissionLimit/occupied` —— 只有这组进入"不可用即跳过"和候选 `ttlMs` 计算；**成本证据** = `compute`、`cold`、`publish`、`queue`、`uncertainty` —— 目录**一律不跳过、不过滤**，原样投影为带来源与有效期的样本：候选新增 `costEvidence: {compute, cold, publish}: NumericSampleV2`（保留 `source/sampledAt/ttlMs`），`PlacementCandidate.computeMs/coldMs/publishMs/queueMs/uncertaintyMs` 不再由目录填写（置 `null`）。`plan()`（纯，持有 `clock.now`）解析每个候选：先按 §2 匹配条件查 `computeSamples`（逐条 TTL 已剔除）；不命中则对 `costEvidence.compute/cold/publish` 逐个做 `sampleUsableV2(sample, clock.now, domain)`——这一步在**规划时刻**检查有效期，处理"快照生成时有效、规划时已过期"的情况；过期或 UNKNOWN 的 `compute` → `COST_UNKNOWN`，过期或 UNKNOWN 的 `cold/publish` → 同样 `COST_UNKNOWN`（R5，不填 0）；`queue` 由 §4 的预约表替代，`uncertainty` 按本条派生。`directory.ts:168` 的 `publishMs: e.publish.value!`、`uncertaintyMs: e.uncertainty.value!` 等非空断言随之去掉。测试：代理上报 `uncertainty/queue` 为 UNKNOWN 时快照中候选存在；`compute` 为 UNKNOWN 时候选仍存在但规划器给出 `COST_UNKNOWN`；`cold` 样本 `sampledAt + ttlMs < clock.now`（快照生成时仍有效）→ 规划器 `COST_UNKNOWN`，且 `directory` 层对同一画像不跳过该候选。
+- **候选可见性与拒绝诊断**：在其他准入条件满足、准入证据仍有效时，仅成本证据过期不会使目录跳过候选；规划器无法取得有效成本估计时，在 `rejections[]` 中报告 `COST_UNKNOWN`。若心跳停滞同时导致准入证据过期，目录仍按准入规则过滤该候选。因此，调度盘不能将这一变化表述为“心跳停滞的设备都会保留在候选列表”。
+- **分布估计策略**（写入 `PlanningPolicy.costEstimate`，默认值在此固定）：`sampleTtlMs = 600000` —— **逐条**剔除 `now − observedAt > sampleTtlMs` 的样本，再在剩余样本上计算 `count/p50/p90`（不能用最新样本时间判断整条，否则持续有新样本时旧样本永不过期）；`minSamples = 3`（剔除后低于则回退校准）；`windowSamples = 32`（沿用 §76 每目标窗口）；分位数用 nearest-rank：升序后 `sorted[ceil(n·q) − 1]`，与 `RunTimings` 一致；`count < 8` 时在 `decisionEvidence.costConfidence` 记 `LOW`，否则 `NORMAL`——两者都只是策略标签，不代表统计上的可靠保证。三个样本的 p50/p90 只是首版策略，不得在文档或答辩中称为"分布画像"。测试：11 分钟前 5 个样本 + 刚才 2 个 → `count=2` 回退校准。
+- **匹配条件**（全部相等才命中）：目标身份（`targetId` + 执行器版本 + 校准代次）、`configId`（候选将被下发的配置，当前为 `configurations[0]`）、`workKey`、`startup`。不命中 → 校准 PRIOR，**首版不借用相邻字节桶**（R5）。DAG 节点：提交时的整图规划用父输出上界 `bounds` 算 `workKey`，可能不命中，允许回退校准；每节点派发时的重规划（`workflow-jobs.progress` 在父节点 COMMITTED 后提交，`source.bytes` 为实际字节）用实际字节算 `workKey`，以此为准。**接受的保守代价**：整图规划若因校准先验偏大而超出 `budgetMs`，提交即被拒，没有逐节点重规划的补救机会；这与当前行为相同（今天整图规划本来就只有校准值），不构成退化，但不得宣称"损失仅限估计精度"。
+- `PlacementNode.workKey?: string`，由 `cpu-jobs.submit` / `workflow-jobs.submit` 用 `workKeyV2(pack.manifest.contract, parameters, bytes)` 填写；整图规划时 DAG 中间节点的 `bytes` 用现有 `bounds` 上界，派发时重规划用父节点实际输出字节（匹配策略见上）。
+- `planning-api.plan()`（纯）对每个候选解析：按上述匹配条件命中且 `count ≥ minSamples` → `computeMs = p50`，`uncertaintyMs = p90 − p50`，`costSource = 'MEASURED'`；否则用校准值 → `uncertaintyMs = round(computeMs × priorUncertaintyRatio)`，`costSource = 'PRIOR'`；校准值也缺 → 保持 `COST_UNKNOWN`。`PlanningPolicy.priorUncertaintyRatio?: number`，默认 0.5，范围 (0, 2]（依据 RFC 6298：首个样本时 RTTVAR = R/2；这是声明的策略先验，不是测量值）。
+- 代理不再上报 `uncertainty` 数值：PC `host.ts:193` 与鸿蒙 `NativeAgent.ets:226` 的 `uncertainty` 改为 `{value:null, source:'UNKNOWN'}`（`validNumericSampleV2` 允许）。规划器的 `COST_UNKNOWN` 检查改在解析之后对 `uncertainty` 生效。
+- `PlannerAssignment` 新增 `costSource`、`costSamples`、`costConfidence`；`decisionEvidence.phaseCosts.EXECUTE` 与 EXECUTE span 的 `predictedMs` 取 **`computeMs + coldMs`**（与 EXECUTE 跨度的测量范围一致，见 §5），不是单独的 `computeMs`；调度盘"分段估计与实测"折叠区显示来源、样本数与置信级。
+
+**测试**：核心 ≥5 例——命中桶；样本不足 3 回退校准并标 PRIOR；过期桶忽略；`priorUncertaintyRatio` 越界 → `SNAPSHOT_OR_POLICY_INVALID`；目标/快照版本不符不采用（沿用 D4 契约验收）。协调者——用固定耗时且外围开销非零的替身执行器，同桶 3 次成功提交后，第 4 次计划的 `phaseCosts.EXECUTE` 等于 `compute p50 + coldP50`（断言它既不等于单独的 `compute p50`，也不等于完整 EXECUTE + 校准 cold）且 `costSource='MEASURED'`；§47 的预测误差报告在改动后仍按段对齐。
+
+### 3. Q2-2 在途占用进入预约表（用户 2026-11-05 确认：不得强制拒绝）
+
+**问题（核对）**：`planner.reject()` 对 `availability.reason==='RESOURCE_CAPACITY'` 或 `resourceWait.value!==0` 直接拒绝并给 `retryAfterMs`（`packages/scheduler-core/src/planner.ts:130-139`），随后 `availableSlots<1` 也会拒绝（`:140`）。规划器的预约表 `earliest()` 初始为空（`:87`），只装本次计划内部的节点。结果：一台 200 ms 后空闲的 PC 与一台关机的 PC 对规划器没有区别。
+
+**不变量**：
+1. 已知剩余时间的在途占用，以区间 `[now, releaseAt)` 进入预约表；规划器由此得到该目标最早可开始时刻，并与其他目标按完工时间比较。
+2. 剩余时间 UNKNOWN、`RELEASE_OVERDUE`、不可中断超期、已超过自身预测仍在运行 → 区间终点为 +∞ → 该目标自然不可选，拒绝码 `RESOURCE_WAIT_UNKNOWN`（R5）。不得把超期任务按"马上释放"处理。
+3. 同一 `attemptId` 只能出现在画像 `inFlight` 或 `queued` 之一；违反 → `PROFILE_INVALID`（`directory.ingest`）。
+4. 预约表只存在于一次规划的内存里。选中忙目标后，派发等待的是**设备事实变化**（新画像或回执），不是预测时刻到达；真实准入仍由设备账本决定（R8、R9）。
+
+**修改**：
+- 快照：`DeviceResources.capacity?: number|null`（= 现有 `c.total`，即贡献容量）；`PlanningSnapshot.inFlight?: {deviceId; holderInstanceId; targetId; resources; releaseAt: NumericSampleV2; overdue: boolean}[]`。投影条件与 `availability.ts` 现有一致性检查相同：画像带 `inFlight` 且各池释放量之和等于 `occupied`；否则该设备不投影，退回静态口径。`releaseAt.value = remaining.sampledAt + remaining.value`（协调者时钟）；`overdue` = 契约 `NON_INTERRUPTIBLE` 且已运行超过 `maxNonPreemptibleMs`，或 `now − remaining.sampledAt ≥ remaining.value`（预测已过仍未结算）。
+- **共享物理设备按 holder 逐个对账**（`directory.snapshot()` 现已合并同设备多个 holder 的 `occupied`，并扣除其他组的隐藏保留与未签发基础预留，`directory.ts:83-105`）：对设备上的每个 holder 分别判定"可投影"（画像带 `inFlight` 且该 holder 各池释放量之和等于其 `occupied`）。池的规划容量 `resources[].available := total（已扣隐藏保留与基础预留）− Σ_{不可投影 holder} occupied_h`；可投影 holder 的占用只以区间进入预约表，不再静态扣减。任何无法用在途事实解释的占用保持静态扣减。只有一个 holder 可投影时，不得把整池恢复为容量——否则规划会虚增可用量，反复选中无法派发的目标。候选 `availableSlots := floor(admissionLimit_h / demand)` 按 holder、按类别（容量槽位）。**内存同规则**：`directory.ts:162` 的 `freeRam = admissionLimit − occupied` 对可投影 holder 改为 `admissionLimit`（RAM 占用以区间进入预约表，`demands()` 已按 `deviceId:ram` 键记资源量），不可投影 holder 保持扣减；`planner.ts:140` 的 `availableMemoryBytes < requiredMemory` 检查因此对忙设备不再误拒，真实内存由 `earliest()` 的区间叠加约束。无任何可投影 holder 的设备一切不变。`hasDispatchCredit`（`directory.ts:82-107`）**不改**：它是派发时刻的真实容量门。
+- **删除旧门**（明确列出，避免只加不删）：`planner.ts:135`（`RESOURCE_CAPACITY` 直接拒绝）、`:136`（`LOCAL_QUEUE_PENDING` 直接拒绝）、`:138`（`policyWait.value === c.queueMs` 相等检查）三行删除；`:134` 的 `RESOURCE_WAIT_UNKNOWN` 保留并扩展为 §3 不变量 2 的条件。
+- **时间坐标**：规划器的 `ready/arrival/startMs/finishMs` 都是相对本次规划起点的毫秒偏移（`initial.completed` 为 0，`cost` 直接与 `remainingBudgetMs` 比较），不是绝对时间。预约表区间必须用同一坐标：`planning-api.plan()`（纯）由 `snapshot.inFlight` 构造 `request.initialOccupancy`：每条 → 各资源 `{key:'<deviceId>:<poolId>', start:0, end, amount}` 加 `{key:'target:<targetId>', start:0, end, amount:1}`；`end = !overdue && sampleUsableV2(releaseAt, clock.now) ? max(0, releaseAt.value − clock.now) : Infinity`。写成 `start:now, end:releaseAt` 会把 200 ms 的释放变成一个巨大的等待区间，这是评审指出的错误。`retryAfterMs` 同为相对值（沿用现有 `sampledAt + value − now` 口径）。
+- `planner.plan()`：`initial.occupancy = request.initialOccupancy ?? []`。`reject()`：有 `availability` 时，`RESOURCE_CAPACITY` 且 `resourceWait` 可用 → **不拒绝**；`resourceWait` UNKNOWN 或有 `blockingReason` → `RESOURCE_WAIT_UNKNOWN`；`CAPACITY_UNAVAILABLE` / `SHARED_CAPACITY_UNAVAILABLE` 在有投影时按容量判断。`extend()` 的 `start = earliest(occupancy, demands, arrival+queued, duration−queued)` 不变——预约表已含在途区间。
+- 预算与重试：`end > remainingBudgetMs` → 该候选 null（已有）。全部候选都因等待超预算被拒时，`rejections[].retryAfterMs = 最早释放 − now`，`cpu-jobs.ts:136-137` 的 `ResourceRetry` 已消费。
+- **preflight 必须改**：`PlanningService.preflight()` 现以 `JSON.stringify(suggestion)` 全等比较；在途区间引入 `now` 后，`startMs/finishMs/dagResourceWaitMs` 随时间变化，原比较会使每次预检都 `PLAN_STALE`。改为只比较放置与路由字段（`targetId, deviceId, executorId, nodeId, inputSource*, inputRelayId, inputEndpoint*, outputEndpoint*`），时间与成本字段不参与。增加测试：同一放置、不同 `now` 的预检通过；放置不同的预检失败。
+- 派发等待：选中忙目标后 `start` 走现有路径（`cpu-jobs.ts:375-407`），`hasDispatchCredit` 为假抛 `ALLOTMENT_UNAVAILABLE`。增加协调者侧事件唤醒：`DeviceDirectory` 提供 `watchProfile(groupId, holderId, notify)`（与 `allotments.watch` 同型），`startAttempt` 的 `wait` 上下文在 `ALLOTMENT_UNAVAILABLE` 时等待该 holder 的下一次画像/回执而非固定 100 ms（`cpu-jobs.ts:454`）；等待上限 = `min(计划 startMs + uncertaintyMs + 1000 ms 心跳余量, deadlineAt − 100)`；超过上限按现有 `PLAN_STALE` 重规划，不是失败。跨 HTTP 调用的续接沿用 SDK `startJob` 的既有重试（`ALLOTMENT_UNAVAILABLE` 可重试，≤ `min(capacityWaitMs, budgetMs)`）。`dispatchDiagnostics` 增加 `PLANNED_WAIT` 类型，避免把计划内等待记成 `START_FAILED`。
+- `decisionEvidence` 新增 `plannedStartMs`、`plannedResourceWaitMs`、在途 `p90RemainingMs`（来自画像 `history`，只记录，首版不用于选路）。追踪 `QUEUE` 段实测与 `plannedResourceWaitMs` 的差进入 §47 的误差报告。
+
+**测试（核心 `planner.test.ts`）**：
+a. 忙目标在途剩余 200、`compute` 50，空闲目标 `compute` 400 → 选忙目标，`startMs≈200`、`dagResourceWaitMs=200`；
+b. 同场景剩余 UNKNOWN → 忙目标 `RESOURCE_WAIT_UNKNOWN`，选空闲；
+c. `overdue` / `RELEASE_OVERDUE` → 拒绝；
+d. 两个独立节点都偏好忙目标 → 第二个排在第一个之后（预约表叠加），与 `planner.test.ts:203` 同池串行用例一致；
+e. 等待使 `finish` 超预算 → 不选，`retryAfterMs` 等于最早释放；
+f. **回归守卫**：没有 `inFlight` 投影的快照，决策与改前逐字段一致（用现有 fixture 固定）；
+g. 纯度：注入一旦调用就抛错的 `Date/performance` 端口，调用次数为 0（AC5 既有模式）；
+h. 同一物理设备两个 holder，只有一个可投影：另一个的占用仍静态扣减，可投影者的占用以区间出现；两者合计不超过物理容量；
+i. 某 holder 释放量之和 ≠ `occupied`（存在无法解释的占用）→ 该 holder 不投影，其占用按静态口径；
+j. 坐标：在途释放 200 ms 的区间在预约表中为 `[0,200)`，与 `remainingBudgetMs` 同坐标；
+k. 内存受限的忙设备：RAM 256 MiB 全被一个 200 ms 后释放的在途任务占用，新任务需 128 MiB、`compute` 50，另一空闲设备 `compute` 400 → 选忙设备，`startMs≈200`；同场景在途剩余 UNKNOWN → 拒绝。
+**测试（协调者）**：两个 PC 代理；A 正在跑约 1 s 的替身任务，B 的校准 `compute` 远大于 A：提交后计划选 A，任务进入 `DISPATCHING` 并记 `PLANNED_WAIT`，A 结算后由画像事件唤醒自动派发，回执成功；追踪 `QUEUE` 实测与 `plannedResourceWaitMs` 可对齐。反例：A 的在途剩余注入 UNKNOWN → 选 B。预检用例：同放置不同时刻通过。
+**鸿蒙**：`NativeAgent.ets:241-242` 已上报 `queued`/`inFlight`，本条不改代理。
+
+### 4. Q2-3 排队任务进入预约表（取代 `policyWait` 累加）
+
+**问题（核对）**：`availability()` 末行 `policyWait = credit&&!queued ? e.queue : UNKNOWN`，而 `e.queue` 两端都是 `PRIOR 0`；只要设备上有未启动的排队条目，候选即 `LOCAL_QUEUE_PENDING` → `POLICY_WAIT_UNKNOWN` 被拒。
+
+**不变量**：排队任务与在途任务是两个不相交的集合（§3 不变量 3），但这只是不重复计费的**必要条件**：排队任务开始前要等在途释放，自身启动后又占用资源，所以不能把它的时长与在途等待相加（同池时少算前段等待；独立池时多算不存在的等待）。排队任务必须和在途任务一样进入预约表，由 `earliest()` 统一结算。
+
+**修改**：
+- 快照新增 `PlanningSnapshot.queued?: {deviceId; holderInstanceId; attemptId; priority; resources; holdEstimate: NumericSampleV2; elapsedMs}[]`，由画像 `queued[]`（`micro-queue.ts` `queuedFacts`，含 `resources/priority/elapsed`）与协调者为该 attempt 保存的计划合成：`holdEstimate = 该任务计划中的 executionMs − policyQueueMs`（它一旦启动将持有资源的时长，含计算、外围开销、发布），`source='PRIOR'`；协调者查不到该 attempt 的计划或估计为 null → `holdEstimate` UNKNOWN。
+- `planning-api.plan()` 构造初始预约表的顺序：先放 §3 的在途区间；再对每个有候选的设备，取类别不低于本请求类别的排队条目，按（类别高→低，`elapsedMs` 大→小）排序，逐个用 `earliestFeasibleV2(occupancy, 该条目的资源需求, 0, holdEstimate)` 放置并把区间加入预约表（现有私有方法 `earliest()` 提取为核心导出的纯函数 `earliestFeasibleV2`，规划器与 seeding 共用，避免两套实现）。某条目 `holdEstimate` UNKNOWN → 其涉及的池加入 `[0, Infinity)` 区间 → 需要这些池的候选自然被拒，拒绝码 `POLICY_WAIT_UNKNOWN`。类别低于本请求的排队条目不放置（它们按 §7.2.2 让位）；老化/有界连续服务可能让它们先跑，这一偏差写入契约"失效条件"。
+- 规划器：删除 `planner.ts:138` 的 `policyWait.value === c.queueMs` 检查与 `extend()` 中 `arrival + queued` 的加法；`start = earliest(occupancy, demands, arrival, duration)`，预约表已含排队与在途。**报告口径**（D4 要求分开报告）：`dagResourceWaitMs = earliest(仅在途 + 本图区间) − arrival`，`policyQueueMs = earliest(在途 + 排队 + 本图区间) − earliest(仅在途 + 本图区间)`。约束：两次 `earliest` 必须使用**相同的** `arrival`、资源需求、`duration` 和本图已有区间，只有预约表集合不同；任一结果为 `Infinity` 时该候选走拒绝分支（`RESOURCE_WAIT_UNKNOWN` 或 `POLICY_WAIT_UNKNOWN`），不得出现 `Infinity − Infinity`。两者之和是**预测**等待且不重复；实测等待来自追踪 `QUEUE` 跨度，二者差值进入 §47 误差报告。
+- `availability()` 的 `policyWait` 不再作为数值进入选路，只保留 `reason='LOCAL_QUEUE_PENDING'` 作诊断。代理 `executors[].queue` 停止作为等待估计：PC `host.ts:193`、鸿蒙 `NativeAgent.ets:226` 改为 `UNKNOWN`；`directory.ts:168` 的 `queueMs` 置 0，由上述报告口径替代。
+
+**测试**（核心）：
+a. 同池串行：在途释放 200，排队 1 条同类 `holdEstimate` 300，新任务同池 → `startMs ≈ 500`（不是 300）；`dagResourceWaitMs = 200`、`policyQueueMs = 300`；
+b. 独立池重叠：排队条目只占 `gpu`，新任务只占 `cpu` → 新任务 `startMs` 不受排队影响；
+c. 低类别排队不延后高类别请求；
+d. 排队条目估计缺失 → 需要该池的候选 `POLICY_WAIT_UNKNOWN`；
+e. 两条排队条目同池 → 顺序放置，第二条在第一条之后。
+**测试**（协调者）：存在排队任务时，新计划的 `policyQueueMs` 等于按上述口径计算的值；§79 的两 App 竞争用例在改后仍通过。
+
+### 5. Q2-4 进程外围开销分离（无行为变化）
+
+**问题（核对）**：PC 每任务 `fork` 新进程（`cpu-engine.ts:13`），EXECUTE 跨度与校准 `compute` 都包含进程启动（`execution-runtime.ts:46`、`calibration-executor.ts:47` 用外层墙钟）；`cold` 恒为 0。将来引入暖进程池时，所有历史样本都会污染。
+
+**修改**：
+- 命名：该差值包含进程启动、IPC、Base64 序列化与退出等待，不全是冷启动，统一称**进程外围开销** `overheadMs`，不叫 startup/cold。PC：`executeCpu` 已返回子进程自测的 `durationMs`（`cpu-child.ts:10,36`），`overheadMs = 外层 EXECUTE 墙钟 − result.durationMs`。`ExecutionReportV2.overheadMs?: number`（`resources-v2.ts:51`，校验 `:147-148` 按 `resourceHeldMs` 方式）。校准结果同样记录。
+- 代理画像：`compute = 校准墙钟 − overhead`、`cold = 校准 overhead`，均 PRIOR（`cold` 沿用协议字段名，语义即外围开销；暖进程池引入后它会趋近 0 且仍是实测）。
+- **口径对齐**：EXECUTE 跨度（`execution-runtime.ts:46` 的 `segment('EXECUTE', executeCpu)`）始终包含外围开销。因此 EXECUTE span 的 `predictedMs` 与 `phaseCosts.EXECUTE` 必须是 `computeMs + coldMs`（§2 已改），规划器的 `execution` 求和不变。只把 `compute` 填进 `predictedMs` 会使 §47 的误差系统性偏大，这是评审指出的错误。
+- 协调者：`channel.ts:76-81` 的 `ExecutionReceipt` 处理把 `overheadMs` 随 `resourceHeldMs` 一起交给 `store.receive`，存入 `JobData`；`observeExecution` 维护两个窗口：`execute = span.durationMs − overheadMs` 与 `overhead`，**只有回执带 `overheadMs` 的样本才写入这两个窗口**。缺 `overheadMs` 的回执（旧代理、鸿蒙）整段只进 §76 的漂移窗口，**不参与拆分估计**——否则"完整 EXECUTE 当 compute"再加代理 `cold` 会把 100 ms 预测成 120 ms。该目标于是回退校准（`compute` 与 `cold` 同出校准，口径一致）。§2 的 `computeSamples` 增加 `coldP50Ms`（来自 `overhead` 窗口），候选 `coldMs` 解析同 §2。
+- 鸿蒙：进程内引擎，`overheadMs` 待实现；未实现期间鸿蒙目标永远走校准先验，不得混用实测 EXECUTE 与校准 `cold`（登记 §14）。
+
+**测试**：PC——`overhead + compute == EXECUTE 墙钟`（±1 ms）；回执无 `overheadMs` 时该样本不进入 `execute/overhead` 窗口，候选解析为校准 PRIOR（断言预测值 ≠ 完整耗时 + 校准 cold）；EXECUTE 的 `predictionErrors` 以 `compute + cold` 为预测值，在替身执行器固定耗时下误差接近 0（无系统性偏差）；§3 f 类守卫通过。
+
+### 6. Q1-1 执行器注册表与架构检查扩展
+
+**问题（核对）**：`services/pc-agent/src/cpu-engine.ts:9` 写死能力名单，`cpu-child.ts:11/20/30` 按名分支，鸿蒙 `NativeAgent.ets:324-336` 同样分支。接入新能力等于修改两个代理源码；AC1 只检查核心零修改，不检查代理。
+
+**修改**：
+- PC：新增 `services/pc-agent/src/executors/registry.ts`：`registerExecutor({capability, executorId, run(input, parameters, config, signal) → {bytes, schemaId, durationMs}})`，重复注册拒绝；内置三个能力各成一个文件（`executors/text-count.ts`、`vector-normalize.ts`、`image-crop.ts`）；`cpu-child.ts` 查表分发；`cpu-engine.ts` 的能力校验改为 `registry.has(capability)`；`image-encoder.ts` 经同一注册表接入，保留其 CUDA 探针逻辑。
+- 鸿蒙：`v2/host/executors/` 目录，`NativeAgent.engine()` 改查表；三个实现各成文件。本项改 HAR，需 API 22 编译（环境见 §81）。
+- 架构检查：`scripts/architecture-rules.json` 新增 `executorDispatchRoots`（`cpu-engine.ts`、`cpu-child.ts`、`execution-runtime.ts`、`NativeAgent.ets`）与 `forbiddenCapabilityLiterals`（由 `capabilities/*/manifest.json` 的 `packId` 加 `image.encode` 生成）；`executors/` 目录本身允许出现能力名。`check-architecture.test.mjs` 加违规 fixture。
+- AC1 验收补一条：接入第四个能力时上述分发文件的源码摘要不变。
+
+**测试**：注册表单测（重复注册、未注册能力 → `CAPABILITY_UNSUPPORTED`）；三能力回归；架构 fixture 正反例。
+
+### 7. Q1-2 用例覆盖标签与装载时结构覆盖检查
+
+**问题（核对）**：现有三个包各只有一个典型输入（`packages/reference-capabilities/src/index.ts:21-24`，`crop.ts`）；"全面性"没有可衡量的定义。
+
+**定义**：覆盖按**契约维度**计，不按输入空间计（POSIX/LTP 的做法：每条规范条款至少一个用例）。
+
+**修改**：
+- `ReferenceCase.covers: string[]` 与 `ReferenceCase.expect: {kind:'OUTPUT'} | {kind:'REJECT'; errorCode:string}`（运行时结构，不是 T2 协议对象）。**标签不是覆盖证明，断言才是**：每个标签绑定明确断言——`OUTPUT` 用例由 `evaluate` 打分；`REJECT` 用例要求执行器以契约规定的错误码结算 `FAILED` 且无输出（例如 `image.raster` 的 `boundary:empty` 是"非法输入被正确拒绝"，不是"合法边界成功"），命中即质量 1，输出非空或错误码不符即 0。**贯通链路**（缺任一环 REJECT 就没有判断依据）：① 执行器以 `Error(<协议 ID>)` 结算，`execution-runtime.ts` 已把它写入 `receipt.errorCode`；② `calibration-executor.ts:67` 现对非 SUCCEEDED 回执统一返回 `{output:[], durationMs:0}`，改为仅当 `receipt.state==='FAILED'` 时附 `errorCode: receipt.errorCode`，`CANCELLED_SETTLED`/`SIDE_EFFECT_UNKNOWN` 不附；③ `EvaluationResult`/`EvaluationReport`（`evaluation-wire.ts:8,13`）增加可选 `errorCode`，`decodeEvaluationReport` 校验其为协议 ID、只与空输出同时出现、且不得与 `notRun` 同时出现；④ `qualification.ts` 评分按 `expect.kind` 分派：`REJECT` 命中 = `settled && !notRun && output.length===0 && errorCode===expect.errorCode`；`notRun`、超时（`CANCELLED_SETTLED`）、`EVALUATION_SETTLEMENT_UNKNOWN`、基础设施失败一律**不是**正确拒绝，沿用现有 `WAITING_RESOURCE`/重试路径；`REJECT` 命中不消耗 `cooldown`。测试：REJECT 用例对"抛对码""抛错码""超时""notRun"四种结果分别得 1、0、不计分重试、不计分重试。标签语法：`schema:<inputSchema>`、`boundary:empty|max`、`param:<name>:min|max`（对 `workModel` 声明的参数）、家族标签；覆盖检查同时要求每个 `inputSchema` 至少一个 `REJECT` 用例（非法输入）。
+- 要求表 `capabilities/coverage-requirements.json`（数据文件，不进核心）：契约可派生的必需项——每个 `inputSchema` ≥1 例、`boundary:empty`、`boundary:max`、`workModel` 每个参数的 `min/max`；按 schema 家族的"平台分歧"标签——`text.*` → `unicode:grapheme`、`boundary:line-ending`；`image.raster` → `encoder:jpeg`；`vector.*` → `float:zero`、`float:large`；`image.embedding` → `model:manifest`。
+- `QualificationService` 构造时校验：缺必需标签 → `TRUSTED_PACK_COVERAGE`（包装载失败，不是设备不合格）。
+- 现有包补齐用例：`text.count`：空串（`OUTPUT`，期望全 0）、CJK+emoji、CRLF、最大长度、非 JSON 输入（`REJECT`）；`vector.normalize`：零向量（已有）、大数值、`dimension` 上界、行维度不一致（`REJECT`）；`image.crop`：box 贴边、`paddingRatio` 0/0.5、`targetSize` 32/1024、`jpegQuality` 40/95、空字节与非图片（`REJECT`）。期望输出由参考实现在装包时生成，不手写字面量：`pack()` 助手改为接受 `reference(input) => expected`。**参考实现必须独立于执行器**：`packages/reference-capabilities/src` 不得导入 `services/pc-agent/src/executors`（加入 `architecture-rules.json` 的依赖禁止项），frozen 模式的参考实现另写一份；能用独立检查器表达的优先用 tolerance/property（裁剪包现有的几何+颜色检查就是这种做法，保留）。同一作者写两份实现不能证明独立，只能降低共同缺陷的概率；这一局限写入 `capabilities/README.md`。
+- **套件身份必须包含期望输出**：现有 `packDigest` 只含 manifest、输入摘要、参数、配置，不含 `expected`；答案变化不会使资格失效。改为纳入期望输出摘要（frozen/tolerance）或不变量的 `{id, version}` 列表（property，语义变化必须升版本，只有名称不够），以及每个用例的 `expect`，与 `image.encode` 套件（`suiteId = 'encode.' + hash(含 vector)`）一致。
+- 评测预算核对：`app.ts:236` 的策略为 `maxRuns:8`、`activeSamples:2`、`evidenceTtlMs:3600000`；ACTIVE 需要 `max(cases.length, activeSamples)` 次通过（`qualification.ts:92`）。补齐用例后须保证 `maxRuns ≥ 用例数 + 2`、`maxDurationMs ≥ maxRuns × caseTimeoutMs`，并把实际值写入实施记录。
+
+**测试**：覆盖检查正反例；三个包在 PC 通过（鸿蒙在 API 24 模拟器可用时补跑）；实施记录写明每个包的用例数与标签清单。
+
+### 8. Q1-3 `evaluate` 三模式助手
+
+- `frozenPack(reference)`：相等判定，分数 {0,1}；`tolerancePack(metric, threshold)`：分数 [0,1]，阈值由包声明（crop、encode 已是此类）；`propertyPack(invariants[])`：不需要答案，每条不变量带 `{id, version, precondition}`——`vector`：`‖row‖ ∈ {0,1}`、`norms[i] == ‖input[i]‖`；`text`（按 `cpu-child.ts:32` 的现行语义：空串行数 0，行按 `\r\n|\r|\n` 切分，词为 trim 后按空白切分）：`characters(a+'\n'+b) == characters(a)+characters(b)+1`（无前提）；`words(a+'\n'+b) == words(a)+words(b)`（无前提）；`lines(a+'\n'+b) == lines(a)+lines(b)`，**前提：a、b 均非空且 a 不以 `\r` 结尾**（空串行数为 0 会破坏等式；`\r` 与 `\n` 会被合并成一个 CRLF）。组合用例由助手从基础用例两两生成，不满足前提的组合跳过。
+- 分数语义统一写入 `capabilities/README.md`：frozen/property 只有 0/1；tolerance 连续；`qualityThreshold` 由包声明。
+
+**测试**：三种助手各一正一反。
+
+### 9. Q1-5 运行时质量核验（可选，默认关闭，实施前再确认预算参数）
+
+- 已有：TTL 到期重验（`qualification.ts:224-226`，当前 `evidenceTtlMs = 1 h`）、输出 schema 校验、§76 耗时漂移断路。
+- 差分抽样（新增，默认关闭，策略 `PlacementRollout.shadowRate`）：对 `PURE` 且 ACTIVE 的目标，按预算把同一业务输入复制派给第二个 ACTIVE 目标——沿用 §6.5 的对冲 attempt 机制（独立 `attemptId`、同一 `PlanningService`、不推进下游），用包的 `evaluate` 以第一个输出为期望打分；低于阈值记 `QUALITY_DIVERGENCE`，两目标转 SUSPENDED 并重跑参考套件。授权限制：同 App 作用域、`privacy=AUTHORIZED_REMOTE`。
+
+### 10. 规格与契约文字（实施时同步修订，修订号不变）
+
+- WP-D4 第 2 条"契约正文"补写五项：估计对应的目标/资源池/快照版本；来源（MEASURED/PRIOR/UNKNOWN）与失效条件；`queueMs` 只含未启动排队（§4），预约表含在途占用（§3），二者不相交；UNKNOWN 的处理（§3 不变量 2、§4）；资源不足（`RESOURCE_WAIT_UNKNOWN`）与策略等待（`POLICY_WAIT_UNKNOWN`）分别报告。
+- §7.1.3 增加 `uncertainty` 的 PRIOR 派生规则（§2）。
+- §5.2 契约对象增加 `workModel`；§7.3 `ExecutionReceipt` 增加 `overheadMs`。
+- §7.6 第 2 条增加"用例须按契约维度标注覆盖，套件身份包含期望输出"。
+
+### 11. 禁止
+
+1. 不得用预测释放时间代替结算释放资源；派发等待只等设备事实（画像/回执），不得新增定时领取（R17）。
+2. 不得给 UNKNOWN 填 0；不得把 PRIOR 标成 MEASURED；不得把校准值或策略先验写成实测收益（R16）。
+3. 不得在 `planning.ts` 之外做候选选择；§3 的派发等待不选目标，只等待或重规划（R21）。
+4. 不得修改 T1 冻结的枚举（span `phase`、状态码），只加可选字段（D10）。
+5. 不得因本轮改动降低 §44/§47 的追踪与误差报告口径；`predictedMs` 必须是本轮解析后的估计。
+6. 不得把 `hasDispatchCredit` 的真实容量门放宽为"预计有空"。
+
+### 12. 验收清单
+
+| 条目 | 命令 | 通过标准 | 鸿蒙 |
+| --- | --- | --- | --- |
+| Q1-4 桶键 | `npm run core:test`、`npm run protocol:v2:test`、协调者定向测试 | 本节 §1 四个核心用例与一个协调者用例通过；T1 fixture 正反例通过 | `LedgerV2.ets` 键同步或登记 §14 |
+| Q2-1 分布估计 | `npm run core:test`、协调者定向测试、`npm run architecture:deps` | §2 用例通过；§47 误差报告口径不变；`costSource` 出现在调度盘 | 代理 `uncertainty` 改 UNKNOWN，API 22/24 HAR 编译 |
+| Q2-2 在途预约 | `npm run core:test`（a–k）、两代理协调者用例、预检用例 | a–k 全过（含 k 内存受限忙设备）；忙目标被选中并在结算后自动派发；无投影快照决策与改前一致 | 不改代理 |
+| Q2-3 排队进预约表 | 核心（a–e）与协调者定向测试；§79 用例复跑 | §4 a–e 通过（同池串行 ≈500、独立池不受影响）；§79 两 App 竞争 5/5 不退化 | 代理 `queue` 改 UNKNOWN |
+| Q2-4 外围开销分离 | PC 代理测试；§3 f 类守卫；§47 误差报告 | `overhead + compute == EXECUTE`；EXECUTE 预测无系统偏差；选择不变 | `overheadMs` 待实现 |
+| Q1-1 注册表 | PC 代理测试、`npm run architecture:deps` | 注册表单测通过；违规 fixture 使检查失败；三能力回归 | HAR 改动待 API 22 编译 |
+| Q1-2 覆盖 | 协调者评测测试 | 缺标签包被拒；三包补齐后在 PC 评测通过并进入 ACTIVE；`packDigest` 变化触发重评测 | 模拟器可用时补跑 |
+| Q1-3 助手 | reference-capabilities 测试 | 三模式各一正一反 | — |
+| 全量 | `npm run scheduler:v2:test`，随后 `npm run acceptance:report` | 核心、PC、协调者、架构全部通过；AC1/AC3/AC5 报告更新 | — |
+
+完成后更新 §1 的 S5/S6 行与 §2 的 A1、B7、C4a、D2、D4 行；本节保留为方案记录。
+
+### 13. 实施顺序与并行
+
+- 第一人（Q2 组，主线分支）：§1 → §2 → §3 → §4 → §5。§3 是用户的核心诉求，但在 §2 之前做会缺少 `uncertainty`，预算判断不可靠。
+- 第二人（Q1 组，独立 worktree，R20）：§6 → §7 → §8。
+- **共享执行链的接口先冻结**（上一版"只在 crop 声明上有交集"不准确：Q1-1 重构 `cpu-engine.ts`/`cpu-child.ts`，Q2-4 的外围开销依赖同一条链返回的子进程自测时长）。第一步由第一人单独提交一个小改动：`cpu-engine.ts` 导出的 `CpuResult {bytes, hash, schemaId, durationMs, backend}` 冻结为执行器接口，并写明 `durationMs` 的语义 = **子进程内、围绕实际执行函数的单调时钟差**（当前 `cpu-child.ts:10,36`），不含进程启动/IPC/序列化；`execution-runtime.ts` 以 `EXECUTE 墙钟 − durationMs` 计外围开销。此后文件归属：Q2 组拥有 `execution-runtime.ts`、`host.ts`、`durable-ledger.ts`、协调者与核心；Q1 组拥有 `cpu-engine.ts`、`cpu-child.ts`、`executors/`、`reference-capabilities`、`qualification.ts` 评分分支、`architecture-rules.json`、`NativeAgent.engine()`。Q1 组重构时必须保持 `durationMs` 在新的 `registry.run()` 内按同一语义测量，并以 §5 的 `overhead + compute == EXECUTE` 测试作为回归门。§7 的 crop 用例补齐仍在第一人提交 §1 的 `workModel` 声明之后。
+- §9 待用户确认预算参数后另行安排。
+
+### 14. 鸿蒙待实现登记（R22）
+
+| 项 | 内容 | 阻塞 |
+| --- | --- | --- |
+| Q1-4 | `LedgerV2.ets` 在途残差历史的键改用 `costConfiguration`；若无 ArkTS 版 `costConfiguration`，需移植到 `v2/core` | API 22 编译 |
+| Q2-1 / Q2-3 | `NativeAgent.ets:226` 的 `uncertainty`、`queue` 改为 UNKNOWN | API 22 编译 |
+| Q2-4 | `overheadMs` 上报（进程内引擎按引擎/模型实例化耗时计） | API 22 编译；未实现期间鸿蒙目标只用校准先验，实测 EXECUTE 不进入拆分估计 |
+| Q1-1 | `engine()` 改注册表 | API 22 编译 |
+| 其余 | 代理已上报 `inFlight`、`queued`、`capacityCredits`（§81） | 无 |
