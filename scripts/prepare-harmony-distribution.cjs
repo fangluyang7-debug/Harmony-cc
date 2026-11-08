@@ -17,6 +17,53 @@ function copy(src, dest) {
   });
 }
 
+const README_CENTER = `# Windows x64 协调中心
+
+完整解压后双击 Start.cmd。选择当前局域网 IPv4 和端口，点击“启动协调中心”。就绪后点击“设备邀请与配对”建立空间并生成邀请，点击“打开调度盘”查看运行状态。
+
+包内已带 Node.js 运行时和 OpenSSL，不需要在本机安装任何环境。首次启动会在 services/coordinator/data/desktop-<IP> 下生成证书和数据库，请保留该目录用于备份与迁移。默认 HTTPS TCP 7443，发现使用 UDP 7444，设备之间须能互访。停止服务请使用页面中的“停止当前服务”。
+`;
+
+const README_AGENT = `# Windows x64 设备调度件
+
+完整解压后双击 Start.cmd。向协调中心取得新生成的设备邀请 JSON，导入后点击“配对设备”，然后点击“开启设备调度件”。安装身份默认保存在当前用户的 HarmonyRuntime/device，重新启动时可直接使用。
+
+基础 CPU 能力使用包内运行时，不需要在本机安装 Node.js。若需要执行图像编码，请另配 Python、模型与可信评测套件；包内 services/image-worker/requirements.txt 列出了 Python 依赖。使用 CUDA 时另外准备 NVIDIA 驱动和支持 CUDA 的 PyTorch，启动页选择 CUDA 并填写 Python 和套件路径，中心需配置同一评测套件。
+`;
+
+// The coordinator creates its TLS certificate with OpenSSL. Ship the one from Git for Windows
+// so a clean machine works without installing Git, and place it where Start.cmd adds it to PATH.
+function bundleOpenSsl(dest) {
+  const dirs = (process.env.PATH || '').split(path.delimiter).filter(Boolean);
+  if (process.platform === 'win32') try {
+    for (const git of execFileSync('where.exe', ['git'], {encoding: 'utf8', windowsHide: true}).trim().split(/\r?\n/)) {
+      const bin = path.dirname(git);
+      dirs.push(path.join(bin, '..', 'mingw64', 'bin'), path.join(bin, '..', 'usr', 'bin'));
+    }
+  } catch {}
+  for (const dir of dirs) {
+    if (!fs.existsSync(path.join(dir, 'openssl.exe'))) continue;
+    const dlls = fs.readdirSync(dir).filter(name => /^lib(?:ssl|crypto).*\.dll$/i.test(name));
+    if (!dlls.length) continue;
+    const target = path.join(dest, 'runtime/openssl');
+    fs.mkdirSync(target, {recursive: true});
+    fs.copyFileSync(path.join(dir, 'openssl.exe'), path.join(target, 'openssl.exe'));
+    for (const dll of dlls) fs.copyFileSync(path.join(dir, dll), path.join(target, dll));
+    // OpenSSL derives its prefix from the binary location and reads <prefix>/etc/ssl/openssl.cnf.
+    // With the binary under runtime/openssl, that config has to live in runtime/etc/ssl.
+    const config = path.join(dir, '..', 'etc', 'ssl', 'openssl.cnf');
+    if (fs.existsSync(config)) {
+      fs.mkdirSync(path.join(dest, 'runtime/etc/ssl'), {recursive: true});
+      fs.copyFileSync(config, path.join(dest, 'runtime/etc/ssl/openssl.cnf'));
+    } else {
+      throw Error('OPENSSL_CONFIG_NOT_FOUND: expected ' + config);
+    }
+    console.log('bundled OpenSSL from ' + dir + ' (' + dlls.length + ' dll)');
+    return;
+  }
+  throw Error('OPENSSL_NOT_FOUND: install Git for Windows or put openssl.exe on PATH');
+}
+
 function windowsPackage(name, role) {
   const dest = path.join(stage, name);
   const center = role === 'center';
@@ -68,6 +115,7 @@ function windowsPackage(name, role) {
     dependency(key, manifest);
   if (center) dependency('prisma', manifest);
   for (const file of ['node.exe', 'LICENSE']) copy(path.join(nodeHome, file), path.join(dest, 'runtime', file));
+  if (center) bundleOpenSsl(dest);
   copy(path.join(root, 'capabilities/coverage-requirements.json'), path.join(dest, 'node_modules/capabilities/coverage-requirements.json'));
   const html = fs.readFileSync(path.join(root, 'apps/runtime-desktop/index.html'), 'utf8');
   const hide = center ? 'section:nth-of-type(2)' : 'section:nth-of-type(1)';
@@ -75,8 +123,13 @@ function windowsPackage(name, role) {
   fs.mkdirSync(path.join(dest, 'apps/runtime-desktop'), {recursive: true});
   fs.writeFileSync(path.join(dest, 'apps/runtime-desktop/index.html'),
     html.replace('<style>', '<style>' + hide + '{display:none}').replace('启动协调中心，或将这台电脑作为执行设备接入。', intro));
+  fs.writeFileSync(path.join(dest, 'README.md'), center ? README_CENTER : README_AGENT);
+  // The bundled OpenSSL must be reachable through PATH: the launcher only accepts an
+  // absolute COORDINATOR_OPENSSL or an openssl.exe found next to a PATH entry.
   fs.writeFileSync(path.join(dest, 'Start.cmd'), [
-    '@echo off', 'cd /d "%~dp0"', '"runtime/node.exe" scripts/runtime-desktop.cjs', 'pause', ''
+    '@echo off', 'cd /d "%~dp0"',
+    'if exist "runtime\\openssl\\openssl.exe" set "PATH=%PATH%;%~dp0runtime\\openssl"',
+    '"runtime/node.exe" scripts/runtime-desktop.cjs', 'pause', ''
   ].join('\r\n').replaceAll('/', '\\').replace('cd \\d', 'cd /d'));
   console.log(name + ': ' + visited.size + ' runtime dependencies');
   return dest;
@@ -90,11 +143,15 @@ windowsPackage('02-Device-Agent-Windows-x64', 'agent');
 // dependencies in a nested node_modules, and dropping them makes the coordinator exit with
 // "Cannot find module '@nestjs/common'" right after the migrations run.
 function zipPackage(dir) {
-  const archive = path.join(out, dir + '.zip');
+  const folder = path.join(out, dir);
+  fs.mkdirSync(folder, {recursive: true});
+  const archive = path.join(folder, dir + '.zip');
   fs.rmSync(archive, {force: true});
+  fs.rmSync(path.join(out, dir + '.zip'), {force: true});
   const tar = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
   const entries = fs.readdirSync(path.join(stage, dir));
   execFileSync(tar, ['-a', '-cf', archive, '-C', path.join(stage, dir), ...entries], {stdio: 'inherit'});
+  fs.copyFileSync(path.join(stage, dir, 'README.md'), path.join(folder, 'README.md'));
   console.log(dir + '.zip: ' + fs.statSync(archive).size + ' bytes');
   return archive;
 }

@@ -1761,6 +1761,8 @@ Require stack:
 
 **修复**：`scripts/prepare-harmony-distribution.cjs`（原在 `dist/`，属 gitignore，已移到 `scripts/`）新增打包步骤，用系统自带 bsdtar（Windows 10+ 的 `C:\Windows\System32\tar.exe`）以 `-a` 生成标准 ZIP，不按名字过滤 `node_modules`；HAP 复制和 `SHA256SUMS.txt` 生成也纳入脚本，校验和从刚写出的文件计算，不再与文件脱节。`npm run dist:prepare` 可复现。
 
-**结果**（测试）：01 包含 882 个 `@nestjs` 条目、140,348,870 字节；02 为 43,496,796 字节且不含 NestJS 条目（设备代理是纯 Node，不依赖框架）。重新解压安装后协调中心 `RUNNING`：`https://100.81.81.224:7443`，`0.0.0.0:7443` 与 UDP `7444` 均在监听，证书指纹 `F9:DA:44:58:22:0F:F1:21:C0:B8:0C:EF:AA:D4:4D:72:98:8F:69:B1:23:5E:DC:36:D8:44:04:1D:6B:4C:05:63`，数据目录 `D:\HarmonyCoordinator\services\coordinator\data\desktop-100.81.81.224`。
+**零依赖化**（同轮）：目标机器装好即用，不该要求先装 Git 或 OpenSSL。协调者首次启动要用 `openssl req` 生成证书，因此把 Git for Windows 里的 `openssl.exe`、`libssl-3-x64.dll`、`libcrypto-3-x64.dll` 收进 `runtime/openssl/`，`Start.cmd` 把它追加到 PATH。只放 exe 不够：OpenSSL 由可执行文件位置推导前缀，会去读 `<前缀>/etc/ssl/openssl.cnf`，二进制在 `runtime/openssl` 时前缀是 `runtime`，所以配置要放到 `runtime/etc/ssl/openssl.cnf`，缺了会在 `COORDINATOR_START_FAILED CHECK_CONFIGURATION` 处失败。README 由脚本生成并写进包内。
 
-**边界**：本次只验证了 Windows x64 协调者；扫码配对、跨 App 授权、真实任务派发仍未验。首次生成证书依赖本机 OpenSSL，启动器会从 `where git` 推导 `usr/bin/openssl.exe`，本机命中 `E:\Git\usr\bin\openssl.exe`。
+**结果**（测试）：01 包含 882 个 `@nestjs` 条目、143,433,400 字节；02 为 43,497,533 字节且不含 NestJS 条目（设备代理是纯 Node，不依赖框架）。按「全新机器」复验：解压到 `D:\HarmonyCoordinator`，把 PATH 限制为 `runtime\openssl;C:\Windows\System32;C:\Windows`（无 Git、无系统 OpenSSL），启动后 23 个迁移全部应用、证书生成成功、协调中心 `RUNNING`：`https://100.81.81.224:7443`，`0.0.0.0:7443` 与 UDP `7444` 均在监听，证书指纹 `9D:3B:CA:49:54:85:36:07:E3:85:B8:A9:F0:8C:05:14:4A:C1:64:1F:99:9D:A4:18:06:BE:6A:E0:55:EC:5E:31`，数据目录 `D:\HarmonyCoordinator\services\coordinator\data\desktop-100.81.81.224`。
+
+**边界**：本次只验证了 Windows x64 协调者；扫码配对、跨 App 授权、真实任务派发仍未验。证书与数据库写在解压目录内，移动目录或换机器需要重新生成证书，设备端要重新配对。
