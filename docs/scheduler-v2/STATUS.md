@@ -1744,3 +1744,5 @@ SoleAI 原包名 `Micro.12.myapplication` 是 DevEco 模板默认值，桌面名
 **脚本新增保护**：签名 Profile 不含当前 `bundleName` 时丢弃该配置并打印 `signing profile does not cover …; building unsigned`，避免 hvigor 在签名阶段因包名不匹配中断整个构建。
 
 **边界**：DevEco 签名向导只写材料、不写 product 引用，这个缺口无法从仓库侧消除；改包名或换设备后，流程固定为「IDE 重新生成签名 → 跑一次 npm 脚本 → 再部署」。分发包 `dist/调度系统分发-20261108/04-SoleAI-HarmonyOS` 的 HAP 已换成新包名构建（SHA-256 `c8be8418…`），Windows 两包与设备调度件 HAP 未变。手机端协同开关的实际授权、扫码配对仍未验。
+
+**设备调度件改名**（2026-11-09）：桌面名与应用内标题由 `Harmony Agent`、`Harmony · 设备调度件` 改为「调度连接」，包名保持 `org.harmonycc.agent`，因此原 Profile 继续有效，无需重新生成。重新构建后 `SignHap` 4.0 秒完成，`entry-default-signed.hap` 12,826,033 字节，`hdc install -r` 覆盖安装成功，`aa start` 后页面标题显示「调度连接」，状态 `INVITATION_REQUIRED`。分发包 03 的 HAP 同步替换（SHA-256 `4965df37…`）。

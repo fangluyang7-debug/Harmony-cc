@@ -34,7 +34,7 @@ struct Index {
  @StorageLink('maxCpuLimit') maxCpuLimit:number=1;
  @StorageLink('maxMemoryLimitMB') maxMemoryLimit:number=256;
  build(){Scroll(){Column({space:14}){
-  Text('Harmony · 设备调度件').fontSize(28).fontWeight(FontWeight.Bold);
+  Text('调度连接').fontSize(28).fontWeight(FontWeight.Bold);
   Text(this.status).fontSize(17);
   Text(this.discovered).fontSize(14);
   Button('搜索附近的调度中心').onClick(()=>{void this.discover();});
