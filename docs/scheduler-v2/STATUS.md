@@ -1734,3 +1734,13 @@ node "/e/DevEco/DevEco Studio/tools/hvigor/bin/hvigorw.js" --mode module \
 **边界**：签名材料只存在于 `.test/`（已 gitignore）和本机 `~/.ohos/config`，未进仓库；`apps/harmony-agent/build-profile.json5` 仍是空 `signingConfigs`，从该目录构建需要重新自动签名。SoleAI（`Micro.12.myapplication`）现有的两份旧 profile 都不含本机 UDID，必须连真机在 DevEco 里重新生成后才能安装。真机扫码配对、跨 App 授权、后台贡献仍待验。
 
 **回归**（2026-11-09）：`scripts/harmony-v2-app-build.cjs` 每次都会用 `apps/<app>` 覆盖暂存工程并重写 `build-profile.json5`，此前固定写 `signingConfigs: []`，DevEco 生成的签名材料会被下一次命令行构建抹掉。现改为先读取暂存工程的既有 `signingConfigs`，非空则沿用并给 product 补 `signingConfig`，日志打印 `signing config default kept from previous stage profile`。用 `node scripts/harmony-v2-app-build.cjs harmony-agent --har` 复跑：`SignHap` 3.9 秒完成，产出 `entry-default-signed.hap` 12,826,016 字节，暂存 profile 中 `"signingConfig":"default"` 保留。DevEco 里点一次自动签名后，命令行与 IDE 两条构建路径都出签名包。
+
+### 85.1 SoleAI 包名修订与真机安装（2026-11-09）
+
+SoleAI 原包名 `Micro.12.myapplication` 是 DevEco 模板默认值，桌面名与 Ability 标签也是 `MyApplication`、`label` 占位符。改为 `org.harmonycc.soleai`、vendor `Harmony CC`、应用名 `SoleAI`（提交 `5e18d23`）。改包名使旧 Profile 失效，用户在 02:32 于 DevEco 重新生成，`default_s2-harmony_*.p7b` 的 `bundle-name` 变为 `org.harmonycc.soleai` 且仍含本机 UDID。
+
+**IDE 向导的第二个缺口**（与 §85 同源，但这次是产品引用）：02:33 直接点 Run 仍报 `9568320`。暂存工程里 `signingConfigs` 已更新为新 Profile，但 `products[0]` 依旧没有 `signingConfig`。跑一次 `node scripts/harmony-v2-app-build.cjs harmony --har` 后 `SignHap` 3.8 秒完成，产出 `entry-default-signed.hap` 25,183,697 字节；`hdc install -r` 返回 `install bundle successfully`，`aa start -b org.harmonycc.soleai -a EntryAbility` 返回 `start ability successfully`，进程 PID 58569，首页截图显示「云端商品助手」与选图找商品、男生通勤鞋、500 以内跑鞋、耐克运动鞋四个入口。
+
+**脚本新增保护**：签名 Profile 不含当前 `bundleName` 时丢弃该配置并打印 `signing profile does not cover …; building unsigned`，避免 hvigor 在签名阶段因包名不匹配中断整个构建。
+
+**边界**：DevEco 签名向导只写材料、不写 product 引用，这个缺口无法从仓库侧消除；改包名或换设备后，流程固定为「IDE 重新生成签名 → 跑一次 npm 脚本 → 再部署」。分发包 `dist/调度系统分发-20261108/04-SoleAI-HarmonyOS` 的 HAP 已换成新包名构建（SHA-256 `c8be8418…`），Windows 两包与设备调度件 HAP 未变。手机端协同开关的实际授权、扫码配对仍未验。
