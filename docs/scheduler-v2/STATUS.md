@@ -1710,4 +1710,25 @@ e. 两条排队条目同池 → 顺序放置，第二条在第一条之后。
 
 本轮未重跑 §83 的全部验收套件。主购物流程目前接入图片预处理，独立图像搜索入口接入图像编码；文字购物、账号和其他原有业务仍走原服务。图像编码还依赖真实模型、Python/CUDA 环境及可信评测套件。
 
-现场待验：签名安装、实际扫码、跨 App 授权、真实 GPU、跨物理设备网络及断线恢复。当前没有连接的 HDC 真机，也未完成图形页面的人工视觉验收。手机设备贡献仍受前台生命周期约束，切换到购物 App 后的持续后台算力不是本轮完成项。启动页面尚未封装为独立安装程序。具体操作见 [局域网说明](LOCAL-COORDINATOR-20261031.md)。
+现场待验：签名安装、实际扫码、跨 App 授权、真实 GPU、跨物理设备网络及断线恢复。当前没有连接的 HDC 真机，也未完成图形页面的人工视觉验收。（签名安装已于 §85 补验）手机设备贡献仍受前台生命周期约束，切换到购物 App 后的持续后台算力不是本轮完成项。启动页面尚未封装为独立安装程序。具体操作见 [局域网说明](LOCAL-COORDINATOR-20261031.md)。
+
+## 85. 真机签名与安装（2026-11-09）
+
+`org.harmonycc.agent` 首次在真机 ADY-AL00（API 26，UDID `6503DF75…F1A81A`）完成签名安装并启动。
+
+**现象**：DevEco 部署报 `code:9568320 error: no signature file`，随后 `Launch org.harmonycc.agent failed`。
+
+**根因**：`.test/s2-harmony-agent/build-profile.json5` 的 `app.signingConfigs` 里已有 2026-11-08 自动生成的调试材料（证书、profile、p12），但 `products[0]` 缺少 `"signingConfig": "default"` 引用。构建日志对应行是 `[WARN] No signingConfig found for product default`，`SignHap` 任务空转，输出目录只有 `entry-default-unsigned.hap`，DevEco 于是把未签名包推给设备。profile 本身有效：`type=debug`、`bundle-name=org.harmonycc.agent`、device-ids 含本机 UDID。
+
+**修复**：在 product 上补 `"signingConfig": "default"`。命令行构建还需两项环境：`DEVECO_SDK_HOME` 指向 `E:/DevEco/DevEco Studio/sdk`，以及把 DevEco 自带 JBR 加入 PATH（`hap-sign-tool.jar` 校验 profile 时按 `java` 查找，系统 PATH 里没有 JDK 会直接 `spawn java ENOENT`）。
+
+```
+export DEVECO_SDK_HOME="E:/DevEco/DevEco Studio/sdk"
+export PATH="/e/DevEco/DevEco Studio/jbr/bin:$PATH"
+node "/e/DevEco/DevEco Studio/tools/hvigor/bin/hvigorw.js" --mode module \
+  -p product=default -p buildMode=debug assembleHap --no-daemon
+```
+
+**结果**（测试）：`SignHap` 4.2 秒完成，产物 `entry-default-signed.hap` 12,826,012 字节，比未签名包多 44,302 字节签名块；`hdc install -r` 返回 `install bundle successfully`；`aa start -b org.harmonycc.agent -a EntryAbility` 返回 `start ability successfully`，截图显示「Harmony · 设备调度件」页面，状态 `INVITATION_REQUIRED`，含搜索/扫码入口、邀请 JSON 输入、贡献上限（CPU 槽位 1、内存 256 MiB）与前台贡献开关。
+
+**边界**：签名材料只存在于 `.test/`（已 gitignore）和本机 `~/.ohos/config`，未进仓库；`apps/harmony-agent/build-profile.json5` 仍是空 `signingConfigs`，从该目录构建需要重新自动签名。SoleAI（`Micro.12.myapplication`）现有的两份旧 profile 都不含本机 UDID，必须连真机在 DevEco 里重新生成后才能安装。真机扫码配对、跨 App 授权、后台贡献仍待验。
