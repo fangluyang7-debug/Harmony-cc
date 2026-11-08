@@ -1746,3 +1746,21 @@ SoleAI 原包名 `Micro.12.myapplication` 是 DevEco 模板默认值，桌面名
 **边界**：DevEco 签名向导只写材料、不写 product 引用，这个缺口无法从仓库侧消除；改包名或换设备后，流程固定为「IDE 重新生成签名 → 跑一次 npm 脚本 → 再部署」。分发包 `dist/调度系统分发-20261108/04-SoleAI-HarmonyOS` 的 HAP 已换成新包名构建（SHA-256 `c8be8418…`），Windows 两包与设备调度件 HAP 未变。手机端协同开关的实际授权、扫码配对仍未验。
 
 **设备调度件改名**（2026-11-09）：桌面名与应用内标题由 `Harmony Agent`、`Harmony · 设备调度件` 改为「调度连接」，包名保持 `org.harmonycc.agent`，因此原 Profile 继续有效，无需重新生成。重新构建后 `SignHap` 4.0 秒完成，`entry-default-signed.hap` 12,826,033 字节，`hdc install -r` 覆盖安装成功，`aa start` 后页面标题显示「调度连接」，状态 `INVITATION_REQUIRED`。分发包 03 的 HAP 同步替换（SHA-256 `4965df37…`）。
+
+## 86. 分发包首次安装验证与嵌套依赖修复（2026-11-09）
+
+把 01 包按「全新机器」流程安装：`unzip` 到 `D:\HarmonyCoordinator`，用包内 `runtime/node.exe` 启动 `scripts/runtime-desktop.cjs`，再由控制页启动协调中心。Prisma 的 23 个迁移全部执行成功、证书生成成功，随后进程退出：
+
+```
+Error: Cannot find module '@nestjs/common'
+Require stack:
+- D:\HarmonyCoordinator\services\coordinator\dist\app.js
+```
+
+**根因**：ZIP 里没有 `services/coordinator/node_modules`。暂存目录里是有的（`@nestjs/common`、`core`、`platform-express` 都在），是打 ZIP 这一步丢的。协调者的 NestJS 依赖被 npm 装在服务目录下的嵌套 `node_modules`，打包时若按名字跳过 `node_modules`，就会连它一起排除；根 `node_modules` 正常进了包，所以问题只在启动协调中心时才暴露。
+
+**修复**：`scripts/prepare-harmony-distribution.cjs`（原在 `dist/`，属 gitignore，已移到 `scripts/`）新增打包步骤，用系统自带 bsdtar（Windows 10+ 的 `C:\Windows\System32\tar.exe`）以 `-a` 生成标准 ZIP，不按名字过滤 `node_modules`；HAP 复制和 `SHA256SUMS.txt` 生成也纳入脚本，校验和从刚写出的文件计算，不再与文件脱节。`npm run dist:prepare` 可复现。
+
+**结果**（测试）：01 包含 882 个 `@nestjs` 条目、140,348,870 字节；02 为 43,496,796 字节且不含 NestJS 条目（设备代理是纯 Node，不依赖框架）。重新解压安装后协调中心 `RUNNING`：`https://100.81.81.224:7443`，`0.0.0.0:7443` 与 UDP `7444` 均在监听，证书指纹 `F9:DA:44:58:22:0F:F1:21:C0:B8:0C:EF:AA:D4:4D:72:98:8F:69:B1:23:5E:DC:36:D8:44:04:1D:6B:4C:05:63`，数据目录 `D:\HarmonyCoordinator\services\coordinator\data\desktop-100.81.81.224`。
+
+**边界**：本次只验证了 Windows x64 协调者；扫码配对、跨 App 授权、真实任务派发仍未验。首次生成证书依赖本机 OpenSSL，启动器会从 `where git` 推导 `usr/bin/openssl.exe`，本机命中 `E:\Git\usr\bin\openssl.exe`。
