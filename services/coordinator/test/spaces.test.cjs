@@ -27,6 +27,8 @@ test('browser spaces persist, isolate roles and operate a paired CPU host with a
   assert.equal((await owner('/'+group+'/members/'+guestId,{role:'MEMBER'})).status,200);
   const settings={ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:268435456,reserveMemoryBytes:0};
   const device=await owner('/'+group+'/devices',{name:'演示 CPU',settings});assert.equal(device.status,200);assert.equal(device.body.invitation.tlsMode,'pinned');
+  assert.match(device.body.qr,/^data:image\/png;base64,/);
+  assert.deepEqual(device.body.contribution,settings,'QR bootstrap retains the owner-confirmed resource policy');
   const dir=r.config.dataDir,file=path.join(dir,'space-invitation.json'),installation=path.join(dir,'space-host'),policy=path.join(dir,'space-policy.json');
   fs.writeFileSync(file,JSON.stringify(device.body));fs.writeFileSync(policy,JSON.stringify(settings));
   await command(path.resolve('../pc-agent/dist/pairing-main.js'),[file,installation]);

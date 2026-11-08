@@ -226,6 +226,7 @@ model ConsoleApp {
 }
 
 model RegisteredApp {
+  declarationJson String?
   batchWeight Int @default(1)
   batchService Float @default(0)
   id String @id

@@ -152,6 +152,11 @@ export class NativeAgent {
   agent.lifecycleForeground=lifecycleForeground;agent.foreground=lifecycleForeground();await agent.restorePreferences();agent.timer=setInterval(()=>{void agent.tick().catch((e:Error)=>agent.error(e as Error));},2000);await agent.tick();return agent;
  }
  isConnected():boolean{return this.ready&&!this.stopped;}
+ async registerApplication(declaration:Object):Promise<string>{
+  if(!this.isConnected())throw Error('SDK_COORDINATOR_OFFLINE');
+  if(this.installation.appInstanceId)throw Error('DEVICE_OWNER_CREDENTIAL_REQUIRED');
+  return JSON.stringify(await this.transport.json('/v2/apps/registrations',declaration));
+ }
  displayHolderId():string{return this.installation.paired.peer.holderInstanceId;}
  async displayInbox():Promise<Object>{return this.transport.json('/v2/display');}
  async displayInvite(viewerHolderId:string):Promise<Object>{

@@ -58,7 +58,7 @@ export async function searchSelectedImage(spaceId:string,encoding?:EncodingTarge
     try{
       const workflow:SdkWorkflow={version:3,id,outputContract:'image.embedding',qualityTarget:'reference',
         nodes:[{id:'encode',capability:'image.encode.v1',modelManifest:space.model,targetId:encoding.targetId||undefined,input,dependsOn:[],parameters:JSON.stringify(space.model)}]};
-      const task=await encoding.sdk.submit(workflow,{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
+      const task=await encoding.sdk.submit(workflow,{requestId:id,budgetMs:30000,resultDestination:'ORIGIN'});
       const result=await task.result();
       if(!result.status.targetId||(encoding.targetId&&result.status.targetId!==encoding.targetId))throw Error('IMAGE_V2_TARGET_MISMATCH');
       encodingTargetId=result.status.targetId;

@@ -61,7 +61,10 @@ export class TelemetryView {
     });
     const transfers=authorizations.map(row=>{const a=parsed(row.metadataJson).authorization;return {id:row.id,jobId:row.attemptId,state:row.state,operation:a.operation,bytes:a.bytes,
       endpointDeviceId:a.endpoint.deviceId,requesterHolderId:a.requesterHolderId,issuedAt:a.issuedAt};}).sort((a,b)=>b.issuedAt-a.issuedAt).slice(0,100);
+    const registeredApps=await this.db.registeredApp.findMany({where:{groupId},select:{id:true,label:true,declarationJson:true,contractsJson:true,maxConcurrent:true}});
+    const installations=await this.db.registeredInstallation.findMany({where:{groupId},select:{id:true,appId:true,deviceId:true,state:true}});
     return {version:1,space:{id:space.id,name:space.name},updatedAt:now,domain:this.directory.domain,devices,network,links,transfers,
+      applications:registeredApps.map(a=>({id:a.id,label:a.label,declaration:parsed(a.declarationJson),contracts:parsed(a.contractsJson),maxConcurrent:a.maxConcurrent,installations:installations.filter(i=>i.appId===a.id)})),
       jobs:jobs.slice(0,100),jobWindow:100,jobCount:jobs.length,
       workflows:graphs.map(row=>{const d=parsed(row.metadataJson);return {id:row.id,state:row.state,nodes:d.nodes.map((n:any)=>({id:n.id,jobId:n.jobId,state:n.state}))};}),
       features:{hedging:'PURE_INTERACTIVE_RELAY_INPUT',reassignment:'AVAILABLE',candidateCosts:'PERSISTED_BASELINE_AND_SELECTED_ONLY',traceAccess:'EXISTING_PRINCIPAL_READERS',readOnly:true}};

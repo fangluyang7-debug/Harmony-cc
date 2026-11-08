@@ -130,7 +130,10 @@ function renderFaults(){
   const feature=code=>code==='PURE_INTERACTIVE_RELAY_INPUT'?'交互 PURE 任务 · 中继输入已核验':code==='NOT_IMPLEMENTED_S6'?'尚未接入（S6）':code==='AVAILABLE'?'已接入，以事件记录为准':'UNKNOWN';
   $('faults').innerHTML=`<div class="fault-layout"><div>${jobs.length?jobs.slice(0,10).map(j=>`<div class="fault-event"><strong>${esc(j.rejection?.reasonCode??j.yield?.reasonCode??j.state)}</strong><small>${esc(shortId(j.id))} · ${esc(name(j.deviceId))} · ${esc(j.state)} · 资源结算 ${j.resourcesSettled===true?'已确认':'UNKNOWN / 未确认'}</small></div>`).join(''):empty(snapshot?'当前执行记录窗口内无已记录的拒绝、让出或失败事件':'等待协调者记录')}<p class="explanation">画像过期只表示当前证据失效，不直接判定设备故障；结果或取消状态也不代替资源结算证明。</p></div><aside class="unavailable"><h3>故障恢复能力边界</h3><p>备份执行：${feature(snapshot?.features.hedging)}</p><p>故障改派：${feature(snapshot?.features.reassignment)}</p><p>本页展示已有任务状态与让出证据，不生成恢复或改派记录。</p></aside></div>`;
 }
-function render(){renderRecentJobs();renderMetrics();renderTopology();renderDevices();renderNetwork();renderJobs();renderDecision();renderTrace();renderFaults();}
+function renderApplications(){
+  $('applications').innerHTML=(snapshot?.applications??[]).map(a=>`<article class="device-card"><h3>${esc(a.label)}</h3><p>声明版本：${esc(a.declaration?.revision??'未声明')} · 并发额度 ${esc(a.maxConcurrent)}</p><p>${a.contracts.map(esc).join(' · ')}</p>${(a.declaration?.workflows??[]).map(w=>`<p>${esc(w.id)}：${w.capabilities.map(esc).join(' → ')}</p>`).join('')}<p>${a.installations.map(i=>`${esc(shortId(i.deviceId))} · ${esc(i.state)}`).join('<br>')}</p><small>ACTIVE 表示安装身份有效，不代表应用当前在线或执行能力已就绪。</small></article>`).join('')||empty('尚无注册应用');
+}
+function render(){renderRecentJobs();renderMetrics();renderTopology();renderDevices();renderApplications();renderNetwork();renderJobs();renderDecision();renderTrace();renderFaults();}
 async function loadTrace(){
   const id=selected,current=group,serial=++traceSerial;if(!id)return;
   try{const result=await get(`/v2/spaces/${encodeURIComponent(group)}/telemetry/traces/${encodeURIComponent(id)}`);if(serial!==traceSerial||id!==selected||current!==group)return;trace=result;traceError='';}

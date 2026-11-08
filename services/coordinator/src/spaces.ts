@@ -14,6 +14,7 @@ import {AppRegistry} from './apps';
 import {SdkJobs} from './sdk';
 import {SchedulerSdk,SdkPort} from '@harmony/scheduler-client';
 import {TelemetryView} from './telemetry-view';
+const qrCode=require('qrcode') as {toDataURL:(text:string,options:object)=>Promise<string>};
 
 const hash=(s:string|Buffer)=>createHash('sha256').update(s).digest('hex');
 const passwordHash=(password:string,salt:string)=>new Promise<Buffer>((resolve,reject)=>scrypt(password,salt,64,(e,v)=>e?reject(e):resolve(v)));
@@ -143,7 +144,10 @@ export class TeamSpaces {
         await this.allotments.confirmDevice(deviceId,[{resourcePoolId:'cpu',amount:settings.maxCpuThreads},{resourcePoolId:'ram',amount:settings.maxMemoryBytes},...(settings.maxVramBytes?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:settings.maxVramBytes}]:[])],[{groupId:spaceId,holderInstanceId:holderId,appInstanceId:null}]);
         const invitation=await this.auth.invite(spaceId,user.id,deviceId,address,600000);
         await this.db.spaceDevice.create({data:{id:deviceId,spaceId,userId:user.id,holderId,name:label(body.name),settingsJson:JSON.stringify(settings),createdAt:Date.now()}});
-        res.json({invitation:{...invitation,tlsMode:this.config.proxy?'public':'pinned'},holderInstanceId:holderId,domain:this.config.domain,contribution:settings});return;
+        const bootstrap={invitation:{...invitation,tlsMode:this.config.proxy?'public':'pinned'},holderInstanceId:holderId,domain:this.config.domain,contribution:settings};
+        // Full pinned bootstrap stays in this member-authorized, no-store response. No external QR service.
+        const qr=await qrCode.toDataURL(JSON.stringify(bootstrap),{errorCorrectionLevel:'L',margin:4,width:640});
+        res.json({...bootstrap,qr});return;
       }
       if(action==='sdk'&&parts[2]==='jobs'){
         await this.member(user.id,spaceId,['OWNER','MEMBER']);const peer=await this.appPeer(user.id,spaceId),jobId=parts[3],operation=parts[4];

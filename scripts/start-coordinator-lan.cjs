@@ -15,10 +15,11 @@ function main(){
   const migration=spawnSync(process.execPath,['scripts/migrate.cjs'],{cwd:'services/coordinator',env,stdio:'inherit',windowsHide:true});
   if(migration.error)throw migration.error;if(migration.status!==0)throw Error('LAN_MIGRATION_FAILED');
   console.log('Coordinator URL: '+env.COORDINATOR_PUBLIC_URL+'\nData directory: '+env.COORDINATOR_DATA_DIR);
-  const child=spawn(process.execPath,['services/coordinator/dist/main.js'],{env,stdio:'inherit',windowsHide:true});
+  const child=spawn(process.execPath,['services/coordinator/dist/main.js'],{env,stdio:['inherit','inherit','inherit','ipc'],windowsHide:true});
+  process.on('message',message=>{if(message?.type==='shutdown'&&child.connected)child.send({type:'shutdown'});});
   for(const signal of ['SIGINT','SIGTERM'])process.once(signal,()=>child.kill(signal));
   child.on('error',error=>{console.error(error.message);process.exitCode=1;});
-  child.on('exit',code=>{process.exitCode=code??1;});
+  child.on('exit',code=>{process.exitCode=code??1;if(process.connected)process.disconnect();});
 }
 module.exports={lanEnvironment};
 if(require.main===module)try{main();}catch(error){console.error(error.message);process.exitCode=1;}

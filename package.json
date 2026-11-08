@@ -18,6 +18,7 @@
     "packages/scheduler-client"
   ],
   "scripts": {
+    "runtime:desktop": "node scripts/runtime-desktop.cjs",
     "sdk:build": "npm --workspace @harmony/scheduler-client run build && esbuild packages/scheduler-client/src/index.ts --bundle --format=esm --platform=browser --outfile=apps/team-space-web/scheduler-sdk.js",
     "sdk:test": "npm --workspace @harmony/scheduler-client test",
     "sdk:native:test": "node tests/sdk/native.cjs",

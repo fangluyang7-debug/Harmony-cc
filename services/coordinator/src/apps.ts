@@ -3,15 +3,17 @@ import {Prisma,PrismaClient} from '../generated/client';
 import {AppIdentityV2,ResourceAmountV2,canonical,protocolId,validResourceVectorV2,vectorFitsV2,vectorSumV2} from '@harmony/scheduler-core';
 import {Peer} from './channel';
 import {PairingService,certificateFingerprint} from './auth';
+import {AppDeclaration,validDeclaration} from './app-declaration';
 
-export interface RegistrationInput {batchWeight?:number;label:string;allowedContracts:string[];maxConcurrent:number;resources:ResourceAmountV2[];offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];appId?:string;}
+export interface RegistrationInput {declaration?:AppDeclaration;batchWeight?:number;label:string;allowedContracts:string[];maxConcurrent:number;resources:ResourceAmountV2[];offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];appId?:string;}
 const hash=(text:string)=>createHash('sha256').update(text).digest('hex');
 const exact=(v:any,keys:string[],optional:string[]=[])=>v&&typeof v==='object'&&!Array.isArray(v)&&keys.every(k=>k in v)&&Object.keys(v).every(k=>[...keys,...optional].includes(k));
 function validate(input:RegistrationInput){
- if(!exact(input,['label','allowedContracts','maxConcurrent','resources','offlineBase','onlineExtra'],['appId','batchWeight'])||input.batchWeight!==undefined&&(!Number.isSafeInteger(input.batchWeight)||input.batchWeight<1||input.batchWeight>64)||typeof input.label!=='string'||!input.label.trim()||input.label.length>80||
+ if(!exact(input,['label','allowedContracts','maxConcurrent','resources','offlineBase','onlineExtra'],['appId','batchWeight','declaration'])||input.batchWeight!==undefined&&(!Number.isSafeInteger(input.batchWeight)||input.batchWeight<1||input.batchWeight>64)||typeof input.label!=='string'||!input.label.trim()||input.label.length>80||
   !Array.isArray(input.allowedContracts)||!input.allowedContracts.length||input.allowedContracts.length>64||!input.allowedContracts.every(protocolId)||new Set(input.allowedContracts).size!==input.allowedContracts.length||
   !Number.isSafeInteger(input.maxConcurrent)||input.maxConcurrent<1||input.maxConcurrent>64||![input.resources,input.offlineBase,input.onlineExtra].every(validResourceVectorV2)||
   !vectorFitsV2(vectorSumV2(input.offlineBase,input.onlineExtra),input.resources)||input.appId!==undefined&&!protocolId(input.appId))throw Error('APP_REGISTRATION_INVALID');
+ if(input.declaration!==undefined&&!validDeclaration(input.declaration,input.allowedContracts))throw Error('APP_DECLARATION_INVALID');
 }
 /** Explicit owner approval creates an installation capability; its label does not authenticate a software publisher. */
 export class AppRegistry {
@@ -19,9 +21,11 @@ export class AppRegistry {
  private async create(tx:Prisma.TransactionClient,owner:Peer,input:RegistrationInput,ids?:{appId:string;appInstanceId:string;holderInstanceId:string}){
   const existing=input.appId?await tx.registeredApp.findUnique({where:{id:input.appId}}):await tx.registeredApp.findUnique({where:{groupId_principalId_label:{groupId:owner.groupId,principalId:owner.principalId,label:input.label.trim()}}});
   if(existing&&(existing.groupId!==owner.groupId||existing.principalId!==owner.principalId))throw Error('APP_OWNER_REQUIRED');
+  if(existing&&input.declaration&&existing.declarationJson&&canonical(JSON.parse(existing.declarationJson))!==canonical(input.declaration))throw Error('APP_DECLARATION_CONFLICT');
   if(input.appId&&!existing)throw Error('APP_UNKNOWN');
   if(existing&&(canonical(JSON.parse(existing.contractsJson))!==canonical(input.allowedContracts)||existing.maxConcurrent!==input.maxConcurrent||input.batchWeight!==undefined&&existing.batchWeight!==input.batchWeight||canonical(JSON.parse(existing.resourcesJson))!==canonical(input.resources)))throw Error('APP_POLICY_CONFLICT');
   const app=existing??await tx.registeredApp.create({data:{id:ids?.appId??randomUUID(),groupId:owner.groupId,principalId:owner.principalId,label:input.label.trim(),batchWeight:input.batchWeight??1,contractsJson:JSON.stringify(input.allowedContracts),resourcesJson:JSON.stringify(input.resources),maxConcurrent:input.maxConcurrent}});
+  if(input.declaration&&!app.declarationJson)await tx.registeredApp.update({where:{id:app.id},data:{declarationJson:JSON.stringify(input.declaration)}});
   const appBases=(await tx.registeredInstallation.findMany({where:{appId:app.id}})).map(i=>JSON.parse(i.offlineJson) as ResourceAmountV2[]);
   if(!vectorFitsV2(vectorSumV2(...appBases,input.offlineBase),input.resources))throw Error('APP_BASE_QUOTA_UNAVAILABLE');
   const id=ids?.appInstanceId??randomUUID(),holder=ids?.holderInstanceId??randomUUID(),code=randomBytes(18).toString('base64url');
@@ -61,7 +65,7 @@ export class AppRegistry {
   if(!peer.app)throw Error('APP_REGISTRATION_REQUIRED');
   const i=await tx.registeredInstallation.findUnique({where:{id:peer.app.appInstanceId}}),app=i?await tx.registeredApp.findUnique({where:{id:i.appId}}):null;
   if(!i||!app||i.state!=='ACTIVE'||i.groupId!==peer.groupId||i.principalId!==peer.principalId||i.deviceId!==peer.deviceId||i.holderInstanceId!==peer.holderInstanceId||app.id!==peer.app.appId)throw Error('APP_CREDENTIAL_REVOKED');
-  return {identity:this.identity(app,i.id),offlineBase:JSON.parse(i.offlineJson) as ResourceAmountV2[],onlineExtra:JSON.parse(i.onlineJson) as ResourceAmountV2[],quota:{maxConcurrent:app.maxConcurrent,resources:JSON.parse(app.resourcesJson) as ResourceAmountV2[]}};
+  return {identity:this.identity(app,i.id),declaration:app.declarationJson?JSON.parse(app.declarationJson) as AppDeclaration:null,offlineBase:JSON.parse(i.offlineJson) as ResourceAmountV2[],onlineExtra:JSON.parse(i.onlineJson) as ResourceAmountV2[],quota:{maxConcurrent:app.maxConcurrent,resources:JSON.parse(app.resourcesJson) as ResourceAmountV2[]}};
  }
  async reserveJob(tx:Prisma.TransactionClient,peer:Peer,id:string,resources:ResourceAmountV2[],deadlineAt:number){
   const context=await this.context(peer,tx),existing=await tx.appJobReservation.findUnique({where:{id}});

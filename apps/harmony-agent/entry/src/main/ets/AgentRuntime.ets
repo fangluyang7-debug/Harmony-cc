@@ -5,8 +5,8 @@ let agent:NativeAgent|null=null;
 let opening:Promise<NativeAgent>|null=null;
 let desiredForeground=true;
 export async function openAgent(context:common.UIAbilityContext,bootstrap:Bootstrap|null):Promise<NativeAgent>{
- if(agent!==null)return agent;
- if(opening!==null)return opening;
+ if(agent!==null){if(bootstrap!==null&&agent.displayHolderId()!==bootstrap.holderInstanceId)throw Error('INSTALLATION_ALREADY_PAIRED');return agent;}
+ if(opening!==null){const current=await opening;if(bootstrap!==null&&current.displayHolderId()!==bootstrap.holderInstanceId)throw Error('INSTALLATION_ALREADY_PAIRED');return current;}
  opening=NativeAgent.start(context,bootstrap,()=>desiredForeground);
  try{agent=await opening;agent.setForeground(desiredForeground);return agent;}finally{opening=null;}
 }

@@ -1,4 +1,4 @@
-import {indexer} from '../services/V2CropSession';
+import {cooperative} from '../services/CooperativeSession';
 interface View {id:string;version:number;shownVersion:number;state:string;}
 @Entry
 @Component
@@ -16,7 +16,7 @@ struct V2DisplaySharePage {
   this.busy=true;
   const generation=this.generation;
   try{
-   const host=indexer.displayHost();
+   const host=cooperative;
    let view:View;
    if(action==='invite'){
     view=await host.displayInvite(this.viewer.trim()) as View;
@@ -37,7 +37,7 @@ struct V2DisplaySharePage {
  onPageShow():void{this.timer=setInterval(()=>{if(this.session)void this.update('status');},1000);}
  onPageHide():void{
   this.generation++;clearInterval(this.timer);const id=this.session;this.session='';this.active=false;
-  if(id){try{void indexer.displayHost().displaySession(id,'revoke').catch(()=>{});}catch{}}
+  if(id){try{void cooperative.displaySession(id,'revoke').catch(()=>{});}catch{}}
  }
  build(){
   Column({space:16}){

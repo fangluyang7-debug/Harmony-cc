@@ -2,6 +2,8 @@ import path from 'node:path';
 import {openImageEncoder} from './image-encoder';
 import fs from 'node:fs';
 import { CpuHost, CpuHostConfig } from './host';
+let stopRequested=false,shutdown:(()=>Promise<void>)|null=null;
+process.on('message',(message:any)=>{if(message==='stop'||message?.type==='shutdown'){stopRequested=true;if(shutdown)void shutdown().then(()=>process.disconnect?.());}});
 async function main(){
   const [pairedFile,contributionFile]=process.argv.slice(2);if(!pairedFile||!contributionFile)throw Error('HOST_ARGUMENTS');
   const config={...JSON.parse(fs.readFileSync(pairedFile,'utf8')),contribution:JSON.parse(fs.readFileSync(contributionFile,'utf8'))} as CpuHostConfig;
@@ -25,7 +27,7 @@ async function main(){
   });
   let stopping=false;const close=async()=>{if(stopping)return;stopping=true;await host.close();};
   process.once('SIGINT',()=>{void close();});process.once('SIGTERM',()=>{void close();});
-  process.on('message',message=>{if(message==='stop')void close().then(()=>process.disconnect?.());});
+  shutdown=close;if(stopRequested){await close();process.disconnect?.();return;}
   host.start();console.log('CPU host started: automatic profiles, calibration and execution enabled.');
 }
-void main().catch(()=>{console.error('CPU_HOST_START_FAILED: check paired configuration and contribution policy.');process.exitCode=1;});
+void main().catch(()=>{console.error('CPU_HOST_START_FAILED: check paired configuration and contribution policy.');process.exitCode=1;if(process.connected)process.disconnect();});
