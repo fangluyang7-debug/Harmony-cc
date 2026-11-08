@@ -7,11 +7,17 @@ const studio=process.env.DEVECO_STUDIO_HOME||'E:/DevEco/DevEco Studio',sdk=proce
 const metadata=JSON.parse(fs.readFileSync(path.join(sdk,'default/sdk-pkg.json'))).data,sdkVersion=metadata.platformVersion+'('+metadata.apiVersion+')';
 if(String(metadata.apiVersion)!=='22'||metadata.platformVersion!=='6.0.2')throw Error('SDK_BASELINE_MISMATCH: require HarmonyOS 6.0.2 API 22; set DEVECO_STUDIO_HOME / DEVECO_SDK_HOME');
 const stage=path.join(root,'.test/s2-'+name),source=path.join(root,'apps',name);fs.mkdirSync(stage,{recursive:true});
+// DevEco writes generated signing material into the stage profile. Keep it across regeneration and
+// link it to the product: without the link hvigor logs "No signingConfig found for product default",
+// skips SignHap and emits only an unsigned HAP, which devices reject with 9568320.
+let signing=null;
+try{const kept=JSON.parse(fs.readFileSync(path.join(stage,'build-profile.json5'),'utf8')).app.signingConfigs;if(Array.isArray(kept)&&kept.length)signing=kept;}catch{}
 const filter=p=>!/[\\/](?:oh_modules|build|\.hvigor|node_modules)(?:[\\/]|$)/.test(p);
 fs.cpSync(source,stage,{recursive:true,filter});
 fs.mkdirSync(path.join(stage,'hvigor'),{recursive:true});
 fs.writeFileSync(path.join(stage,'hvigor/hvigor-config.json5'),JSON.stringify({modelVersion:metadata.platformVersion,dependencies:{}}));
-fs.writeFileSync(path.join(stage,'build-profile.json5'),JSON.stringify({app:{signingConfigs:[],products:[{name:'default',targetSdkVersion:sdkVersion,compatibleSdkVersion:sdkVersion,runtimeOS:'HarmonyOS',buildOption:{strictMode:{caseSensitiveCheck:true,useNormalizedOHMUrl:true}}}],buildModeSet:[{name:'debug'},{name:'release'}]},modules:[{name:'entry',srcPath:'./entry',targets:[{name:'default',applyToProducts:['default']}]}]}));
+fs.writeFileSync(path.join(stage,'build-profile.json5'),JSON.stringify({app:{signingConfigs:signing??[],products:[{name:'default',...(signing?{signingConfig:signing[0].name??'default'}:{}),targetSdkVersion:sdkVersion,compatibleSdkVersion:sdkVersion,runtimeOS:'HarmonyOS',buildOption:{strictMode:{caseSensitiveCheck:true,useNormalizedOHMUrl:true}}}],buildModeSet:[{name:'debug'},{name:'release'}]},modules:[{name:'entry',srcPath:'./entry',targets:[{name:'default',applyToProducts:['default']}]}]}));
+if(signing)console.log('signing config '+signing[0].name+' kept from previous stage profile');
 const dependency=process.argv.includes('--har')?path.join(root,'.test/s2-har/scheduler/build/default/outputs/default/scheduler.har'):path.join(root,'apps/harmony/scheduler');
 const modulePackage=JSON.parse(fs.readFileSync(path.join(source,'entry/oh-package.json5')));modulePackage.dependencies={scheduler:'file:'+dependency.replaceAll('\\','/')};
 fs.writeFileSync(path.join(stage,'entry/oh-package.json5'),JSON.stringify(modulePackage));

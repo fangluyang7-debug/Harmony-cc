@@ -1732,3 +1732,5 @@ node "/e/DevEco/DevEco Studio/tools/hvigor/bin/hvigorw.js" --mode module \
 **结果**（测试）：`SignHap` 4.2 秒完成，产物 `entry-default-signed.hap` 12,826,012 字节，比未签名包多 44,302 字节签名块；`hdc install -r` 返回 `install bundle successfully`；`aa start -b org.harmonycc.agent -a EntryAbility` 返回 `start ability successfully`，截图显示「Harmony · 设备调度件」页面，状态 `INVITATION_REQUIRED`，含搜索/扫码入口、邀请 JSON 输入、贡献上限（CPU 槽位 1、内存 256 MiB）与前台贡献开关。
 
 **边界**：签名材料只存在于 `.test/`（已 gitignore）和本机 `~/.ohos/config`，未进仓库；`apps/harmony-agent/build-profile.json5` 仍是空 `signingConfigs`，从该目录构建需要重新自动签名。SoleAI（`Micro.12.myapplication`）现有的两份旧 profile 都不含本机 UDID，必须连真机在 DevEco 里重新生成后才能安装。真机扫码配对、跨 App 授权、后台贡献仍待验。
+
+**回归**（2026-11-09）：`scripts/harmony-v2-app-build.cjs` 每次都会用 `apps/<app>` 覆盖暂存工程并重写 `build-profile.json5`，此前固定写 `signingConfigs: []`，DevEco 生成的签名材料会被下一次命令行构建抹掉。现改为先读取暂存工程的既有 `signingConfigs`，非空则沿用并给 product 补 `signingConfig`，日志打印 `signing config default kept from previous stage profile`。用 `node scripts/harmony-v2-app-build.cjs harmony-agent --har` 复跑：`SignHap` 3.9 秒完成，产出 `entry-default-signed.hap` 12,826,016 字节，暂存 profile 中 `"signingConfig":"default"` 保留。DevEco 里点一次自动签名后，命令行与 IDE 两条构建路径都出签名包。
