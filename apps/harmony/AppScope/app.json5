@@ -1,7 +1,7 @@
 {
   "app": {
-    "bundleName": "Micro.12.myapplication",
-    "vendor": "example",
+    "bundleName": "org.harmonycc.soleai",
+    "vendor": "Harmony CC",
     "versionCode": 1000000,
     "versionName": "1.0.0",
     "icon": "$media:layered_image",

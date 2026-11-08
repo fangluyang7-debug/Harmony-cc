@@ -12,6 +12,13 @@ const stage=path.join(root,'.test/s2-'+name),source=path.join(root,'apps',name);
 // skips SignHap and emits only an unsigned HAP, which devices reject with 9568320.
 let signing=null;
 try{const kept=JSON.parse(fs.readFileSync(path.join(stage,'build-profile.json5'),'utf8')).app.signingConfigs;if(Array.isArray(kept)&&kept.length)signing=kept;}catch{}
+// A renamed bundle invalidates the old profile; hvigor would fail the whole build on the mismatch,
+// so drop the stale config and build unsigned until DevEco generates one for the new bundle name.
+if(signing){
+  const bundle=JSON.parse(fs.readFileSync(path.join(source,'AppScope/app.json5'),'utf8').replace(/^\s*\/\/.*$/gm,'')).app.bundleName;
+  let matches=false;try{matches=fs.readFileSync(signing[0].material?.profile??'').includes(bundle);}catch{}
+  if(!matches){console.log('signing profile does not cover '+bundle+'; building unsigned, regenerate it in DevEco');signing=null;}
+}
 const filter=p=>!/[\\/](?:oh_modules|build|\.hvigor|node_modules)(?:[\\/]|$)/.test(p);
 fs.cpSync(source,stage,{recursive:true,filter});
 fs.mkdirSync(path.join(stage,'hvigor'),{recursive:true});
