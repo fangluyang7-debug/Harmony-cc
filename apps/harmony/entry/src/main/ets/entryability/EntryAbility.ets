@@ -1,5 +1,6 @@
 import { indexer } from '../services/V2CropSession';
 import { cooperative } from '../services/CooperativeSession';
+import { aiGateway } from '../services/AiTaskGateway';
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CloudApiConfig } from '../services/CloudApiConfig';
@@ -33,6 +34,7 @@ export default class EntryAbility extends UIAbility {
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     indexer.initialize(this.context);
     cooperative.initialize(this.context);
+    aiGateway.initialize(this.context);
     this.destroyed = false;
     this.appVisibility = AppVisibility.FOREGROUND;
     try {

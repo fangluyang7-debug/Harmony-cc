@@ -4,7 +4,7 @@ process.on('message',async m=>{try{let value;
  if(m.action==='open'){
   const {config,certificate,source}=m;
   const ledger=await DurableLedger.open(config.directory,config.identity,certificate);await ledger.close();
-  host=await CpuHost.open({...config,...(source?{fixedServices:[collect,final].map(pack=>({pack,execute:async input=>({bytes:input,schemaId:pack.manifest.contract.outputSchemas[0]})}))}:{})},()=>{});host.start();value={pid:process.pid};
+  host=await CpuHost.open({...config,...(source?{services:[collect,final].map(pack=>({pack,execute:async input=>({bytes:input,schemaId:pack.manifest.contract.outputSchemas[0]})}))}:{})},()=>{});host.start();value={pid:process.pid};
  }else if(m.action==='cost'){
   if(host.config.connection.domain!=='SIMULATED')throw Error('FIXTURE_DOMAIN');
   // Freeze only the synthetic selection prior; automatic calibration must not

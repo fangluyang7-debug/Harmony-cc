@@ -6,11 +6,12 @@ import { Peer } from './channel';
 import {isLegacyEncodingSuite,validateCoverage} from '@harmony/reference-capabilities';
 import {sustainedDrift} from './performance-feedback';
 import type { EvaluationPermit, EvaluationResult } from '@harmony/resource-transport';
+import { evaluationOutputLimit } from '@harmony/resource-transport';
 export type { EvaluationPermit, EvaluationResult } from '@harmony/resource-transport';
 
 export interface EvaluationCase {covers?:string[];expect?:{kind:'OUTPUT'}|{kind:'REJECT';errorCode:string};expected?:unknown;id:string;input:Buffer;parameters:string;config:ExecutionConfigV2;maxOutputBytes:number;}
 /** Installed by the host, never constructed from a device advertisement or an HTTP payload. */
-export interface TrustedPack {simulationFixture?:true;manifest:CapabilityPackV2;cases:EvaluationCase[];evaluate:(test:EvaluationCase,output:Buffer)=>Promise<number>;}
+export interface TrustedPack {simulationFixture?:true;dryRunEvaluation?:true;manifest:CapabilityPackV2;cases:EvaluationCase[];evaluate:(test:EvaluationCase,output:Buffer)=>Promise<number>;}
 export interface EvaluationPolicy {maxRuns:number;maxDurationMs:number;maxBytes:number;maxConcurrent:number;caseTimeoutMs:number;canarySamples:number;activeSamples:number;evidenceTtlMs:number;cooldownMs:number;}
 /** Adapter MUST enforce permit scope and real quota, persist attempt identity, and only return after engine settlement. */
 export interface EvaluationRunner {
@@ -33,8 +34,9 @@ export class QualificationService {
     if(Object.values(policy).some(n=>!Number.isSafeInteger(n)||n<1)||policy.canarySamples>policy.activeSamples||policy.activeSamples>policy.maxRuns||policy.maxConcurrent>16)throw Error('EVALUATION_POLICY_INVALID');
     this.installed=packs.map(original=>{
       const pack={manifest:structuredClone(original.manifest),cases:original.cases.map(c=>({...structuredClone(c),input:Buffer.from(c.input)})),evaluate:original.evaluate};
-      if(!validCapabilityPackV2(pack.manifest)||pack.manifest.contract.sideEffectPolicy!=='PURE'||pack.cases.length<1||pack.cases.length>128||new Set(pack.cases.map(c=>c.id)).size!==pack.cases.length||
-        pack.cases.some(c=>!c.id||!validExecutionConfigV2(c.config)||c.input.length>8388608||!Number.isSafeInteger(c.maxOutputBytes)||c.maxOutputBytes<1||c.maxOutputBytes>8388608))throw Error('TRUSTED_PACK_INVALID');
+      // Write capabilities qualify only through the service's dry-run mode; other side-effect policies stay out.
+      if(!validCapabilityPackV2(pack.manifest)||!(pack.manifest.contract.sideEffectPolicy==='PURE'||pack.manifest.contract.sideEffectPolicy==='IDEMPOTENT_WRITE'&&original.dryRunEvaluation===true&&!!pack.manifest.contract.serviceId)||pack.cases.length<1||pack.cases.length>128||new Set(pack.cases.map(c=>c.id)).size!==pack.cases.length||
+        pack.cases.some(c=>!c.id||!validExecutionConfigV2(c.config)||c.input.length>8388608||!Number.isSafeInteger(c.maxOutputBytes)||c.maxOutputBytes<1||c.maxOutputBytes>evaluationOutputLimit))throw Error('TRUSTED_PACK_INVALID');
       const fixture=original.simulationFixture===true&&this.directory.domain==='SIMULATED';
       if(!fixture&&!isLegacyEncodingSuite(original))validateCoverage(pack.manifest,pack.cases);
       for(const c of pack.cases)JSON.parse(c.parameters);

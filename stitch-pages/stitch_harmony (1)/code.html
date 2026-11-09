@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Harmony 调度中心设备接入</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style>
+    :root {
+      --hm-bg: #000000;
+      --hm-card: #1c1c1e;
+      --hm-card-press: #2c2c2e;
+      --hm-text-primary: #ffffff;
+      --hm-text-secondary: #8e8e93;
+      --hm-blue: #0a59f7;
+      --hm-blue-hover: #2970ff;
+      --hm-green: #30d158;
+      --hm-red: #ff453a;
+      --hm-divider: rgba(255, 255, 255, 0.08);
+    }
+    * {
+      -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
+    }
+    body {
+      background-color: #000000;
+      color: var(--hm-text-primary);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      width: 100%;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+    .status-bar {
+      height: 44px;
+      padding: env(safe-area-inset-top, 8px) 24px 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
+      z-index: 40;
+      flex-shrink: 0;
+    }
+    .view-screen {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      flex-direction: column;
+      position: relative;
+      width: 100%;
+    }
+    .view-screen.active {
+      display: flex;
+    }
+    .hm-card {
+      background-color: var(--hm-card);
+      border-radius: 20px;
+      overflow: hidden;
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .hm-card-item {
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      transition: background-color 0.15s;
+    }
+    .hm-card-item:active {
+      background-color: var(--hm-card-press);
+    }
+    .hm-btn-primary {
+      background: var(--hm-blue);
+      color: #fff;
+      border-radius: 9999px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .hm-btn-primary:active {
+      transform: scale(0.98);
+      filter: brightness(1.1);
+    }
+    .hm-btn-secondary {
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
+      border-radius: 9999px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    .hm-btn-secondary:active {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    /* Switch */
+    .switch-toggle {
+      width: 50px;
+      height: 28px;
+      background: #39393d;
+      border-radius: 99px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .switch-toggle.checked {
+      background: var(--hm-blue);
+    }
+    .switch-toggle::after {
+      content: '';
+      position: absolute;
+      width: 24px;
+      height: 24px;
+      background: white;
+      border-radius: 50%;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    }
+    .switch-toggle.checked::after {
+      transform: translateX(22px);
+    }
+    /* Radar Scanner Animation */
+    .scanner-line {
+      position: absolute;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #0a59f7, #60a5fa, transparent);
+      box-shadow: 0 0 12px #3b82f6;
+      animation: scanAnim 2.5s ease-in-out infinite;
+    }
+    @keyframes scanAnim {
+      0% { top: 0; opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
+    }
+    /* Pull indicator */
+    .drag-handle {
+      width: 36px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 2px;
+      margin: 8px auto 0;
+    }
+    .home-indicator-bar {
+      padding-bottom: env(safe-area-inset-bottom, 8px);
+    }
+  </style>
+</head>
+<body class="bg-black text-white min-h-screen flex flex-col justify-between selection:bg-blue-600 selection:text-white">
+<!-- 顶部状态栏 -->
+<div class="status-bar">
+<span class="tracking-tight">12:35</span>
+<div class="flex items-center gap-2 text-xs">
+<i class="fa-solid fa-wifi"></i>
+<i class="fa-solid fa-signal"></i>
+<span class="text-[11px] font-bold bg-neutral-800/90 px-1 py-0.5 rounded leading-none">5G</span>
+<i class="fa-solid fa-battery-three-quarters text-sm"></i>
+</div>
+</div>
+<!-- ==================== 状态 1: 搜索协调中心 (类似 WLAN 设置页) ==================== -->
+<div class="view-screen" id="screen-search">
+<!-- 鸿蒙顶栏 -->
+<div class="px-5 pt-2 pb-3 flex items-center justify-between">
+<div class="flex items-center gap-3">
+<button class="w-9 h-9 rounded-full bg-neutral-900/80 flex items-center justify-center text-neutral-300 hover:text-white active:scale-95 transition-transform" onclick="window.history.back()">
+<i class="fa-solid fa-chevron-left text-base"></i>
+</button>
+<span class="text-xl font-bold tracking-tight text-white">加入调度中心</span>
+</div>
+<!-- 扫一扫入口 -->
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-neutral-900/90 hover:bg-neutral-800 border border-white/5 text-blue-400 text-xs font-medium active:scale-95 transition-all" onclick="switchTab('screen-scan')">
+<i class="fa-solid fa-qrcode text-sm"></i>
+<span>扫一扫</span>
+</button>
+</div>
+<!-- 搜索状态与列表 -->
+<div class="px-4 flex-1 space-y-4 pb-8 overflow-y-auto">
+<!-- 搜索状态指示条 -->
+<div class="flex items-center justify-between px-2 pt-1">
+<div class="flex items-center gap-2">
+<span class="text-xs font-medium text-neutral-400 tracking-wide">附近的协调中心</span>
+<span class="inline-block w-3.5 h-3.5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" id="search-spinner"></span>
+</div>
+<button class="text-xs text-blue-400 hover:text-blue-300 active:opacity-70 flex items-center gap-1" onclick="triggerRescan()">
+<i class="fa-solid fa-rotate-right text-[11px]"></i>
+<span>重新搜索</span>
+</button>
+</div>
+<!-- 发现的设备列表 (鸿蒙卡片组样式) -->
+<div class="hm-card divide-y divide-white/5" id="device-card-group">
+<div class="divide-y divide-white/5" id="dynamic-device-list"></div>
+</div>
+<!-- 模拟空状态展示开关组件 -->
+<div class="pt-2 px-1">
+<div class="flex items-center justify-between text-xs text-neutral-500 mb-2">
+<span>演示切换：</span>
+<button class="text-neutral-400 underline hover:text-white" id="toggle-empty-btn" onclick="toggleEmptyState()">模拟“未发现中心”</button>
+</div>
+<!-- 空状态卡片 (默认隐藏) -->
+<div class="hidden hm-card p-6 text-center" id="empty-state-card">
+<div class="w-12 h-12 rounded-full bg-neutral-800/60 mx-auto flex items-center justify-center text-neutral-500 mb-3">
+<i class="fa-solid fa-satellite-dish text-xl"></i>
+</div>
+<p class="text-sm font-semibold text-neutral-300">未发现附近的协调中心</p>
+<p class="text-xs text-neutral-500 mt-1 max-w-[240px] mx-auto">请确保调度中心服务已开启并在同一局域网内</p>
+<button class="mt-4 px-5 py-2 rounded-full bg-blue-600 text-xs font-semibold text-white hover:bg-blue-500 active:scale-95 transition-all" onclick="triggerRescan()">重新搜索</button>
+</div>
+</div>
+<!-- 鸿蒙特色提示项卡片 -->
+<div class="hm-card p-4 bg-neutral-900/60 border border-white/5">
+<div class="flex items-start gap-3">
+<i class="fa-solid fa-circle-info text-blue-400 mt-0.5 text-sm"></i>
+<div class="text-xs leading-relaxed text-neutral-400">
+            接入前请确认协调中心已配置信任白名单。如首次接入，在所选协调中心控制台点击「生成设备配对码」后继续。
+          </div>
+</div>
+</div>
+</div>
+</div>
+<!-- ==================== 状态 2: 输入配对码 (底部抽屉弹层) ==================== -->
+<div class="view-screen" id="screen-pair">
+<!-- 底部弹层背景虚化覆盖层 -->
+<div class="absolute inset-0 bg-black/70 backdrop-blur-md z-10 flex flex-col justify-end">
+<div class="bg-[#1c1c1e] rounded-t-[32px] px-6 pt-2 pb-8 border-t border-white/10 z-20 shadow-2xl">
+<div class="drag-handle"></div>
+<div class="mt-4 text-center">
+<div class="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-blue-400 flex items-center justify-center mx-auto mb-3">
+<i class="fa-solid fa-shield-halved text-xl"></i>
+</div>
+<h3 class="text-lg font-bold text-white">输入配对码</h3>
+<p class="text-xs text-blue-400 font-medium mt-1" id="pair-device-name">算力主控 · 主控集群</p>
+<p class="text-[11px] text-neutral-400 font-mono" id="pair-device-ip">192.168.1.100:7443</p>
+</div>
+<!-- 输入区域 -->
+<div class="mt-6 space-y-2">
+<label class="block text-xs font-medium text-neutral-400">协调中心配对凭据</label>
+<div class="relative">
+<input class="w-full bg-neutral-900 border border-neutral-700/80 rounded-2xl px-4 py-3.5 text-center text-xl font-mono tracking-widest text-white placeholder:text-neutral-600 placeholder:text-xs placeholder:tracking-normal focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" id="mobile-pin-input" inputmode="numeric" maxlength="6" oninput="handlePinInput(this.value)" placeholder="输入协调中心显示的 4–6 位数字" type="text"/>
+<div class="hidden absolute right-3 top-3.5 w-6 h-6 rounded-full bg-neutral-800 text-neutral-400 flex items-center justify-center cursor-pointer text-xs" id="input-clear-btn" onclick="clearPinInput()">
+<i class="fa-solid fa-xmark"></i>
+</div>
+</div>
+<!-- 动态校验/错误提示区 -->
+<div class="hidden text-xs text-red-400 flex items-center gap-1.5 px-1 pt-1" id="pin-error-msg">
+<i class="fa-solid fa-circle-exclamation text-[11px]"></i>
+<span>配对码错误或已过期，请在协调中心重新获取</span>
+</div>
+<p class="text-[11px] text-neutral-500 px-1">在协调中心控制台点击「添加节点」获取即时 6 位数字验证码</p>
+</div>
+<!-- 操作按钮栏 -->
+<div class="mt-6 grid grid-cols-2 gap-3">
+<button class="hm-btn-secondary py-3 text-sm font-semibold" onclick="switchTab('screen-search')">取消</button>
+<button class="hm-btn-primary py-3 text-sm font-semibold disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2" disabled="" id="mobile-connect-btn" onclick="submitPairing()">
+<span id="btn-text">连接</span>
+<span class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin hidden" id="btn-spinner"></span>
+</button>
+</div>
+<!-- 模拟输入便捷辅助项 -->
+<div class="mt-4 pt-3 border-t border-white/5 flex items-center justify-center gap-2 text-[11px] text-neutral-500">
+<span>快速填充测试：</span>
+<button class="text-blue-400 underline hover:text-blue-300" onclick="quickFillPin('884920')">正确码(884920)</button>
+<span>·</span>
+<button class="text-red-400 underline hover:text-red-300" onclick="quickFillPin('000000')">错误码(000000)</button>
+</div>
+</div>
+</div>
+</div>
+<!-- ==================== 状态 3: 扫一扫界面 ==================== -->
+<div class="view-screen" id="screen-scan">
+<!-- 扫码顶栏 -->
+<div class="px-5 pt-2 pb-3 flex items-center justify-between z-20">
+<button class="w-9 h-9 rounded-full bg-neutral-900/80 flex items-center justify-center text-neutral-300 hover:text-white active:scale-95 transition-transform" onclick="switchTab('screen-search')">
+<i class="fa-solid fa-chevron-left text-base"></i>
+</button>
+<span class="text-base font-semibold text-white">扫码接入</span>
+<div class="w-9"></div>
+</div>
+<!-- 取景框与扫描效果 -->
+<div class="flex-1 flex flex-col items-center justify-center px-6 relative">
+<div class="relative w-64 h-64 border-2 border-white/20 rounded-3xl overflow-hidden bg-neutral-950/40 backdrop-blur-xs flex items-center justify-center">
+<!-- 四角定位标 -->
+<div class="absolute top-2 left-2 w-6 h-6 border-t-2 border-l-2 border-blue-500 rounded-tl-lg"></div>
+<div class="absolute top-2 right-2 w-6 h-6 border-t-2 border-r-2 border-blue-500 rounded-tr-lg"></div>
+<div class="absolute bottom-2 left-2 w-6 h-6 border-b-2 border-l-2 border-blue-500 rounded-bl-lg"></div>
+<div class="absolute bottom-2 right-2 w-6 h-6 border-b-2 border-r-2 border-blue-500 rounded-br-lg"></div>
+<!-- 扫描动态光线 -->
+<div class="scanner-line" id="scanner-beam"></div>
+<!-- 模拟二维码图案 -->
+<div class="p-4 bg-white/5 rounded-xl border border-white/10 flex flex-col items-center opacity-85">
+<i class="fa-solid fa-qrcode text-7xl text-neutral-400"></i>
+<span class="text-[10px] text-neutral-400 mt-2 font-mono">NODE-PAIR://7443-SYNC</span>
+</div>
+</div>
+<p class="text-xs text-neutral-400 mt-6 text-center">扫描协调中心显示的配对二维码</p>
+<!-- 识别成功模拟抽屉卡片 -->
+<div class="mt-6 w-full max-w-[320px] hm-card p-4 border border-blue-500/30 bg-blue-950/30" id="scan-result-card">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center flex-shrink-0">
+<i class="fa-solid fa-check"></i>
+</div>
+<div class="min-w-0 flex-1">
+<div class="text-xs text-blue-400 font-semibold">已成功解析广播凭据</div>
+<div class="text-sm font-bold text-white truncate" id="scan-device-name">算力主控 · 主控集群</div>
+<div class="text-[11px] text-neutral-400 font-mono" id="scan-device-ip">192.168.1.100:7443</div>
+</div>
+</div>
+<div class="mt-3 flex gap-2">
+<button class="flex-1 py-2 text-xs rounded-full bg-neutral-800 text-neutral-300 font-medium hover:bg-neutral-700" onclick="resetScan()">重新扫描</button>
+<button class="flex-1 py-2 text-xs rounded-full bg-blue-600 text-white font-semibold hover:bg-blue-500 active:scale-95 transition-all" onclick="completeScanConnect()">立即连接</button>
+</div>
+</div>
+<!-- 模拟扫码失效状态操作 -->
+<div class="mt-4 flex items-center gap-3 text-xs text-neutral-500">
+<button class="hover:text-red-400 underline" onclick="simulateExpiredScan()">模拟二维码过期</button>
+<span>·</span>
+<button class="hover:text-white underline" onclick="switchTab('screen-search')">返回设备列表</button>
+</div>
+<!-- 过期提示框 (默认隐藏) -->
+<div class="hidden mt-3 p-3 bg-red-950/40 border border-red-500/30 rounded-xl text-center max-w-[320px] w-full" id="scan-expired-box">
+<p class="text-xs text-red-300 font-medium">二维码无效或已过期</p>
+<div class="mt-2 flex gap-2 justify-center">
+<button class="px-3 py-1 bg-red-600/30 text-red-200 text-xs rounded-full" onclick="resetScan()">重新扫描</button>
+<button class="px-3 py-1 bg-neutral-800 text-neutral-300 text-xs rounded-full" onclick="switchTab('screen-search')">返回列表</button>
+</div>
+</div>
+</div>
+</div>
+<!-- ==================== 状态 4: 贡献上限 (连接成功后状态) ==================== -->
+<div class="view-screen active" id="screen-quota">
+<!-- 顶栏 -->
+<div class="px-5 pt-2 pb-3 flex items-center justify-between border-b border-white/5">
+<div class="flex items-center gap-3">
+<button class="w-9 h-9 rounded-full bg-neutral-900/80 flex items-center justify-center text-neutral-300 hover:text-white active:scale-95 transition-transform" onclick="switchTab('screen-search')" title="返回并查看列表">
+<i class="fa-solid fa-chevron-left text-base"></i>
+</button>
+<div>
+<span class="text-xs text-blue-400 font-medium">Harmony · 鸿蒙设备</span>
+<h2 class="text-lg font-bold text-white leading-tight">贡献上限</h2>
+</div>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-green-500/15 border border-green-500/30 text-green-400 text-xs font-medium flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-ping"></span>
+<span>已连接</span>
+</span>
+</div>
+<!-- 正文内容区 -->
+<div class="px-4 py-4 space-y-4 overflow-y-auto flex-1">
+<!-- 协调中心状态卡片 -->
+<div class="hm-card p-4 border border-white/5">
+<div class="text-xs text-neutral-400 mb-1 flex items-center justify-between">
+<span>当前接入协调中心</span>
+<span class="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-mono" id="quota-status-pill">动态参数驱动</span>
+</div>
+<div class="flex items-center justify-between">
+<div class="truncate mr-3">
+<div class="text-[15px] font-bold text-white truncate" id="connected-cluster-name">算力主控 · 主控集群</div>
+<div class="text-xs text-neutral-500 font-mono mt-0.5 truncate" id="connected-cluster-ip">192.168.1.100:7443 (已鉴权接入)</div>
+</div>
+<button class="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 bg-red-950/30 border border-red-500/20 rounded-full font-medium active:scale-95 transition-all flex-shrink-0" onclick="disconnectDevice()">断开连接</button>
+</div>
+</div>
+<!-- 两个只读卡片展示 CPU 槽位 与 内存 -->
+<div>
+<div class="flex items-center justify-between px-1 mb-2">
+<span class="text-xs font-medium text-neutral-400">已分配资源额度</span>
+<span class="text-[11px] text-neutral-500">额度由调度中心分配</span>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div class="hm-card p-4 border border-white/5 relative overflow-hidden flex flex-col justify-between">
+<div class="text-xs text-neutral-400 flex items-center justify-between">
+<span>CPU 槽位</span>
+<i class="fa-solid fa-microchip text-neutral-500"></i>
+</div>
+<div class="mt-3 flex items-baseline gap-1">
+<span class="text-3xl font-bold font-mono text-neutral-200" id="quota-cpu">2</span>
+<span class="text-xs text-neutral-400" id="quota-cpu-unit">核核心</span>
+</div>
+<div class="mt-3 flex items-center gap-1.5">
+<button class="w-6 h-6 rounded bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-center text-xs font-bold active:scale-90 transition-transform" onclick="window.adjustCpu(-1)">-</button>
+<button class="w-6 h-6 rounded bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-center text-xs font-bold active:scale-90 transition-transform" onclick="window.adjustCpu(1)">+</button>
+<span class="text-[10px] text-neutral-400 bg-black/40 px-2 py-0.5 rounded-md flex-1 text-center truncate" id="cpu-tag">动态平衡中</span>
+</div>
+</div>
+<div class="hm-card p-4 border border-white/5 relative overflow-hidden flex flex-col justify-between">
+<div class="text-xs text-neutral-400 flex items-center justify-between">
+<span>内存额度</span>
+<i class="fa-solid fa-memory text-neutral-500"></i>
+</div>
+<div class="mt-3 flex items-baseline gap-1">
+<span class="text-3xl font-bold font-mono text-neutral-200" id="quota-mem">512</span>
+<span class="text-xs text-neutral-400" id="quota-mem-unit">MiB</span>
+</div>
+<div class="mt-3 flex items-center gap-1.5">
+<button class="w-6 h-6 rounded bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-center text-xs font-bold active:scale-90 transition-transform" onclick="window.adjustMem(-128)">-</button>
+<button class="w-6 h-6 rounded bg-neutral-800 text-neutral-300 hover:text-white flex items-center justify-center text-xs font-bold active:scale-90 transition-transform" onclick="window.adjustMem(128)">+</button>
+<span class="text-[10px] text-neutral-400 bg-black/40 px-2 py-0.5 rounded-md flex-1 text-center truncate" id="mem-tag">隔离沙箱</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 允许接收任务 开关行 -->
+<div class="hm-card p-4 border border-white/5">
+<div class="flex items-center justify-between">
+<div class="pr-3">
+<div class="text-[15px] font-semibold text-white">允许接收任务</div>
+<div class="text-xs text-neutral-400 mt-1 leading-snug">关闭后暂停接收新任务。鸿蒙调度件切到后台时也会暂停接单。</div>
+</div>
+<!-- 开关 -->
+<div class="switch-toggle checked flex-shrink-0" id="task-switch" onclick="toggleTaskSwitch()"></div>
+</div>
+</div>
+<!-- 演示切换待分配状态 -->
+<div class="flex items-center justify-between text-xs text-neutral-500 px-2 pt-1">
+<span>状态模拟：</span>
+<button class="text-blue-400 underline hover:text-blue-300" id="quota-toggle-btn" onclick="toggleQuotaState()">切换为「等待分配」</button>
+</div>
+<!-- 调度说明 -->
+<div class="p-3 bg-neutral-900/40 rounded-xl text-neutral-400 text-xs leading-relaxed border border-white/5">
+<i class="fa-solid fa-shield-check text-neutral-400 mr-1.5"></i>
+        当前设备已接入安全调度总线。计算过程遵循本地隔离标准，不读取设备私有媒体与通讯数据。
+      </div>
+</div>
+</div>
+<!-- 底部虚拟手势条 (鸿蒙导航条) -->
+<div class="home-indicator-bar h-8 flex items-center justify-center bg-black flex-shrink-0">
+<div class="w-32 h-1 bg-neutral-600 rounded-full"></div>
+</div>
+<script>
+    window.dynamicState = {
+      prefix: '算力主控',
+      cpu: 2,
+      mem: 512,
+      isPending: false,
+      nodes: [
+        { id: 1, suffix: '主控集群', ip: '192.168.1.100:7443', tag: '强信号', icon: 'fa-server' },
+        { id: 2, suffix: '备用调度点', ip: '192.168.1.108:7443', tag: '', icon: 'fa-network-wired' },
+        { id: 3, suffix: '辅助算力池', ip: '10.0.4.12:7443', tag: '', icon: 'fa-microchip' }
+      ]
+    };
+
+    let currentDevice = { 
+      name: `${window.dynamicState.prefix} · ${window.dynamicState.nodes[0].suffix}`, 
+      ip: window.dynamicState.nodes[0].ip 
+    };
+
+    function switchTab(screenId) {
+      document.querySelectorAll('.view-screen').forEach(el => el.classList.remove('active'));
+      const target = document.getElementById(screenId);
+      if (target) target.classList.add('active');
+    }
+
+    window.renderDeviceList = function() {
+      const container = document.getElementById('dynamic-device-list');
+      if (!container) return;
+      const prefix = window.dynamicState.prefix || '协调中心';
+      container.innerHTML = window.dynamicState.nodes.map((node, idx) => {
+        const fullName = `${prefix} · ${node.suffix}`;
+        const isMain = idx === 0;
+        const iconBg = isMain 
+          ? 'bg-blue-950/60 border-blue-500/20 text-blue-400 group-hover:bg-blue-900/40' 
+          : 'bg-neutral-800/80 border-white/5 text-neutral-400 group-hover:bg-neutral-800';
+        return `
+          <div onclick="selectDevice('${fullName}', '${node.ip}', ${idx})" class="hm-card-item group">
+            <div class="flex items-center gap-3.5 min-w-0">
+              <div class="w-10 h-10 rounded-2xl ${iconBg} border flex items-center justify-center flex-shrink-0 transition-colors">
+                <i class="fa-solid ${node.icon} text-base"></i>
+              </div>
+              <div class="truncate">
+                <div class="text-[15px] font-semibold text-white truncate flex items-center gap-1.5">
+                  <span>${fullName}</span>
+                  ${node.tag ? `<span class="text-[10px] px-1.5 py-0.2 bg-blue-500/20 text-blue-400 rounded-full font-normal">${node.tag}</span>` : ''}
+                </div>
+                <div class="text-xs text-neutral-400 mt-0.5 truncate font-mono">${node.ip}</div>
+              </div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0 pl-2">
+              <span class="text-xs text-neutral-400 flex items-center gap-1">
+                <i class="fa-solid fa-lock text-[11px]"></i>
+                <span class="text-[11px]">需要配对码</span>
+              </span>
+              <i class="fa-solid fa-chevron-right text-xs text-neutral-600"></i>
+            </div>
+          </div>
+        `;
+      }).join('');
+    };
+
+    function selectDevice(name, ip) {
+      currentDevice = { name, ip };
+      const pairName = document.getElementById('pair-device-name');
+      const pairIp = document.getElementById('pair-device-ip');
+      const connName = document.getElementById('connected-cluster-name');
+      const connIp = document.getElementById('connected-cluster-ip');
+      const scanName = document.getElementById('scan-device-name');
+      const scanIp = document.getElementById('scan-device-ip');
+
+      if (pairName) pairName.innerText = name;
+      if (pairIp) pairIp.innerText = ip;
+      if (connName) connName.innerText = name;
+      if (connIp) connIp.innerText = `${ip} (已鉴权接入)`;
+      if (scanName) scanName.innerText = name;
+      if (scanIp) scanIp.innerText = ip;
+
+      switchTab('screen-pair');
+    }
+
+    function handlePinInput(val) {
+      const connectBtn = document.getElementById('mobile-connect-btn');
+      const clearBtn = document.getElementById('input-clear-btn');
+      const errBox = document.getElementById('pin-error-msg');
+      if (errBox) errBox.classList.add('hidden');
+
+      if (val.length > 0) {
+        if (clearBtn) clearBtn.classList.remove('hidden');
+      } else {
+        if (clearBtn) clearBtn.classList.add('hidden');
+      }
+
+      const isValid = /^\d{4,6}$/.test(val.trim());
+      if (connectBtn) connectBtn.disabled = !isValid;
+    }
+
+    function clearPinInput() {
+      const input = document.getElementById('mobile-pin-input');
+      if (input) {
+        input.value = '';
+        handlePinInput('');
+        input.focus();
+      }
+    }
+
+    function quickFillPin(code) {
+      const input = document.getElementById('mobile-pin-input');
+      if (input) {
+        input.value = code;
+        handlePinInput(code);
+      }
+    }
+
+    function submitPairing() {
+      const input = document.getElementById('mobile-pin-input');
+      const spinner = document.getElementById('btn-spinner');
+      const btnText = document.getElementById('btn-text');
+      const btn = document.getElementById('mobile-connect-btn');
+      const errBox = document.getElementById('pin-error-msg');
+
+      if (btnText) btnText.innerText = "正在验证...";
+      if (spinner) spinner.classList.remove('hidden');
+      if (btn) btn.disabled = true;
+
+      setTimeout(() => {
+        if (spinner) spinner.classList.add('hidden');
+        if (input && input.value === '000000') {
+          if (btnText) btnText.innerText = "连接";
+          if (btn) btn.disabled = false;
+          if (errBox) errBox.classList.remove('hidden');
+        } else {
+          if (btnText) btnText.innerText = "连接";
+          if (btn) btn.disabled = false;
+          if (input) input.value = '';
+          switchTab('screen-quota');
+        }
+      }, 700);
+    }
+
+    function completeScanConnect() {
+      switchTab('screen-quota');
+    }
+
+    function simulateExpiredScan() {
+      const card = document.getElementById('scan-result-card');
+      const expired = document.getElementById('scan-expired-box');
+      if (card) card.classList.add('hidden');
+      if (expired) expired.classList.remove('hidden');
+    }
+
+    function resetScan() {
+      const card = document.getElementById('scan-result-card');
+      const expired = document.getElementById('scan-expired-box');
+      if (expired) expired.classList.add('hidden');
+      if (card) card.classList.remove('hidden');
+    }
+
+    function toggleTaskSwitch() {
+      const toggle = document.getElementById('task-switch');
+      if (toggle) toggle.classList.toggle('checked');
+    }
+
+    window.adjustCpu = function(delta) {
+      window.dynamicState.cpu = Math.max(1, window.dynamicState.cpu + delta);
+      window.syncQuotaDisplay();
+    };
+
+    window.adjustMem = function(delta) {
+      window.dynamicState.mem = Math.max(128, window.dynamicState.mem + delta);
+      window.syncQuotaDisplay();
+    };
+
+    window.syncQuotaDisplay = function() {
+      const cpu = document.getElementById('quota-cpu');
+      const mem = document.getElementById('quota-mem');
+      const cpuUnit = document.getElementById('quota-cpu-unit');
+      const memUnit = document.getElementById('quota-mem-unit');
+      const cpuTag = document.getElementById('cpu-tag');
+      const memTag = document.getElementById('mem-tag');
+      const pill = document.getElementById('quota-status-pill');
+      const btn = document.getElementById('quota-toggle-btn');
+
+      if (window.dynamicState.isPending) {
+        if (cpu) { cpu.innerText = "待分配"; cpu.className = "text-xl font-medium text-neutral-400"; }
+        if (mem) { mem.innerText = "待分配"; mem.className = "text-xl font-medium text-neutral-400"; }
+        if (cpuUnit) cpuUnit.style.display = 'none';
+        if (memUnit) memUnit.style.display = 'none';
+        if (cpuTag) cpuTag.innerText = '等待调度';
+        if (memTag) memTag.innerText = '等待调度';
+        if (pill) { pill.innerText = '等待调度中心分配'; pill.className = 'text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 font-mono'; }
+        if (btn) btn.innerText = `切换为「已分配 (${window.dynamicState.cpu}核/${window.dynamicState.mem}M)」`;
+      } else {
+        if (cpu) { cpu.innerText = window.dynamicState.cpu; cpu.className = "text-3xl font-bold font-mono text-neutral-200"; }
+        if (mem) { mem.innerText = window.dynamicState.mem; mem.className = "text-3xl font-bold font-mono text-neutral-200"; }
+        if (cpuUnit) cpuUnit.style.display = 'inline';
+        if (memUnit) memUnit.style.display = 'inline';
+        if (cpuTag) cpuTag.innerText = '动态平衡中';
+        if (memTag) memTag.innerText = '隔离沙箱';
+        if (pill) { pill.innerText = '动态参数驱动'; pill.className = 'text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-mono'; }
+        if (btn) btn.innerText = "切换为「等待分配」";
+      }
+    };
+
+    function toggleQuotaState() {
+      window.dynamicState.isPending = !window.dynamicState.isPending;
+      window.syncQuotaDisplay();
+    }
+
+    function triggerRescan() {
+      const spinner = document.getElementById('search-spinner');
+      if (spinner) {
+        spinner.classList.remove('hidden');
+        setTimeout(() => {
+          spinner.classList.remove('hidden');
+        }, 1000);
+      }
+    }
+
+    let isEmpty = false;
+    function toggleEmptyState() {
+      isEmpty = !isEmpty;
+      const cardGroup = document.getElementById('device-card-group');
+      const emptyCard = document.getElementById('empty-state-card');
+      const toggleBtn = document.getElementById('toggle-empty-btn');
+      if (isEmpty) {
+        if (cardGroup) cardGroup.classList.add('hidden');
+        if (emptyCard) emptyCard.classList.remove('hidden');
+        if (toggleBtn) toggleBtn.innerText = "恢复列表结果";
+      } else {
+        if (cardGroup) cardGroup.classList.remove('hidden');
+        if (emptyCard) emptyCard.classList.add('hidden');
+        if (toggleBtn) toggleBtn.innerText = "模拟“未发现中心”";
+      }
+    }
+
+    function disconnectDevice() {
+      if (confirm('确认断开与当前协调中心的连接吗？')) {
+        switchTab('screen-search');
+      }
+    }
+
+    // 初始化渲染
+    window.renderDeviceList();
+    window.syncQuotaDisplay();
+  </script>
+</body></html>

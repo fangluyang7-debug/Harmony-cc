@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "spaces": [
+    {
+      "serviceId": "soleai.catalog",
+      "indexSpaceId": "replace-with-active-index-space-id",
+      "indexVersion": "replace-with-active-index-version",
+      "model": {
+        "modelId": "replace-with-index-model-id",
+        "version": "replace-with-model-version",
+        "weightsHash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "preprocessVersion": "replace-with-preprocess-version",
+        "embeddingKind": "image",
+        "dimension": 512,
+        "dtype": "float32",
+        "normalization": "l2"
+      }
+    }
+  ],
+  "stages": [
+    {
+      "serviceId": "soleai.catalog",
+      "capabilities": [
+        "catalog.price-stock.v1",
+        "rank.v1",
+        "shopping.commit.v1"
+      ]
+    }
+  ]
+}

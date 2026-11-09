@@ -390,7 +390,12 @@
         "serviceId": {
           "type": "string",
           "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
-          "description": "Optional fixed logical service. Only the authenticated origin App host may execute it; endpoints and credentials remain local."
+          "description": "Optional logical service that provides this capability. Any target registering the same serviceId is a planning candidate; endpoints and credentials stay with the executing host."
+        },
+        "parameterRole": {
+          "type": "string",
+          "enum": ["EXECUTION", "MODEL_MANIFEST"],
+          "description": "What task.parameters carries. MODEL_MANIFEST: the model manifest (legacy encoding packs; default when absent and a model is declared). EXECUTION: run parameters such as topK; the model is matched through modelManifest instead."
         }
       },
       "required": [

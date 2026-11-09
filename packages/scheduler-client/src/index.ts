@@ -1,7 +1,7 @@
 import type {ModelManifestV2} from '@harmony/scheduler-core';
 /** Public submission data contains no identity claims. Credentials bind the App on the server. */
 export interface SdkInput {contentHash:string;bytes:number;schemaId:string;schemaVersion:number;}
-export interface SdkNode {modelManifest?:ModelManifestV2;id:string;capability:string;input?:SdkInput;inputFrom?:string;parameters:string;dependsOn:string[];targetId?:string;}
+export interface SdkNode {effects?:'PURE'|'COMMIT';businessIdempotencyKey?:string;privacy?:'LOCAL_ONLY'|'OWNER_SERVICE'|'SHARED';modelManifest?:ModelManifestV2;id:string;capability:string;input?:SdkInput;inputFrom?:string;parameters:string;dependsOn:string[];targetId?:string;}
 export interface SdkWorkflow {version:3;id:string;outputContract:string;qualityTarget:string;nodes:SdkNode[];}
 export interface SdkAlternatives {version:3;id:string;outputContract:string;qualityTarget:string;alternatives:SdkWorkflow[];}
 export interface SubmitOptions {priority?:'REMOTE_INTERACTIVE'|'REMOTE_BATCH';requestId:string;budgetMs:number;resultDestination:'ORIGIN';inputLocation?:'ORIGIN';}

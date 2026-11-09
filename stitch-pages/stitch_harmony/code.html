@@ -1,0 +1,1332 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Harmony 调度系统 · Windows / 桌面端设备接入与调度控制台</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"/>
+<style>
+    :root {
+      --hm-bg: #0b0e14;
+      --hm-sidebar: #11141c;
+      --hm-card: #161b26;
+      --hm-card-hover: #1e2433;
+      --hm-blue: #0a59f7;
+      --hm-blue-hover: #256afe;
+      --hm-cyan: #06b6d4;
+      --hm-border: rgba(255, 255, 255, 0.08);
+    }
+    body {
+      background-color: var(--hm-bg);
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+    .desktop-app-frame {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      background: var(--hm-bg);
+    }
+    .desktop-card {
+      background: var(--hm-card);
+      border: 1px solid var(--hm-border);
+      border-radius: 16px;
+      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .desktop-card-interactive {
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+    .desktop-card-interactive:hover {
+      background: var(--hm-card-hover);
+      border-color: rgba(37, 99, 235, 0.45);
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 0 15px rgba(10, 89, 247, 0.15);
+    }
+    .switch-toggle {
+      width: 48px;
+      height: 26px;
+      background: #2a3142;
+      border-radius: 99px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .switch-toggle.checked {
+      background: #0a59f7;
+    }
+    .switch-toggle::after {
+      content: '';
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: white;
+      border-radius: 50%;
+      top: 3px;
+      left: 3px;
+      transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.35);
+    }
+    .switch-toggle.checked::after {
+      transform: translateX(22px);
+    }
+    .scanner-line {
+      position: absolute;
+      width: 100%;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #38bdf8, #2563eb, transparent);
+      box-shadow: 0 0 14px #38bdf8;
+      animation: scanAnim 2.6s ease-in-out infinite;
+    }
+    @keyframes scanAnim {
+      0% { top: 4%; opacity: 0; }
+      15% { opacity: 1; }
+      85% { opacity: 1; }
+      100% { top: 96%; opacity: 0; }
+    }
+    .pulse-radar {
+      animation: pulseRadar 2s infinite ease-out;
+    }
+    @keyframes pulseRadar {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.3; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .modal-backdrop {
+      background: rgba(4, 7, 13, 0.78);
+      backdrop-filter: blur(10px);
+    }
+    /* custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+  </style>
+</head>
+<body>
+<div class="desktop-app-frame">
+<!-- 左侧快捷功能边栏 (Windows 11 Fluent / HarmonyOS 风格) -->
+<aside class="w-64 bg-[#11141c] border-r border-white/5 flex flex-col justify-between p-4 flex-shrink-0 z-20">
+<div>
+<!-- 品牌徽标 -->
+<div class="flex items-center gap-3 px-3 py-3 mb-5 border-b border-white/5 pb-4">
+<div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-blue-500/25 ring-1 ring-white/20">
+<i class="fa-solid fa-shapes text-sm"></i>
+</div>
+<div>
+<div class="text-sm font-bold text-white tracking-wide flex items-center gap-1.5">
+              Harmony 调度
+              <span class="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-400 font-mono">v3.2</span>
+</div>
+<div class="text-[11px] text-blue-400/90 font-medium">Windows 控制台</div>
+</div>
+</div>
+<!-- 四大核心功能与流程导航菜单 -->
+<div class="px-2 mb-2 text-[10px] font-semibold text-neutral-500 tracking-wider uppercase">调度控制流程</div>
+<nav class="space-y-1.5">
+<button class="tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold bg-blue-600/15 text-blue-400 border border-blue-500/30 transition-all text-left group" id="tab-btn-search" onclick="setActiveTab('search')">
+<div class="flex items-center gap-3">
+<i class="fa-solid fa-tower-broadcast text-sm w-4 text-center group-hover:scale-110 transition-transform"></i>
+<span>1. 搜索协调中心</span>
+</div>
+<span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+</button>
+<button class="tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-neutral-400 hover:text-white hover:bg-white/5 transition-all text-left group" id="tab-btn-pair" onclick="openPairModal()">
+<div class="flex items-center gap-3">
+<i class="fa-solid fa-key text-sm w-4 text-center group-hover:scale-110 transition-transform"></i>
+<span>2. 居中配对弹窗</span>
+</div>
+<span class="text-[10px] text-neutral-600 font-mono">PIN</span>
+</button>
+<button class="tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-neutral-400 hover:text-white hover:bg-white/5 transition-all text-left group" id="tab-btn-scan" onclick="setActiveTab('scan')">
+<div class="flex items-center gap-3">
+<i class="fa-solid fa-qrcode text-sm w-4 text-center group-hover:scale-110 transition-transform"></i>
+<span>3. 扫一扫接入</span>
+</div>
+<span class="text-[10px] text-neutral-600">快捷</span>
+</button>
+<button class="tab-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium text-neutral-400 hover:text-white hover:bg-white/5 transition-all text-left group" id="tab-btn-quota" onclick="setActiveTab('quota')">
+<div class="flex items-center gap-3">
+<i class="fa-solid fa-gauge-high text-sm w-4 text-center group-hover:scale-110 transition-transform"></i>
+<span>4. 贡献上限管理</span>
+</div>
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400" id="nav-quota-state-dot"></span>
+</button>
+</nav>
+<div class="mt-8 px-2 mb-2 text-[10px] font-semibold text-neutral-500 tracking-wider uppercase">快捷测试动作</div>
+<div class="space-y-1">
+<button class="w-full text-left px-3 py-1.5 rounded-lg text-[11px] text-neutral-400 hover:text-blue-300 hover:bg-blue-500/10 flex items-center gap-2 transition-colors" onclick="randomizeAllCenters()">
+<i class="fa-solid fa-dice text-xs text-blue-400"></i>
+<span>🎲 随机生成新集群数据</span>
+</button>
+<button class="w-full text-left px-3 py-1.5 rounded-lg text-[11px] text-neutral-400 hover:text-cyan-300 hover:bg-cyan-500/10 flex items-center gap-2 transition-colors" onclick="openEditCenterModal()">
+<i class="fa-solid fa-pen-to-square text-xs text-cyan-400"></i>
+<span>✏️ 快速编辑当前集群参数</span>
+</button>
+<button class="w-full text-left px-3 py-1.5 rounded-lg text-[11px] text-neutral-400 hover:text-white hover:bg-white/5 flex items-center gap-2 transition-colors" onclick="openAddNodeModal()">
+<i class="fa-solid fa-plus text-xs text-indigo-400"></i>
+<span>手动添加自定义中心</span>
+</button>
+<button class="w-full text-left px-3 py-1.5 rounded-lg text-[11px] text-neutral-400 hover:text-amber-300 hover:bg-amber-500/10 flex items-center gap-2 transition-colors" onclick="toggleQuotaAllocation()">
+<i class="fa-solid fa-sliders text-xs text-amber-400"></i>
+<span id="nav-quota-toggle-label">切换额度已分配/待分配</span>
+</button>
+</div>
+</div>
+<!-- 底部系统信息：完全取自 state.localSystem 动态驱动 -->
+<div class="p-3.5 bg-gradient-to-b from-white/[0.07] to-white/[0.02] rounded-2xl border border-white/5 shadow-inner">
+<div class="flex items-center justify-between text-[11px] text-neutral-400">
+<span class="flex items-center gap-1.5 font-medium">
+<i class="fa-brands fa-windows text-blue-400"></i> 本机环境
+          </span>
+<span class="text-emerald-400 flex items-center gap-1.5 font-mono text-[11px] font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/30"></span> 就绪
+          </span>
+</div>
+<div class="text-xs font-semibold text-white mt-1.5 flex items-center justify-between">
+<span id="system-os-display">Windows 11 Pro</span>
+<span class="text-[10px] text-neutral-400 font-mono" id="system-arch-display">x86_64</span>
+</div>
+<div class="text-[11px] text-neutral-400 font-mono mt-1 flex items-center justify-between">
+<span id="system-ip-display">IP: 192.168.1.42</span>
+<span class="text-emerald-400/80" id="system-mem-display">32GB RAM</span>
+</div>
+</div>
+</aside>
+<!-- 右侧主界面内容 -->
+<main class="flex-1 flex flex-col h-full overflow-hidden bg-[#0b0e14]">
+<!-- 统一桌面顶栏 -->
+<header class="h-16 border-b border-white/5 px-8 flex items-center justify-between flex-shrink-0 bg-[#0e121a]/60 backdrop-blur-md">
+<div class="flex items-center gap-4">
+<button class="w-8 h-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors" onclick="setActiveTab('search')" title="返回搜索列表">
+<i class="fa-solid fa-arrow-left text-xs"></i>
+</button>
+<div>
+<div class="flex items-center gap-2.5">
+<h1 class="text-base font-bold text-white leading-tight" id="header-page-title">加入调度中心</h1>
+<span class="text-[11px] px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 border border-blue-500/30 font-mono flex items-center gap-1" id="active-node-tag">
+<i class="fa-solid fa-circle-dot text-[8px] text-blue-400"></i>
+<span id="active-node-tag-text">当前选定: 主控集群 · 华东 #01</span>
+</span>
+</div>
+<p class="text-xs text-neutral-400" id="header-page-sub">在局域网内发现可用节点，连接后参与应用任务协同调度</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<!-- 全局4态视角的极速切换器 -->
+<div class="hidden lg:flex items-center bg-black/40 p-1 rounded-xl border border-white/5 text-[11px] text-neutral-400">
+<button class="px-2.5 py-1 rounded-lg text-blue-400 bg-blue-500/20 font-semibold transition-all" id="step-pill-search" onclick="setActiveTab('search')">1.搜索</button>
+<button class="px-2.5 py-1 rounded-lg hover:text-white transition-all" id="step-pill-pair" onclick="openPairModal()">2.配对码</button>
+<button class="px-2.5 py-1 rounded-lg hover:text-white transition-all" id="step-pill-scan" onclick="setActiveTab('scan')">3.扫码</button>
+<button class="px-2.5 py-1 rounded-lg hover:text-white transition-all" id="step-pill-quota" onclick="setActiveTab('quota')">4.上限监控</button>
+</div>
+<div class="h-4 w-[1px] bg-white/10 hidden lg:block"></div>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-600/15 hover:bg-cyan-600/25 border border-cyan-500/30 text-cyan-300 text-xs font-medium transition-colors" onclick="openEditCenterModal()" title="快速修改当前选中节点的名称与端口">
+<i class="fa-solid fa-pen text-[10px]"></i>
+<span>编辑节点参数</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-200 text-xs font-medium transition-colors" onclick="openAddNodeModal()">
+<i class="fa-solid fa-plus text-[10px] text-cyan-400"></i>
+<span>新增节点</span>
+</button>
+<button class="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-400 text-xs font-semibold transition-all shadow-sm" onclick="setActiveTab('scan')">
+<i class="fa-solid fa-qrcode"></i>
+<span>扫一扫</span>
+</button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-neutral-300 text-xs transition-colors" onclick="triggerRescan()" title="重新扫描">
+<i class="fa-solid fa-rotate-right text-[11px]" id="header-rescan-icon"></i>
+<span>重新搜索</span>
+</button>
+</div>
+</header>
+<!-- 视图容器 -->
+<div class="flex-1 overflow-y-auto p-8">
+<!-- ==================== 状态 1: 桌面端 搜索协调中心 ==================== -->
+<section class="view-panel block space-y-6 max-w-5xl mx-auto" id="screen-search">
+<!-- 搜索状态行与广播提示 (动态数据驱动) -->
+<div class="desktop-card p-4 bg-gradient-to-r from-blue-950/30 via-[#151b28] to-slate-900/40 border-blue-500/20 flex items-center justify-between flex-wrap gap-4">
+<div class="flex items-center gap-3.5">
+<div class="relative flex items-center justify-center">
+<div class="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-lg border border-blue-500/30">
+<i class="fa-solid fa-tower-broadcast"></i>
+</div>
+<div class="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-cyan-400 pulse-radar"></div>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-white uppercase tracking-wider">局域网调度自动感知中</span>
+<span class="inline-block w-3 h-3 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" id="search-spinner"></span>
+<span class="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-cyan-300 font-mono border border-cyan-500/30" id="multicast-info-tag">UDP:7443 Multicast</span>
+</div>
+<p class="text-xs text-neutral-400 mt-0.5" id="search-status-text">正在向网段 192.168.1.0/24 广播鸿蒙协同心跳，已发现 3 个调度集群节点</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="text-xs text-blue-400 hover:text-blue-300 font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-500/10 border border-blue-500/20 transition-all hover:bg-blue-500/20" onclick="randomizeAllCenters()">
+<i class="fa-solid fa-shuffle text-[10px]"></i> 刷新随机节点
+              </button>
+<button class="text-xs text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg border border-white/5 hover:bg-white/5 transition-all" id="desktop-toggle-empty-btn" onclick="toggleEmptyState()">
+                模拟空状态
+              </button>
+</div>
+</div>
+<!-- 附近的协调中心网格卡片展示 (完全由 state.centersList 动态生成) -->
+<div>
+<div class="flex items-center justify-between mb-3 px-1">
+<div class="flex items-center gap-2">
+<h2 class="text-sm font-bold text-white">附近的协调中心</h2>
+<span class="text-xs px-2 py-0.2 rounded-full bg-neutral-800 text-neutral-300 font-mono" id="node-count-badge">3 个在线</span>
+</div>
+<span class="text-xs text-neutral-500">点击卡片切换选中并进入配对握手流程</span>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="desktop-device-grid">
+<!-- 由 JavaScript 动态渲染填充，杜绝硬编码 -->
+</div>
+</div>
+<!-- 空状态展示 (未发现附近的协调中心) -->
+<div class="hidden desktop-card p-12 text-center border-dashed border-neutral-700 bg-neutral-900/30" id="desktop-empty-state">
+<div class="w-16 h-16 rounded-2xl bg-neutral-800/80 mx-auto flex items-center justify-center text-neutral-500 mb-4 text-2xl border border-white/5">
+<i class="fa-solid fa-satellite-dish animate-pulse"></i>
+</div>
+<h3 class="text-lg font-bold text-neutral-200">未发现附近的协调中心</h3>
+<p class="text-xs text-neutral-400 mt-2 max-w-md mx-auto leading-relaxed" id="empty-state-tip">
+              请检查 Windows 本机防火墙是否允许入站 7443 端口通信，并确保协调中心集群已启动，并与本机处于同一无线局域网或 VLAN 子网。
+            </p>
+<div class="mt-6 flex justify-center items-center gap-3">
+<button class="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-2" onclick="randomizeAllCenters(); if(isDtEmpty) toggleEmptyState();">
+<i class="fa-solid fa-rotate-right"></i> 重新检索中心
+              </button>
+<button class="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-medium text-xs transition-colors flex items-center gap-2" onclick="openAddNodeModal()">
+<i class="fa-solid fa-keyboard"></i> 手动指定 IP 添加
+              </button>
+</div>
+</div>
+<!-- 底部特性指引横幅 -->
+<div class="desktop-card p-4.5 flex items-center justify-between gap-4 bg-[#141924] border-neutral-800">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-xl bg-blue-600/15 text-blue-400 flex items-center justify-center flex-shrink-0 border border-blue-500/20">
+<i class="fa-solid fa-circle-nodes text-sm"></i>
+</div>
+<div class="text-xs text-neutral-300 leading-relaxed">
+<span class="font-bold text-white">分布式动态调度引擎：</span>
+                每个协调中心具备独立的负载拓扑算法。支持多网卡接入与自定义算力切片配额，接入后可随时调整 CPU/内存配比。
+              </div>
+</div>
+<button class="text-xs font-semibold text-blue-400 hover:text-white bg-blue-500/10 hover:bg-blue-600/30 px-3.5 py-2 rounded-xl border border-blue-500/30 flex-shrink-0 transition-colors flex items-center gap-1.5" onclick="openAddNodeModal()">
+<i class="fa-solid fa-plus text-[10px]"></i> 添加自定义中心
+            </button>
+</div>
+</section>
+<!-- ==================== 状态 3: 桌面端 扫一扫接入 ==================== -->
+<section class="view-panel hidden space-y-6 max-w-4xl mx-auto" id="screen-scan">
+<div class="desktop-card p-8 border-neutral-800 bg-gradient-to-b from-[#151b27] to-[#121620]">
+<div class="max-w-md mx-auto text-center">
+<div class="w-12 h-12 rounded-2xl bg-blue-600/20 text-blue-400 mx-auto flex items-center justify-center text-xl mb-3 border border-blue-500/30">
+<i class="fa-solid fa-qrcode"></i>
+</div>
+<h2 class="text-lg font-bold text-white">扫描协调中心显示的配对二维码</h2>
+<p class="text-xs text-neutral-400 mt-1">支持通过 Windows 摄像头取景或外接扫码器直连目标协调中心</p>
+<!-- 取景框 -->
+<div class="mt-6 relative w-72 h-72 mx-auto border-2 border-white/10 rounded-3xl overflow-hidden bg-black/70 flex items-center justify-center shadow-2xl">
+<!-- 科技感四角取景线 -->
+<div class="absolute top-3 left-3 w-6 h-6 border-t-2 border-l-2 border-cyan-400 rounded-tl-md"></div>
+<div class="absolute top-3 right-3 w-6 h-6 border-t-2 border-r-2 border-cyan-400 rounded-tr-md"></div>
+<div class="absolute bottom-3 left-3 w-6 h-6 border-b-2 border-l-2 border-cyan-400 rounded-bl-md"></div>
+<div class="absolute bottom-3 right-3 w-6 h-6 border-b-2 border-r-2 border-cyan-400 rounded-br-md"></div>
+<!-- 动态扫描激光线 -->
+<div class="scanner-line"></div>
+<div class="p-4 bg-white/5 rounded-2xl border border-white/10 flex flex-col items-center">
+<i class="fa-solid fa-qrcode text-8xl text-neutral-300"></i>
+<span class="text-[11px] text-cyan-300/80 mt-2 font-mono" id="scan-qr-meta">HM-PAIR://CLUST-8849-SEC</span>
+</div>
+</div>
+<!-- 识别凭据卡片 (动态数据驱动) -->
+<div class="mt-6 p-4.5 rounded-2xl bg-blue-950/30 border border-blue-500/30 text-left" id="desktop-scan-result">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3.5">
+<div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+<i class="fa-solid fa-circle-check text-lg text-emerald-400"></i>
+</div>
+<div>
+<div class="text-[11px] font-semibold text-cyan-400 flex items-center gap-1.5">
+<span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span> 已识别目标协调中心
+                      </div>
+<div class="text-sm font-bold text-white mt-0.5" id="scan-cluster-name">主控集群 · 华东 #01</div>
+<div class="text-[11px] text-neutral-400 font-mono mt-0.5" id="scan-cluster-ip">192.168.1.100:7443 (证书 SHA-256 吻合)</div>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<button class="px-3 py-1.5 rounded-xl bg-neutral-800 text-neutral-400 hover:text-white text-xs border border-white/5 transition-colors" onclick="simulateDesktopScanExpired()">
+                      失效模拟
+                    </button>
+<button class="px-4 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-all shadow-md shadow-blue-500/25 flex items-center gap-1.5" onclick="connectFromScan()">
+<span>立即连接</span>
+<i class="fa-solid fa-arrow-right text-[10px]"></i>
+</button>
+</div>
+</div>
+</div>
+<!-- 二维码失效模拟提示 -->
+<div class="hidden mt-6 p-4 rounded-2xl bg-red-950/40 border border-red-500/30 text-center" id="desktop-scan-expired">
+<div class="w-8 h-8 rounded-full bg-red-500/20 text-red-400 mx-auto flex items-center justify-center mb-1.5 text-sm">
+<i class="fa-solid fa-circle-xmark"></i>
+</div>
+<p class="text-xs text-red-300 font-semibold">配对二维码无效或已超时过期</p>
+<p class="text-[11px] text-neutral-400 mt-0.5">请在调度中心主控控制台刷新并重新生成配对二维码</p>
+<div class="mt-3 flex justify-center gap-3">
+<button class="px-4 py-1.5 rounded-lg bg-red-600/30 hover:bg-red-600/40 text-red-200 text-xs font-medium" onclick="resetDesktopScan()">重新取景</button>
+<button class="px-4 py-1.5 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 text-xs font-medium" onclick="setActiveTab('search')">返回设备网格</button>
+</div>
+</div>
+</div>
+</div>
+</section>
+<!-- ==================== 状态 4: 桌面端 贡献上限管理 ==================== -->
+<section class="view-panel hidden space-y-6 max-w-5xl mx-auto" id="screen-quota">
+<!-- 状态横幅：已连接协调中心 (动态数据驱动) -->
+<div class="desktop-card p-6 flex flex-wrap items-center justify-between gap-4 bg-gradient-to-r from-[#141a27] via-[#161c28] to-[#12151f] border-blue-500/20">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 flex items-center justify-center text-xl shadow-lg shadow-emerald-500/10">
+<i class="fa-solid fa-link"></i>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<span class="text-xs font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/25 flex items-center gap-1" id="connected-status-badge">
+<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> 已连接
+                  </span>
+<span class="text-xs text-neutral-400">Harmony · 鸿蒙与 Windows 分布式调度系统</span>
+</div>
+<div class="flex items-center gap-2 mt-1">
+<h2 class="text-xl font-bold text-white tracking-tight" id="connected-center-name">主控集群 · 华东 #01</h2>
+<button class="text-xs text-neutral-400 hover:text-cyan-400 px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors flex items-center gap-1" onclick="openEditCenterModal()" title="快速编辑当前集群参数">
+<i class="fa-solid fa-pen text-[10px]"></i> 编辑参数
+                  </button>
+</div>
+<div class="text-xs text-neutral-400 font-mono mt-1" id="connected-center-info">
+                  接入地址：192.168.1.100:7443 | 鉴权协议：TLSv1.3 AES-GCM-256 | 会话延迟：4ms
+                </div>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="px-3.5 py-2 text-xs rounded-xl bg-white/5 hover:bg-white/10 text-neutral-200 border border-white/10 transition-colors flex items-center gap-1.5" id="desktop-quota-btn" onclick="toggleQuotaAllocation()">
+<i class="fa-solid fa-arrows-split-up-and-left text-[11px] text-amber-400"></i>
+<span id="desktop-quota-btn-text">演示：切换为「待分配」</span>
+</button>
+<button class="px-4 py-2 text-xs font-semibold rounded-xl bg-red-950/40 border border-red-500/30 text-red-300 hover:bg-red-900/50 transition-colors flex items-center gap-1.5" onclick="disconnectCenter()">
+<i class="fa-solid fa-power-off text-[10px]"></i>
+<span>断开连接</span>
+</button>
+</div>
+</div>
+<!-- 核心监控卡片：CPU 槽位与内存 (完全动态驱动 + 交互步进微调) -->
+<div>
+<div class="flex items-center justify-between mb-3 px-1">
+<div>
+<h3 class="text-sm font-bold text-white">贡献上限与算力资源分配</h3>
+<p class="text-xs text-neutral-400">额度与约束由当前协调中心协同动态下发，支持本地步进微调贡献上限</p>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-xs text-neutral-500">预设模板:</span>
+<button class="px-2.5 py-1 text-xs rounded-lg bg-white/5 hover:bg-white/10 text-neutral-300 border border-white/5 transition-all" onclick="applyPresetQuota(2, 1024)">轻量 (2核/1G)</button>
+<button class="px-2.5 py-1 text-xs rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 transition-all font-medium" onclick="applyPresetQuota(4, 2048)">标准 (4核/2G)</button>
+<button class="px-2.5 py-1 text-xs rounded-lg bg-white/5 hover:bg-white/10 text-neutral-300 border border-white/5 transition-all" onclick="applyPresetQuota(8, 8192)">高性能 (8核/8G)</button>
+</div>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- CPU 卡片 -->
+<div class="desktop-card p-6 bg-[#151a24] border-neutral-800" id="card-cpu-wrapper">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center text-xs">
+<i class="fa-solid fa-microchip"></i>
+</div>
+<div class="text-xs font-semibold text-neutral-300">CPU 槽位 (Slots)</div>
+</div>
+<span class="text-[11px] px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 font-medium" id="cpu-status-tag">已生效</span>
+</div>
+<div class="mt-4 flex items-baseline justify-between">
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-extrabold font-mono text-white tracking-tight" id="dt-quota-cpu">4</span>
+<span class="text-xs text-neutral-400" id="cpu-unit-label">核协同计算单元</span>
+</div>
+<!-- CPU 交互步进器 -->
+<div class="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-white/5" id="cpu-step-controls">
+<button class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white flex items-center justify-center text-xs transition-colors" onclick="stepCpu(-1)" title="减少 1 核">
+<i class="fa-solid fa-minus"></i>
+</button>
+<button class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white flex items-center justify-center text-xs transition-colors" onclick="stepCpu(1)" title="增加 1 核">
+<i class="fa-solid fa-plus"></i>
+</button>
+</div>
+</div>
+<p class="text-[11px] text-neutral-500 mt-1 font-mono" id="cpu-quota-subnote">额度由协调中心下发 · 支持亲和性优先调度</p>
+<div class="mt-5 pt-4 border-t border-white/5">
+<div class="flex items-center justify-between text-[11px] text-neutral-400 mb-1.5">
+<span>微调本机允许提供槽位:</span>
+<span class="font-mono text-blue-400 font-bold" id="cpu-range-val">4 核</span>
+</div>
+<input class="w-full accent-blue-500 cursor-pointer h-1.5 bg-neutral-800 rounded-lg" id="cpu-slider" max="32" min="1" oninput="onCpuSliderChange(this.value)" step="1" type="range" value="4"/>
+</div>
+<div class="mt-3 flex items-center justify-between text-[11px] text-neutral-500">
+<span>亲和性策略：NUMA 优先</span>
+<span>上限约束：由调度中心动态分配</span>
+</div>
+</div>
+<!-- 内存卡片 -->
+<div class="desktop-card p-6 bg-[#151a24] border-neutral-800" id="card-mem-wrapper">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-lg bg-cyan-600/20 text-cyan-400 flex items-center justify-center text-xs">
+<i class="fa-solid fa-memory"></i>
+</div>
+<div class="text-xs font-semibold text-neutral-300">内存限制 (Memory)</div>
+</div>
+<span class="text-[11px] px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 font-medium" id="mem-status-tag">已生效</span>
+</div>
+<div class="mt-4 flex items-baseline justify-between">
+<div class="flex items-baseline gap-2">
+<span class="text-4xl font-extrabold font-mono text-white tracking-tight" id="dt-quota-mem">2048</span>
+<span class="text-xs text-neutral-400" id="mem-unit-label">MiB 专用缓冲池</span>
+</div>
+<!-- 内存交互步进器 -->
+<div class="flex items-center gap-1.5 bg-black/40 p-1 rounded-xl border border-white/5" id="mem-step-controls">
+<button class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white flex items-center justify-center text-xs transition-colors" onclick="stepMemory(-512)" title="减少 512 MiB">
+<i class="fa-solid fa-minus"></i>
+</button>
+<button class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/15 text-neutral-300 hover:text-white flex items-center justify-center text-xs transition-colors" onclick="stepMemory(512)" title="增加 512 MiB">
+<i class="fa-solid fa-plus"></i>
+</button>
+</div>
+</div>
+<p class="text-[11px] text-neutral-500 mt-1 font-mono" id="mem-quota-subnote">额度由协调中心下发 · 启用 OOM Guard 溢出防护</p>
+<div class="mt-5 pt-4 border-t border-white/5">
+<div class="flex items-center justify-between text-[11px] text-neutral-400 mb-1.5">
+<span>微调内存缓冲上限:</span>
+<span class="font-mono text-cyan-400 font-bold" id="mem-range-val">2048 MiB</span>
+</div>
+<input class="w-full accent-cyan-500 cursor-pointer h-1.5 bg-neutral-800 rounded-lg" id="mem-slider" max="32768" min="256" oninput="onMemSliderChange(this.value)" step="256" type="range" value="2048"/>
+</div>
+<div class="mt-3 flex items-center justify-between text-[11px] text-neutral-500">
+<span>溢出防护：已开启</span>
+<span>虚拟交换空间：禁用</span>
+</div>
+</div>
+</div>
+</div>
+<!-- 独立开关：允许接收任务 (完全与 state.selectedCenter.allowTasks 双向绑定) -->
+<div class="desktop-card p-6 flex items-center justify-between bg-[#151923] border-neutral-800">
+<div class="max-w-2xl">
+<div class="flex items-center gap-2">
+<div class="text-base font-bold text-white">允许接收任务</div>
+<span class="text-[10px] px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-medium" id="task-switch-tag">接受调度中</span>
+</div>
+<p class="text-xs text-neutral-400 mt-1.5 leading-relaxed">
+                关闭后暂停接收新任务。鸿蒙与 Windows 调度件切到后台或休眠时也会暂停接单，现有运行中的作业将等待平滑退出，确保数据不丢失。
+              </p>
+</div>
+<div class="switch-toggle checked flex-shrink-0" id="desktop-task-switch" onclick="toggleTaskSwitch()"></div>
+</div>
+</section>
+</div>
+</main>
+</div>
+<!-- ==================== 状态 2: 电脑端 居中模态弹窗 (配对码输入) ==================== -->
+<div class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4" id="desktop-pair-modal">
+<div class="w-full max-w-md desktop-card p-7 bg-[#161b26] border-neutral-700 shadow-2xl relative">
+<!-- 关闭图标 -->
+<button class="absolute right-4 top-4 w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white flex items-center justify-center text-xs transition-colors" onclick="closePairModal()">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<!-- 弹窗顶栏所选协调中心信息 (完全动态驱动) -->
+<div class="text-center pt-2">
+<div class="w-12 h-12 rounded-2xl bg-blue-600/15 border border-blue-500/30 text-blue-400 mx-auto flex items-center justify-center text-xl mb-3 shadow-lg shadow-blue-500/10">
+<i class="fa-solid fa-shield-halved"></i>
+</div>
+<h3 class="text-lg font-bold text-white">输入配对码</h3>
+<p class="text-xs text-blue-400 font-semibold mt-1" id="modal-device-name">主控集群 · 华东 #01</p>
+<p class="text-[11px] text-neutral-400 font-mono mt-0.5" id="modal-device-ip">192.168.1.100:7443</p>
+</div>
+<!-- 配对码输入区域 -->
+<div class="mt-6 space-y-2">
+<label class="block text-xs font-semibold text-neutral-300">配对码验证</label>
+<div class="relative">
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-4 py-3 text-center text-xl font-mono tracking-widest text-white placeholder:text-neutral-600 placeholder:text-xs placeholder:tracking-normal focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all" id="desktop-pin-input" inputmode="numeric" maxlength="6" oninput="handleDesktopPinInput(this.value)" placeholder="输入协调中心显示的 4–6 位数字" type="text"/>
+<div class="hidden absolute right-3 top-3.5 w-6 h-6 rounded-full bg-neutral-800 text-neutral-400 flex items-center justify-center cursor-pointer text-xs hover:text-white" id="desktop-clear-btn" onclick="clearDesktopPin()">
+<i class="fa-solid fa-xmark"></i>
+</div>
+</div>
+<!-- 错误提示 -->
+<div class="hidden text-xs text-red-400 flex items-center gap-1.5 pt-1" id="desktop-pin-error">
+<i class="fa-solid fa-circle-exclamation text-xs"></i>
+<span>配对码错误或已过期，请在协调中心控制台重新获取</span>
+</div>
+<p class="text-[11px] text-neutral-500 leading-normal">提示：必须通过协调中心屏幕生成的 PIN 配对码建立受信任加密连接。</p>
+</div>
+<!-- 快速填充按钮 -->
+<div class="mt-3.5 flex items-center justify-center gap-2 text-[11px] text-neutral-500">
+<span>快速填充体验：</span>
+<button class="text-blue-400 hover:underline" onclick="fillDesktopPin('884920')">有效码 (884920)</button>
+<span>·</span>
+<button class="text-red-400 hover:underline" onclick="fillDesktopPin('000000')">过期码 (000000)</button>
+</div>
+<!-- 操作按钮栏 -->
+<div class="mt-6 grid grid-cols-2 gap-3">
+<button class="py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors" onclick="closePairModal()">
+          取消
+        </button>
+<button class="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:pointer-events-none text-white text-xs font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20" disabled="" id="desktop-connect-btn" onclick="submitDesktopPair()">
+<span id="dt-btn-text">连接</span>
+<span class="hidden w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" id="dt-btn-spinner"></span>
+</button>
+</div>
+</div>
+</div>
+<!-- ==================== 快速编辑当前集群参数弹窗 ==================== -->
+<div class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4" id="desktop-edit-modal">
+<div class="w-full max-w-md desktop-card p-6 bg-[#161b26] border-neutral-700 shadow-2xl relative">
+<button class="absolute right-4 top-4 w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white flex items-center justify-center text-xs transition-colors" onclick="closeEditCenterModal()">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<div class="text-center pt-2">
+<div class="w-12 h-12 rounded-2xl bg-cyan-600/15 border border-cyan-500/30 text-cyan-400 mx-auto flex items-center justify-center text-xl mb-3 shadow-lg shadow-cyan-500/10">
+<i class="fa-solid fa-sliders"></i>
+</div>
+<h3 class="text-lg font-bold text-white">✏️ 快速编辑集群参数</h3>
+<p class="text-xs text-neutral-400 mt-1">即时修改选中集群参数，全局动态联动</p>
+</div>
+<div class="mt-5 space-y-3.5">
+<div>
+<label class="block text-xs font-semibold text-neutral-300 mb-1">协调中心名称</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500" id="edit-cluster-name" type="text"/>
+</div>
+<div class="grid grid-cols-3 gap-2">
+<div class="col-span-2">
+<label class="block text-xs font-semibold text-neutral-300 mb-1">IP 地址</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500" id="edit-cluster-ip" type="text"/>
+</div>
+<div>
+<label class="block text-xs font-semibold text-neutral-300 mb-1">端口</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500" id="edit-cluster-port" type="number"/>
+</div>
+</div>
+<div>
+<label class="block text-xs font-semibold text-neutral-300 mb-1">会话延迟 (如: 4ms)</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500" id="edit-cluster-latency" type="text"/>
+</div>
+<div>
+<label class="block text-xs font-semibold text-neutral-300 mb-1">描述信息</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-cyan-500" id="edit-cluster-desc" type="text"/>
+</div>
+</div>
+<div class="mt-6 grid grid-cols-2 gap-3">
+<button class="py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors" onclick="closeEditCenterModal()">
+          取消
+        </button>
+<button class="py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-semibold transition-colors shadow-lg shadow-cyan-500/20" onclick="saveEditedCenter()">
+          保存并应用
+        </button>
+</div>
+</div>
+</div>
+<!-- ==================== 新增自定义协调中心弹窗 ==================== -->
+<div class="hidden fixed inset-0 z-50 modal-backdrop flex items-center justify-center p-4" id="desktop-node-modal">
+<div class="w-full max-w-md desktop-card p-6 bg-[#161b26] border-neutral-700 shadow-2xl relative">
+<button class="absolute right-4 top-4 w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-white flex items-center justify-center text-xs transition-colors" onclick="closeAddNodeModal()">
+<i class="fa-solid fa-xmark"></i>
+</button>
+<div class="text-center pt-2">
+<div class="w-12 h-12 rounded-2xl bg-blue-600/15 border border-blue-500/30 text-blue-400 mx-auto flex items-center justify-center text-xl mb-3">
+<i class="fa-solid fa-server"></i>
+</div>
+<h3 class="text-lg font-bold text-white">添加自定义协调中心</h3>
+<p class="text-xs text-neutral-400 mt-1">指定局域网或远程调度集群网络参数与算力贡献</p>
+</div>
+<div class="mt-5 space-y-3.5">
+<div>
+<label class="block text-xs font-semibold text-neutral-300 mb-1">协调中心名称</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500" id="input-node-name" placeholder="如：华北区域 · 智算集群 #04" type="text"/>
+</div>
+<div class="grid grid-cols-3 gap-2">
+<div class="col-span-2">
+<label class="block text-xs font-semibold text-neutral-300 mb-1">IP 地址</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white placeholder:text-neutral-600 focus:outline-none focus:border-blue-500" id="input-node-ip" placeholder="192.168.1.150" type="text"/>
+</div>
+<div>
+<label class="block text-xs font-semibold text-neutral-300 mb-1">端口</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-blue-500" id="input-node-port" type="number" value="7443"/>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<div>
+<label class="block text-xs font-semibold text-neutral-300 mb-1">预设 CPU 槽位 (核)</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-blue-500" id="input-node-cpu" max="32" min="1" type="number" value="4"/>
+</div>
+<div>
+<label class="block text-xs font-semibold text-neutral-300 mb-1">预设内存缓冲 (MiB)</label>
+<input class="w-full bg-neutral-900 border border-neutral-700 rounded-xl px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-blue-500" id="input-node-mem" max="65536" min="256" step="256" type="number" value="2048"/>
+</div>
+</div>
+</div>
+<div class="mt-6 grid grid-cols-2 gap-3">
+<button class="py-2.5 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition-colors" onclick="closeAddNodeModal()">
+          取消
+        </button>
+<button class="py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors shadow-lg shadow-blue-500/20" onclick="saveNodeModal()">
+          保存并连接
+        </button>
+</div>
+</div>
+</div>
+<script>
+    // ==========================================
+    // 1. 全局数据响应模型 (JavaScript State Model)
+    // 彻底杜绝写死与硬编码
+    // ==========================================
+    const state = {
+      activeTab: 'search', // 'search' | 'pair' | 'scan' | 'quota'
+      isDtEmpty: false,
+      localSystem: {
+        os: 'Windows 11 Pro',
+        arch: 'x86_64',
+        ip: '192.168.1.42',
+        totalMemory: '32GB RAM'
+      },
+      selectedCenter: {
+        id: 'node-1',
+        name: '主控集群 · 华东 #01',
+        ip: '192.168.1.100',
+        port: 7443,
+        latency: '4ms',
+        desc: '调度主干核心，支持任务协同流转',
+        status: 'online',
+        cpuSlots: 4,
+        memoryMb: 2048,
+        isAllocated: true,
+        allowTasks: true
+      },
+      centersList: [
+        {
+          id: 'node-1',
+          name: '主控集群 · 华东 #01',
+          ip: '192.168.1.100',
+          port: 7443,
+          latency: '4ms',
+          desc: '调度主干核心，支持任务协同流转',
+          status: 'online',
+          cpuSlots: 4,
+          memoryMb: 2048,
+          isAllocated: true,
+          allowTasks: true
+        },
+        {
+          id: 'node-2',
+          name: '实验室研发生态节点',
+          ip: '192.168.1.128',
+          port: 7443,
+          latency: '12ms',
+          desc: '鸿蒙 ArkUI 跨端应用沙盒编译池',
+          status: 'online',
+          cpuSlots: 8,
+          memoryMb: 4096,
+          isAllocated: true,
+          allowTasks: true
+        },
+        {
+          id: 'node-3',
+          name: '边缘智算微中心 #08',
+          ip: '192.168.1.205',
+          port: 7443,
+          latency: '7ms',
+          desc: '轻量任务推理与近场数据汇聚',
+          status: 'online',
+          cpuSlots: 2,
+          memoryMb: 1024,
+          isAllocated: true,
+          allowTasks: true
+        }
+      ]
+    };
+
+    // ==========================================
+    // 2. 初始化与主渲染管线
+    // ==========================================
+    window.addEventListener('DOMContentLoaded', () => {
+      renderLocalSystem();
+      renderAll();
+    });
+
+    function renderAll() {
+      renderDeviceGrid();
+      renderActiveTab();
+      renderBoundDisplays();
+    }
+
+    // 渲染本机环境卡片
+    function renderLocalSystem() {
+      const osEl = document.getElementById('system-os-display');
+      const archEl = document.getElementById('system-arch-display');
+      const ipEl = document.getElementById('system-ip-display');
+      const memEl = document.getElementById('system-mem-display');
+      if (osEl) osEl.innerText = state.localSystem.os;
+      if (archEl) archEl.innerText = state.localSystem.arch;
+      if (ipEl) ipEl.innerText = `IP: ${state.localSystem.ip}`;
+      if (memEl) memEl.innerText = state.localSystem.totalMemory;
+    }
+
+    // 渲染全部关联协调中心信息 (顶栏、配对弹窗、扫一扫、贡献上限监控)
+    function renderBoundDisplays() {
+      const center = state.selectedCenter;
+      const fullAddr = `${center.ip}:${center.port}`;
+
+      // 顶栏当前选中节点
+      const tagText = document.getElementById('active-node-tag-text');
+      if (tagText) tagText.innerText = `当前选定: ${center.name}`;
+
+      // 状态1 广播信息
+      const statusText = document.getElementById('search-status-text');
+      if (statusText) {
+        statusText.innerText = `正在向网段 ${center.ip.replace(/\.\d+$/, '.0')}/24 广播鸿蒙协同心跳，已发现 ${state.centersList.length} 个调度集群节点`;
+      }
+      const multicastTag = document.getElementById('multicast-info-tag');
+      if (multicastTag) multicastTag.innerText = `UDP:${center.port} Multicast`;
+
+      // 状态2 居中配对弹窗信息
+      const modalName = document.getElementById('modal-device-name');
+      const modalIp = document.getElementById('modal-device-ip');
+      if (modalName) modalName.innerText = center.name;
+      if (modalIp) modalIp.innerText = fullAddr;
+
+      // 状态3 扫一扫接入信息
+      const scanName = document.getElementById('scan-cluster-name');
+      const scanIp = document.getElementById('scan-cluster-ip');
+      const scanMeta = document.getElementById('scan-qr-meta');
+      if (scanName) scanName.innerText = center.name;
+      if (scanIp) scanIp.innerText = `${fullAddr} (证书 SHA-256 吻合)`;
+      if (scanMeta) scanMeta.innerText = `HM-PAIR://${center.name.slice(0, 4).toUpperCase()}-${center.port}-SEC`;
+
+      // 状态4 贡献上限管理
+      const connectedName = document.getElementById('connected-center-name');
+      const connectedInfo = document.getElementById('connected-center-info');
+      if (connectedName) connectedName.innerText = center.name;
+      if (connectedInfo) {
+        connectedInfo.innerText = `接入地址：${fullAddr} | 鉴权协议：TLSv1.3 AES-GCM-256 | 会话延迟：${center.latency}`;
+      }
+
+      // CPU 与 内存数值与滑块/状态
+      renderQuotaValues();
+
+      // 任务开关状态
+      renderTaskSwitchState();
+    }
+
+    // 渲染配额卡片与待分配状态
+    function renderQuotaValues() {
+      const center = state.selectedCenter;
+      const cpuVal = document.getElementById('dt-quota-cpu');
+      const memVal = document.getElementById('dt-quota-mem');
+      const cpuSlider = document.getElementById('cpu-slider');
+      const memSlider = document.getElementById('mem-slider');
+      const cpuRangeVal = document.getElementById('cpu-range-val');
+      const memRangeVal = document.getElementById('mem-range-val');
+      const cpuTag = document.getElementById('cpu-status-tag');
+      const memTag = document.getElementById('mem-status-tag');
+      const btnText = document.getElementById('desktop-quota-btn-text');
+      const navDot = document.getElementById('nav-quota-state-dot');
+
+      if (!center.isAllocated) {
+        // 待分配灰阶占位态
+        if (cpuVal) {
+          cpuVal.innerText = "待分配";
+          cpuVal.className = "text-2xl font-semibold text-neutral-500";
+        }
+        if (memVal) {
+          memVal.innerText = "待分配";
+          memVal.className = "text-2xl font-semibold text-neutral-500";
+        }
+        if (cpuTag) {
+          cpuTag.innerText = "待协调下发";
+          cpuTag.className = "text-[11px] px-2 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700 font-medium";
+        }
+        if (memTag) {
+          memTag.innerText = "待协调下发";
+          memTag.className = "text-[11px] px-2 py-0.5 rounded bg-neutral-800 text-neutral-400 border border-neutral-700 font-medium";
+        }
+        if (btnText) btnText.innerText = "演示：恢复「已分配额度」";
+        if (navDot) navDot.className = "w-1.5 h-1.5 rounded-full bg-amber-400";
+      } else {
+        // 已分配生效态
+        if (cpuVal) {
+          cpuVal.innerText = center.cpuSlots;
+          cpuVal.className = "text-4xl font-extrabold font-mono text-white tracking-tight";
+        }
+        if (memVal) {
+          memVal.innerText = center.memoryMb;
+          memVal.className = "text-4xl font-extrabold font-mono text-white tracking-tight";
+        }
+        if (cpuTag) {
+          cpuTag.innerText = "已生效";
+          cpuTag.className = "text-[11px] px-2 py-0.5 rounded bg-blue-500/15 text-blue-400 border border-blue-500/30 font-medium";
+        }
+        if (memTag) {
+          memTag.innerText = "已生效";
+          memTag.className = "text-[11px] px-2 py-0.5 rounded bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 font-medium";
+        }
+        if (btnText) btnText.innerText = "演示：切换为「待分配」";
+        if (navDot) navDot.className = "w-1.5 h-1.5 rounded-full bg-emerald-400";
+      }
+
+      if (cpuSlider) cpuSlider.value = center.cpuSlots;
+      if (memSlider) memSlider.value = center.memoryMb;
+      if (cpuRangeVal) cpuRangeVal.innerText = `${center.cpuSlots} 核`;
+      if (memRangeVal) memRangeVal.innerText = `${center.memoryMb} MiB`;
+    }
+
+    // 渲染任务开关状态
+    function renderTaskSwitchState() {
+      const toggle = document.getElementById('desktop-task-switch');
+      const tag = document.getElementById('task-switch-tag');
+      if (!toggle || !tag) return;
+
+      if (state.selectedCenter.allowTasks) {
+        toggle.classList.add('checked');
+        tag.innerText = "接受调度中";
+        tag.className = "text-[10px] px-2 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 font-medium";
+      } else {
+        toggle.classList.remove('checked');
+        tag.innerText = "已暂停接单";
+        tag.className = "text-[10px] px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-300 font-medium";
+      }
+    }
+
+    // 动态渲染协调中心卡片网格
+    function renderDeviceGrid() {
+      const grid = document.getElementById('desktop-device-grid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      state.centersList.forEach((node) => {
+        const isCurrent = node.id === state.selectedCenter.id;
+        const card = document.createElement('div');
+        card.className = `desktop-card desktop-card-interactive p-5 flex flex-col justify-between ${isCurrent ? 'ring-2 ring-blue-500/70 bg-[#19202f]' : ''}`;
+        card.onclick = () => selectCenterAndPair(node);
+
+        card.innerHTML = `
+          <div>
+            <div class="flex items-start justify-between">
+              <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-600/15 border border-blue-500/25 text-blue-400 flex items-center justify-center text-base">
+                  <i class="fa-solid fa-server"></i>
+                </div>
+                <div>
+                  <h4 class="text-sm font-bold text-white tracking-wide">${node.name}</h4>
+                  <p class="text-xs text-neutral-400 font-mono mt-0.5">${node.ip}:${node.port}</p>
+                </div>
+              </div>
+              <span class="text-[10px] px-2 py-0.5 rounded-full font-mono flex items-center gap-1 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span class="w-1 h-1 rounded-full bg-emerald-400"></span> ${node.latency}
+              </span>
+            </div>
+
+            <p class="text-xs text-neutral-400 mt-3 leading-relaxed">${node.desc}</p>
+          </div>
+
+          <div class="mt-4 pt-3.5 border-t border-white/5 flex items-center justify-between text-xs">
+            <span class="text-[11px] text-amber-400/90 flex items-center gap-1.5 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+              <i class="fa-solid fa-lock text-[10px]"></i> 需要配对码
+            </span>
+            <div class="flex items-center gap-1.5 text-blue-400 font-semibold group-hover:translate-x-0.5 transition-transform">
+              <span>立即配对</span>
+              <i class="fa-solid fa-chevron-right text-[10px]"></i>
+            </div>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      const countBadge = document.getElementById('node-count-badge');
+      if (countBadge) countBadge.innerText = `${state.centersList.length} 个在线`;
+    }
+
+    // 选中中心并触发配对弹窗
+    function selectCenterAndPair(node) {
+      state.selectedCenter = node;
+      renderBoundDisplays();
+      renderDeviceGrid();
+      openPairModal();
+    }
+
+    // ==========================================
+    // 3. 视图导航切换
+    // ==========================================
+    function setActiveTab(tab) {
+      state.activeTab = tab;
+      renderActiveTab();
+    }
+
+    function renderActiveTab() {
+      // 隐藏所有面板
+      document.querySelectorAll('.view-panel').forEach(panel => panel.classList.add('hidden'));
+
+      const activeId = `screen-${state.activeTab}`;
+      const activeEl = document.getElementById(activeId);
+      if (activeEl) activeEl.classList.remove('hidden');
+
+      // 更新边栏按钮高亮
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600/15', 'text-blue-400', 'border', 'border-blue-500/30', 'font-semibold');
+        btn.classList.add('text-neutral-400', 'font-medium');
+      });
+      const activeNavBtn = document.getElementById(`tab-btn-${state.activeTab}`);
+      if (activeNavBtn) {
+        activeNavBtn.classList.remove('text-neutral-400', 'font-medium');
+        activeNavBtn.classList.add('bg-blue-600/15', 'text-blue-400', 'border', 'border-blue-500/30', 'font-semibold');
+      }
+
+      // 顶部 Pills 状态
+      ['search', 'pair', 'scan', 'quota'].forEach(t => {
+        const pill = document.getElementById(`step-pill-${t}`);
+        if (pill) {
+          if (t === state.activeTab) {
+            pill.className = 'px-2.5 py-1 rounded-lg text-blue-400 bg-blue-500/20 font-semibold transition-all';
+          } else {
+            pill.className = 'px-2.5 py-1 rounded-lg hover:text-white transition-all';
+          }
+        }
+      });
+
+      // 顶部标题和说明
+      const titles = {
+        'search': { title: '加入调度中心', sub: '在局域网内发现可用节点，连接后参与应用任务协同调度' },
+        'scan': { title: '扫一扫 · 快捷配对', sub: '使用电脑摄像头或扫码器识别调度二维码，即刻建立授信连接' },
+        'quota': { title: '贡献上限管理', sub: '监控与微调当前接入协调中心分配给本机的算力槽位与内存池' }
+      };
+
+      if (titles[state.activeTab]) {
+        document.getElementById('header-page-title').innerText = titles[state.activeTab].title;
+        document.getElementById('header-page-sub').innerText = titles[state.activeTab].sub;
+      }
+    }
+
+    // ==========================================
+    // 4. 配对码弹窗逻辑
+    // ==========================================
+    function openPairModal() {
+      const modal = document.getElementById('desktop-pair-modal');
+      renderBoundDisplays();
+      document.getElementById('desktop-pin-input').value = '';
+      handleDesktopPinInput('');
+      modal.classList.remove('hidden');
+      setTimeout(() => {
+        document.getElementById('desktop-pin-input').focus();
+      }, 100);
+    }
+
+    function closePairModal() {
+      document.getElementById('desktop-pair-modal').classList.add('hidden');
+    }
+
+    function handleDesktopPinInput(val) {
+      const connectBtn = document.getElementById('desktop-connect-btn');
+      const clearBtn = document.getElementById('desktop-clear-btn');
+      const errBox = document.getElementById('desktop-pin-error');
+      errBox.classList.add('hidden');
+
+      if (val.length > 0) {
+        clearBtn.classList.remove('hidden');
+      } else {
+        clearBtn.classList.add('hidden');
+      }
+
+      const isValid = /^\d{4,6}$/.test(val.trim());
+      connectBtn.disabled = !isValid;
+    }
+
+    function clearDesktopPin() {
+      const input = document.getElementById('desktop-pin-input');
+      input.value = '';
+      handleDesktopPinInput('');
+      input.focus();
+    }
+
+    function fillDesktopPin(code) {
+      const input = document.getElementById('desktop-pin-input');
+      input.value = code;
+      handleDesktopPinInput(code);
+    }
+
+    function submitDesktopPair() {
+      const input = document.getElementById('desktop-pin-input');
+      const spinner = document.getElementById('dt-btn-spinner');
+      const btnText = document.getElementById('dt-btn-text');
+      const btn = document.getElementById('desktop-connect-btn');
+      const errBox = document.getElementById('desktop-pin-error');
+
+      btnText.innerText = "校验握手中...";
+      spinner.classList.remove('hidden');
+      btn.disabled = true;
+
+      setTimeout(() => {
+        spinner.classList.add('hidden');
+        if (input.value === '000000') {
+          btnText.innerText = "连接";
+          btn.disabled = false;
+          errBox.classList.remove('hidden');
+        } else {
+          btnText.innerText = "连接";
+          btn.disabled = false;
+          closePairModal();
+          setActiveTab('quota');
+        }
+      }, 600);
+    }
+
+    // ==========================================
+    // 5. 扫一扫逻辑
+    // ==========================================
+    function connectFromScan() {
+      setActiveTab('quota');
+    }
+
+    function simulateDesktopScanExpired() {
+      document.getElementById('desktop-scan-result').classList.add('hidden');
+      document.getElementById('desktop-scan-expired').classList.remove('hidden');
+    }
+
+    function resetDesktopScan() {
+      document.getElementById('desktop-scan-expired').classList.add('hidden');
+      document.getElementById('desktop-scan-result').classList.remove('hidden');
+    }
+
+    // ==========================================
+    // 6. 贡献上限管理与微调
+    // ==========================================
+    function toggleTaskSwitch() {
+      state.selectedCenter.allowTasks = !state.selectedCenter.allowTasks;
+      renderTaskSwitchState();
+    }
+
+    function toggleQuotaAllocation() {
+      state.selectedCenter.isAllocated = !state.selectedCenter.isAllocated;
+      renderQuotaValues();
+    }
+
+    function onCpuSliderChange(val) {
+      state.selectedCenter.cpuSlots = parseInt(val, 10);
+      if (!state.selectedCenter.isAllocated) {
+        state.selectedCenter.isAllocated = true;
+      }
+      renderQuotaValues();
+    }
+
+    function onMemSliderChange(val) {
+      state.selectedCenter.memoryMb = parseInt(val, 10);
+      if (!state.selectedCenter.isAllocated) {
+        state.selectedCenter.isAllocated = true;
+      }
+      renderQuotaValues();
+    }
+
+    function stepCpu(delta) {
+      let current = state.selectedCenter.cpuSlots || 4;
+      let next = Math.max(1, Math.min(32, current + delta));
+      onCpuSliderChange(next);
+    }
+
+    function stepMemory(delta) {
+      let current = state.selectedCenter.memoryMb || 2048;
+      let next = Math.max(256, Math.min(32768, current + delta));
+      onMemSliderChange(next);
+    }
+
+    function applyPresetQuota(cpu, mem) {
+      state.selectedCenter.cpuSlots = cpu;
+      state.selectedCenter.memoryMb = mem;
+      state.selectedCenter.isAllocated = true;
+      renderQuotaValues();
+    }
+
+    function disconnectCenter() {
+      if (confirm(`确定要断开与「${state.selectedCenter.name}」的调度信道吗？现有待执行任务将转交其他集群节点。`)) {
+        setActiveTab('search');
+      }
+    }
+
+    // ==========================================
+    // 7. 快速编辑当前选定集群参数弹窗
+    // ==========================================
+    function openEditCenterModal() {
+      const center = state.selectedCenter;
+      document.getElementById('edit-cluster-name').value = center.name;
+      document.getElementById('edit-cluster-ip').value = center.ip;
+      document.getElementById('edit-cluster-port').value = center.port;
+      document.getElementById('edit-cluster-latency').value = center.latency;
+      document.getElementById('edit-cluster-desc').value = center.desc;
+      document.getElementById('desktop-edit-modal').classList.remove('hidden');
+    }
+
+    function closeEditCenterModal() {
+      document.getElementById('desktop-edit-modal').classList.add('hidden');
+    }
+
+    function saveEditedCenter() {
+      const newName = document.getElementById('edit-cluster-name').value.trim();
+      const newIp = document.getElementById('edit-cluster-ip').value.trim();
+      const newPort = parseInt(document.getElementById('edit-cluster-port').value, 10) || 7443;
+      const newLatency = document.getElementById('edit-cluster-latency').value.trim() || '5ms';
+      const newDesc = document.getElementById('edit-cluster-desc').value.trim() || '自定义协调调度中心';
+
+      if (newName) state.selectedCenter.name = newName;
+      if (newIp) state.selectedCenter.ip = newIp;
+      state.selectedCenter.port = newPort;
+      state.selectedCenter.latency = newLatency;
+      state.selectedCenter.desc = newDesc;
+
+      // 同步到 centersList 中
+      const idx = state.centersList.findIndex(n => n.id === state.selectedCenter.id);
+      if (idx !== -1) {
+        state.centersList[idx] = { ...state.selectedCenter };
+      }
+
+      closeEditCenterModal();
+      renderAll();
+    }
+
+    // ==========================================
+    // 8. 随机生成集群数据
+    // ==========================================
+    function randomizeAllCenters() {
+      const regions = ['华北', '华东', '华南', '西南', '西北', '华中', '海外边缘'];
+      const types = ['智算枢纽', '协同集群', '研发生态组', '高吞吐调度器', '异构超算微中心'];
+      const descriptions = [
+        '局域网自动感知并同步，具备全双工任务流水线',
+        '支持鸿蒙 ArkUI 跨端组件分布式渲染协作与沙盒编译',
+        '低功耗近场接入节点，负责轻量批处理分流与快速响应',
+        '主干协同枢纽，支持大模型分层张量推理调度'
+      ];
+
+      const count = Math.floor(Math.random() * 2) + 3; // 3-4个
+      const newNodes = [];
+
+      for (let i = 0; i < count; i++) {
+        const randRegion = regions[Math.floor(Math.random() * regions.length)];
+        const randType = types[Math.floor(Math.random() * types.length)];
+        const randDesc = descriptions[Math.floor(Math.random() * descriptions.length)];
+        const randIp = `192.168.${Math.floor(Math.random() * 5 + 1)}.${Math.floor(Math.random() * 200 + 10)}`;
+        const randPort = [7443, 8443, 9090, 7001][Math.floor(Math.random() * 4)];
+        const randCpu = [2, 4, 8, 16][Math.floor(Math.random() * 4)];
+        const randMem = [1024, 2048, 4096, 8192][Math.floor(Math.random() * 4)];
+        const randLatency = `${Math.floor(Math.random() * 15 + 3)}ms`;
+
+        newNodes.push({
+          id: 'node-rnd-' + Date.now() + '-' + i,
+          name: `${randType} · ${randRegion} #${Math.floor(Math.random() * 90 + 10)}`,
+          ip: randIp,
+          port: randPort,
+          latency: randLatency,
+          desc: randDesc,
+          status: 'online',
+          cpuSlots: randCpu,
+          memoryMb: randMem,
+          isAllocated: true,
+          allowTasks: true
+        });
+      }
+
+      state.centersList = newNodes;
+      state.selectedCenter = newNodes[0];
+
+      if (state.isDtEmpty) toggleEmptyState();
+      renderAll();
+    }
+
+    // 重新扫描动画触发
+    function triggerRescan() {
+      const icon = document.getElementById('header-rescan-icon');
+      const spinner = document.getElementById('search-spinner');
+      if (icon) icon.classList.add('animate-spin');
+      if (spinner) spinner.classList.remove('hidden');
+
+      setTimeout(() => {
+        if (icon) icon.classList.remove('animate-spin');
+        randomizeAllCenters();
+      }, 600);
+    }
+
+    // 切换空状态
+    function toggleEmptyState() {
+      state.isDtEmpty = !state.isDtEmpty;
+      const grid = document.getElementById('desktop-device-grid');
+      const empty = document.getElementById('desktop-empty-state');
+      const btn = document.getElementById('desktop-toggle-empty-btn');
+      if (state.isDtEmpty) {
+        grid.classList.add('hidden');
+        empty.classList.remove('hidden');
+        btn.innerText = "恢复列表搜索结果";
+      } else {
+        grid.classList.remove('hidden');
+        empty.classList.add('hidden');
+        btn.innerText = "模拟空状态";
+      }
+    }
+
+    // ==========================================
+    // 9. 添加自定义协调中心
+    // ==========================================
+    function openAddNodeModal() {
+      document.getElementById('input-node-name').value = '';
+      document.getElementById('input-node-ip').value = '';
+      document.getElementById('desktop-node-modal').classList.remove('hidden');
+    }
+
+    function closeAddNodeModal() {
+      document.getElementById('desktop-node-modal').classList.add('hidden');
+    }
+
+    function saveNodeModal() {
+      const name = document.getElementById('input-node-name').value.trim() || `自定义调度中心 #${state.centersList.length + 1}`;
+      const ip = document.getElementById('input-node-ip').value.trim() || `192.168.1.${Math.floor(Math.random() * 200 + 10)}`;
+      const port = parseInt(document.getElementById('input-node-port').value, 10) || 7443;
+      const cpuSlots = parseInt(document.getElementById('input-node-cpu').value, 10) || 4;
+      const memoryMb = parseInt(document.getElementById('input-node-mem').value, 10) || 2048;
+
+      const newNode = {
+        id: 'node-custom-' + Date.now(),
+        name,
+        ip,
+        port,
+        latency: '3ms',
+        desc: '手动添加的自定义局域网调度协调节点',
+        status: 'online',
+        cpuSlots,
+        memoryMb,
+        isAllocated: true,
+        allowTasks: true
+      };
+
+      state.centersList.unshift(newNode);
+      state.selectedCenter = newNode;
+
+      closeAddNodeModal();
+      if (state.isDtEmpty) toggleEmptyState();
+      renderAll();
+      openPairModal();
+    }
+  </script>
+</body></html>

@@ -50,6 +50,8 @@ export class TelemetryView {
         plan:data.plan?{snapshotVersion:data.plan.snapshotVersion,policyVersion:data.plan.policyVersion,
           status:decision?.status??'UNKNOWN',reason:decision?.reason??'UNKNOWN',baselineMs:finite(decision?.baselineMs),suggestionMs:finite(decision?.suggestionMs),
           baseline:decision?.baseline??null,suggestion:decision?.suggestion??null,rejections:decision?.rejections??[],planningMs:finite(decision?.planningMs)}:null,
+        candidateCount:finite(data.decisionEvidence?.candidateCount),
+        dataScope:data.privacy??'UNKNOWN',
         resultDelivery:data.decisionEvidence?.resultDelivery??'UNKNOWN',
         transfers:offer.transferPlan.map((hop:any)=>({from:hop.from,to:hop.to,via:hop.via})),
         selectedInputEndpoint:decision?.suggestion?.[0]?.inputEndpointId??null};

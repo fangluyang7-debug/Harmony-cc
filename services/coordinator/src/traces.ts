@@ -93,7 +93,7 @@ export class TraceService {
       }
     }
     const analysis=analyzeTrace(spans);
-    return {traceId,spans,analysis,causality,coverage:{sourceSdkRoot:!!root,sourceDurationMs:root?.span.durationMs??null,criticalPathPending:!root||!causality.complete||analysis.status!=='COMPLETE',
+    return {traceId,spans,analysis,causality,decisions:jobs.map(job=>({attemptId:job.id,nodeId:job.d.offer.task.nodeId,targetId:job.d.offer.target.targetId,candidateCount:job.d.decisionEvidence?.candidateCount??null,snapshotVersion:job.d.decisionEvidence?.snapshotVersion??null})),coverage:{sourceSdkRoot:!!root,sourceDurationMs:root?.span.durationMs??null,criticalPathPending:!root||!causality.complete||analysis.status!=='COMPLETE',
       reasonCode:!root?'SOURCE_SDK_ROOT_NOT_RECORDED':!causality.complete?'CRITICAL_PATH_DEPENDENCIES_INCOMPLETE':analysis.status!=='COMPLETE'?'CLOCK_OR_MEASUREMENT_INCOMPLETE':'MEASURED_CAUSAL_TRACE_COMPLETE'}};
   }
 }

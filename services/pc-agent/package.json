@@ -8,6 +8,7 @@
     "recovery": "node dist/recovery-main.js",
     "pair": "node dist/pairing-main.js",
     "start": "node dist/host-main.js",
+    "service-host": "node dist/service-host-main.js",
     "submit": "node dist/submit-main.js",
     "app:register": "node dist/app-register-main.js"
   },

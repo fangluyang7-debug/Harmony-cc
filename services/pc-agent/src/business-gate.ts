@@ -7,6 +7,6 @@ export function requireBusinessQualification(offer:DispatchOfferV2,executor:Exec
   if(!validCapabilityAdmissionV2(admission)||admission.domain!==domain||admission.groupId!==offer.task.groupId||admission.holderInstanceId!==holderInstanceId||admission.targetId!==offer.target.targetId||
     !['CANARY','ACTIVE'].includes(admission.state)||admission.identity!==identity||!sampleUsableV2(admission.quality,now,domain)||
     canonical(offer.target)!==canonical(executor.target)||canonical(offer.task.contract)!==canonical(executor.contract)||canonical(offer.resources)!==canonical(executor.resources)||
-    executor.model!==null&&canonical(JSON.parse(offer.task.parameters))!==canonical(executor.model)||
+    executor.model!==null&&executor.contract.parameterRole!=='EXECUTION'&&canonical(JSON.parse(offer.task.parameters))!==canonical(executor.model)||
     offer.allowedConfigs.some(c=>!executor.configurations.some(local=>canonical(c)===canonical(local))))throw Error('CAPABILITY_NOT_QUALIFIED');
 }

@@ -1,0 +1,534 @@
+{
+  "label": "SoleAI 购物",
+  "allowedContracts": [
+    "chat.understand.v1",
+    "text.embed.v1",
+    "vector.search.v1",
+    "catalog.price-stock.v1",
+    "rank.v1",
+    "chat.answer.v1",
+    "image.quality.v1",
+    "image.crop.v1",
+    "vision.category.v1",
+    "vision.profile.v1",
+    "image.encode.v1",
+    "image.search.v1",
+    "chat.suggest.v1",
+    "shopping.commit.v1"
+  ],
+  "maxConcurrent": 2,
+  "resources": [
+    {
+      "resourcePoolId": "cpu",
+      "amount": 4
+    },
+    {
+      "resourcePoolId": "ram",
+      "amount": 4294967296
+    },
+    {
+      "resourcePoolId": "gpu",
+      "amount": 1
+    },
+    {
+      "resourcePoolId": "vram",
+      "amount": 8589934592
+    }
+  ],
+  "offlineBase": [],
+  "onlineExtra": [],
+  "declaration": {
+    "version": 1,
+    "revision": "soleai.app.1",
+    "workflows": [
+      {
+        "id": "shopping.text",
+        "capabilities": [
+          "chat.understand.v1",
+          "text.embed.v1",
+          "vector.search.v1",
+          "catalog.price-stock.v1",
+          "rank.v1",
+          "chat.answer.v1",
+          "shopping.commit.v1"
+        ],
+        "inputSchema": "text.query",
+        "outputContract": "shopping.result",
+        "qualityTarget": "reference",
+        "nodes": [
+          {
+            "id": "understand",
+            "capability": "chat.understand.v1",
+            "dependsOn": [],
+            "effects": "PURE",
+            "privacy": "OWNER_SERVICE"
+          },
+          {
+            "id": "embed",
+            "capability": "text.embed.v1",
+            "dependsOn": [
+              "understand"
+            ],
+            "effects": "PURE",
+            "privacy": "OWNER_SERVICE"
+          },
+          {
+            "id": "search",
+            "capability": "vector.search.v1",
+            "dependsOn": [
+              "embed"
+            ],
+            "parameters": "{\"topK\":30}",
+            "effects": "PURE"
+          },
+          {
+            "id": "price",
+            "capability": "catalog.price-stock.v1",
+            "dependsOn": [
+              "search"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "rank",
+            "capability": "rank.v1",
+            "dependsOn": [
+              "price",
+              "understand"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "answer",
+            "capability": "chat.answer.v1",
+            "dependsOn": [
+              "rank"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "commit",
+            "capability": "shopping.commit.v1",
+            "dependsOn": [
+              "answer"
+            ],
+            "effects": "COMMIT",
+            "privacy": "OWNER_SERVICE"
+          }
+        ]
+      },
+      {
+        "id": "shopping.image",
+        "capabilities": [
+          "image.quality.v1",
+          "image.crop.v1",
+          "vision.category.v1",
+          "vision.profile.v1",
+          "image.encode.v1",
+          "image.search.v1",
+          "vector.search.v1",
+          "catalog.price-stock.v1",
+          "rank.v1",
+          "chat.answer.v1",
+          "shopping.commit.v1"
+        ],
+        "inputSchema": "image.raster",
+        "outputContract": "shopping.result",
+        "qualityTarget": "reference",
+        "alternatives": [
+          {
+            "id": "shopping.image.encode-then-search",
+            "capabilities": [
+              "image.quality.v1",
+              "image.crop.v1",
+              "vision.category.v1",
+              "vision.profile.v1",
+              "image.encode.v1",
+              "vector.search.v1",
+              "catalog.price-stock.v1",
+              "rank.v1",
+              "chat.answer.v1",
+              "shopping.commit.v1"
+            ],
+            "inputSchema": "image.raster",
+            "outputContract": "shopping.result",
+            "qualityTarget": "reference",
+            "nodes": [
+              {
+                "id": "quality",
+                "capability": "image.quality.v1",
+                "dependsOn": [],
+                "effects": "PURE"
+              },
+              {
+                "id": "crop",
+                "capability": "image.crop.v1",
+                "dependsOn": [
+                  "quality"
+                ],
+                "parameters": "{\"targetSize\":1024,\"jpegQuality\":95}",
+                "effects": "PURE"
+              },
+              {
+                "id": "category",
+                "capability": "vision.category.v1",
+                "dependsOn": [
+                  "crop"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "profile",
+                "capability": "vision.profile.v1",
+                "dependsOn": [
+                  "crop"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "encode",
+                "capability": "image.encode.v1",
+                "dependsOn": [
+                  "crop"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "search",
+                "capability": "vector.search.v1",
+                "dependsOn": [
+                  "encode",
+                  "category"
+                ],
+                "parameters": "{\"topK\":30}",
+                "effects": "PURE"
+              },
+              {
+                "id": "price",
+                "capability": "catalog.price-stock.v1",
+                "dependsOn": [
+                  "search"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "rank",
+                "capability": "rank.v1",
+                "dependsOn": [
+                  "price",
+                  "profile"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "answer",
+                "capability": "chat.answer.v1",
+                "dependsOn": [
+                  "rank"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "commit",
+                "capability": "shopping.commit.v1",
+                "dependsOn": [
+                  "answer"
+                ],
+                "effects": "COMMIT",
+                "privacy": "OWNER_SERVICE"
+              }
+            ]
+          },
+          {
+            "id": "shopping.image.service-search",
+            "capabilities": [
+              "image.quality.v1",
+              "image.crop.v1",
+              "vision.category.v1",
+              "vision.profile.v1",
+              "image.search.v1",
+              "catalog.price-stock.v1",
+              "rank.v1",
+              "chat.answer.v1",
+              "shopping.commit.v1"
+            ],
+            "inputSchema": "image.raster",
+            "outputContract": "shopping.result",
+            "qualityTarget": "reference",
+            "nodes": [
+              {
+                "id": "quality",
+                "capability": "image.quality.v1",
+                "dependsOn": [],
+                "effects": "PURE"
+              },
+              {
+                "id": "crop",
+                "capability": "image.crop.v1",
+                "dependsOn": [
+                  "quality"
+                ],
+                "parameters": "{\"targetSize\":1024,\"jpegQuality\":95}",
+                "effects": "PURE"
+              },
+              {
+                "id": "category",
+                "capability": "vision.category.v1",
+                "dependsOn": [
+                  "crop"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "profile",
+                "capability": "vision.profile.v1",
+                "dependsOn": [
+                  "crop"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "search",
+                "capability": "image.search.v1",
+                "dependsOn": [
+                  "crop",
+                  "category"
+                ],
+                "parameters": "{\"topK\":30}",
+                "effects": "PURE"
+              },
+              {
+                "id": "price",
+                "capability": "catalog.price-stock.v1",
+                "dependsOn": [
+                  "search"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "rank",
+                "capability": "rank.v1",
+                "dependsOn": [
+                  "price",
+                  "profile"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "answer",
+                "capability": "chat.answer.v1",
+                "dependsOn": [
+                  "rank"
+                ],
+                "effects": "PURE"
+              },
+              {
+                "id": "commit",
+                "capability": "shopping.commit.v1",
+                "dependsOn": [
+                  "answer"
+                ],
+                "effects": "COMMIT",
+                "privacy": "OWNER_SERVICE"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "shopping.more",
+        "capabilities": [
+          "text.embed.v1",
+          "vector.search.v1",
+          "catalog.price-stock.v1",
+          "rank.v1",
+          "shopping.commit.v1"
+        ],
+        "inputSchema": "session.ref",
+        "outputContract": "shopping.result",
+        "qualityTarget": "reference",
+        "nodes": [
+          {
+            "id": "embed",
+            "capability": "text.embed.v1",
+            "dependsOn": [],
+            "effects": "PURE"
+          },
+          {
+            "id": "search",
+            "capability": "vector.search.v1",
+            "dependsOn": [
+              "embed"
+            ],
+            "parameters": "{\"topK\":60}",
+            "effects": "PURE"
+          },
+          {
+            "id": "price",
+            "capability": "catalog.price-stock.v1",
+            "dependsOn": [
+              "search"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "rank",
+            "capability": "rank.v1",
+            "dependsOn": [
+              "price"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "commit",
+            "capability": "shopping.commit.v1",
+            "dependsOn": [
+              "rank"
+            ],
+            "effects": "COMMIT",
+            "privacy": "OWNER_SERVICE"
+          }
+        ]
+      },
+      {
+        "id": "shopping.profile",
+        "capabilities": [
+          "vision.profile.v1",
+          "shopping.commit.v1"
+        ],
+        "inputSchema": "product.ref",
+        "outputContract": "product.profile",
+        "qualityTarget": "reference",
+        "nodes": [
+          {
+            "id": "profile",
+            "capability": "vision.profile.v1",
+            "dependsOn": [],
+            "effects": "PURE"
+          },
+          {
+            "id": "commit",
+            "capability": "shopping.commit.v1",
+            "dependsOn": [
+              "profile"
+            ],
+            "effects": "COMMIT",
+            "privacy": "OWNER_SERVICE"
+          }
+        ]
+      },
+      {
+        "id": "shopping.refine",
+        "capabilities": [
+          "image.crop.v1",
+          "vision.category.v1",
+          "vision.profile.v1",
+          "image.encode.v1",
+          "vector.search.v1",
+          "catalog.price-stock.v1",
+          "rank.v1",
+          "chat.answer.v1",
+          "shopping.commit.v1"
+        ],
+        "inputSchema": "image.refine",
+        "outputContract": "shopping.result",
+        "qualityTarget": "reference",
+        "nodes": [
+          {
+            "id": "crop",
+            "capability": "image.crop.v1",
+            "dependsOn": [],
+            "parameters": "{\"targetSize\":1024,\"jpegQuality\":95}",
+            "effects": "PURE"
+          },
+          {
+            "id": "category",
+            "capability": "vision.category.v1",
+            "dependsOn": [
+              "crop"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "profile",
+            "capability": "vision.profile.v1",
+            "dependsOn": [
+              "crop"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "encode",
+            "capability": "image.encode.v1",
+            "dependsOn": [
+              "crop"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "search",
+            "capability": "vector.search.v1",
+            "dependsOn": [
+              "encode",
+              "category"
+            ],
+            "parameters": "{\"topK\":30}",
+            "effects": "PURE"
+          },
+          {
+            "id": "price",
+            "capability": "catalog.price-stock.v1",
+            "dependsOn": [
+              "search"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "rank",
+            "capability": "rank.v1",
+            "dependsOn": [
+              "price",
+              "profile"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "answer",
+            "capability": "chat.answer.v1",
+            "dependsOn": [
+              "rank"
+            ],
+            "effects": "PURE"
+          },
+          {
+            "id": "commit",
+            "capability": "shopping.commit.v1",
+            "dependsOn": [
+              "answer"
+            ],
+            "effects": "COMMIT",
+            "privacy": "OWNER_SERVICE"
+          }
+        ]
+      },
+      {
+        "id": "shopping.suggestions",
+        "capabilities": [
+          "chat.suggest.v1"
+        ],
+        "inputSchema": "session.ref",
+        "outputContract": "text.list",
+        "qualityTarget": "reference",
+        "nodes": [
+          {
+            "id": "suggest",
+            "capability": "chat.suggest.v1",
+            "dependsOn": [],
+            "effects": "PURE",
+            "privacy": "OWNER_SERVICE"
+          }
+        ]
+      }
+    ]
+  }
+}

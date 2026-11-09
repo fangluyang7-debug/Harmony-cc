@@ -22,7 +22,7 @@ export class WorkflowJobs {
   if(!row||!['DISPATCHING','DISPATCHED'].includes(row.state))return;
   const d=JSON.parse(row.metadataJson),t=d.offer.task;
   if(t.workflowId!==id||t.attemptId!==id||!d.fingerprint||!d.sourcePeer||d.deadlineAt<=Date.now()||
-    t.contract.serviceId||d.request.nodes[0].allowedTargetIds?.length||d.choices?.length>1)return;
+    t.contract.sideEffectPolicy!=='PURE'||d.request.nodes[0].allowedTargetIds?.length||d.choices?.length>1)return;
   const node=await tx.node.findUnique({where:{id:JSON.stringify([id,t.nodeId])}});
   if(!node||node.state!=='REJECTED'||node.currentAttemptId!==id||node.backupAttemptId)return;
   const input=d.input,workflow:SdkWorkflow={version:3,id,qualityTarget:t.qualityTarget,outputContract:t.contract.outputSchemas[0],
@@ -40,8 +40,12 @@ export class WorkflowJobs {
   if(Object.keys(body).some(k=>!['workflow','options'].includes(k))||Object.keys(w).some(k=>!['version','id','outputContract','qualityTarget','nodes'].includes(k))||Object.keys(o).some(k=>!['requestId','budgetMs','resultDestination','inputLocation','priority'].includes(k))||o.priority!==undefined&&!['REMOTE_INTERACTIVE','REMOTE_BATCH'].includes(o.priority))throw Error('SDK_GRAPH_INVALID');
   const known=new Set<string>();
   for(const node of w.nodes){
-   if(!protocolId(node.id)||known.has(node.id)||!Array.isArray(node.dependsOn)||node.dependsOn.some(id=>!known.has(id))||typeof node.parameters!=='string'||Buffer.byteLength(node.parameters)>32768||node.targetId!==undefined&&!protocolId(node.targetId)||Object.keys(node).some(k=>!['id','capability','input','inputFrom','parameters','dependsOn','targetId','modelManifest'].includes(k)))throw Error('SDK_GRAPH_NODE_INVALID');
-   JSON.parse(node.parameters);const pack=this.pack(node.capability);if(!app.identity.allowedContracts.includes(pack.manifest.contract.contractId))throw Error('APP_CONTRACT_FORBIDDEN');
+   if(!protocolId(node.id)||known.has(node.id)||!Array.isArray(node.dependsOn)||node.dependsOn.some(id=>!known.has(id))||typeof node.parameters!=='string'||Buffer.byteLength(node.parameters)>32768||node.targetId!==undefined&&!protocolId(node.targetId)||Object.keys(node).some(k=>!['id','capability','input','inputFrom','parameters','dependsOn','targetId','modelManifest','effects','businessIdempotencyKey','privacy'].includes(k))||node.privacy!==undefined&&!['LOCAL_ONLY','OWNER_SERVICE','SHARED'].includes(node.privacy))throw Error('SDK_GRAPH_NODE_INVALID');
+   JSON.parse(node.parameters);const pack=this.pack(node.capability);
+   const effects=node.effects??'PURE';
+   if(!['PURE','COMMIT'].includes(effects)||(effects==='PURE')!==(pack.manifest.contract.sideEffectPolicy==='PURE'))throw Error('SDK_EFFECTS_MISMATCH');
+   if(effects==='COMMIT'&&!protocolId(node.businessIdempotencyKey!))throw Error('SDK_IDEMPOTENCY_REQUIRED');
+   if(effects==='PURE'&&node.businessIdempotencyKey!==undefined)throw Error('SDK_EFFECTS_MISMATCH');if(!app.identity.allowedContracts.includes(pack.manifest.contract.contractId))throw Error('APP_CONTRACT_FORBIDDEN');
    if(node.modelManifest!==undefined&&(!validModelManifestV2(node.modelManifest)||!sameModelV2(node.modelManifest,pack.manifest.model)))throw Error('SDK_MODEL_MISMATCH');
    if(node.inputFrom!==undefined){if(node.input!==undefined||!node.dependsOn.includes(node.inputFrom))throw Error('SDK_GRAPH_EDGE_INVALID');const parent=w.nodes.find(n=>n.id===node.inputFrom)!;if(!pack.manifest.contract.inputSchemas.includes(this.pack(parent.capability).manifest.contract.outputSchemas[0]))throw Error('SDK_GRAPH_SCHEMA_MISMATCH');}
    else{const input=node.input;if(!input||Object.keys(input).sort().join('|')!=='bytes|contentHash|schemaId|schemaVersion'||!/^[a-f0-9]{64}$/.test(input.contentHash)||!Number.isSafeInteger(input.bytes)||input.bytes<1||input.bytes>8388608||input.schemaVersion!==1||!pack.manifest.contract.inputSchemas.includes(input.schemaId))throw Error('SDK_INPUT_INVALID');}
@@ -103,7 +107,10 @@ export class WorkflowJobs {
  }
  /** Replan once after a settled PURE yield or a durable pre-admission rejection. */
  private async restartSettledOrUnstarted(id:string,data:GraphData,node:NodeState){
-  if(data.deadlineAt<=Date.now()||(node.yieldedAttempts?.length??0)+(node.reassignedAttempts?.length??0)>=1)return false;
+  // COMMIT never gets an automatic replacement attempt. The installed pack answers without a transaction;
+  // the stored offer's contract is re-checked below as the authoritative record for this attempt.
+  const installed=this.packs.find(p=>p.manifest.contract.capability===data.workflow.nodes.find(n=>n.id===node.id)?.capability);
+  if(installed&&installed.manifest.contract.sideEffectPolicy!=='PURE'||data.deadlineAt<=Date.now()||(node.yieldedAttempts?.length??0)+(node.reassignedAttempts?.length??0)>=1)return false;
   const oldId=node.jobId,nextId=randomUUID();
   const history=[...(node.yieldedAttempts??[]),oldId];
   const replacement:NodeState={id:node.id,jobId:nextId,state:'PENDING',yieldedAttempts:history};
@@ -113,6 +120,7 @@ export class WorkflowJobs {
    const row=await tx.attempt.findUnique({where:{id:oldId}});
    if(!row?.offerJson||row.groupId!==graph.groupId||row.workflowId!==id)return false;
    const offer=JSON.parse(row.offerJson),record=row.recordJson&&JSON.parse(row.recordJson);
+   if(offer.task.contract.sideEffectPolicy!=='PURE')return false;
    const notice=row.yieldJson&&JSON.parse(row.yieldJson).notice;
    const refusal=row.rejectionJson&&JSON.parse(row.rejectionJson).reply;
    const unstarted=row.state==='REJECTED'&&!record&&refusal?.reasonCode==='QUEUE_STARVED_NOT_STARTED'&&refusal.attemptId===oldId&&
@@ -121,7 +129,7 @@ export class WorkflowJobs {
      notice.attemptId===oldId&&offer.task.contract.sideEffectPolicy==='PURE'&&offer.task.contract.interruptibility==='CANCEL_RESTART';
    if(!yielded&&!unstarted)return false;
    if(unstarted){
-    if(data.workflow.nodes.find(n=>n.id===node.id)?.targetId||offer.task.contract.serviceId)return false;
+    if(data.workflow.nodes.find(n=>n.id===node.id)?.targetId)return false;
     delete replacement.yieldedAttempts;replacement.reassignedAttempts=[oldId];
     replacement.excludedDeviceId=offer.target.deviceId;
    }
@@ -162,7 +170,7 @@ export class WorkflowJobs {
       data.failure={code:'SDK_MODEL_MISMATCH',reason:'REGISTERED_MODEL_CHANGED',nodeId:n.id};await this.stop(id,data,'FAILED');return;
      }
      const assignment=data.plan.decision.suggestion!.find(a=>a.nodeId===n.id)!;
-     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:!!assignment.outputEndpointId&&data.workflow.nodes.some(child=>child.inputFrom===n.id&&data.plan.decision.suggestion?.find(a=>a.nodeId===child.id)?.inputEndpointOperation==='WRITE'),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
+     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,businessIdempotencyKey:n.businessIdempotencyKey,privacy:n.privacy,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:!!assignment.outputEndpointId&&data.workflow.nodes.some(child=>child.inputFrom===n.id&&data.plan.decision.suggestion?.find(a=>a.nodeId===child.id)?.inputEndpointOperation==='WRITE'),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
      state.state='SUBMITTED';await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
     }
     if(await this.jobs.graphInput(data.peer,state.jobId,source))continue;

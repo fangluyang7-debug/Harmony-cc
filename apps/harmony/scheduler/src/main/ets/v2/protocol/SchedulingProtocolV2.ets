@@ -26,6 +26,8 @@ export function validWorkModelV2(model:WorkModelV2):boolean {
 export interface TaskContractV2 {
   workModel?: WorkModelV2;
   serviceId?: string;
+  /** EXECUTION: parameters are run parameters. MODEL_MANIFEST: parameters carry the model manifest (legacy encoding packs; default when absent and a model is declared). */
+  parameterRole?: string;
   contractId: string; version: number; capability: string; inputSchemas: string[]; outputSchemas: string[];
   sideEffectPolicy: string; interruptibility: string; maxNonPreemptibleMs: number | null;
 }
@@ -119,7 +121,9 @@ export function validTaskContractV2(v: TaskContractV2): boolean {
   const fields=['contractId','version','capability','inputSchemas','outputSchemas','sideEffectPolicy','interruptibility','maxNonPreemptibleMs'];
   if(objectV2(v)&&Object.keys(v).indexOf('serviceId')>=0)fields.push('serviceId');
   if(objectV2(v)&&Object.keys(v).indexOf('workModel')>=0)fields.push('workModel');
+  if(objectV2(v)&&Object.keys(v).indexOf('parameterRole')>=0)fields.push('parameterRole');
   return exactV2(v,fields)&&(fields.indexOf('workModel')<0||validWorkModelV2(v.workModel!))&&(fields.indexOf('serviceId')<0||idV2(v.serviceId!))&&
+    (fields.indexOf('parameterRole')<0||['EXECUTION','MODEL_MANIFEST'].indexOf(v.parameterRole!)>=0)&&
     idV2(v.contractId)&&integerV2(v.version,1)&&idV2(v.capability)&&idsV2(v.inputSchemas,64)&&idsV2(v.outputSchemas,64)&&v.outputSchemas.length>0&&
     ['PURE','IDEMPOTENT_WRITE','TRANSACTIONAL','NO_REPLAY'].indexOf(v.sideEffectPolicy)>=0&&['CHECKPOINT','CANCEL_RESTART','NON_INTERRUPTIBLE'].indexOf(v.interruptibility)>=0&&
     (v.maxNonPreemptibleMs===null||timeV2(v.maxNonPreemptibleMs));

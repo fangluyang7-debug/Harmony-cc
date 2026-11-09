@@ -5,6 +5,7 @@ import { AssetsModule } from '../assets/assets.module';
 import { ProductProfileModule } from '../product-profile/product-profile.module';
 import { ProductPoolController } from './controllers/product-pool.controller';
 import { ImageSearchV2Controller } from './controllers/image-search-v2.controller';
+import { ShoppingStagesV2Controller } from './controllers/shopping-stages-v2.controller';
 import { AuthModule } from '../auth/auth.module';
 import { ANN_SEARCH_PORT } from './application/ann-search-port.interface';
 import { AnnSearchService } from './application/ann-search.service';
@@ -60,7 +61,7 @@ import { VolcengineDoubaoEmbeddingProviderService } from './application/volcengi
 
 @Module({
   imports: [CacheModule, AssetsModule, ProductProfileModule, AuthModule],
-  controllers: [ProductPoolController, ImageSearchV2Controller],
+  controllers: [ProductPoolController, ImageSearchV2Controller, ShoppingStagesV2Controller],
   providers: [
     ProductPoolService,
     HashEmbeddingProviderService,

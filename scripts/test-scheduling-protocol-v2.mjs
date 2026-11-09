@@ -29,6 +29,7 @@ for(const source of sources){
   }
   const load=name=>JSON.parse(fs.readFileSync(new URL(`fixtures/valid/${name}.json`,base),'utf8'));
   const service=load('TaskContract');service.serviceId='catalog.lookup';equal(api.validTaskContractV2(service),true);equal(ajv.getSchema('urn:scheduling:v2#/definitions/TaskContract')(service),true);service.serviceId='https://untrusted';equal(api.validTaskContractV2(service),false);service.serviceId=null;equal(api.validTaskContractV2(service),false);
+  for(const [role,expected] of [['EXECUTION',true],['MODEL_MANIFEST',true],['PARAMS',false],[1,false]]){const roled=load('TaskContract');roled.parameterRole=role;equal(api.validTaskContractV2(roled),expected,'parameterRole '+role);equal(ajv.getSchema('urn:scheduling:v2#/definitions/TaskContract')(roled),expected,'parameterRole schema '+role);}
   const modeled=load('TaskContract'),validateContract=ajv.getSchema('urn:scheduling:v2#/definitions/TaskContract');
   for(const [model,expected] of [[{version:'crop-v1',parameters:[{name:'quality',bucketWidth:10}]},true],
     [{version:'crop-v1',parameters:[{name:'quality',bucketWidth:0}]},false],[null,false]]){

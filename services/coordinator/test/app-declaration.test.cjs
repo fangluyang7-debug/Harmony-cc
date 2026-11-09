@@ -25,3 +25,23 @@ test('owner approved declaration persists; rejected declarations create no insta
   await assert.rejects(r.apps.register(owner.peer,{...input,declaration:{...declaration,revision:'shopping.2'}},r.url),/APP_DECLARATION_CONFLICT/);
  }finally{await r.close();}
 });
+
+{
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {validDeclaration}=require('../dist/app-declaration');
+const workflow=()=>({id:'shopping.text',capabilities:['chat.understand.v1','shopping.commit.v1'],inputSchema:'text.query',outputContract:'shopping.result',qualityTarget:'reference',nodes:[{id:'understand',capability:'chat.understand.v1',dependsOn:[],parameters:'{}',effects:'PURE'},{id:'commit',capability:'shopping.commit.v1',dependsOn:['understand'],effects:'COMMIT'}]});
+const declaration=()=>({version:1,revision:'soleai.app.1',workflows:[workflow()]});
+const valid=d=>validDeclaration(d,['chat.understand.v1','shopping.commit.v1']);
+test('effects, parameters, dependencies and content-based quality are validated',()=>{
+ assert.equal(valid(declaration()),true);
+ for(const revision of ['soleai.app.1','other.app.42','legacy']){const d=declaration();d.revision=revision;delete d.workflows[0].qualityTarget;assert.equal(valid(d),false);}
+ for(const mutate of [d=>delete d.workflows[0].qualityTarget,d=>d.workflows[0].nodes[1].effects='REMOTE',d=>d.workflows[0].nodes[0].parameters='[]',d=>d.workflows[0].nodes[0].dependsOn=['commit']]){const d=declaration();mutate(d);assert.equal(valid(d),false);}
+ const old=declaration();old.revision='legacy';delete old.workflows[0].qualityTarget;old.workflows[0].nodes.forEach(n=>delete n.effects);assert.equal(valid(old),true);
+});
+test('alternatives require compatible complete paths without nesting',()=>{
+ const d=declaration(),w=d.workflows[0];w.alternatives=[workflow()];delete w.nodes;assert.equal(valid(d),true);
+ w.alternatives[0].outputContract='other';assert.equal(valid(d),false);
+ w.alternatives[0]=workflow();w.alternatives[0].alternatives=[workflow()];assert.equal(valid(d),false);
+});
+
+}

@@ -235,3 +235,24 @@ test('reservations use independent physical and holder pool identities and adjac
  expect(earliestFeasibleV2([running,queued],demands,0,50)).toBe(500);
  expect(earliestFeasibleV2([{...queued,key:other,end:Infinity}],demands,0,50)).toBe(0);
 });
+
+it('selects among service targets without binding the submitting host',()=>{
+ const r=fixture();r.nodes=r.nodes.slice(0,1);r.links.forEach(l=>l.bytesPerSecond=1000000);
+ const n=r.nodes[0];n.serviceId='soleai';n.candidates[1].serviceId='soleai';
+ const planner=new WorkflowPlacementPlanner(limits,()=>0),one=planner.plan(r);
+ expect(one.candidateCounts?.a).toBe(1);expect(one.suggestion?.[0].targetId).toBe('pc');
+ expect(one.rejections).toEqual(expect.arrayContaining([expect.objectContaining({targetId:'cloud',code:'SERVICE_PLACEMENT_FORBIDDEN'})]));
+ n.candidates[0].serviceId='soleai';n.candidates[0].computeMs=1;n.candidates[1].computeMs=500;
+ const two=planner.plan(r);expect(two.candidateCounts?.a).toBe(2);expect(two.suggestion?.[0].targetId).toBe('cloud');
+});
+
+it('data scope filters candidates by where the data may go, without naming a target',()=>{
+ const r=fixture();r.nodes=r.nodes.slice(0,1);r.links.forEach(l=>l.bytesPerSecond=1000000);const n=r.nodes[0];
+ const planner=new WorkflowPlacementPlanner(limits,()=>0);
+ expect(planner.plan(r).suggestion?.[0].targetId).toBe('pc'); // cheaper remote wins when data is shareable
+ n.dataScope='LOCAL_ONLY';const local=planner.plan(r);
+ expect(local.suggestion?.[0].targetId).toBe('cloud');expect(local.candidateCounts?.a).toBe(1);
+ expect(local.rejections).toEqual(expect.arrayContaining([expect.objectContaining({targetId:'pc',code:'DATA_SCOPE_FORBIDDEN'})]));
+ n.dataScope='OWNER_SERVICE';expect(planner.plan(r).status).toBe('blocked'); // no target registers a service
+ n.candidates[1].serviceId='catalog';n.serviceId='catalog';expect(planner.plan(r).suggestion?.[0].targetId).toBe('pc');
+});

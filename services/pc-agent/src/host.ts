@@ -23,11 +23,14 @@ import {cpuSchemas} from '@harmony/reference-capabilities';
 import {performance} from 'node:perf_hooks';
 import {pcTraceClockDomainId} from './execution-trace';
 
-export interface FixedServiceAdapter {pack:ReferencePack;execute(input:Buffer,parameters:string,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string}>;}
+/** A capability provided by a logical service (its own catalogue, index or model). The host that
+ * installs the adapter is an ordinary execution target; placement stays with the planner. */
+export interface ServiceExecutionContext {/** Reference evaluation: write capabilities must run in the service's dry-run mode. */evaluation:boolean;idempotencyKey:string|null;}
+export interface ServiceAdapter {pack:ReferencePack;execute(input:Buffer,parameters:string,signal:AbortSignal,context:ServiceExecutionContext):Promise<{bytes:Buffer;schemaId:string}>;}
 export interface CpuHostConfig {
   dataEndpoint?:DataHostConfig|false;
   imageEncoder?:ImageEncoder;
-  fixedServices?:FixedServiceAdapter[];
+  services?:ServiceAdapter[];
   controlIntervalMs?:number;
   directory:string;identity:{groupId:string;deviceId:string;holderInstanceId:string;appInstanceId:string|null};connection:RecoveryConnection;
   contribution:{ownerMode:'dedicated'|'windows-idle'|'paused';maxCpuThreads:number;maxMemoryBytes:number;maxVramBytes?:number;reserveMemoryBytes:number;idleThresholdMs?:number};
@@ -73,7 +76,7 @@ export class CpuHost {
       fs.renameSync(temporary,target);
   }
   private constructor(readonly ledger:DurableLedger,private readonly config:CpuHostConfig,private readonly onError:(e:unknown)=>void,builtins:ReferencePack[]){
-    this.packs=[...builtins,...(config.imageEncoder?[config.imageEncoder.pack]:[]),...(config.fixedServices??[]).map(s=>s.pack)];
+    this.packs=[...builtins,...(config.imageEncoder?[config.imageEncoder.pack]:[]),...(config.services??[]).map(s=>s.pack)];
     if(new Set(this.packs.map(p=>p.manifest.contract.capability)).size!==this.packs.length)throw Error('SERVICE_CAPABILITY_CONFLICT');
     const request=allotmentTransport(config.connection),packs=this.packs,byDigest=new Map(packs.map(p=>[packDigest(p),p])),installed=new Map([...byDigest].flatMap(([hash,p])=>p.cases.map(c=>[hash+':'+c.id,c] as const)));
     this.relayLinks=new RelayLinks(config.identity.deviceId,config.connection.domain,request);
@@ -89,7 +92,7 @@ export class CpuHost {
         workflowId:'eval-'+permit.id,nodeId:'reference',attemptId:permit.id,coordinatorEpoch:this.agent.coordinatorEpoch,planRevision:1,
         app:this.appPolicy?.identity??{groupId:state.groupId,principalId:state.holderInstanceId,appId:state.holderInstanceId,appInstanceId:state.holderInstanceId,allowedContracts:[executor.contract.contractId]},
         contract:executor.contract,budget:{remainingMs:permit.timeoutMs,deadlineAt:Date.now()+permit.timeoutMs},inputs:[{artifactId:'eval-input-'+permit.id,contentVersion:1,contentHash:permit.inputHash,schemaId:executor.contract.inputSchemas[0],schemaVersion:1}],
-        allowedTargetIds:[executor.target.targetId],qualityTarget:'reference',privacy:'LOCAL_ONLY',priority:'REMOTE_BATCH',parameters:test.parameters,allowedConfigurations:[permit.config.id],businessIdempotencyKey:null},
+        allowedTargetIds:[executor.target.targetId],qualityTarget:'reference',privacy:'LOCAL_ONLY',priority:'REMOTE_BATCH',parameters:test.parameters,allowedConfigurations:[permit.config.id],businessIdempotencyKey:executor.contract.sideEffectPolicy==='PURE'?null:'eval-'+permit.id},
         target:executor.target,resources:executor.resources,allowedConfigs:[permit.config],allotmentId:grant.allotmentId,allotmentVersion:grant.version,leaseMs:permit.timeoutMs,transferPlan:[],dependencies:[],reasonCode:'TRUSTED_REFERENCE'};
       return offer;
     },context,(offer,input,signal)=>this.executeService(offer,input,signal),config.imageEncoder);
@@ -119,7 +122,7 @@ export class CpuHost {
         const reply=await authorize(offer);if(authorizations.size>=8)authorizations.delete(authorizations.keys().next().value!);authorizations.set(offer.task.attemptId,reply.offer);
         return Number.isSafeInteger(reply.snapshotVersion)&&reply.snapshotVersion!>0?reply.snapshotVersion!:null;
       },
-      ports:{...remotePorts,imageEncoder:config.imageEncoder,fixedService:(offer,input,signal)=>this.executeService(offer,input,signal),publish:async(bytes,schemaId,offer,trace)=>{
+      ports:{...remotePorts,imageEncoder:config.imageEncoder,service:(offer,input,signal)=>this.executeService(offer,input,signal),publish:async(bytes,schemaId,offer,trace)=>{
         const reply=await request('/v2/executions/'+offer.task.attemptId+'/output',{bytes:bytes.length,contentHash:digest(bytes),schemaId}) as {ticket:Parameters<typeof transfer>[1];delivery:string;descriptor?:ArtifactDescriptor;endpoint?:{id:string;epoch:string}};
         if(reply.delivery==='RETAINED'){
           const host=this.dataHost,endpoint=host?.identity(),descriptor=reply.descriptor;
@@ -163,13 +166,16 @@ export class CpuHost {
       calibration:{executor:evaluator},onYield:()=>{},onExecutionSettled:()=>{void (this.pending??Promise.resolve()).then(()=>this.tick(false)).catch(onError);},onError});
   }
   private async executeService(offer:DispatchOfferV2,input:Buffer,signal:AbortSignal){
-    const contract=offer.task.contract,adapter=this.config.fixedServices?.find(s=>s.pack.manifest.contract.serviceId===contract.serviceId&&canonical(s.pack.manifest.contract)===canonical(contract));
-    if(!adapter||!this.appPolicy||contract.sideEffectPolicy!=='PURE'||offer.task.app.appInstanceId!==this.config.identity.appInstanceId||offer.task.originDeviceId!==this.config.identity.deviceId)throw Error('SERVICE_SCOPE');
-    if(signal.aborted)throw Error('CANCELLED_SETTLED');return adapter.execute(Buffer.from(input),offer.task.parameters,signal);
+    const contract=offer.task.contract,adapter=this.config.services?.find(s=>s.pack.manifest.contract.serviceId===contract.serviceId&&canonical(s.pack.manifest.contract)===canonical(contract));
+    // Any registered App may be routed here by the planner; App access is enforced by the coordinator's
+    // contract allow-list and authorization, not by binding the service to the submitting host.
+    const evaluation=offer.reasonCode==='TRUSTED_REFERENCE';
+    if(!adapter||!(contract.sideEffectPolicy==='PURE'||contract.sideEffectPolicy==='IDEMPOTENT_WRITE'&&(evaluation||offer.task.businessIdempotencyKey!==null)))throw Error('SERVICE_SCOPE');
+    if(signal.aborted)throw Error('CANCELLED_SETTLED');return adapter.execute(Buffer.from(input),offer.task.parameters,signal,{evaluation,idempotencyKey:offer.task.businessIdempotencyKey});
   }
   static async open(config:CpuHostConfig,onError:(e:unknown)=>void=()=>{}){
     const p=config?.contribution;
-    if(config?.fixedServices?.some(s=>!s.pack.manifest.contract.serviceId||s.pack.manifest.contract.sideEffectPolicy!=='PURE'||s.pack.manifest.contract.interruptibility!=='CANCEL_RESTART')||config?.fixedServices?.length&&config.identity.appInstanceId===null)throw Error('SERVICE_CONFIG_INVALID');
+    if(config?.services?.some(s=>!s.pack.manifest.contract.serviceId||!['PURE','IDEMPOTENT_WRITE'].includes(s.pack.manifest.contract.sideEffectPolicy)||s.pack.manifest.contract.sideEffectPolicy==='IDEMPOTENT_WRITE'&&s.pack.dryRunEvaluation!==true||s.pack.manifest.contract.interruptibility!=='CANCEL_RESTART'))throw Error('SERVICE_CONFIG_INVALID');
     if(!config||config.controlIntervalMs!==undefined&&(!Number.isSafeInteger(config.controlIntervalMs)||config.controlIntervalMs<100||config.controlIntervalMs>=60000)||!path.isAbsolute(config.directory)||!fs.existsSync(path.join(config.directory,'ledger.initialized'))||!p||!['dedicated','windows-idle','paused'].includes(p.ownerMode)||
       !Number.isSafeInteger(p.maxCpuThreads)||p.maxCpuThreads<1||!Number.isSafeInteger(p.maxMemoryBytes)||p.maxMemoryBytes<67108864||!Number.isSafeInteger(p.reserveMemoryBytes)||p.reserveMemoryBytes<0)throw Error('HOST_CONFIG_INVALID');
     const ledger=await DurableLedger.open(config.directory,config.identity,config.connection.certificate);
@@ -188,7 +194,7 @@ export class CpuHost {
     const prior=(value:number|null,sampledAt=now):NumericSampleV2=>({value,source:value===null?'UNKNOWN':'PRIOR',sampledAt,ttlMs:3600000,unit:'ms'});
     const gpu=pack===this.config.imageEncoder?.pack&&!!this.config.imageEncoder.gpu;
     const resources=pack.manifest.resourceLimit.filter(r=>gpu||!['gpu','vram'].includes(r.resourcePoolId));
-    const executorId=pack===this.config.imageEncoder?.pack?(gpu?cudaExecutorId:imageExecutorId):(cpuRegistry.executorId(capability)??'node.cpu.v1');
+    const executorId=pack===this.config.imageEncoder?.pack?(gpu?cudaExecutorId:imageExecutorId):pack.manifest.contract.serviceId?pack.manifest.executorIds[0]:(cpuRegistry.executorId(capability)??'node.cpu.v1');
     return {startup:pack.manifest.contract.serviceId?"UNKNOWN":"COLD",target:{targetId:(gpu?'cuda-':'cpu-')+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
       executorId,executorVersion:'1',backend:gpu?'CUDA':pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
       resources:structuredClone(resources),configurations:[{...pack.cases[0].config}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(null),cold:prior(cost?.overhead??0,cost?cost.at+this.clockOffset:now),publish:prior(0),uncertainty:prior(null)};

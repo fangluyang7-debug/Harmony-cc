@@ -158,6 +158,10 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       @Post('apps/registrations')async registerApp(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>apps.register(await auth.authenticate(bearer(header)),body,config.publicUrl??'https://'+config.certificateHost+':'+app.getHttpServer().address().port));}
       @Post('apps/exchange')async exchangeApp(@Body() body:any){return this.jobResponse(async()=>apps.exchange(body));}
       @Get('apps/me')async appIdentity(@Headers('authorization') header:string){return this.jobResponse(async()=>apps.context(await auth.authenticate(bearer(header))));}
+      /** Qualified-target counts per allowed contract. A count is a registration fact for the App's own routing report; the planner still chooses. */
+      @Get('apps/me/capabilities')async appCapabilities(@Headers('authorization') header:string){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),context=await apps.context(peer);
+        let candidates:{capability:string;targetId:string;serviceId?:string}[]=[];try{candidates=(await snapshots.build(peer.groupId)).snapshot.candidates;}catch{candidates=[];}
+        return {capabilities:context.identity.allowedContracts.map((capability:string)=>{const mine=candidates.filter(c=>c.capability===capability);return {capability,targets:new Set(mine.map(c=>c.targetId)).size,services:new Set(mine.filter(c=>c.serviceId!==undefined).map(c=>c.targetId)).size};})};});}
       @Get('apps/registrations')async listApps(@Headers('authorization') header:string){return this.jobResponse(async()=>apps.list(await auth.authenticate(bearer(header))));}
       @Post('apps/registrations/:id/revoke')async revokeApp(@Headers('authorization') header:string,@Param('id') id:string){return this.jobResponse(async()=>apps.revoke(await auth.authenticate(bearer(header)),id));}
       @Post('credentials/rotate')async rotate(@Headers('authorization') header:string){try{return await auth.rotate(bearer(header));}catch{throw new UnauthorizedException('CREDENTIAL_REJECTED');}}

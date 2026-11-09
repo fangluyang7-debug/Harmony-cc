@@ -59,6 +59,8 @@ test('paired standalone CPU host automatically qualifies; metadata submission ->
   assert.ok(preflights>0);assert.ok(result.decisionEvidence.snapshotVersion>0);assert.equal(result.decisionEvidence.policyVersion,'cpu-host-v1');
   let trace;await until(async()=>{trace=await pinnedRequest(sourceInvite,'/v2/traces/'+result.traceId,undefined,source.credential);return ['PLAN','OFFER','ADMIT','QUEUE','EXECUTE','PUBLISH'].every(p=>trace.spans.some(s=>s.phase===p));},errors);
   assert.ok(trace.spans.every(s=>s.snapshotVersion===result.decisionEvidence.snapshotVersion));
+  assert.equal(trace.decisions.find(d=>d.attemptId===requestId).candidateCount,result.decisionEvidence.candidateCount);
+  assert.ok(result.decisionEvidence.candidateCount>=1);
   await request('/v2/jobs/'+requestId+'/start',{});assert.equal(await r.db.attempt.count({where:{id:requestId}}),1);
   const otherInvite=await r.auth.invite('team1','other','other-device',r.url),other=await r.auth.exchange({inviteId:otherInvite.inviteId,code:otherInvite.code,holderInstanceId:'other-holder'}),otherRequest=allotmentTransport({...connection,credential:other.credential});
   await assert.rejects(otherRequest('/v2/jobs/'+requestId,null),/REJECTED/);

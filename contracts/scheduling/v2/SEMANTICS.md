@@ -64,4 +64,6 @@
 
 ### 来源 App 固定服务（S3）
 
-TaskContractV2 的可选 serviceId 为可信参考包定义的逻辑服务标识，不是 URL。存在该字段时，规划候选必须匹配同一 serviceId、来源 App 安装和来源 holder；服务凭据与实际地址仅由 App 宿主适配器持有，不随工作流提交。当前适配器仅支持 PURE/CANCEL_RESTART，复用资格评测、准入、取消和独立资源结算。没有 serviceId 的原有契约保持兼容。
+TaskContractV2 的可选 serviceId 为可信参考包定义的逻辑服务标识，不是 URL。存在该字段时，规划候选必须登记同一 serviceId；任何登记了该服务的目标（包括独立的业务服务宿主）都是候选，由规划器按成本选择，不绑定来源 App 或来源 holder（STATUS §87 R-17）。服务凭据与实际地址仅由执行宿主的适配器持有，不随工作流提交。当前适配器仅支持 PURE/CANCEL_RESTART，复用资格评测、准入、取消和独立资源结算。没有 serviceId 的原有契约保持兼容。
+
+可选 parameterRole 说明 task.parameters 的含义：MODEL_MANIFEST 表示参数就是模型清单（图像编码包的既有用法；字段缺省且契约声明了模型时按此处理）；EXECUTION 表示参数是运行参数（如 topK），模型一致性改由 modelManifest 与执行器模型的 sameModelV2 比对保证，准入门不再把参数与模型清单全等比较。

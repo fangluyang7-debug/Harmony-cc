@@ -59,6 +59,19 @@ API 22 的购物 App 与设备调度件已完成未签名 HAP 构建。安装前
 
 代理执行结束后主动发布资源画像，仍以本地账本和有效画像为准，不因为收到结果而推测设备已经释放全部资源。
 
+### 业务服务宿主：把服务自己的能力登记为普通执行目标（2026-11-09）
+
+业务服务（例如 SoleAI 的商品向量检索）不再是"固定节点"。它通过一个独立宿主进程以普通目标身份登记能力，规划器在所有登记了该能力的目标里按成本选择（STATUS §87）。
+
+1. 准备共享声明文件：复制 `examples/service-host/service-packs.json`，把 `indexSpaceId`、`indexVersion`、`model` 改成业务服务当前激活索引的元数据（`GET /api/v2/image-search/spaces/<space>` 的返回）。协调者与宿主必须使用**同一份文件**，否则评测套件摘要不一致。
+2. 协调者启动时设置 `COORDINATOR_SERVICE_PACKS=<该文件绝对路径>`（与 `COORDINATOR_CPU_HOST=1` 同用）。
+3. 像 PC 执行设备一样为服务宿主生成设备邀请并配对（`npm --workspace @harmony/pc-agent run pair -- <invitation.json> <目录>`），准备 `contribution.json`。
+4. 复制 `examples/service-host/service.json`，填入 `packs`（同一声明文件）、`baseUrl`（业务服务地址）、`tokenEnv`（存放业务服务访问令牌的环境变量名）。令牌只从环境变量读取，不写入账本、追踪或任务元数据。
+5. 启动：`npm --workspace @harmony/pc-agent run service-host -- <目录>/agent.json <contribution.json> <service.json>`。宿主先核对线上索引与声明一致（不一致报 `SERVICE_INDEX_MISMATCH`），再登记声明文件中的能力（向量检索 `vector.search.v1`，以及 `stages` 段里的 `catalog.price-stock.v1`、`rank.v1`），协调者自动用参考用例评测，通过后进入候选集。
+6. 在调度盘查看任务详情的"候选目标数（资格过滤后）"：只有服务宿主登记该能力时为 1，这是登记事实而非固定；再有一台设备登记同一 `serviceId` 的能力后会变为 2 并按成本比较。
+
+当前提供三项只读能力：`vector.search.v1`、`catalog.price-stock.v1`（对应业务服务 `POST /api/v2/stages/price-stock`）、`rank.v1`（`POST /api/v2/stages/rank`），以及唯一的写能力 `shopping.commit.v1`（`POST /api/v2/stages/commit`，幂等键必填，评测走 `X-Dry-Run`，用户授权由 `POST /api/v2/tickets` 签发的任务票据随任务携带）。视觉分类与文字理解能力的服务登记尚未实现，见 STATUS §87 §16–§17。
+
 ## 双设备验收步骤
 
 1. A 运行协调者，B 运行代理。B 用 HTTPS 访问 A 的就绪接口与网页；若无法连接，检查地址、Windows 入站端口规则和 AP 客户端隔离。不要用关闭 TLS 验证代替证书配置。

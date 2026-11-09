@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>智调鸿枢 · Windows 设备调度件</title>
+<script src="/desktop.js" defer></script>
+<style>
+  :root { color-scheme: dark; font: 15px/1.5 system-ui, "Microsoft YaHei", sans-serif; color: #f1f5f9; background: #0b0e14; }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { display: grid; grid-template-columns: 220px minmax(0,1fr); min-height: 100vh; margin: 0; }
+  aside { background: #11141c; border-right: 1px solid #ffffff14; padding: 24px 16px; }
+  aside strong { font-size: 19px; }
+  aside nav { display: grid; gap: 8px; margin-top: 28px; }
+  aside button { text-align: left; }
+  aside button[aria-current="true"] { background: #162647; border-color: #244b88; color: #93c5fd; }
+  main { padding: 28px clamp(16px, 4vw, 50px); min-width: 0; }
+  header, .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  header { border-bottom: 1px solid #ffffff14; padding-bottom: 16px; }
+  h1, h2, p { margin: 0; }
+  h1 { font-size: 23px; }
+  h2 { font-size: 17px; }
+  p, .muted { color: #a0abc0; overflow-wrap: anywhere; }
+  .panel { background: #161b26; border: 1px solid #ffffff14; border-radius: 16px; padding: 20px; margin-top: 16px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 12px; margin-top: 14px; }
+  button, input, textarea, select { font: inherit; }
+  button { cursor: pointer; padding: 9px 14px; border-radius: 10px; background: #25314a; color: #edf4ff; border: 1px solid #ffffff18; }
+  button:hover { border-color: #60a5fa; }
+  button:disabled { opacity: .5; cursor: default; }
+  button.primary { background: #1756d4; }
+  .center { text-align: left; padding: 16px; background: #131926; border-radius: 12px; overflow-wrap: anywhere; }
+  .center span { display: block; margin-top: 5px; color: #a0abc0; font-size: 13px; }
+  .center .pair-label { border-top: 1px solid #ffffff14; margin-top: 14px; padding-top: 9px; color: #93c5fd; }
+  .discovery-banner { background: #151e31; border: 1px solid #263b60; border-radius: 12px; margin: 14px 0; padding: 12px; }
+  label { display: grid; gap: 6px; margin-top: 12px; }
+  input, textarea, select { padding: 9px; min-width: 0; width: 100%; background: #0b0e14; border: 1px solid #49566d; border-radius: 8px; }
+  textarea { min-height: 96px; resize: vertical; }
+  a { color: #93c5fd; }
+  output { color: #d1d5db; font-size: 24px; font-weight: 700; display: block; }
+  .quota { padding: 14px; background: #202633; border-radius: 12px; }
+  .error { color: #fda4af; margin-top: 12px; }
+  dialog { width: min(520px, calc(100% - 32px)); max-height: 90vh; background: #161b26; color: inherit; border: 1px solid #334155; border-radius: 16px; padding: 20px; }
+  dialog::backdrop { background: #04070dcc; }
+  dialog .row { margin-top: 16px; }
+  summary { cursor: pointer; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; }
+  video { width: 100%; max-height: 280px; margin-top: 12px; }
+  @media (max-width: 690px) { body { grid-template-columns: 1fr; } aside { padding: 12px 16px; } aside nav { display: flex; flex-wrap: wrap; margin-top: 8px; } }
+</style>
+</head>
+<body data-page="agent">
+<aside>
+  <strong>智调鸿枢</strong>
+  <p>Windows 设备调度件</p>
+  <nav aria-label="设备导航">
+    <button type="button" id="nav-discover" aria-current="true">搜索协调中心</button>
+    <button type="button" id="import">导入设备邀请</button>
+    <button type="button" id="scan" hidden>扫一扫</button>
+    <button type="button" id="nav-quota" disabled>贡献上限</button>
+    <a id="role-link" href="/" hidden>打开协调中心</a>
+  </nav>
+</aside>
+<main>
+  <header>
+    <div><h1>设备接入与调度控制台</h1><p id="status" role="status">正在读取状态</p></div>
+    <button type="button" id="discover">重新搜索</button>
+  </header>
+  <p class="error" id="error" role="alert" hidden></p>
+  <section class="panel" id="discover-panel" aria-labelledby="discover-title">
+    <div class="discovery-banner">
+      <div class="row"><strong>局域网自动发现</strong><span class="muted">UDP 7444</span></div>
+      <p id="search-status" role="status">正在搜索附近的协调中心…</p>
+    </div>
+    <h2 id="discover-title">附近的协调中心</h2>
+    <div class="grid" id="centers"></div>
+  </section>
+  <section class="panel" id="quota-panel" aria-labelledby="quota-title" hidden>
+    <div class="row">
+      <div><h2 id="quota-title">贡献上限</h2><p id="connected-center"></p></div>
+      <button type="button" id="agent-power" class="primary" disabled>开启设备调度件</button>
+    </div>
+    <div class="grid">
+      <div class="quota">CPU 槽位<output id="cpu">待分配</output></div>
+      <div class="quota">内存<output id="memory">待分配</output></div>
+    </div>
+    <p>额度来自设备配对配置。能力就绪和实际在线状态请在调度盘查看。</p>
+  </section>
+  <details class="panel">
+    <summary>设备配置</summary>
+    <label>设备安装目录<input id="directory" placeholder="留空使用用户目录下 HarmonyRuntime/device"></label>
+    <button type="button" id="load-installation">读取设备配置</button>
+    <label>图像后端（可选）
+      <select id="backend"><option value="">使用现有环境配置</option><option>CPU</option><option>CUDA</option></select>
+    </label>
+    <label>Python 可执行文件<input id="python" placeholder="启用图像编码时填写绝对路径"></label>
+    <label>可信编码套件 JSON<input id="suite" placeholder="与协调中心一致的本地套件路径"></label>
+  </details>
+  <details class="panel"><summary>运行日志</summary><pre id="logs">暂无运行日志</pre></details>
+</main>
+<dialog id="pair-dialog" aria-labelledby="pair-title">
+  <h2 id="pair-title">设备配对</h2>
+  <p id="pair-center"></p>
+  <p>使用协调中心为本机生成的一次性设备邀请。</p>
+  <label>导入邀请文件<input id="file" type="file" accept=".json,application/json"></label>
+  <label>或粘贴完整设备邀请<textarea id="invitation"></textarea></label>
+  <p class="error" id="pair-error" role="alert" hidden></p>
+  <div class="row"><button type="button" id="cancel-pair">取消</button><button type="button" id="pair" class="primary">配对设备</button></div>
+</dialog>
+<dialog id="scan-dialog" aria-labelledby="scan-title">
+  <h2 id="scan-title">扫描协调中心的设备邀请</h2>
+  <video id="camera" autoplay muted playsinline></video>
+  <p class="error" id="scan-error" role="alert" hidden></p>
+  <div class="row"><button type="button" id="cancel-scan">关闭</button></div>
+</dialog>
+</body>
+</html>

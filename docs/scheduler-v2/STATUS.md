@@ -1766,3 +1766,291 @@ Require stack:
 **结果**（测试）：01 包含 882 个 `@nestjs` 条目、143,433,400 字节；02 为 43,497,533 字节且不含 NestJS 条目（设备代理是纯 Node，不依赖框架）。按「全新机器」复验：解压到 `D:\HarmonyCoordinator`，把 PATH 限制为 `runtime\openssl;C:\Windows\System32;C:\Windows`（无 Git、无系统 OpenSSL），启动后 23 个迁移全部应用、证书生成成功、协调中心 `RUNNING`：`https://100.81.81.224:7443`，`0.0.0.0:7443` 与 UDP `7444` 均在监听，证书指纹 `9D:3B:CA:49:54:85:36:07:E3:85:B8:A9:F0:8C:05:14:4A:C1:64:1F:99:9D:A4:18:06:BE:6A:E0:55:EC:5E:31`，数据目录 `D:\HarmonyCoordinator\services\coordinator\data\desktop-100.81.81.224`。
 
 **边界**：本次只验证了 Windows x64 协调者；扫码配对、跨 App 授权、真实任务派发仍未验。证书与数据库写在解压目录内，移动目录或换机器需要重新生成证书，设备端要重新配对。
+
+## 87. 用户确认的应用级协同开关与业务服务目标化修订方案（2026-11-09）
+
+来源：用户 2026-11-09 重申最初设想并确认三点口径（见 §0）；本节是按 §00.3 "不属于任何切片的需求，由用户确认后先写入规格，再实施"准备的**规格修订方案**，供用户当晚修订 `specification-r6.md`。**状态：用户已确认 R-17/R-18；声明、候选证据和规划规则已部分实施，D5 与副作用规则已同步规格。业务执行器、阶段拆分、App 全量接入及真机验收未完成。** 修订号沿用 §82 做法不变，记为"用户 2026-11-09 确认"。实施者每完成一条，在对应条目后追加"实施记录"。
+
+核对基线：`4273cd0` 工作树（干净）。本节引用的行号以该基线为准，实施前先 `git status` 核对。
+
+### 0. 用户确认的口径（对本节全部条目生效）
+
+1. **开关是 App 级，不是工作流级。** 打开 = 手机连接协调器，SoleAI **全部 AI 功能**进入调度体系，由调度器结合任务需求、各设备能力与负载、通信成本决定每个节点在哪执行；关闭 = 不接入调度体系，SoleAI 和普通 App 一样只用这台手机的资源、由手机自己的调度件运行。开发者一次性声明完整 AI 能力清单，用户只操作总开关。
+2. **打开 ≠ 每个任务都派出去。** 小任务留本机、重任务或本机忙时才考虑其他设备，这个判断由算法完成，App 不再自行决定哪些环节"值得"接入。
+3. **一切放置都是算法输出，不允许先导固定。** 不存在预先标好"只能在某处执行"的节点类型；业务服务和手机、PC 一样是普通执行目标，登记能力与数据副本位置，由规划器在全部登记了该能力的目标里选最优。今天某能力只有一个目标登记，算法选它是"候选集只有一个"的结果；明天新增目标，声明与规划器零修改。
+
+### 1. 当前实现与口径的差距（核对）
+
+| 差距 | 代码事实 | 结论 |
+| --- | --- | --- |
+| 声明不全 | `apps/harmony/entry/src/main/ets/services/CooperativeSession.ets:16-21` 的 `manifest` 只声明 `shopping.photo.prepare`（`image.crop.v1`）和 `shopping.image.encode`（`image.encode.v1`）两条工作流，`allowedContracts` 也只有这两个契约 | 不是"App 全部 AI 功能"的声明 |
+| 入口不统一 | 主购物流程只有 `Index.ets:387` 一处 `cooperative.preparePhoto()` 经过调度器；其后 `tasks.searchImageResult(prepared)` 仍由 `ShoppingTaskService.ets:39` 注册的 `CloudShoppingExecutor` 直接调 `/api/v1/shopping/tasks`（`CloudShoppingExecutor.ets:154`）。文字购物 `searchResult`、`refreshResult`、`sessionResult` 完全不经 SDK | 开关实际是"启用两个协同子功能"，不是"整个 App 的运行模式切换" |
+| 关闭模式未定义 | `preparePhoto` 在 `!this.enabled()` 时 `return uri`，其余走原路径；`availableClient()` 失败时把状态写成"新任务使用原业务路径" | 关闭模式等于"原 SoleAI"，这一点本身符合口径 1，但规格没有把它定义为正式的"本机模式" |
+| 先导固定 | 规格 r6 §2 术语表第 207 行定义"固定服务节点"，§00.2 第 39 行把 SoleAI 业务服务写成"任务图中的固定服务节点" | 违反口径 3，要删除 |
+| 声明结构不够 | `services/coordinator/src/app-declaration.ts` 的 `DeclaredWorkflow` 只有 `id/capabilities/inputSchema/outputContract/nodes`，节点只有 `id/capability/dependsOn` | 缺质量目标与节点参数/成本模型，无法承载完整声明；需按 D10 只加可选字段 |
+| 能力包只有三个 | `capabilities/` 下只有 `image.crop.v1`、`text.count.v1`、`vector.normalize.v1`；`image.encode.v1` 的包在 §72 的受信模型评测包里 | 文字理解、视觉分类、商品画像、检索、排序、回答没有能力契约 |
+| 服务端已有完整阶段清单 | `services/api-server/src/core/runtime/shopping-capabilities.ts` 的 `SHOPPING_DEPENDENCIES` 与 `image-search-task-graph.ts:5` 的 `IMAGE_SEARCH_STAGES`（receive → asset → quality-check → crop → category → product-profile → embedding → vector-search → price-stock → rank → answer → result） | 声明清单的直接来源，不必重新发明 |
+| 手机本机调度件仍在 | `ModelEngineRegistry.ets:107-109` 注册 `LocalTensorEngineProvider`、`MindSporeLiteProvider`、`CloudModelProxyProvider`；`LocalPolicyStore`、`VectorSearchWorker`、`NeuralEmbeddingIndex` 保留 | 关闭模式的执行基础已存在 |
+
+### 2. 规格修订清单（`specification-r6.md`，按行号）
+
+逐条列出"现文 → 改为 → 为什么"。用户确认后由实施者改写，不改修订号。
+
+| # | 位置 | 现文 | 改为 | 为什么 |
+| --- | --- | --- | --- | --- |
+| R-1 | §2 术语表 L207 | "固定服务节点：契约约束必须在某个逻辑服务上执行的节点，例如 SoleAI 业务检索。" | **删除该行**。新增术语"**执行目标**（target）：向协调器登记了能力、资源与数据副本位置的任何执行方，包括手机、PC 和 App 自己的业务服务；规划器对所有目标一视同仁。" | 口径 3：不允许先导固定 |
+| R-2 | §00.2 L39 | "SoleAI 业务服务：可以继续部署在云端。它是任务图中的固定服务节点，与协调者是两个独立的服务" | "SoleAI 业务服务：可以继续部署在云端。它**以普通执行目标身份向协调器登记**自己能执行的能力（文字理解、视觉分类、商品画像、向量检索、排序、回答）及持有的数据副本（商品索引、库存库），与协调者是两个独立的服务" | 同上 |
+| R-3 | §00.2 L314 第 4 条 | "协调者与 SoleAI 业务服务是两个独立进程，各自拥有数据库和迁移入口。协调者禁止读写购物会话表。" | 保留，追加一句："业务服务登记为执行目标后，协调者只通过执行器协议向它派发节点，仍禁止读写购物会话表。" | 边界不变，防止把"目标化"理解成合库 |
+| R-4 | §4 设计决定 D9 L328 | "v1 与 v2 隔离：v1 入口保持可运行；v2 不兼容 v1 设备，不迁移 v1 样本；**新旧入口以工作流为单位切换**，不同时调度同一任务。" | "**本机模式与协同模式以 App 为单位切换**：协同开关关闭时，App 全部 AI 工作流由手机本机调度件执行（原 v1 路径）；打开时全部已声明工作流经 v2 统一入口提交。v2 不兼容 v1 设备，不迁移 v1 样本；同一任务不在两种模式间迁移，切换只影响新任务。" | **偏离的根源条款**。"以工作流为单位切换"使 §84 只接两条工作流成为合规行为 |
+| R-5 | §4 设计决定 D8 L327 | "等价路径由 App 声明：调度器只在 App 声明的等价路径之间选择，不自行删除或跳过业务阶段。" | 保留，追加："声明必须覆盖 App 的**全部** AI 工作流，不得只声明易于派发的阶段。" | 这是应用级开关的基础 |
+| R-6 | §4 设计决定 D11 L329 | "……设备与协调者失联时，停止接受新的远程任务，来源 App 的新业务回到原有本地调度……" | 保留，措辞改为"回到**本机模式**（见 D9）" | 与口径 1 一致：失联 = 自动降为本机模式 |
+| R-7 | §4.1 组件表 L300 | "SoleAI App：通过 SDK 接入 v2，保留 v1 入口" | "SoleAI App：协同开关打开时全部 AI 工作流通过 SDK 接入 v2；关闭时由本机调度件执行" | 配合 R-4 |
+| R-8 | §4.1 组件表 L301 | "SoleAI 业务服务：商品库、向量检索接口、收图检索接口、索引管理" | 追加"；**执行器协议端点**（登记能力、接收派发、回执）" | 配合 R-2、§4 |
+| R-9 | §7.2.6 L603 | "`PlacementPolicy / SemanticPolicy / SchedulerClient` 的本地/云端路由：v1 与离线降级使用 → v1 保留；v2 由协调者规划" | "……→ **本机模式**使用并接管全部 AI 工作流；协同模式由协调者规划" | 给关闭模式一个明确的执行者 |
+| R-10 | §10 WP-C5 L1150-1157 | 产出："SoleAI 新增 v2 识别入口，与 v1 并存，以工作流为单位切换；声明 §11.2 中的三条等价路径。" 要求："v1 入口行为不变" | 产出："SoleAI 声明**全部 AI 工作流**（§11.5 清单）；协同开关控制 App 整体模式（D9）；每个 AI 调用点经统一入口按模式分流。" 要求："**本机模式下行为与原 SoleAI 一致**；业务登录态只在 SoleAI 内部使用。" 验收：替身——本机模式回归通过；协同模式下 §11.5 每条工作流至少完成一次（可用替身执行器）；真实——同一功能同一输入的本机/协同对比各至少一次 | 接入范围从"图像识别入口"扩为"全部 AI 功能" |
+| R-11 | §10 WP-C6 L1159-1170 | 产出 1-3：向量检索接口、收图检索接口、索引命名空间 | 保留 1-3，**追加 4**："业务服务作为执行目标：实现执行器协议（登记能力与数据副本位置、接收节点派发、按 T1 回执），把 `chat`、`vision.category`、`vision.product-profile`、`vector.search`、`price-stock`、`rank`、`answer` 作为能力登记。" 追加验收：替身——协调者快照中出现业务服务目标及其能力；规划器对只有该目标登记的能力选中它，且追踪时间线标明候选集大小为 1 | 口径 3 的落地点；明确不属于 R2 冻结的"v1 调度路径" |
+| R-12 | §11.2 L1342-1350 | "三条路径的输出契约相同，由 SoleAI 在 v2 入口中声明" | 保留三条路径，开头改为"图片购物工作流内部的三条等价编码路径，由 SoleAI 在 §11.5 的声明中给出"；去掉"v2 入口"措辞 | §11.2 只是图片工作流的一部分 |
+| R-13 | §11 **新增 §11.5 应用声明清单** | 无 | 写入本节 §3 的表 | 声明的规格依据 |
+| R-14 | §11 **新增 §11.6 本机模式** | 无 | 写入本节 §6 | 关闭模式的规格依据 |
+| R-15 | §12.3 回滚 L1388-1396 | "v1 源码与旧业务入口保持可独立运行"；"切回 v1 入口" | 措辞改为"关闭协同开关即回到本机模式"；步骤不变 | 语义本就一致 |
+| R-16 | §10.0 S7 行 L784 验收列 | "三条等价路径在替身环境各完成一次" | "§11.5 全部工作流在协同模式替身环境各完成一次；本机模式回归通过" | 配合 R-10 |
+
+**不改的条款及理由**：R2（v1 冻结）不改——业务服务新增执行器端点属于 WP-C6 业务服务接口，不是 `api-server` 的调度路径；R21（选择只在 `PlanningService`）不改——业务服务目标化正是让选择回到规划器；§82 全部条目不受影响，但 Q1-2 的用例覆盖标签以后要覆盖新增能力。
+
+### 3. 应用声明清单（拟写入规格 §11.5）
+
+来源：`shopping-capabilities.ts` 的 `SHOPPING_DEPENDENCIES` 与 `IMAGE_SEARCH_STAGES`。能力 ID 为拟定名，实施时按 `protocolId` 规则定稿。"今日目标"列只是**当前事实**，不写进声明；声明只写能力、契约与质量目标。
+
+| 工作流 | 节点（依赖顺序） | 能力 | 输入 → 输出契约 | 质量目标 | 今日登记该能力的目标（事实，非声明） |
+| --- | --- | --- | --- | --- | --- |
+| `shopping.text` 文字购物 | understand → embed → search → price-stock → rank → answer | `chat.understand.v1`、`text.embed.v1`、`vector.search.v1`、`catalog.price-stock.v1`、`rank.v1`、`chat.answer.v1` | `text.query` → `shopping.result` | 与原 v1 文字购物相同的候选质量门槛（§76 漂移窗口沿用） | 业务服务（全部）；`text.embed` 手机 `MindSporeLiteProvider` 待评测 |
+| `shopping.image` 图片购物 | quality-check → crop → category → product-profile → encode → search → price-stock → rank → answer | `image.quality.v1`、`image.crop.v1`、`vision.category.v1`、`vision.profile.v1`、`image.encode.v1`、`vector.search.v1`、`catalog.price-stock.v1`、`rank.v1`、`chat.answer.v1` | `image.raster` → `shopping.result` | X6 评测集非劣；§11.2 三条编码路径等价 | crop：手机 ImageKit、PC CPU；encode：PC GPU/CPU（§72-74）、手机待验；其余：业务服务 |
+| `shopping.more` 继续加载 | embed → search → rank | `text.embed.v1`、`vector.search.v1`、`rank.v1` | `session.ref` → `shopping.result` | 同文字购物 | 同上 |
+| `shopping.profile` 商品画像 | profile | `vision.profile.v1` 或 `chat.understand.v1` | `product.ref` → `product.profile` | 原 v1 画像字段完整 | 业务服务 |
+| `shopping.refine` 以图再筛 | 同图片购物去掉 quality-check | 同上 | `image.raster + session.ref` → `shopping.result` | 同图片购物 | 同上 |
+| `shopping.suggestions` 建议词 | suggest | `chat.suggest.v1` | `session.ref` → `text.list` | 非空且不重复 | 业务服务 |
+
+**不纳入**：`/api/v1/auth/guest`、`/api/v1/sessions/*` 的收藏/读取、`/api/v1/assets/images` 的纯上传——属于账号、会话与存储，不是 AI 计算；但 `assets` 上传的字节数要作为后续节点的传输成本输入。
+
+**声明结构需增加的可选字段**（`app-declaration.ts`，D10）：工作流级 `qualityTarget`（引用能力包里的评测门槛 ID）；节点级 `parameters`（契约参数，供 §82 Q1-4 的 `workModel` 分桶）与 `alternatives`（§11.2 三条路径用此表达，取代单独的"等价路径声明"）。
+
+### 4. 业务服务作为执行目标（WP-C6 追加项，实施步骤）
+
+1. **登记**：`services/api-server` 新增 `runtime/executor-endpoint`，启动时用 App 侧相同的邀请/凭证流程向协调器登记为目标，登记内容：能力列表（§3 表第 3 列中由它实现的）、资源池（`cpu`/`ram` 按部署实例声明；外部模型 API 作为独立池 `model-api`，容量 = 并发上限）、数据副本（`indexSpaceId` 与版本、库存库标识）。复用 `services/pc-agent/src/host.ts` 的登记与画像发布路径，不复制 Nest 依赖进协调者（R2 第二类复用：复制后改写）。 **实施记录（2026-11-09 第二批）**：未在 api-server 内嵌登记逻辑，改为复用 `services/pc-agent` 宿主：新增 `service-host-main.ts`（独立进程，`appInstanceId=null` 的普通目标，`npm --workspace @harmony/pc-agent run service-host`）；`host.ts` 删除服务适配器的来源 App/设备绑定和"必须是 App 宿主"限制（`fixedServices`→`services`、`FixedServiceAdapter`→`ServiceAdapter`、端口 `fixedService`→`service`），服务执行器 ID 取能力包声明（`service.http.v1`）。能力包 `vector.search.v1`（`packages/reference-capabilities/src/vector-search.ts`）由索引空间元数据（serviceId、indexSpaceId、indexVersion、model）确定性生成，协调者 `COORDINATOR_SERVICE_PACKS` 与宿主 `service.json.packs` 读同一声明文件，两侧摘要一致；宿主启动前核对线上索引（`GET /api/v2/image-search/spaces/:space`），不一致报 `SERVICE_INDEX_MISMATCH` 拒绝启动。资源池按 cpu/ram 声明；`model-api` 池与数据副本登记未做。示例见 `examples/service-host/`。
+2. **执行**：接收 T1 派发，把节点映射到现有阶段实现（`shopping.stage.*`），回执带 `durationMs` 与 `overheadMs`（§82 Q2-4 口径），模型 API 往返计入 `overheadMs`。 **实施记录（2026-11-09 第二批）**：只接入只读纯计算能力 `vector.search.v1`：输入契约 `vector.query`（model+vector+可选 category）、参数 `{indexSpaceId,topK}`（topK 进 `workModel` 成本桶）、输出契约 `candidate.list`；适配 `/api/v2/image-search/vector`，服务 4xx→`QUERY_REJECTED`，网络/5xx→`SERVICE_UNAVAILABLE`，本地校验失败→`VECTOR_QUERY_INVALID`；输出去掉 `requestId/processingMs`。评测为属性评测（候选数≤topK、分数有限且非增、productId 唯一、索引空间/版本一致），不伪造期望输出；覆盖标签通过 `validateCoverage`。发现并绕开一处隐含约定：`business-gate.ts` 要求能力包带 `model` 时任务参数必须等于模型清单，故服务包声明 `model:null`，模型由查询自带并由服务核验。`shopping.stage.*` 映射、`overheadMs` 分离、`shopping.commit.v1` 未做。 **实施记录（2026-11-09 第三批）**：业务服务新增只读阶段接口 `POST /api/v2/stages/price-stock`（按 productId 或 platform+url 从目录刷新价格/库存，未知商品如实返回 `amount:null, stockStatus:unknown`，接受 `candidate.list` 直接输入）与 `POST /api/v2/stages/rank`（复用 `finalCandidateRank`，纯函数），均 JWT 守卫、零写入（`services/api-server/src/modules/product-pool/controllers/shopping-stages-v2.controller.ts`，测试 `test/shopping-stages-v2.test.cjs`）。对应能力包 `catalog.price-stock.v1`、`rank.v1`（`packages/reference-capabilities/src/catalog-stages.ts`，属性评测：逐项对应、定价行必有币种、子集/去重/库存过滤/价格窗口/排序规则），适配器 `stageAdapter`，服务宿主声明文件新增 `stages` 段。`parameterRole` 已落地（见 §12 第 6 项），`vector.search.v1` 恢复声明模型空间。
+3. **候选集可见**：追踪时间线的 `decisionEvidence` 增加可选字段 `candidateCount`，调度盘显示"该节点候选目标 N 个"。N=1 时页面如实显示"仅一个目标登记了此能力"，**不得显示为"固定"**。这是答辩时区分"算法选的"和"写死的"的唯一证据。 **实施记录（2026-11-09）**：第一批已接入；第二批集成测试断言业务任务 `decisionEvidence.candidateCount===1`、追踪 `decisions` 同值。
+4. **新增目标零修改验证**：用 PC agent 替身登记 `vision.category.v1`，不改声明与规划器，验证候选集变为 2 且规划器按成本选择。这条是口径 3 的验收。 **实施记录（2026-11-09 第二批，部分）**：核心替身 1→2 见第一批；本批 `services/coordinator/test/service-host.test.cjs` 验证独立服务宿主登记并自动评测通过后，另一 App（不同设备与 holder、未安装该服务）被规划到它：`plan.deviceId` 为服务设备、`target.backend=SERVICE`、`executorId=service.http.v1`、`holderId` 为服务宿主而非来源 App、任务元数据不含服务令牌与地址、回执已提交；服务拒绝的查询以 `QUERY_REJECTED` 结算不重试。真实第二目标（PC 登记 `vision.*`）与真实 SoleAI 业务服务登记仍未做。
+
+### 5. App 统一入口改造（WP-C5，实施步骤）
+
+1. `CooperativeSession.ets` 的 `manifest` 按 §3 扩展，`allowedContracts` 覆盖全部能力；`revision` 升为 `soleai.app.1`（声明变化会触发 `APP_DECLARATION_CONFLICT`，需在协调中心重新授权应用版本，`setEnabled` 已有该检查）。 **实施记录（2026-11-09 第二批）**：完整声明改为随包资源 `apps/harmony/entry/src/main/resources/rawfile/ai-declaration.json`（6 条工作流、14 个契约、`revision soleai.app.1`，写会话工作流末尾为显式 `commit` 节点，图片购物以 `alternatives` 表达先编码再检索 / 服务端收图检索两条结构等价路径；原 §11.2 的手机编码与 PC 编码合并为同一 `encode` 节点，差别只是放置）。`CooperativeSession.ets` 开启开关时读取该文件注册，状态文案如实写出当前可协同执行的环节。`services/coordinator/test/soleai-declaration.test.cjs` 直接读同一文件用 `validDeclaration` 校验并断言不含任何放置字样，通过。API 22 HAP 构建通过（`entry-default-signed.hap` 25,191,667 字节，SignHap 3.8 s），未安装真机。`allowedContracts` 中 9 个能力尚无能力包，提交会被 `CAPABILITY_UNSUPPORTED` 拒绝，见 §12 第 8 项。
+2. 新增 `AiTaskGateway.ets`：唯一的 AI 任务入口，签名按工作流 ID + 输入；内部按 `cooperative.enabled()` 分流——打开走 `sdk.submit`（整图提交，含 `alternatives`），关闭走原 `ShoppingTaskService`/`ModelEngineRegistry`。`preparePhoto()` 删除，其逻辑并入图片工作流的 crop 节点。
+3. 调用点逐个改接：`Index.ets:387`（图片购物）、`ShoppingTaskService.ets:41/45/48/54`（文字、图片、刷新、会话操作）、`V2ImageSearch.ets`（并入 `shopping.image`，不再是独立入口）、建议词与画像的调用点（实施时 `grep CloudShoppingExecutor` 核对无遗漏）。
+4. `CloudShoppingExecutor` 保留，但只在本机模式被 `ModelEngineRegistry` 的 `CloudModelProxyProvider` 路径使用；协同模式下业务服务通过执行器协议被派发，App 不再直连 `/api/v1/shopping/tasks`。
+5. 首页「v2 裁剪验收」「v2 图像候选检索」两个按钮降为开发者入口（设置页），不再出现在主流程旁。
+6. 状态文案：`cooperativeStatus` 从"图片预处理与图像编码交由调度器选择设备"改为"已接入调度系统 · N 条工作流已声明"；每次任务完成显示"执行目标：本机 / <设备名> / 业务服务"，由回执 `targetId` 决定。
+
+### 6. 本机模式定义（拟写入规格 §11.6）
+
+1. 本机模式 = 协同开关关闭或与协调器失联（D11）。SoleAI 的全部 AI 工作流由手机本机调度件（`ModelEngineRegistry` + `LocalPolicyStore` + 受约束策略）执行，调度决策只考虑这台手机的资源与它自己的业务后端，**不连接协调器、不借用任何其他设备**。
+2. 本机调度件在 `LocalTensorEngineProvider`、`MindSporeLiteProvider`、`CloudModelProxyProvider` 之间的选择属于 App 内部实现，和普通 App 调用自己的服务器一样，不计入"协同"。
+3. 某能力在本机模式下没有任何可用执行方式时（例如未来某个只在 PC 上有的能力），App 明确提示"该功能需要开启协同调度"，不得静默换路径。
+4. 本机模式的行为就是原 SoleAI（§3.4 回归基线 41 套件 326 用例保持通过）；它同时是协同模式的对照基线（§8）。
+
+### 7. 旧验收重标
+
+口径变更后，以下条目**不作废，但降级标注**，防止旧"部分"冒充新口径进度：
+
+| 条目 | 旧标注 | 改为 |
+| --- | --- | --- |
+| §1 S4 行、§2 C5/C7a 行 | "SoleAI 最小 v2 裁剪页面已接入" | "图片工作流 crop 节点经 SDK 验证；应用级接入未开始" |
+| §71-§72（C5 收图/编码入口） | "实现 §11.2 第三条路径" | "图片工作流 encode 节点的三条等价路径之一验证；并入 `shopping.image` 待做" |
+| §84 协同开关 | "首次打开协同开关自动提交内置工作流" | "开关连接与应用登记链路验证；声明仅 2/6 工作流，入口未统一" |
+| §77-§78 D9 验收报告 | AC 报告中的 SoleAI 条目 | 加注"按工作流级口径生成，应用级口径待重跑" |
+| `docs/23` 演示方案 C 档 | "原云端链路 vs 部分协同预处理" | 作废，按 §8 重写 |
+
+### 8. 演示基线（取代 `docs/23` C 档）
+
+同一台手机、同一 SoleAI、同一功能、同一输入、同一质量目标，两次运行：
+
+| 运行 | 开关 | 预期观察 |
+| --- | --- | --- |
+| A 本机模式 | 关 | 手机本机调度件执行；调度盘上没有该任务；手机显示执行目标全部为"本机/业务服务" |
+| B 协同模式 | 开 | 同一任务图出现在调度盘；crop/encode 节点候选集 ≥2，规划器按成本选目标（可能仍选本机——这是正确行为，要在讲解中强调）；chat/vision 节点候选集 =1 如实显示；追踪时间线给出每个节点的候选数、所选目标与原因 |
+
+对比指标：端到端耗时、每节点所在目标、手机侧占用（CPU/温度）、质量门槛通过与否。**不得**只挑 B 快于 A 的样本；两种结果都要保留（R16）。
+
+### 9. 禁止
+
+1. 不得在声明、规划器或调度盘中引入任何"固定/不可移动"的节点类型或标记；位置差异只能来自候选集与成本（口径 3）。
+2. 不得保留 `preparePhoto` 式的单点旁路；协同模式下所有 AI 调用必须经 `AiTaskGateway`。
+3. 不得在本机模式下连接协调器；不得在协同模式下由 App 自行选择设备（R21）。
+4. 不得把"候选集只有业务服务"的节点描述为"协同加速"；不得把本机模式下的云端 API 调用描述为"协同"。
+5. 不得为通过验收而删减声明（D8 追加句）；没有能力包的能力先以 `UNKNOWN` 质量证据登记，不得伪造评测。
+6. 不得修改 §82 已确认的估计链路语义；新增字段全部可选（D10）。
+
+### 10. 验收清单
+
+| 条目 | 命令 / 方式 | 通过标准 |
+| --- | --- | --- |
+| 规格修订 | 人工核对 R-1—R-16 | 规格中不再出现"固定服务节点""以工作流为单位切换"；§11.5/§11.6 存在 |
+| 声明校验 | 协调者定向测试（`apps.ts`、`app-declaration.ts`） | §3 六条工作流通过 `validDeclaration`；缺 `qualityTarget` 的工作流被拒；`alternatives` 正反例 |
+| 业务服务目标 | 协调者快照与规划测试 | 快照含业务服务目标及能力；只有它登记的能力被选中且 `candidateCount=1`；替身第二目标登记后 `candidateCount=2` 且按成本选择，声明与规划器零修改 |
+| 统一入口 | 架构检查新增规则 | `apps/harmony/entry` 中 `CloudShoppingExecutor` 只被本机模式路径引用；无 `/api/v1/shopping/tasks` 直连出现在协同路径 |
+| 本机模式回归 | `npm run api:test:unit -- --runInBand` + App 替身测试 | 41 套件 326 用例通过；开关关闭时无协调器连接 |
+| 协同模式替身 | SDK 与协调者集成测试 | §3 六条工作流各完成一次，追踪时间线完整 |
+| 全量 | `npm run scheduler:v2:test`，随后 `npm run acceptance:report` | 全部通过；AC 报告 SoleAI 条目按新口径生成 |
+| 真机 | 按 §8 运行 A/B | 两次运行证据齐全，调度盘与时间线截图 |
+
+### 11. 实施顺序
+
+**规格（今晚，用户）** R-1 → R-4 → R-10/R-11 → R-13/R-14 → 其余措辞条。先删"固定服务节点"和"以工作流为单位切换"，这两条定了，其他都是跟随修改。
+
+**代码（规格确认后）**
+1. 声明结构字段 + `validDeclaration` 测试（半天，不触碰 App）。
+2. 业务服务执行器端点 + 登记（§4 第 1-2 步）；`candidateCount` 进追踪与调度盘（§4 第 3 步）。这一步完成后，协同模式下即使 App 还没改，调度盘已能看到业务服务作为目标。
+3. App `manifest` 扩展 + `AiTaskGateway` + 调用点改接（§5）。文字购物先改——它最能体现"全部 AI 功能"而不只是图片。
+4. 能力包补齐：`chat.*`、`vision.*`、`vector.search.v1`、`rank.v1` 先登记为业务服务独占、质量证据 `UNKNOWN`；`image.quality.v1` 可由 PC/手机实现。
+5. §4 第 4 步"新增目标零修改"验证；§7 重标；§8 演示基线脚本。
+6. 真机 A/B。
+
+### 12. 需要用户在修订时决定的事项
+
+1. 能力 ID 命名（§3 表为拟定名）。
+2. `shopping.suggestions`、`shopping.profile` 是否纳入首批，还是先做 `shopping.text`、`shopping.image`、`shopping.more` 三条。
+3. 业务服务的 `model-api` 资源池容量取值（外部模型 API 的并发上限），这是它参与成本比较的依据。
+4. 首页两个 v2 开发者入口是移到设置页还是直接删除。
+
+### 13. 修订记录（2026-11-09 实施者核对，已采纳）
+
+实施者按 §1 核对代码时发现两处 §2 清单漏掉的事实，用户确认后补入。两条都改变 §11 的实施顺序：**R-17/R-18 定稿前不得动 `planner.ts:153`**，否则会连带改变 S6-R 的备份语义。实施记录（2026-11-09）：用户补齐限制并明确要求继续实施后，已按下列条目修改代码；规格 D5、§7.6 同步记录服务过滤与副作用边界。
+
+#### R-17 先导固定的代码源头：D5 与 `serviceId` 宿主绑定
+
+**核对**：规格 D5（L324）写的是"'必须上云'是契约中的位置约束（`serviceId` / `placementConstraint`）……第一阶段由来源 App 使用自己的业务登录态执行该节点；协调者不接收长期业务凭证"。对应 `packages/scheduler-core/src/planner.ts:153`：
+
+```
+if(node.serviceId!==c.serviceId||node.serviceId!==undefined&&(r.originHolderId===undefined||r.appInstanceId===undefined
+   ||c.holderInstanceId!==r.originHolderId||c.appInstanceId!==r.appInstanceId))return 'SERVICE_PLACEMENT_FORBIDDEN';
+```
+
+契约带 `serviceId` 的节点，唯一合法候选是**发起任务的 App 宿主本身**（同 `holderInstanceId`、同 `appInstanceId`），候选集恒为 1。`services/coordinator/src/workflow-jobs.ts:25` 与 `:124` 进一步把带 `serviceId` 的节点排除在重规划与备份尝试之外。`serviceId` 由能力包契约携带（`cpu-jobs.ts:92`、`workflow-jobs.ts:60`），目录在 `directory.ts:200` 原样透传。这是 §0 口径 3 所指"先导固定"的真正代码来源；§2 的 R-1/R-2 只删了术语，没有触及这条规则。
+
+**设计初衷**：凭证边界——协调者不能持有用户业务登录态，所以让 App 自己执行需要登录的节点。边界正确，手段错误：把"谁有凭证"做成了"谁来执行"。
+
+**修订**：
+
+| # | 位置 | 现文 | 改为 | 为什么 |
+| --- | --- | --- | --- | --- |
+| R-17a | §4 设计决定 D5 L324 | "固定服务节点：'必须上云'是契约中的位置约束（`serviceId` / `placementConstraint`），不写进设备画像。第一阶段由来源 App 使用自己的业务登录态执行该节点；协调者不接收长期业务凭证。" | "**服务能力与凭证边界**：`serviceId` 只表示'该能力由逻辑服务 X 提供'，是候选过滤条件——登记了 X 的任何目标都是候选，规划器按成本选择；它**不是**宿主绑定，也不是位置约束。协调者仍不接收长期业务凭证；用户身份由任务输入携带的短期业务令牌在业务服务侧校验（§11.1：身份取自业务认证会话，不信任请求体）。" | 口径 3；保留凭证边界 **实施记录（2026-11-09）**：已写入规格 D5；采用输入制品携带短期业务令牌，业务服务校验。令牌签发与执行端验证尚未实现。 |
+| R-17b | `planner.ts:153` | 同上代码 | 保留 `node.serviceId!==c.serviceId` 的过滤，**删除** `holderInstanceId / appInstanceId` 相等的后半句；拒绝码 `SERVICE_PLACEMENT_FORBIDDEN` 语义收窄为"目标未登记该服务" | 候选集由登记决定 **实施记录（2026-11-09）**：已删除来源 holder/appInstance 绑定，保留 serviceId 匹配；旧断言已改写，新增候选数 1→2 与成本选择测试。App 访问隔离依赖 allowedContracts 和目录 App 投影（§60），此条不再承担来源 App 绑定检查。 |
+| R-17c | `workflow-jobs.ts:25`、`:124` | 带 `serviceId` 的节点不重规划、不做备份 | 删除该豁免；是否可备份改由 R-18 的 `effects` 决定 | 位置与副作用是两件事 **实施记录（2026-11-09）**：已移除 serviceId 豁免；自动替换只允许 PURE，COMMIT 未启动也不生成新尝试；既有备份路径按 sideEffectPolicy 判定。 |
+| R-17d | §5.1 协议 `contract.serviceId`（`protocol-v2.ts:28`） | 可选字段 | 保留字段与校验不变（D10） | 只改语义，不改协议 **实施记录（2026-11-09）**：协议字段和校验未改。 |
+
+**验收**：业务服务替身以 `serviceId=soleai` 登记 `vector.search.v1` 后，来源手机宿主**未**登记该服务时候选集 = 1 且选中业务服务；手机宿主也登记同一 `serviceId` 时候选集 = 2 且按成本选择；`SERVICE_PLACEMENT_FORBIDDEN` 只在目标未登记该 `serviceId` 时出现。核心 `planner` 既有用例中依赖宿主绑定的断言需改写，不得删除。
+
+#### R-18 购物阶段有副作用，不能直接包装成执行器
+
+**核对**：调度器对执行器的假设是"输入制品 → 输出制品，可重试、可取消、可在两个目标备份尝试取一个赢家"（§68/§69 S6-R）。`services/api-server/src/modules/sessions/application/shopping-image-stages.service.ts` 的阶段不满足：`:247-263` 在阶段中间 `prisma.querySession.create`、写 `filterSnapshots`、`queryImagePreprocessSnapshot`、候选快照；`:53` 的输出格式即 `shopping.stage-commit.v1`，绑定 `userId / sessionId`。直接派发会导致重试建重复会话、备份尝试写两份状态、取消留下半截会话。
+
+**修订**：每个阶段拆成**纯计算**与**提交**两部分，声明用节点级可选字段 `effects` 区分。
+
+| 现有阶段 | 纯计算（`effects: PURE`，可派发、可备份、可重试） | 提交（`effects: COMMIT`，只执行一次） |
+| --- | --- | --- |
+| quality-check / crop | 图 → 图 | — |
+| category / product-profile | 图 → 类别 / 画像 JSON | 写 session 快照 |
+| embedding | 图 → 向量 | — |
+| vector-search / price-stock | 只读查询 → 候选列表 | — |
+| rank | 候选 + 画像 → 排序 | — |
+| receive / asset / result | — | 建会话、写候选快照、落结果 |
+
+| # | 位置 | 改为 | 为什么 |
+| --- | --- | --- | --- |
+| R-18a | `app-declaration.ts` 节点结构（§3 末段的可选字段列表） | 追加节点级可选字段 `effects: 'PURE' \| 'COMMIT'`，缺省 `PURE` | D10 只加可选字段 **实施记录（2026-11-09）**：声明支持 effects、parameters、qualityTarget 与工作流级 alternatives；含 COMMIT 或 alternatives 必须有 qualityTarget，与 revision 无关。旧 PURE 声明兼容。TypeScript 与 ArkTS SDK 已同步 effects、businessIdempotencyKey。 |
+| R-18b | §7.6 / S6-R 备份规则 | `COMMIT` 节点禁用对冲与备份尝试，必须携带幂等键（复用服务端已有 `idempotency-key` / `x-request-revision`，见 `architecture-change-acceptance.md`）；失败只能按同幂等键重放，不得另起尝试 | 副作用语义 **实施记录（2026-11-09）**：单节点/等价路径与多节点 SDK 校验 effects 和能力包策略一致、COMMIT 带键、PURE 不带键；原始提交层校验键格式且所有非 PURE 都必须带键（比协议更严格），不接收 effects 字段，也未禁止 PURE 带键。自动替换与既有备份按策略禁用非 PURE。服务端业务幂等去重验收尚未完成。 |
+| R-18c | §11.5 声明清单（本节 §3 表） | 每条工作流末尾增加一个 `commit` 节点（`effects: COMMIT`，能力 `shopping.commit.v1`），`price-stock` 保持只读 | 业务提交显式化 **实施记录（2026-11-09 → 11-10）**：随包声明 `ai-declaration.json` 已含每条写会话工作流末尾的 `commit` 节点（第二批）；`shopping.commit.v1` 能力包、业务服务端点与宿主适配器见第四批（§17）。App 统一入口仍未接入。 |
+| R-18d | WP-C6 追加项 4（本节 §4） | 业务服务登记的能力拆为纯计算能力（`vision.category.v1` 等）与 `shopping.commit.v1`；`shopping-image-stages.service.ts` 的 Prisma 写入全部移入 `commit` 实现 | 纯计算部分才能成为通用执行器 **实施记录（2026-11-10 第四批，部分）**：`POST /api/v2/stages/commit` 以幂等键派生全部 id，重放返回同一会话；只读阶段 price-stock/rank 已拆出（第三批）。原 `shopping-image-stages.service.ts` 的图片流水线写入尚未改走 commit，`vision.*`/`chat.*` 仍未拆出。 |
+
+**明确界定**：`effects` 是**语义属性**，不是位置约束。`COMMIT` 节点仍由规划器在登记了 `shopping.commit.v1` 的目标里选；今天只有业务服务登记它，候选集 = 1 是登记事实，不是声明固定。
+
+**验收**：`COMMIT` 节点在 S6-R 的备份触发条件满足时不产生第二次尝试（定向用例）；同幂等键重放不产生重复 `querySession`（api-server 单测）；`PURE` 节点的既有备份用例不退化。
+
+#### 对 §11 实施顺序的修正
+
+1. 声明结构字段（含 `effects`）+ `validDeclaration` 测试 ← 先做，不改规划器。
+2. `candidateCount` 进追踪与调度盘 ← 先做，只读证据，不改选择。
+3. **R-17b/R-17c 规划器改动** ← 待用户确认 R-17a 后，与核心既有用例改写一并提交。
+4. 业务服务执行器端点：先登记只读纯计算能力（`vector.search.v1`、`catalog.price-stock.v1`），再做 `shopping.commit.v1`，最后 `vision.*`、`chat.*`。
+5. 其余不变。
+
+#### §12 追加待定事项
+
+5. **（已定：随任务携带；第四批已实施票据签发与核验）** R-17a 中短期业务令牌的携带方式：作为任务输入制品的一部分（受 D6 数据路径与访问权限约束），还是由业务服务按 `appInstanceId` 向 SoleAI 后端换取。两种都不让协调者持有凭证；前者改动小，后者多一次往返。
+6. **（已定并实施，第三批）参数与模型身份的分离**（第二批发现）：`services/pc-agent/src/business-gate.ts:10` 与 `image-encoder.ts:53` 把 `task.parameters` 当作模型清单全等比对，这是图像编码包的私有约定被提升成了通用准入门。建议契约新增可选字段（如 `parameterRole: MODEL_MANIFEST | EXECUTION`，缺省沿用旧行为），准入门只在 `MODEL_MANIFEST` 时比对参数，模型一致性统一走 `node.modelManifest` 对 `executor.model` 的 `sameModelV2`。D10 只加可选字段；ArkTS `NativeAgent.ets` 同步。在此之前服务包只能声明 `model:null`。
+7. **（已定：(a) 干跑；第四批已实施）COMMIT 能力的评测方式**：`qualification.ts` 只接受 `sideEffectPolicy=PURE` 的受信包，`execution-runtime.ts` 也只执行 PURE 派发；`shopping.commit.v1` 这类写会话的能力无法用参考用例评测（跑用例会写真实会话）。可选：(a) 业务服务提供带幂等键的"干跑"模式，评测只校验结构与幂等回放；(b) COMMIT 能力不做质量评测，登记即 ACTIVE 但只允许登记了该 `serviceId` 的业务服务目标声明它，质量证据写 `UNKNOWN`。两种都要改 §7.6 状态机与宿主运行时，须先定。
+8. **（已定：声明先行）App 声明已随包发布**（`apps/harmony/entry/src/main/resources/rawfile/ai-declaration.json`，6 条工作流、14 个契约，`revision soleai.app.1`）。其中 `image.search.v1`、`image.quality.v1`、`chat.*`、`vision.*`、`catalog.price-stock.v1`、`rank.v1`、`shopping.commit.v1` 尚无能力包，协同模式下提交会被 `CAPABILITY_UNSUPPORTED` 拒绝；在统一入口接入前，App 仍只把裁剪/编码节点交给调度器。需要你确认：声明先行、能力逐个登记的节奏是否接受，还是等能力包齐全再切声明版本。
+9. **（用户 2026-11-10 确定方向）敏感数据不离开任务设备，由算法作为约束处理，不做隐私确认弹窗。** 现有机制：请求级 `privacy: LOCAL_ONLY | AUTHORIZED_REMOTE`（`planner.ts:157` 对非本机候选返回 `TRANSFER_FORBIDDEN`），但 `cpu-jobs.ts` 目前对所有业务任务固定写 `AUTHORIZED_REMOTE`。拟实施：声明的输入契约/节点带数据敏感级（`LOCAL_ONLY` 原始个人数据只在来源设备；`OWNER_SERVICE` 只可去 App 自己的业务服务；`SHARED` 任何合格目标），由 SDK 按节点输入自动推导并允许开发者在声明中收紧；规划器把它当作候选过滤条件（数据事实，非位置指定），调度盘显示被排除的原因。待写入规格 §11.5 与 D6。
+
+### 14. 本批复核与验收记录（2026-11-09）
+
+- §3 声明字段：已实施 R-18a；parameters 为 JSON 对象字符串；alternatives 沿用现有 SDK 的工作流级结构。本批不将完整图等价路径执行标为完成。
+- §4 第 3 步：candidateCount 为规划器资格过滤后、maxCandidates 截断前的候选目标数；逐节点规划各自记录，写入 decisionEvidence、追踪 decisions 及调度盘，缺失显示 UNKNOWN。它不等于登记数量，不单凭 N=1 推断只有一个目标登记。
+- §4 第 4 步：核心替身用例验证候选 1→2 与成本选择；业务服务真实登记及端到端新增目标验收未完成。
+- R22：TypeScript 与 ArkTS SDK 源码同步；源码一致性测试纳入 scheduler:v2:test。ArkTS 真机 COMMIT 执行尚未验收。
+- 本批仅修改通用声明、SDK 元数据、规划规则和证据链；没有将 API 服务阶段写入包装为 PURE，也未声称已有可运行的 COMMIT 执行器。
+- 验证：scheduler:v2:test 全量运行中，结果待回填。
+
+### 15. 第二批实施记录：业务服务目标化（2026-11-09）
+
+范围：§4 第 1–4 步的可在软件层完成的部分；不含 App 全量接入（§5）、阶段拆分与 `shopping.commit.v1`（R-18c/d）、真实 SoleAI 业务服务登记与真机。
+
+| 改动 | 文件 | 要点 |
+| --- | --- | --- |
+| 服务宿主去绑定 | `services/pc-agent/src/host.ts`、`execution-runtime.ts`、`agent.ts`、`calibration-executor.ts` | 删除 `executeService` 的 `appPolicy`/`appInstanceId`/`originDeviceId` 绑定与 `open()` 中"服务适配器必须是 App 宿主"的拒绝；`fixedServices`→`services`，`FixedServiceAdapter`→`ServiceAdapter`，端口 `fixedService`→`service`；服务执行器 ID 取能力包 `executorIds[0]` |
+| 独立业务服务宿主 | `services/pc-agent/src/service-host-main.ts`、`service-adapters.ts`、`package.json`（`service-host` 脚本） | 读取 `agent.json`/`contribution.json`/`service.json`，令牌仅取自环境变量；启动前核对线上索引；HTTP 适配 `vector.search.v1` |
+| 服务能力包 | `packages/reference-capabilities/src/vector-search.ts`、`index.ts` | 由索引空间元数据确定性生成；属性评测；覆盖标签齐全；新增 `vector.query:1`、`candidate.list:1` 制品校验；`loadServiceSpaces/loadServicePacks` 共享声明文件 |
+| 协调者装载 | `services/coordinator/src/main.ts` | `COORDINATOR_SERVICE_PACKS=<file>` 与内置包、编码套件并列装载 |
+| 测试 | `services/coordinator/test/service-host.test.cjs`（重写）、`workflow-host-child.cjs`、`workflow.test.cjs`（更名） | 单测：包摘要确定性、适配器对六个参考用例的输出/拒绝映射、取消；集成：独立服务宿主评测通过 → 另一 App 被规划到它 → 候选数 1、backend SERVICE、holder 为服务宿主、元数据无令牌、回执提交、服务拒绝以 `QUERY_REJECTED` 结算 |
+| 文档与示例 | `LOCAL-COORDINATOR-20261031.md`、`examples/service-host/` | 服务宿主操作步骤与示例配置 |
+| App 完整声明 | `apps/harmony/entry/src/main/resources/rawfile/ai-declaration.json`、`services/CooperativeSession.ets`、`services/coordinator/test/soleai-declaration.test.cjs` | 一次性声明全部 AI 工作流；协调者侧用同一文件校验；API 22 HAP 构建通过 |
+
+**边界**：`vector.search.v1` 是唯一服务能力，且因 `business-gate.ts` 的"参数 = 模型清单"约定而声明 `model:null`；该约定是图像编码包的隐含假设，后续应改为按契约显式声明（登记到 §12 待定项）。服务宿主的资源池只有 cpu/ram；`model-api` 并发池、数据副本位置、短期业务令牌随任务输入携带（R-17a）均未实现——当前适配器使用宿主自己的服务令牌，只能访问共享目录索引，不能代表用户身份。真实 SoleAI 业务服务与协调者联调、真机均未进行。
+
+**验证（2026-11-09 复跑）**：`npm run scheduler:v2:test` 首轮：核心 56/56、协议 T1 525 / T2 374、传输 3/3、SDK 10/10、PC 代理 52/52、架构 26/26 通过，协调者 148/149——`retention.test.cjs` 因第一批 `restartSettledOrUnstarted` 对未装载能力包直接 `this.pack()` 抛 `CAPABILITY_UNSUPPORTED` 失败。修正为"装载了包则按包判断（COMMIT 不进事务），否则进事务后以存量 offer 契约为准拒绝非 PURE"；`retention + effects + workflow` 6/6，架构 26/26，协调者全量复跑 **149/149** 通过。`service-host.test.cjs` 2/2（集成用例约 19 s）。日志 `tmp/scheduler-v2-test.log`、`tmp/coordinator-test.log` 本机保留，未入库。
+
+### 16. 第三批实施记录：显式参数角色与只读业务阶段（2026-11-10）
+
+用户 2026-11-10 确认 §12 第 5–8 项：令牌随任务携带（绑定用途、封给业务服务、用过即废，过期为兜底）；参数角色改显式字段；COMMIT 采用业务服务干跑评测；声明先行、能力逐个登记。本批落实第 6 项并补两项只读能力；第 5、7 项与 `shopping.commit.v1` 为下一批。
+
+| 改动 | 文件 | 要点 |
+| --- | --- | --- |
+| 契约字段 `parameterRole` | `packages/scheduler-core/src/protocol-v2.ts`、`apps/harmony/scheduler/.../SchedulingProtocolV2.ets`（逐字节同步）、`contracts/scheduling/v2/schema/protocol.schema.json`、`SEMANTICS.md`、`scripts/test-scheduling-protocol-v2.mjs` | 可选枚举 `EXECUTION | MODEL_MANIFEST`（D10）；缺省沿用旧行为；T1 新增 16 项正反检查；`serviceId` 描述同步改为“任何登记该服务的目标都是候选” |
+| 准入门 | `services/pc-agent/src/business-gate.ts` | 仅当契约未声明 `EXECUTION` 时才把参数与模型清单全等比较 |
+| 服务包恢复模型 | `reference-capabilities/src/vector-search.ts` | `parameterRole:'EXECUTION'`，`model` 回到索引模型空间，规划器可按 `modelManifest` 预先过滤 |
+| 业务服务只读阶段 | `services/api-server/.../shopping-stages-v2.controller.ts`、`product-pool.module.ts`、`test/shopping-stages-v2.test.cjs` | 价格库存刷新与最终排序各自成为可单独调用的纯阶段；零写入断言 |
+| 能力包与适配器 | `reference-capabilities/src/catalog-stages.ts`、`index.ts`（三种新 schema）、`vector-search.ts`（声明文件 `stages` 段与 `loadServiceDeclaration`）、`pc-agent/src/service-adapters.ts`（`stageAdapter`）、`service-host-main.ts` | 两包各 8 个参考用例，属性评测；服务宿主按声明文件同时登记向量检索与两阶段 |
+| 协调者健壮性 | `services/coordinator/src/qualification.ts` | 参考用例 `maxOutputBytes` 超过评测线路上限（`evaluationOutputLimit`=65536）时在装载期拒绝（`TRUSTED_PACK_INVALID`），不再进入“许可无效→在途永不结算”的死循环（本批实测触发并修复） |
+| 测试 | `services/coordinator/test/service-stages.test.cjs` | 包摘要确定性；适配器对全部 16 个用例；忽略排序规则的服务评分为 0；集成：独立服务宿主登记两能力→另一 App 的价格刷新与排序任务被规划到它，候选数 1、holder 为服务宿主、元数据无令牌 |
+
+**边界**：业务服务仍以宿主自己的服务令牌访问，只能触达共享目录（第 5 项待实施）；`image.search.v1`、`chat.*`、`vision.*`、`text.embed.v1`、`image.quality.v1`、`shopping.commit.v1` 仍无能力包；图像编码包的用例 `maxOutputBytes=4096+dimension*32` 在维度超过约 1900 时会被新的装载期检查拒绝，当前 CLIP 类模型（512/768）不受影响，若引入更高维模型需同步放宽线路上限。api-server 的 Prisma 客户端需先 `npm run prisma:generate` 才能构建，本机此前未生成。
+
+**验证（2026-11-10）**：协议 T1 541 / T2 374（新增 parameterRole 16 项）；api-server `shopping-stages-v2.test.cjs` 1/1；协调者 `service-stages.test.cjs` 2/2（集成 19 s）、`service-host.test.cjs` 2/2、`effects/agent-integration/image-encoder-host` 7/7；PC 代理 52/52。全量复跑与第四批合并记录于 §17。
+
+### 17. 第四批实施记录：写步骤、任务票据与干跑评测（2026-11-10）
+
+落实 §12 第 5、7 项与 R-18c/d 的服务端部分：购物工作流唯一的写步骤 `shopping.commit.v1` 成为可调度能力，用户授权以任务票据随任务携带，评测通过业务服务的干跑模式完成。
+
+| 改动 | 文件 | 要点 |
+| --- | --- | --- |
+| 任务票据 | `services/api-server/src/modules/auth/application/jwt-token.service.ts`（`signScoped/verifyScoped`）、`auth.module.ts`（导出）、`modules/sessions/controllers/shopping-commit-v2.controller.ts`（`POST /api/v2/tickets`） | 登录用户为一次工作流签票：绑定 `workflowId`、输入摘要 `inputHash`、能力范围、过期（默认 60 s，≤10 min）；`kind=service-ticket`，访问令牌不能冒充票据；票据内容只有不透明 id，协调器与执行宿主只搬运 |
+| 写步骤 | 同上控制器 `POST /api/v2/stages/commit`、`sessions.module.ts` | 票据校验（范围含 commit、输入摘要一致、未过期）；`Idempotency-Key` 必填，会话/资产/筛选快照 id 全部由键派生，重放返回同一会话（并发竞态按唯一冲突回退为重放）；`X-Dry-Run: true` 走完全部校验只回报将写入的表，零写入；干跑可用字面票据 `dry-run`，非干跑拒绝 |
+| 能力包 | `packages/reference-capabilities/src/commit-stage.ts`、`index.ts`（两种新 schema、`ReferencePack.dryRunEvaluation`） | `IDEMPOTENT_WRITE / CANCEL_RESTART / parameterRole EXECUTION`；5 个参考用例全部干跑；不变量：评测期间必须 `dryRun=true` 且不得出现 `created`，声明写入表与候选数一致 |
+| 协调者 | `services/coordinator/src/qualification.ts` | 受信包放行条件扩为 PURE，或 `IDEMPOTENT_WRITE` 且包标记 `dryRunEvaluation` 且带 `serviceId`；其余副作用策略仍拒绝 |
+| 宿主 | `services/pc-agent/src/host.ts`、`execution-runtime.ts`、`service-adapters.ts`（`commitAdapter`）、`service-host-main.ts` | 适配器获得执行上下文 `{evaluation, idempotencyKey}`；评测派发的幂等键为 `eval-<permit>`（满足协议对 IDEMPOTENT_WRITE 必带键的要求）；运行时只在 SERVICE 目标且带键时执行 IDEMPOTENT_WRITE；适配器在评测时强制 `X-Dry-Run`，服务若在评测中真写则报 `SERVICE_DRY_RUN_VIOLATED`，无键业务提交报 `IDEMPOTENCY_KEY_REQUIRED` |
+| 测试 | `services/api-server/test/shopping-commit-v2.test.cjs`、`services/coordinator/test/service-commit.test.cjs` | 服务端：签票/拒票/篡改输入/过期/用访问令牌冒充均拒绝，首写→重放→不同键再写、干跑零写入；集成：服务宿主仅以干跑通过评测（会话数 0）→ App 带业务幂等键提交 commit 被规划到它、`created`；同键重试 `replay`、会话数不变；无键提交被协调者 `JOB_IDEMPOTENCY_REQUIRED` 拒绝 |
+
+**票据的三道防线（用户 2026-11-10 确认的口径）**：绑定用途（workflowId + 输入摘要 + 能力范围，偷到也只能做这一件事）；只有业务服务能验（HS256 服务密钥，执行宿主与协调器不可验不可改）；用过即废由幂等键保证（同键重放不产生新写入）。**尚未实现**：票据的显式消费登记（当前靠幂等重放实现"不重复"，但同一票据在有效期内仍可对同一输入发起不同幂等键的 commit——需要新增票据消费表或把幂等键写入票据）；~~隐私操作前在手机弹窗确认后再签票~~（用户 2026-11-10 取消：敏感数据不靠用户确认，靠调度约束，见 §12 第 9 项）；App 侧签票调用。
+
+**边界**：ArkTS `NativeAgent.ets` 的服务适配器仍只允许 PURE（R22 待同步，手机端目前不会作为写能力的目标）；`shopping-image-stages.service.ts` 原图片流水线未改走 commit；`TRANSACTIONAL/NO_REPLAY` 策略仍不受理。
+
+**验证（2026-11-10）**：全量 `scheduler:v2:test`：核心 56/56、T1 541 / T2 374、传输 3/3、SDK 10/10、PC 代理 52/52、架构 26/26；协调者 154 项首轮 153/154（`service-host` 业务任务 60 s 等待在全量并行负载下超时，单独复跑 17 s 通过），三份服务集成测试等待上限统一改为 180 s 后协调者复跑 153/154（这次超时的是既有重负载用例 `workflow-reassign-process`，108 s；单独复跑 72 s 通过）。两次超时均为负载抖动，无断言失败；中间一轮无干扰全量 152/152。业务服务：`shopping-stages-v2` 1/1、`shopping-commit-v2` 1/1；既有 `image-search-v2.test.cjs`（不在 v2 门禁内）在 `staged` 断言失败，涉及的 `V2ImageSearch.ets`、SDK 分段逻辑与控制器本轮未改动，原因待查，登记为遗留项。

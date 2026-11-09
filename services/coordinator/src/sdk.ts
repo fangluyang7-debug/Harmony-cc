@@ -28,18 +28,22 @@ export class SdkJobs {
    if(w.outputContract!==root.outputContract||w.qualityTarget!==root.qualityTarget)throw Error('SDK_ALTERNATIVES_NOT_EQUIVALENT');
    if(w.nodes.length!==1)throw Error('SDK_MULTI_NODE_REQUIRES_S5');
    const n=w.nodes[0];
-   if(!exact(n,['id','capability','input','parameters','dependsOn'],['targetId','modelManifest'])||!protocolId(n.id)||!Array.isArray(n.dependsOn)||n.dependsOn.length||typeof n.parameters!=='string'||Buffer.byteLength(n.parameters)>32768||n.targetId!==undefined&&!protocolId(n.targetId))throw Error('SDK_NODE_INVALID');
+   if(!exact(n,['id','capability','input','parameters','dependsOn'],['targetId','modelManifest','effects','businessIdempotencyKey','privacy'])||!protocolId(n.id)||n.privacy!==undefined&&!['LOCAL_ONLY','OWNER_SERVICE','SHARED'].includes(n.privacy)||!Array.isArray(n.dependsOn)||n.dependsOn.length||typeof n.parameters!=='string'||Buffer.byteLength(n.parameters)>32768||n.targetId!==undefined&&!protocolId(n.targetId))throw Error('SDK_NODE_INVALID');
    try{JSON.parse(n.parameters);}catch{throw Error('SDK_NODE_INVALID');}
    const pack=this.packs.find(p=>p.manifest.contract.capability===n.capability),input=n.input!;
    if(!pack||!pack.manifest.contract.outputSchemas.includes(w.outputContract))throw Error('SDK_OUTPUT_CONTRACT_INVALID');
+   const effects=n.effects??'PURE';
+   if(!['PURE','COMMIT'].includes(effects)||(effects==='PURE')!==(pack.manifest.contract.sideEffectPolicy==='PURE'))throw Error('SDK_EFFECTS_MISMATCH');
+   if(effects==='COMMIT'&&!protocolId(n.businessIdempotencyKey!))throw Error('SDK_IDEMPOTENCY_REQUIRED');
+   if(effects==='PURE'&&n.businessIdempotencyKey!==undefined)throw Error('SDK_EFFECTS_MISMATCH');
    if(n.modelManifest!==undefined&&(!validModelManifestV2(n.modelManifest)||!sameModelV2(n.modelManifest,pack.manifest.model)))throw Error('SDK_MODEL_MISMATCH');
    if(!exact(input,['contentHash','bytes','schemaId','schemaVersion'])||!/^[a-f0-9]{64}$/.test(input.contentHash)||!Number.isSafeInteger(input.bytes)||input.bytes<1||input.bytes>8388608||input.schemaVersion!==1||!pack.manifest.contract.inputSchemas.includes(input.schemaId))throw Error('SDK_INPUT_INVALID');
   }
   const node=workflows[0].nodes[0];
   // S3's initial adapter shares one input and capability. General multi-stage/data paths are S5.
-  if(workflows.some(w=>w.nodes[0].capability!==node.capability||canonical(w.nodes[0].input)!==canonical(node.input)))throw Error('SDK_ALTERNATIVES_REQUIRE_S5');
+  if(workflows.some(w=>w.nodes[0].privacy!==node.privacy||w.nodes[0].businessIdempotencyKey!==node.businessIdempotencyKey||w.nodes[0].effects!==node.effects||w.nodes[0].capability!==node.capability||canonical(w.nodes[0].input)!==canonical(node.input)))throw Error('SDK_ALTERNATIVES_REQUIRE_S5');
   const fingerprint=createHash('sha256').update(canonical(body)).digest('hex');
-  return this.jobs.submit(peer,{requestId:body.options.requestId,priority:body.options.priority,capability:node.capability,contentHash:node.input!.contentHash,bytes:node.input!.bytes,budgetMs:body.options.budgetMs,parameters:node.parameters,...(body.options.inputLocation?{inputLocation:body.options.inputLocation}:{})},workflows.map(w=>({parameters:w.nodes[0].parameters,...(w.nodes[0].targetId?{targetId:w.nodes[0].targetId}:{})})),fingerprint);
+  return this.jobs.submit(peer,{requestId:body.options.requestId,priority:body.options.priority,capability:node.capability,contentHash:node.input!.contentHash,bytes:node.input!.bytes,budgetMs:body.options.budgetMs,parameters:node.parameters,businessIdempotencyKey:node.businessIdempotencyKey,privacy:node.privacy,...(body.options.inputLocation?{inputLocation:body.options.inputLocation}:{})},workflows.map(w=>({parameters:w.nodes[0].parameters,...(w.nodes[0].targetId?{targetId:w.nodes[0].targetId}:{})})),fingerprint);
  }
  async start(peer:Peer,id:string){return this.graphs&&await this.graphs.exists(id)?this.graphs.start(peer,id):this.jobs.start(peer,id);}
  async received(peer:Peer,id:string,body:unknown){if(await this.graphs?.exists(id))return this.graphs!.received(peer,id,body);const result=await this.jobs.received(peer,await this.jobs.winnerFor(peer,id),body);await this.retention?.sweepRelay();return result;}

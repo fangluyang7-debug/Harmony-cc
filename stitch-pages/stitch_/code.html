@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>智调鸿枢 · 协调中心 (运行中状态)</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<style>
+    :root {
+      --bg-base: #0c1017;
+      --bg-panel: #131923;
+      --bg-panel-hover: #18202d;
+      --border-panel: rgba(255, 255, 255, 0.08);
+      --border-panel-subtle: rgba(255, 255, 255, 0.04);
+      --text-main: #f0f4f9;
+      --text-sub: #8d9ba8;
+      --text-dim: #546474;
+      --accent-cyan: #06b6d4;
+      --accent-cyan-light: #67e8f9;
+      --accent-cyan-glow: rgba(6, 182, 212, 0.35);
+      --accent-emerald: #10b981;
+      --accent-blue: #3b82f6;
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --font-code: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background-color: var(--bg-base);
+      background-image: 
+        radial-gradient(ellipse 65% 45% at 50% 28%, rgba(6, 182, 212, 0.12) 0%, transparent 80%),
+        radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.02) 1px, transparent 0);
+      background-size: 100% 100%, 32px 32px;
+      color: var(--text-main);
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+      position: relative;
+    }
+
+    /* Top Bar */
+    .brand-logo-icon {
+      width: 24px;
+      height: 24px;
+      color: var(--accent-cyan);
+    }
+
+    .brand-subtitle-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #a5f3fc;
+      background: rgba(6, 182, 212, 0.15);
+      border: 1px solid rgba(6, 182, 212, 0.35);
+      padding: 2px 8px;
+      border-radius: 4px;
+      width: fit-content;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .state-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(6, 182, 212, 0.1);
+      padding: 5px 12px;
+      border-radius: 20px;
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      color: #a5f3fc;
+    }
+
+    .state-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 8px var(--accent-cyan);
+      animation: pulse-dot 2s infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.5; transform: scale(0.85); }
+    }
+
+    /* Main Console */
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 36px 20px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* Central Power Unit - Active Mode */
+    .hero-power-unit {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 32px;
+      position: relative;
+    }
+
+    .power-btn-container {
+      position: relative;
+      width: 168px;
+      height: 168px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .power-outer-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 1.5px solid var(--accent-cyan);
+      box-shadow: 
+        0 0 28px rgba(6, 182, 212, 0.45),
+        inset 0 0 18px rgba(6, 182, 212, 0.25);
+      animation: spin-glow 14s linear infinite;
+    }
+
+    @keyframes spin-glow {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .power-outer-ring::before {
+      content: '';
+      position: absolute;
+      inset: -5px;
+      border-radius: 50%;
+      border: 1px dashed rgba(6, 182, 212, 0.4);
+    }
+
+    .power-button {
+      position: relative;
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #0d2838 0%, #081722 100%);
+      border: 1.5px solid var(--accent-cyan);
+      color: #67e8f9;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 
+        0 14px 30px rgba(0, 0, 0, 0.5),
+        0 0 25px rgba(6, 182, 212, 0.35),
+        inset 0 2px 5px rgba(255, 255, 255, 0.25),
+        inset 0 -4px 10px rgba(0, 0, 0, 0.6);
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    }
+
+    .power-button:hover {
+      transform: scale(1.02);
+      border-color: #a5f3fc;
+      color: #cffafe;
+      box-shadow: 
+        0 18px 36px rgba(0, 0, 0, 0.6),
+        0 0 35px rgba(6, 182, 212, 0.55),
+        inset 0 2px 6px rgba(255, 255, 255, 0.35);
+    }
+
+    .power-button:active {
+      transform: scale(0.98);
+    }
+
+    .power-icon {
+      width: 54px;
+      height: 54px;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.6));
+    }
+
+    .unit-labels {
+      text-align: center;
+      margin-top: 18px;
+    }
+
+    .primary-action-text {
+      font-size: 19px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.2px;
+      margin-bottom: 6px;
+    }
+
+    .status-badge-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--text-sub);
+    }
+
+    .status-chip-active {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(6, 182, 212, 0.15);
+      border: 1px solid rgba(6, 182, 212, 0.4);
+      padding: 3px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #67e8f9;
+    }
+
+    .status-chip-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 6px var(--accent-cyan);
+    }
+
+    .active-endpoint-pill {
+      font-family: var(--font-code);
+      font-size: 12px;
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 2px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    /* Console Stack */
+    .console-stack {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .panel-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-panel);
+      border-radius: var(--radius-md);
+      padding: 18px 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-title svg {
+      width: 15px;
+      height: 15px;
+      color: var(--accent-cyan);
+    }
+
+    .card-live-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: var(--font-code);
+    }
+
+    .network-grid {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 12px;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-label {
+      font-size: 12px;
+      color: var(--text-sub);
+      font-weight: 500;
+    }
+
+    .input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    select, input {
+      width: 100%;
+      background: #0d131c;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: var(--radius-sm);
+      color: var(--text-main);
+      font-family: var(--font-code);
+      font-size: 13px;
+      padding: 10px 12px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select {
+      cursor: pointer;
+      appearance: none;
+      padding-right: 32px;
+    }
+
+    .port-active {
+      background: rgba(6, 182, 212, 0.08);
+      border-color: rgba(6, 182, 212, 0.4);
+      color: #a5f3fc;
+      font-weight: 600;
+    }
+
+    .select-chevron {
+      position: absolute;
+      right: 12px;
+      pointer-events: none;
+      color: var(--text-dim);
+      width: 14px;
+      height: 14px;
+    }
+
+    .network-hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: #34d399;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* Sub Actions Enabled */
+    .sub-actions-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    .action-tile-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 14px 18px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      user-select: none;
+      text-decoration: none;
+    }
+
+    .btn-dashboard {
+      background: linear-gradient(180deg, #192738 0%, #121c29 100%);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #93c5fd;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .btn-dashboard:hover {
+      background: linear-gradient(180deg, #20344d 0%, #162436 100%);
+      border-color: #60a5fa;
+      color: #ffffff;
+      box-shadow: 0 6px 16px rgba(59, 130, 246, 0.2);
+    }
+
+    .btn-pairing {
+      background: linear-gradient(180deg, #0e2b34 0%, #0a1f26 100%);
+      border: 1px solid rgba(6, 182, 212, 0.45);
+      color: #67e8f9;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .btn-pairing:hover {
+      background: linear-gradient(180deg, #133a46 0%, #0d2a34 100%);
+      border-color: #22d3ee;
+      color: #ffffff;
+      box-shadow: 0 6px 16px rgba(6, 182, 212, 0.25);
+    }
+
+    .action-tile-btn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    /* Refined Quick Pairing Code Card */
+    .quick-pairing-card {
+      background: linear-gradient(145deg, #111823 0%, #0d141e 100%);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      border-radius: var(--radius-md);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      position: relative;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .quick-pairing-card:hover {
+      border-color: rgba(6, 182, 212, 0.55);
+      box-shadow: 0 10px 28px rgba(6, 182, 212, 0.15);
+      transform: translateY(-1px);
+    }
+
+    .quick-pairing-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .quick-pairing-title-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .quick-pairing-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .quick-pairing-desc {
+      font-size: 11px;
+      color: var(--text-sub);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .quick-code-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .quick-code-display {
+      font-family: var(--font-code);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.12);
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px dashed rgba(56, 189, 248, 0.45);
+      user-select: all;
+    }
+
+    .icon-action-btn {
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #0d1520;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: #94a3b8;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .icon-action-btn:hover {
+      background: rgba(6, 182, 212, 0.15);
+      border-color: rgba(6, 182, 212, 0.4);
+      color: #67e8f9;
+    }
+
+    .icon-action-btn:active {
+      transform: scale(0.92);
+    }
+
+    /* Logs Panel Active */
+    .logs-panel {
+      margin-top: 4px;
+      border: 1px solid var(--border-panel);
+      border-radius: var(--radius-md);
+      background: #0f141d;
+      overflow: hidden;
+    }
+
+    details summary {
+      padding: 13px 18px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-sub);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      list-style: none;
+      background: var(--bg-panel);
+    }
+
+    details summary::-webkit-details-marker { display: none; }
+
+    .summary-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .summary-chevron {
+      width: 14px;
+      height: 14px;
+      transition: transform 0.2s;
+    }
+
+    details[open] .summary-chevron {
+      transform: rotate(90deg);
+    }
+
+    .log-terminal {
+      padding: 14px 18px;
+      font-family: var(--font-code);
+      font-size: 12px;
+      line-height: 1.7;
+      color: #94a3b8;
+      max-height: 120px;
+      overflow-y: auto;
+      border-top: 1px solid var(--border-panel-subtle);
+      background: #0a0e14;
+    }
+
+    .log-item {
+      display: flex;
+      gap: 10px;
+    }
+
+    .log-time {
+      color: #3b4d61;
+      user-select: none;
+    }
+
+    .log-success {
+      color: #34d399;
+    }
+
+    /* Footer status */
+    footer {
+      padding: 16px 36px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: var(--text-dim);
+      border-top: 1px solid var(--border-panel-subtle);
+    }
+
+    /* Modal / Pop-over for Pairing Dialog */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(4, 8, 14, 0.72);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      z-index: 1000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .modal-backdrop.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .pairing-window {
+      width: 100%;
+      max-width: 580px;
+      background: #111823;
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      border-radius: 16px;
+      box-shadow: 
+        0 24px 60px rgba(0, 0, 0, 0.75),
+        0 0 35px rgba(6, 182, 212, 0.15);
+      overflow: hidden;
+      transform: scale(0.94) translateY(12px);
+      transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .modal-backdrop.active .pairing-window {
+      transform: scale(1) translateY(0);
+    }
+
+    /* Window Header */
+    .win-header {
+      height: 42px;
+      background: #090e16;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      user-select: none;
+    }
+
+    .win-title-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #e2e8f0;
+    }
+
+    .win-close-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .win-close-btn:hover {
+      background: rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+
+    .win-body {
+      padding: 24px 26px;
+      position: relative;
+    }
+
+    /* Dynamic QR Container */
+    .qr-dynamic-layout {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .qr-frame-box {
+      width: 200px;
+      height: 200px;
+      background: #0b1119;
+      border-radius: 12px;
+      border: 1px solid rgba(6, 182, 212, 0.35);
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px;
+      box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
+      overflow: hidden;
+    }
+
+    /* Reticle Corner Marks */
+    .reticle-corner {
+      position: absolute;
+      width: 14px;
+      height: 14px;
+      border-color: #38bdf8;
+      border-style: solid;
+      pointer-events: none;
+    }
+    .reticle-tl { top: 6px; left: 6px; border-width: 2px 0 0 2px; }
+    .reticle-tr { top: 6px; right: 6px; border-width: 2px 2px 0 0; }
+    .reticle-bl { bottom: 6px; left: 6px; border-width: 0 0 2px 2px; }
+    .reticle-br { bottom: 6px; right: 6px; border-width: 0 2px 2px 0; }
+
+    /* Laser Scanner Line */
+    .reticle-scanner {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #22d3ee, #67e8f9, #22d3ee, transparent);
+      box-shadow: 0 0 10px #22d3ee;
+      opacity: 0.85;
+      animation: scan-pulse 2.8s ease-in-out infinite alternate;
+      pointer-events: none;
+    }
+
+    @keyframes scan-pulse {
+      0% { top: 12px; opacity: 0.2; }
+      50% { opacity: 0.95; }
+      100% { top: 184px; opacity: 0.2; }
+    }
+
+    #qrCanvas {
+      width: 176px;
+      height: 176px;
+      image-rendering: pixelated;
+      background: #fff;
+      border-radius: 6px;
+      padding: 6px;
+    }
+
+    .qr-config-area {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .config-label-small {
+      font-size: 11px;
+      color: #94a3b8;
+      font-weight: 500;
+    }
+
+    .config-input-small {
+      font-size: 12px;
+      padding: 6px 10px;
+      background: #090e15;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      color: #e2e8f0;
+      font-family: var(--font-code);
+      width: 100%;
+    }
+
+    .config-input-small:focus {
+      border-color: #06b6d4;
+    }
+
+    /* Modal Action Controls */
+    .modal-bottom-actions {
+      margin-top: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding-top: 16px;
+    }
+
+    .btn-simulate-scan {
+      background: linear-gradient(180deg, #164e63 0%, #083344 100%);
+      border: 1px solid #0891b2;
+      color: #a5f3fc;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+    }
+
+    .btn-simulate-scan:hover {
+      background: linear-gradient(180deg, #0e7490 0%, #155e75 100%);
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.35);
+      color: #fff;
+    }
+
+    .btn-modal-cancel {
+      background: transparent;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #94a3b8;
+      font-size: 13px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .btn-modal-cancel:hover {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Success State In Window */
+    .pairing-success-card {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      padding: 18px 10px;
+      animation: fadeInScale 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @keyframes fadeInScale {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .success-badge-icon {
+      width: 58px;
+      height: 58px;
+      border-radius: 50%;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1.5px solid #10b981;
+      color: #34d399;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 0 24px rgba(16, 185, 129, 0.4);
+      margin-bottom: 14px;
+    }
+
+    .device-detail-box {
+      width: 100%;
+      margin: 18px 0;
+      background: #090e15;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      border-radius: 10px;
+      padding: 14px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+
+    .device-row-item {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+    }
+
+    /* Toast notice */
+    #copyToast {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #042f2e;
+      border: 1px solid #14b8a6;
+      color: #5eead4;
+      padding: 8px 18px;
+      border-radius: 30px;
+      font-size: 12px;
+      font-weight: 600;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      z-index: 1200;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+    }
+    #copyToast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+<!-- Top Navigation Header -->
+<div style="height: 38px; background: rgb(9, 13, 20); border-bottom: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; justify-content: space-between; padding: 0px 14px; user-select: none; app-region: drag;"><div style="display: flex; align-items: center; gap: 10px;"><svg class="brand-logo-icon" fill="none" stroke="currentColor" stroke-width="2.2" style="width: 18px; height: 18px;" viewbox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 3v6M12 15v6M3 12h6M15 12h6"></path><circle cx="12" cy="12" fill="currentColor" r="3"></circle></svg><span style="font-size: 13px; font-weight: 600; color: #e2e8f0; letter-spacing: 0.3px;">智调鸿枢 · 桌面控制中心</span><span class="brand-subtitle-badge" style="margin-left: 0; font-size: 10px; padding: 1px 6px;">桌面宿主</span><span style="font-size: 11px; color: #64748b; font-family: var(--font-code);">v2.4.0</span></div><div style="display: flex; align-items: center; gap: 14px; -webkit-app-region: no-drag;"><span class="state-indicator" style="padding: 3px 10px; font-size: 11px;"><span class="state-dot"></span><span>服务稳定运行中</span></span><div style="display: flex; align-items: center; gap: 1px; margin-left: 6px;"><button style="width: 28px; height: 26px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 4px; color: #94a3b8; cursor: pointer;" title="最小化" type="button"><svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="12"><line x1="5" x2="19" y1="12" y2="12"></line></svg></button><button style="width: 28px; height: 26px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 4px; color: #94a3b8; cursor: pointer;" title="最大化" type="button"><svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="12"><rect height="16" rx="2" width="16" x="4" y="4"></rect></svg></button><button style="width: 28px; height: 26px; display: flex; align-items: center; justify-content: center; background: transparent; border: none; border-radius: 4px; color: #94a3b8; cursor: pointer;" title="关闭" type="button"><svg fill="none" height="13" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="13"><line x1="18" x2="6" y1="6" y2="18"></line><line x1="6" x2="18" y1="6" y2="18"></line></svg></button></div></div></div>
+<!-- Central Console -->
+<main>
+<!-- Central Power Unit (Running State) -->
+<div class="hero-power-unit">
+<div class="power-btn-container">
+<div class="power-outer-ring"></div>
+<button aria-label="关闭协调中心" class="power-button" type="button">
+<svg class="power-icon" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path>
+<line x1="12" x2="12" y1="2" y2="12"></line>
+</svg>
+</button>
+</div>
+<div class="unit-labels">
+<h2 class="primary-action-text">关闭协调中心</h2>
+<div class="status-badge-row">
+<span>服务状态</span>
+<span class="status-chip-active">
+<span class="status-chip-dot"></span>
+            运行中
+          </span>
+<span class="active-endpoint-pill" id="heroEndpoint">192.168.1.108:7443</span>
+</div>
+</div>
+</div>
+<!-- Console Stack -->
+<div class="console-stack">
+<!-- Network Settings Card (Running Mode) -->
+<section aria-label="网络设置" class="panel-card">
+<div class="card-header">
+<div class="card-title">
+<svg fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<rect height="8" rx="2" ry="2" width="20" x="2" y="2"></rect>
+<rect height="8" rx="2" ry="2" width="20" x="2" y="14"></rect>
+<line x1="6" x2="6.01" y1="6" y2="6"></line>
+<line x1="6" x2="6.01" y1="18" y2="18"></line>
+</svg>
+            网络接入配置
+          </div>
+<span class="card-live-tag">
+<span style="display:inline-block;width:5px;height:5px;border-radius:50%;background:#10b981;"></span>
+            正在监听连接
+          </span>
+</div>
+<div class="network-grid">
+<div class="field-group">
+<label class="field-label" for="ip-select">本机局域网地址</label>
+<div class="input-wrapper">
+<select id="ip-select" onchange="syncNetworkConfig()">
+<option selected="" value="192.168.1.108">WLAN · 192.168.1.108（当前绑定）</option>
+<option value="10.8.0.24">Ethernet · 10.8.0.24 (以太网)</option>
+</select>
+<svg class="select-chevron" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="6 9 12 15 18 9"></polyline>
+</svg>
+</div>
+</div>
+<div class="field-group">
+<label class="field-label" for="port-input">实际端口</label>
+<div class="input-wrapper">
+<input class="port-active" id="port-input" readonly="" type="text" value="7443"/>
+</div>
+</div>
+</div>
+<div class="network-hint">
+<svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14">
+<polyline points="20 6 9 17 4 12"></polyline>
+</svg>
+          已通过 TLS 证书安全握手 · 广播信道正常 (mDNS / UDP 广播可用)
+        </div>
+</section>
+<!-- Sub Actions Row (Available in running mode) -->
+<div class="sub-actions-row">
+<button class="action-tile-btn btn-dashboard" type="button">
+<svg fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<rect height="18" rx="2" width="18" x="3" y="3"></rect>
+<line x1="3" x2="21" y1="9" y2="9"></line>
+<line x1="9" x2="9" y1="21" y2="9"></line>
+</svg>
+          打开调度盘
+          <span id="dashboardConnectedCount" style="font-size: 11px; opacity: 0.8; font-weight: normal; margin-left: 2px;">(已连接: 2)</span>
+</button>
+<button class="action-tile-btn btn-pairing" onclick="openPairingModal()" type="button">
+<svg fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+<polyline points="16 6 12 2 8 6"></polyline>
+<line x1="12" x2="12" y1="2" y2="15"></line>
+</svg>
+          设备配对
+        </button>
+</div>
+<!-- Refined Quick Pairing Code Card (Replaces the old QR card) -->
+<div class="quick-pairing-card" onclick="openPairingModal()" title="点击打开设备配对独立向导窗口">
+<div class="quick-pairing-info">
+<div class="quick-pairing-title-wrap">
+<span class="quick-pairing-title">
+<svg fill="none" height="15" stroke="var(--accent-cyan)" stroke-width="2" viewbox="0 0 24 24" width="15">
+<rect height="11" rx="2" ry="2" width="18" x="3" y="11"></rect>
+<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+</svg>
+              快捷配对码
+            </span>
+<span style="font-size: 10px; color: #38bdf8; background: rgba(56, 189, 248, 0.12); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.3);">局域网动态</span>
+</div>
+<div class="quick-pairing-desc">
+            点击「设备配对」可打开独立扫码配对窗口
+          </div>
+</div>
+<div class="quick-code-actions" onclick="event.stopPropagation()">
+<span class="quick-code-display" id="mainPairingCode">789 - 412</span>
+<button class="icon-action-btn" onclick="copyPairingCode(event)" title="复制配对码" type="button">
+<svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14">
+<rect height="13" rx="2" ry="2" width="13" x="9" y="9"></rect>
+<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+</svg>
+</button>
+<button class="icon-action-btn" onclick="refreshPairingCode(event)" title="刷新配对码" type="button">
+<svg fill="none" height="14" id="refreshIcon" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14">
+<path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- Collapsible Logs -->
+<div class="logs-panel">
+<details open="">
+<summary>
+<div class="summary-left">
+<svg class="summary-chevron" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<polyline points="9 18 15 12 9 6"></polyline>
+</svg>
+<span id="logSummaryTitle">运行日志 (4)</span>
+</div>
+<span style="font-size: 11px; color: #34d399; font-family: var(--font-code);">RUNNING · 7443</span>
+</summary>
+<div class="log-terminal" id="logTerminal">
+<div class="log-item">
+<span class="log-time">[14:32:05]</span>
+<span class="log-success">协调中心服务启动成功，监听于 192.168.1.108:7443 (TLS开启)</span>
+</div>
+<div class="log-item">
+<span class="log-time">[14:32:06]</span>
+<span>mDNS广播与局域网节点发现服务已激活</span>
+</div>
+<div class="log-item">
+<span class="log-time">[14:32:18]</span>
+<span>设备 [MatePad-Pro-HarmonyOS] 申请配对成功，已加入集群</span>
+</div>
+<div class="log-item">
+<span class="log-time">[14:32:32]</span>
+<span>设备 [ThinkPad-Win11-Node] 建立安全管道握手完成</span>
+</div>
+</div>
+</details>
+</div>
+</div>
+</main>
+<!-- Bottom Bar -->
+<footer>
+<div style="display: flex; align-items: center; gap: 16px;">
+<span style="display: flex; align-items: center; gap: 6px;">
+<span style="width: 6px; height: 6px; border-radius: 50%; background: #10b981;"></span>
+<span>宿主守护进程正常</span>
+</span>
+<span>·</span>
+<span id="footerNetworkDesc">分布式网络：HarmonyOS &amp; Windows 互联中</span>
+</div>
+<div style="display: flex; align-items: center; gap: 14px; font-family: var(--font-code); font-size: 11px;">
+<span>内存占用: 64.2 MB</span>
+<span>·</span>
+<span id="footerThroughput">集群吞吐: 128 ops/s</span>
+<span>·</span>
+<span style="color: #34d399;">延迟: 1.8ms</span>
+</div>
+</footer>
+<!-- Independent Pairing Modal Window -->
+<div class="modal-backdrop" id="pairingModal" onclick="handleBackdropClick(event)">
+<div class="pairing-window" id="pairingWindow">
+<!-- Window Title Bar -->
+<div class="win-header">
+<div class="win-title-area">
+<svg fill="none" height="16" stroke="var(--accent-cyan)" stroke-width="2" viewbox="0 0 24 24" width="16">
+<path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+<polyline points="16 6 12 2 8 6"></polyline>
+<line x1="12" x2="12" y1="2" y2="15"></line>
+</svg>
+<span>设备配对向导 · 安全通道连接</span>
+</div>
+<button class="win-close-btn" onclick="closePairingModal()" title="关闭窗口" type="button">
+<svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14">
+<line x1="18" x2="6" y1="6" y2="18"></line>
+<line x1="6" x2="18" y1="18" y2="18"></line>
+</svg>
+</button>
+</div>
+<!-- Window Content -->
+<div class="win-body">
+<!-- Pairing Step 1: Active QR Code & Config -->
+<div id="pairingScanView">
+<div class="qr-dynamic-layout">
+<!-- Dynamic QR Display Frame with Optical Corners & Scanning Line -->
+<div class="qr-frame-box">
+<span class="reticle-corner reticle-tl"></span>
+<span class="reticle-corner reticle-tr"></span>
+<span class="reticle-corner reticle-bl"></span>
+<span class="reticle-corner reticle-br"></span>
+<div class="reticle-scanner"></div>
+<!-- Canvas for dynamically drawn QR Code matrix based on parameters -->
+<canvas height="160" id="qrCanvas" title="动态生成的配对二维码" width="160"></canvas>
+</div>
+<!-- Parameters and Live Information -->
+<div class="qr-config-area">
+<div>
+<label class="config-label-small">配对目标广播地址 (IP / Host)</label>
+<input class="config-input-small" id="modalIpInput" oninput="renderDynamicQR()" type="text" value="192.168.1.108"/>
+</div>
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+<div>
+<label class="config-label-small">协调端口</label>
+<input class="config-input-small" id="modalPortInput" oninput="renderDynamicQR()" type="text" value="7443"/>
+</div>
+<div>
+<label class="config-label-small">一次性配对密匙</label>
+<input class="config-input-small" id="modalCodeInput" oninput="renderDynamicQR()" type="text" value="789-412"/>
+</div>
+</div>
+<div>
+<label class="config-label-small">动态握手负载包 (TLS Payload URI)</label>
+<div id="qrPayloadDisplay" style="font-family: var(--font-code); font-size: 11px; color: #67e8f9; word-break: break-all; background: #070b10; border: 1px solid rgba(255, 255, 255, 0.06); padding: 6px 8px; border-radius: 6px;">
+                  hdhub://pair?host=192.168.1.108&amp;port=7443&amp;token=789412
+                </div>
+</div>
+<div style="font-size: 11px; color: #64748b; line-height: 1.4;">
+                打开 HarmonyOS 智调客户端或 Windows 辅节点，直接对准二维码扫描或输入 6 位验证码即可完成鉴权。
+              </div>
+</div>
+</div>
+<!-- Bottom Actions -->
+<div class="modal-bottom-actions">
+<div style="display: flex; align-items: center; gap: 8px;">
+<button class="btn-simulate-scan" onclick="simulateDevicePairing()" type="button">
+<svg fill="none" height="15" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="15">
+<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+</svg>
+                模拟移动端扫码连接
+              </button>
+</div>
+<button class="btn-modal-cancel" onclick="closePairingModal()" type="button">取消</button>
+</div>
+</div>
+<!-- Pairing Step 2: Success State (Smooth Transition) -->
+<div class="pairing-success-card" id="pairingSuccessView">
+<div class="success-badge-icon">
+<svg fill="none" height="32" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="32">
+<polyline points="20 6 9 17 4 12"></polyline>
+</svg>
+</div>
+<h3 style="font-size: 18px; font-weight: 700; color: #fff; margin-bottom: 4px;">设备配对成功！</h3>
+<p style="font-size: 12px; color: #94a3b8;">已与新节点完成 ECDSA 证书安全密钥协商，数据同步管道就绪</p>
+<div class="device-detail-box">
+<div class="device-row-item">
+<span style="color: #64748b;">接入设备名称</span>
+<span id="matchedDeviceName" style="color: #67e8f9; font-weight: 600;">HUAWEI Mate 60 Pro (HarmonyOS NEXT)</span>
+</div>
+<div class="device-row-item">
+<span style="color: #64748b;">分配临时令牌</span>
+<span id="matchedDeviceToken" style="color: #e2e8f0; font-family: var(--font-code);">TKN-98F4-B7C1</span>
+</div>
+<div class="device-row-item">
+<span style="color: #64748b;">局域网内延迟</span>
+<span style="color: #34d399; font-family: var(--font-code);">1.4 ms (WLAN 直连)</span>
+</div>
+<div class="device-row-item">
+<span style="color: #64748b;">同步信道权限</span>
+<span style="color: #e2e8f0;">实时剪贴板 · 分布式计算 · 任务调度</span>
+</div>
+</div>
+<div style="display: flex; gap: 12px; width: 100%; justify-content: flex-end;">
+<button class="action-tile-btn btn-pairing" onclick="finishPairingSuccess()" style="padding: 9px 24px; font-size: 13px;" type="button">
+              完成并返回控制台
+            </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Global Toast Notification -->
+<div id="copyToast">已复制配对码到剪贴板</div>
+<script>
+    // State management
+    let currentPairCode = "789 - 412";
+    let connectedDeviceCount = 2;
+
+    // Helper: Generate simple deterministic pseudo QR pattern on canvas
+    function renderDynamicQR() {
+      const canvas = document.getElementById('qrCanvas');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      const ip = document.getElementById('modalIpInput').value.trim() || '192.168.1.108';
+      const port = document.getElementById('modalPortInput').value.trim() || '7443';
+      const code = document.getElementById('modalCodeInput').value.trim().replace(/\D/g, '') || '789412';
+      
+      const payload = `hdhub://pair?host=${ip}&port=${port}&token=${code}`;
+      const payloadEl = document.getElementById('qrPayloadDisplay');
+      if (payloadEl) payloadEl.textContent = payload;
+
+      const size = 160;
+      canvas.width = size;
+      canvas.height = size;
+      
+      // Clear background
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, size, size);
+
+      // Simple hash to generate deterministic pseudo matrix
+      let hash = 0;
+      for (let i = 0; i < payload.length; i++) {
+        hash = (hash << 5) - hash + payload.charCodeAt(i);
+        hash |= 0;
+      }
+
+      const gridCount = 23;
+      const cellSize = size / gridCount;
+
+      ctx.fillStyle = '#090e17';
+
+      // Draw standard QR-like position patterns at 3 corners
+      function drawFinder(r0, c0) {
+        // Outer 7x7 box
+        ctx.fillRect(c0 * cellSize, r0 * cellSize, 7 * cellSize, 7 * cellSize);
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect((c0 + 1) * cellSize, (r0 + 1) * cellSize, 5 * cellSize, 5 * cellSize);
+        ctx.fillStyle = '#090e17';
+        ctx.fillRect((c0 + 2) * cellSize, (r0 + 2) * cellSize, 3 * cellSize, 3 * cellSize);
+      }
+
+      drawFinder(1, 1);
+      drawFinder(1, gridCount - 8);
+      drawFinder(gridCount - 8, 1);
+
+      // Pseudo random data modules driven by content hash
+      for (let r = 0; r < gridCount; r++) {
+        for (let c = 0; c < gridCount; c++) {
+          // Avoid finder patterns
+          if ((r < 9 && c < 9) || (r < 9 && c >= gridCount - 9) || (r >= gridCount - 9 && c < 9)) {
+            continue;
+          }
+          // Timing patterns
+          if (r === 6 || c === 6) {
+            if ((r + c) % 2 === 0) {
+              ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+            }
+            continue;
+          }
+
+          // Pseudo bit calculation
+          const seed = (r * 37 + c * 59 + Math.abs(hash)) % 100;
+          if (seed > 46) {
+            ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+          }
+        }
+      }
+    }
+
+    // Modal display control
+    function openPairingModal() {
+      // Sync modal inputs with latest main page states
+      const selectedIp = document.getElementById('ip-select').value;
+      document.getElementById('modalIpInput').value = selectedIp;
+      document.getElementById('modalPortInput').value = document.getElementById('port-input').value;
+      document.getElementById('modalCodeInput').value = currentPairCode;
+
+      // Reset views
+      document.getElementById('pairingScanView').style.display = 'block';
+      document.getElementById('pairingSuccessView').style.display = 'none';
+
+      renderDynamicQR();
+
+      const modal = document.getElementById('pairingModal');
+      modal.classList.add('active');
+    }
+
+    function closePairingModal() {
+      const modal = document.getElementById('pairingModal');
+      modal.classList.remove('active');
+    }
+
+    function handleBackdropClick(e) {
+      if (e.target === document.getElementById('pairingModal')) {
+        closePairingModal();
+      }
+    }
+
+    // Network IP synchronization
+    function syncNetworkConfig() {
+      const ip = document.getElementById('ip-select').value;
+      const port = document.getElementById('port-input').value;
+      const heroEndpoint = document.getElementById('heroEndpoint');
+      if (heroEndpoint) heroEndpoint.textContent = `${ip}:${port}`;
+      if (document.getElementById('modalIpInput')) {
+        document.getElementById('modalIpInput').value = ip;
+      }
+      renderDynamicQR();
+    }
+
+    // Refresh Pairing Code
+    function refreshPairingCode(e) {
+      if (e) e.stopPropagation();
+      const num1 = Math.floor(100 + Math.random() * 900);
+      const num2 = Math.floor(100 + Math.random() * 900);
+      currentPairCode = `${num1} - ${num2}`;
+
+      const codeEl = document.getElementById('mainPairingCode');
+      codeEl.textContent = currentPairCode;
+
+      const refreshIcon = document.getElementById('refreshIcon');
+      refreshIcon.style.transition = 'transform 0.4s ease';
+      refreshIcon.style.transform = 'rotate(180deg)';
+      setTimeout(() => {
+        refreshIcon.style.transform = 'rotate(0deg)';
+      }, 400);
+
+      // Show small toast
+      showToast('配对码已刷新');
+
+      // Sync modal input if modal is open
+      const modalCodeInput = document.getElementById('modalCodeInput');
+      if (modalCodeInput) {
+        modalCodeInput.value = currentPairCode;
+        renderDynamicQR();
+      }
+    }
+
+    // Copy Pairing Code
+    function copyPairingCode(e) {
+      if (e) e.stopPropagation();
+      const rawCode = currentPairCode.replace(/\s+/g, '');
+      navigator.clipboard ? navigator.clipboard.writeText(rawCode) : null;
+      showToast(`已复制配对码：${rawCode}`);
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('copyToast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2000);
+    }
+
+    // Simulate Device Pairing
+    function simulateDevicePairing() {
+      const scanView = document.getElementById('pairingScanView');
+      const successView = document.getElementById('pairingSuccessView');
+
+      // Randomize device sample
+      const sampleDevices = [
+        'HUAWEI MatePad Pro 13.2 (HarmonyOS NEXT)',
+        'HUAWEI Mate 60 Pro (HarmonyOS 4.2)',
+        'ThinkPad X1 Carbon (Win11 DistNode)'
+      ];
+      const selectedDev = sampleDevices[Math.floor(Math.random() * sampleDevices.length)];
+      document.getElementById('matchedDeviceName').textContent = selectedDev;
+      document.getElementById('matchedDeviceToken').textContent = 'TKN-' + Math.random().toString(36).substring(2, 6).toUpperCase() + '-' + Math.random().toString(36).substring(2, 6).toUpperCase();
+
+      scanView.style.display = 'none';
+      successView.style.display = 'flex';
+    }
+
+    // Finish pairing from modal
+    function finishPairingSuccess() {
+      connectedDeviceCount++;
+      const counterEl = document.getElementById('dashboardConnectedCount');
+      if (counterEl) counterEl.textContent = `(已连接: ${connectedDeviceCount})`;
+
+      // Add to log terminal
+      const now = new Date();
+      const timeStr = `[${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}]`;
+      const devName = document.getElementById('matchedDeviceName').textContent;
+
+      const logTerminal = document.getElementById('logTerminal');
+      const newLog = document.createElement('div');
+      newLog.className = 'log-item';
+      newLog.innerHTML = `<span class="log-time">${timeStr}</span><span class="log-success">新设备 [${devName}] 握手成功，已分配节点通道</span>`;
+      logTerminal.appendChild(newLog);
+      logTerminal.scrollTop = logTerminal.scrollHeight;
+
+      // Update log count
+      const summaryTitle = document.getElementById('logSummaryTitle');
+      if (summaryTitle) summaryTitle.textContent = `运行日志 (${logTerminal.children.length})`;
+
+      // Update footer throughput
+      const throughputEl = document.getElementById('footerThroughput');
+      if (throughputEl) throughputEl.textContent = `集群吞吐: ${128 + connectedDeviceCount * 32} ops/s`;
+
+      closePairingModal();
+      showToast(`设备接入成功，已并入集群！`);
+    }
+
+    // Initial render
+    window.addEventListener('DOMContentLoaded', () => {
+      renderDynamicQR();
+    });
+  </script>
+</body></html>

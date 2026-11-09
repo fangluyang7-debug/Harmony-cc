@@ -12,7 +12,7 @@ const hash=(b:Buffer)=>createHash('sha256').update(b).digest('hex');
 export class CalibrationExecutor {
   constructor(private readonly ledger:DurableLedger,private readonly directory:string,private readonly domain:'REAL'|'SIMULATED',
     private readonly installed:ReadonlyMap<string,EvaluationCase>,
-    private readonly offerFor:(permit:Permit,executor:ExecutorV2)=>Promise<DispatchOfferV2>,private readonly authorize:ExecutionPorts['authorize'],private readonly fixedService?:ExecutionPorts['fixedService'],private readonly imageEncoder?:ExecutionPorts['imageEncoder']){
+    private readonly offerFor:(permit:Permit,executor:ExecutorV2)=>Promise<DispatchOfferV2>,private readonly authorize:ExecutionPorts['authorize'],private readonly service?:ExecutionPorts['service'],private readonly imageEncoder?:ExecutionPorts['imageEncoder']){
     fs.mkdirSync(directory,{recursive:true});
   }
   private filename(id:string){if(!/^[a-f0-9-]{36}$/.test(id))throw Error('PERMIT_INVALID');return path.join(this.directory,id+'.json');}
@@ -41,7 +41,7 @@ export class CalibrationExecutor {
       canonical(offer.resources)!==canonical(executor.resources)||offer.task.inputs.length!==1||offer.task.inputs[0].contentHash!==permit.inputHash||
       offer.task.parameters!==installed.parameters||canonical(offer.allowedConfigs)!==canonical([permit.config])||offer.leaseMs>permit.timeoutMs)throw Error('EVALUATION_OFFER_SCOPE');
     let executionMs:number|undefined,overheadMs:number|undefined;
-    const runtime=new PcExecutionRuntime(this.ledger,{measuredExecution:(wall,overhead)=>{executionMs=wall;overheadMs=overhead;},authorize:this.authorize,imageEncoder:this.imageEncoder,fixedService:this.fixedService,read:async()=>Buffer.from(installed.input),publish:async(output,schemaId)=>{
+    const runtime=new PcExecutionRuntime(this.ledger,{measuredExecution:(wall,overhead)=>{executionMs=wall;overheadMs=overhead;},authorize:this.authorize,imageEncoder:this.imageEncoder,service:this.service,read:async()=>Buffer.from(installed.input),publish:async(output,schemaId)=>{
       if(output.length>permit.maxOutputBytes)throw Error('EVALUATION_OUTPUT_LIMIT');
       const report={permitId:permit.id,domain:this.domain,durationMs:executionMs,overheadMs,output:output.toString('base64'),hash:hash(output)};
       const temporary=filename+'.tmp',fd=fs.openSync(temporary,'wx',0o600);

@@ -1,28 +1,35 @@
 import { common } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
 import { util } from '@kit.ArkTS';
-import { fileIo } from '@kit.CoreFileKit';
 import { HarmonySdkPort, SchedulerSdk, SdkTask, TrustedCoordinator } from 'scheduler';
 interface Registration extends TrustedCoordinator {registrationId:string;code:string;}
 interface Exchange {credential:string;}
 interface Saved {trust:TrustedCoordinator;credential:string;}
 interface Resource {resourcePoolId:string;amount:number;}
-interface DeclaredNode {id:string;capability:string;dependsOn:string[];}
-interface WorkflowDeclaration {id:string;capabilities:string[];inputSchema:string;outputContract:string;nodes:DeclaredNode[];}
+export interface DeclaredNode {id:string;capability:string;dependsOn:string[];parameters?:string;effects?:string;privacy?:string;}
+export interface WorkflowDeclaration {id:string;capabilities:string[];inputSchema:string;outputContract:string;qualityTarget?:string;nodes?:DeclaredNode[];alternatives?:WorkflowDeclaration[];}
+export interface CapabilityAvailability {capability:string;targets:number;services:number;}
+interface CapabilityReply {capabilities?:CapabilityAvailability[];}
 interface Declaration {version:number;revision:string;workflows:WorkflowDeclaration[];}
 interface AppContext {declaration:Declaration|null;}
 interface DisplayMutation {version?:number;text?:string;}
-interface RegistrationRequest {label:string;allowedContracts:string[];maxConcurrent:number;resources:Resource[];offlineBase:Resource[];onlineExtra:Resource[];declaration:Declaration;}
-const manifest:RegistrationRequest={label:'SoleAI 购物',allowedContracts:['image.crop.v1','image.encode.v1'],maxConcurrent:2,
- resources:[{resourcePoolId:'cpu',amount:4},{resourcePoolId:'ram',amount:4294967296},{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:8589934592}],offlineBase:[],onlineExtra:[],
- declaration:{version:1,revision:'soleai.image.1',workflows:[
-  {id:'shopping.photo.prepare',capabilities:['image.crop.v1'],inputSchema:'image.raster',outputContract:'image.raster',nodes:[{id:'prepare',capability:'image.crop.v1',dependsOn:[]}]},
-  {id:'shopping.image.encode',capabilities:['image.encode.v1'],inputSchema:'image.raster',outputContract:'image.embedding',nodes:[{id:'encode',capability:'image.encode.v1',dependsOn:[]}]}]}};
+export interface RegistrationRequest {label:string;allowedContracts:string[];maxConcurrent:number;resources:Resource[];offlineBase:Resource[];onlineExtra:Resource[];declaration:Declaration;}
+/** The complete AI capability declaration of this App (rawfile/ai-declaration.json). Declared once by the developer;
+ * the coordinator persists it and the planner decides where each node runs. Never trimmed to what is convenient. */
+const DECLARATION_FILE='ai-declaration.json';
+async function loadManifest(context:common.UIAbilityContext):Promise<RegistrationRequest>{
+ const raw=await context.resourceManager.getRawFileContent(DECLARATION_FILE);
+ const manifest=JSON.parse(new util.TextDecoder('utf-8',{ignoreBOM:true}).decodeToString(raw)) as RegistrationRequest;
+ if(!manifest||!Array.isArray(manifest.allowedContracts)||!manifest.declaration||!Array.isArray(manifest.declaration.workflows)||manifest.declaration.workflows.length<1)throw Error('AI_DECLARATION_INVALID');
+ return manifest;
+}
 class CooperativeSession {
  private context:common.UIAbilityContext|null=null;
  private sdk:SchedulerSdk|null=null;
  private port:HarmonySdkPort|null=null;
- private preparing=false;
+ private manifest:RegistrationRequest|null=null;
+ private availability:CapabilityAvailability[]|null=null;
+ private availabilityAt=0;
  private active:SdkTask|null=null;
  private changing=false;
  private cancelRequested=false;
@@ -47,7 +54,7 @@ class CooperativeSession {
   if(!value){AppStorage.set('cooperativeEnabled',false);AppStorage.set('cooperativeStatus','已停止新协同任务，原有任务继续结算');return;}
   this.changing=true;AppStorage.set('cooperativeChanging',true);AppStorage.set('cooperativeStatus','正在连接设备调度件并注册应用');
   try{
-   const context=this.context,store=await preferences.getPreferences(context,{name:'cooperative-app'});
+   const context=this.context,store=await preferences.getPreferences(context,{name:'cooperative-app'}),manifest=await loadManifest(context);
    const raw=await store.get('installation','') as string;let port:HarmonySdkPort;
    if(raw){const saved=JSON.parse(raw) as Saved;port=await HarmonySdkPort.open(context,saved.trust,saved.credential);}
    else{
@@ -62,31 +69,20 @@ class CooperativeSession {
    }
    const registeredContext=JSON.parse(await port.request('/v2/apps/me',null)) as AppContext;
    if(registeredContext.declaration?.revision!==manifest.declaration.revision)throw Error('工作流声明版本不一致，请重新授权应用版本');
-   this.port=port;this.sdk=new SchedulerSdk(port);
-   AppStorage.set('cooperativeEnabled',true);AppStorage.set('cooperativeStatus','应用已注册 · 图片预处理与图像编码交由调度器选择设备');
+   this.port=port;this.sdk=new SchedulerSdk(port);this.manifest=manifest;this.availability=null;
+   AppStorage.set('cooperativeEnabled',true);AppStorage.set('cooperativeStatus','应用已注册 · 已声明 '+manifest.declaration.workflows.length+' 条 AI 工作流 · 当前可协同执行：图片预处理、图像编码；其余环节待能力登记');
   }catch(e){AppStorage.set('cooperativeEnabled',false);AppStorage.set('cooperativeStatus',(e as Error).message);throw e as Error;}
   finally{this.changing=false;AppStorage.set('cooperativeChanging',false);}
  }
  async cancel():Promise<void>{this.cancelRequested=true;if(this.active)await this.active.cancel();}
- async preparePhoto(uri:string):Promise<string>{
-  if(!this.enabled())return uri;
-  if(this.preparing)throw Error('上一条协同图片任务尚未结束');this.preparing=true;this.cancelRequested=false;
-  try{
-  const sdk=await this.availableClient();if(!sdk)return uri;
-  const context=this.context!;
-  const file=fileIo.openSync(uri,fileIo.OpenMode.READ_ONLY);let data:Uint8Array;
-  try{const size=fileIo.statSync(file.fd).size;if(size<1||size>8388608)throw Error('IMAGE_SIZE_LIMIT');const buffer=new ArrayBuffer(size);if(fileIo.readSync(file.fd,buffer)!==size)throw Error('FILE_READ_INCOMPLETE');data=new Uint8Array(buffer);}finally{fileIo.closeSync(file);}
-  const id=util.generateRandomUUID(true),input=await sdk.registerInput(data,'image.raster');
-  try{
-   if(this.cancelRequested)throw Error('协同任务已取消');
-   const task=await sdk.submit({version:3,id,outputContract:'image.raster',qualityTarget:'reference',nodes:[{id:'prepare',capability:'image.crop.v1',input,parameters:'{"box":{"x":0,"y":0,"width":1,"height":1},"paddingRatio":0,"targetSize":1024,"jpegQuality":95}',dependsOn:[]}]},{requestId:id,budgetMs:30000,resultDestination:'ORIGIN'});
-   this.active=task;if(this.cancelRequested){await task.cancel();throw Error('协同任务已取消');}
-   const result=await task.result();if(this.cancelRequested)throw Error('协同任务已取消');
-   const destination=context.cacheDir+'/cooperative-'+id+'.jpg',out=fileIo.openSync(destination,fileIo.OpenMode.CREATE|fileIo.OpenMode.WRITE_ONLY|fileIo.OpenMode.TRUNC);
-   try{if(fileIo.writeSync(out.fd,result.output.slice().buffer)!==result.output.byteLength)throw Error('FILE_WRITE_INCOMPLETE');}finally{fileIo.closeSync(out);}
-   AppStorage.set('cooperativeStatus','图片预处理完成 · 执行目标 '+result.status.targetId);return 'file://'+destination;
-  }finally{this.active=null;sdk.releaseInput(input);}
-  }finally{this.preparing=false;}
+ /** Declared workflows as shipped; the gateway matches them against coordinator availability. */
+ declaration():RegistrationRequest|null{return this.manifest;}
+ /** Qualified-target counts per declared capability, cached briefly. Read-only: the planner still decides placement. */
+ async capabilities():Promise<CapabilityAvailability[]>{
+  if(!this.enabled()||!this.port)return [];
+  const now=Date.now();if(this.availability!==null&&now-this.availabilityAt<10000)return this.availability;
+  try{const reply=JSON.parse(await this.port.request('/v2/apps/me/capabilities',null)) as CapabilityReply;this.availability=reply.capabilities??[];this.availabilityAt=now;return this.availability;}
+  catch(e){return this.availability??[];}
  }
 }
 export const cooperative=new CooperativeSession();

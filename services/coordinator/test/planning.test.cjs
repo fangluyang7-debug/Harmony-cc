@@ -116,14 +116,14 @@ test('local result publication stays private only for the authenticated App hold
  assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
 });
 
-test('fixed service placement requires the registered origin App holder and matching logical service',()=>{
+test('service placement matches the logical service without binding the origin holder',()=>{
  const f=fixture(),service=new PlanningService(null),c=f.snapshot.candidates[0];
  f.request.nodes[0].serviceId='catalog';c.serviceId='catalog';c.appInstanceId='app';c.holderInstanceId='origin';f.snapshot.devices[0].holderInstanceId='origin';
  f.request.appInstanceId='app';f.request.originHolderId='origin';
  assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'ready');
- f.request.originHolderId='other';assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
+ f.request.originHolderId='other';assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'ready');
  f.request.originHolderId='origin';c.serviceId='different';assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
- c.serviceId='catalog';delete c.appInstanceId;delete f.request.appInstanceId;assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'blocked');
+ c.serviceId='catalog';delete c.appInstanceId;delete f.request.appInstanceId;assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.status,'ready');
 });
 
 test('online slowdown uses a fresh alternate plan and keeps the primary when waiting is faster',async()=>{

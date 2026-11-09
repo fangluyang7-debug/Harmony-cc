@@ -1,5 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { cooperative } from '../services/CooperativeSession';
+import { aiGateway } from '../services/AiTaskGateway';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { http } from '@kit.NetworkKit';
 import { FeedbackOption, FeedbackRequest, SchedulerService, TaskSignalType, TaskStatus, WorkflowHandle } from 'scheduler';
@@ -32,6 +33,7 @@ struct Index {
   @StorageLink('cooperativeEnabled') cooperativeEnabled:boolean=false;
   @StorageLink('cooperativeChanging') cooperativeChanging:boolean=false;
   @StorageLink('cooperativeStatus') cooperativeStatus:string='尚未启用协同调度';
+  @StorageLink('aiExecutionReport') aiExecutionReport:string='';
   private readonly scheduler: SchedulerService = SchedulerService.getInstance();
   private readonly tasks: ShoppingTaskService = ShoppingTaskService.getInstance();
   private readonly monitor: SchedulerMonitorPublisher = SchedulerMonitorPublisher.getInstance();
@@ -168,7 +170,7 @@ struct Index {
     clearTimeout(this.expiryTimer); this.feedback = null; this.feedbackHidden = false;
   }
   private invalidate(type: TaskSignalType = TaskSignalType.INPUT_REPLACED): void {
-    void cooperative.cancel().catch(()=>{});
+    void aiGateway.cancel().catch(()=>{});
     this.generation++; this.photoGeneration++; this.clearFeedback();
     if (this.activeSearch !== null) {
       // Leaving or cancelling can be the strongest "too slow" signal; remember it for a deferred question.
@@ -263,7 +265,7 @@ struct Index {
     this.contentScroller.scrollTo({ xOffset: 0, yOffset: 0 });
     const started = Date.now();
     try {
-      const handle = this.tasks.searchResult(query, this.highQuality);
+      const handle = (await aiGateway.searchText(query, this.highQuality)).handle;
       this.currentTaskId = this.tasks.lastSubmittedTaskId;
       this.runAudit = this.currentTaskId + ' · 等待云端运行';
       this.activeSearch = handle;
@@ -384,9 +386,9 @@ struct Index {
       this.photoUri = result.photoUris[0]; this.tab = CommerceTab.RADAR; this.selected = null;
       this.products = []; this.lastQuery = ''; this.plan = ''; this.receiptText = '';
       this.summary = '正在上传图片并执行云端检索'; this.loading = true;
-      const prepared = await cooperative.preparePhoto(this.photoUri);
+      const outcome = await aiGateway.searchImage(this.photoUri);
       if (generation !== this.photoGeneration) { return; }
-      const handle = this.tasks.searchImageResult(prepared); this.activeSearch = handle;
+      const handle = outcome.handle; this.activeSearch = handle;
       this.currentTaskId = this.tasks.lastSubmittedTaskId;
       this.runAudit = this.currentTaskId + ' · 等待云端运行';
       const searchResult = await handle.result;
@@ -503,6 +505,7 @@ struct Index {
         Toggle({type:ToggleType.Switch,isOn:this.cooperativeEnabled}).enabled(!this.cooperativeChanging&&!this.loading).onChange((value:boolean)=>{void cooperative.setEnabled(value).catch((e:Error)=>this.notify(e.message));})
       }.width('100%')
       Text(this.cooperativeStatus).fontSize(14).width('100%')
+      if (this.aiExecutionReport.length > 0) { Text(this.aiExecutionReport).fontSize(12).fontColor('#666666').width('100%') }
       Text('首次开启会打开设备调度件确认授权，并自动注册图片工作流。文字购物与账户操作沿用业务服务。').fontSize(13).fontColor('#747878')
       Button('v2 裁剪验收').onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/V2CropPage' }).catch(() => this.notify('验收入口打开失败')); })
       Button('v2 图像候选检索').onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/V2ImageSearchPage' }).catch(() => this.notify('检索入口打开失败')); })
@@ -583,7 +586,7 @@ struct Index {
     const generation = ++this.generation;
     this.loading = true;
     try {
-      const handle = this.tasks.sessionResult(operation, sessionId, body);
+      const handle = (await aiGateway.sessionOperation(operation, sessionId, body)).handle;
       this.activeSearch = handle;
       const result = await handle.result;
       if (generation !== this.generation) { return; }

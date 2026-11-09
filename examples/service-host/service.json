@@ -1,0 +1,6 @@
+{
+  "packs": "E:/absolute/path/to/examples/service-host/service-packs.json",
+  "baseUrl": "https://your-business-service.example/",
+  "tokenEnv": "SOLEAI_SERVICE_TOKEN",
+  "timeoutMs": 20000
+}

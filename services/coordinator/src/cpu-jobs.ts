@@ -18,10 +18,10 @@ import { AppRegistry } from './apps';
 import {DirectTransfers} from './direct-transfers';
 
 interface StartContext {until:number;jobId:string;stage?:string;retries?:number;}
-interface JobData {sourcePeer?:Peer;backupOf?:string;duplicateBudgetMs?:number;resultReceivedAt?:number;delivery?:{id:string;senderHolderId:string;senderEndpointId:string;senderEpoch:string;relay?:boolean;preparation?:{at:number;remainingMs:number;uploadMs?:number;downloadMs?:number;estimatedMs:number|null;reservedTailMs:number;relaySlots:number;reason:string};failure?:{authorizationId:string;endpointId:string;at:number;reason:string}};retainOutput?:{id:string;epoch:string};sourceAttemptId?:string;sourceNodeId?:string;offer:DispatchOfferV2;holderId:string;input:ArtifactDescriptor;output:ArtifactDescriptor|null;traceId:string;
+interface JobData {privacy?:string;sourcePeer?:Peer;backupOf?:string;duplicateBudgetMs?:number;resultReceivedAt?:number;delivery?:{id:string;senderHolderId:string;senderEndpointId:string;senderEpoch:string;relay?:boolean;preparation?:{at:number;remainingMs:number;uploadMs?:number;downloadMs?:number;estimatedMs:number|null;reservedTailMs:number;relaySlots:number;reason:string};failure?:{authorizationId:string;endpointId:string;at:number;reason:string}};retainOutput?:{id:string;epoch:string};sourceAttemptId?:string;sourceNodeId?:string;offer:DispatchOfferV2;holderId:string;input:ArtifactDescriptor;output:ArtifactDescriptor|null;traceId:string;
   budgetMs:number;deadlineAt:number;fingerprint?:string;choices?:{request:PlacementRequest;parameters:string}[];
   request:PlacementRequest;plan:SnapshotDecision;planTiming:{start:number;end:number;clockDomainId?:string};
-  decisionEvidence?:{executionIdentity?:string;calibrationGeneration?:number;snapshotVersion:number;policyVersion:string;profileSequence:number;profileSampledAt:number;resultDelivery:string;inFlightP90?:{attemptId:string;p90RemainingMs:number|null}[];plannedStartMs?:number;plannedResourceWaitMs?:number;costSource?:string;costConfidence?:string;phaseCosts?:{EXECUTE:number|null;QUEUE:number|null;PUBLISH:number|null}};}
+  decisionEvidence?:{candidateCount?:number;executionIdentity?:string;calibrationGeneration?:number;snapshotVersion:number;policyVersion:string;profileSequence:number;profileSampledAt:number;resultDelivery:string;inFlightP90?:{attemptId:string;p90RemainingMs:number|null}[];plannedStartMs?:number;plannedResourceWaitMs?:number;costSource?:string;costConfidence?:string;phaseCosts?:{EXECUTE:number|null;QUEUE:number|null;PUBLISH:number|null}};}
 /** First usable single-node submission path. Uses qualified available targets, with an optional explicit target. */
 class ResourceRetry extends Error {
   constructor(readonly delayMs:number){super('NO_LEGAL_PLAN');}
@@ -72,11 +72,13 @@ export class CpuJobs {
       !Number.isSafeInteger(input.bytes)||input.bytes<1||input.bytes>8388608||input.targetId!==undefined&&!protocolId(input.targetId)||
       input.budgetMs!==undefined&&(!Number.isSafeInteger(input.budgetMs)||input.budgetMs<0||input.budgetMs>30000)||
       input.parameters!==undefined&&(typeof input.parameters!=='string'||Buffer.byteLength(input.parameters)>32768)||
-      input.inputLocation!==undefined&&input.inputLocation!=='ORIGIN'||Object.keys(input).some(k=>!['requestId','capability','contentHash','bytes','targetId','budgetMs','parameters','inputLocation','priority'].includes(k))||input.priority!==undefined&&!['REMOTE_INTERACTIVE','REMOTE_BATCH'].includes(input.priority))throw Error('JOB_INPUT_INVALID');
+      input.inputLocation!==undefined&&input.inputLocation!=='ORIGIN'||Object.keys(input).some(k=>!['requestId','capability','contentHash','bytes','targetId','budgetMs','parameters','inputLocation','priority','businessIdempotencyKey','privacy'].includes(k))||input.priority!==undefined&&!['REMOTE_INTERACTIVE','REMOTE_BATCH'].includes(input.priority)||input.privacy!==undefined&&!['LOCAL_ONLY','OWNER_SERVICE','SHARED'].includes(input.privacy))throw Error('JOB_INPUT_INVALID');
+    if(input.businessIdempotencyKey!==undefined&&!protocolId(input.businessIdempotencyKey))throw Error('JOB_INPUT_INVALID');
     const parameters=input.parameters??'{}';try{JSON.parse(parameters);}catch{throw Error('JOB_INPUT_INVALID');}
     const id=input.requestId,existing=await this.db.cpuJob.findUnique({where:{id}});
-    if(existing){const d=await this.owned(peer,id);if(d.offer.task.priority!==(input.priority??'REMOTE_INTERACTIVE')||d.fingerprint!==fingerprint||(!fingerprint&&d.offer.task.parameters!==parameters)||d.input.ref.contentHash!==input.contentHash||d.input.bytes!==input.bytes||d.offer.task.contract.capability!==input.capability||!fingerprint&&input.targetId&&d.offer.target.targetId!==input.targetId||input.budgetMs!==undefined&&d.budgetMs!==input.budgetMs)throw Error('JOB_CONFLICT');if(existing.state==='CANCELLED')throw Error('JOB_CANCELLED');this.artifacts.register(d.input);return this.upload(peer,id,d);}
+    if(existing){const d=await this.owned(peer,id);if(d.offer.task.businessIdempotencyKey!==(input.businessIdempotencyKey??null)||d.offer.task.priority!==(input.priority??'REMOTE_INTERACTIVE')||d.fingerprint!==fingerprint||(!fingerprint&&d.offer.task.parameters!==parameters)||d.input.ref.contentHash!==input.contentHash||d.input.bytes!==input.bytes||d.offer.task.contract.capability!==input.capability||!fingerprint&&input.targetId&&d.offer.target.targetId!==input.targetId||input.budgetMs!==undefined&&d.budgetMs!==input.budgetMs)throw Error('JOB_CONFLICT');if(existing.state==='CANCELLED')throw Error('JOB_CANCELLED');this.artifacts.register(d.input);return this.upload(peer,id,d);}
     const pack=this.packs.find(p=>p.manifest.contract.capability===input.capability);if(!pack)throw Error('CAPABILITY_UNSUPPORTED');
+    if(pack.manifest.contract.sideEffectPolicy!=='PURE'&&!protocolId(input.businessIdempotencyKey))throw Error('JOB_IDEMPOTENCY_REQUIRED');
     if(!app.identity.allowedContracts.includes(pack.manifest.contract.contractId))throw Error('APP_CONTRACT_FORBIDDEN');
     const now=Date.now();
     const artifact:ArtifactDescriptor=graph?.source?.descriptor??{ref:{artifactId:'in-'+id,contentVersion:1,contentHash:input.contentHash,schemaId:pack.manifest.contract.inputSchemas[0],schemaVersion:1},
@@ -89,7 +91,7 @@ export class CpuJobs {
     if(!graph?.source&&registered&&registered.ownerPrincipalId===artifact.ownerPrincipalId&&registered.bytes===artifact.bytes&&registered.expiresAt<artifact.expiresAt)artifact.expiresAt=registered.expiresAt;
     // S1 has one fixed relay path. The planner prices input -> worker -> relay;
     // subsequent source polling/download is not claimed as an end-to-end estimate.
-    const request:PlacementRequest={recoveryFromDeviceId:graph?.excludedDeviceId,priority:input.priority??'REMOTE_INTERACTIVE',nodes:[{id:'compute',workKey:workKeyV2(pack.manifest.contract,parameters,artifact.bytes),capability:input.capability,...(pack.manifest.contract.serviceId?{serviceId:pack.manifest.contract.serviceId}:{}),dependencies:[],inputs:[artifact.ref.artifactId],
+    const request:PlacementRequest={recoveryFromDeviceId:graph?.excludedDeviceId,priority:input.priority??'REMOTE_INTERACTIVE',nodes:[{id:'compute',workKey:workKeyV2(pack.manifest.contract,parameters,artifact.bytes),capability:input.capability,...(pack.manifest.contract.serviceId?{serviceId:pack.manifest.contract.serviceId}:{}),...(input.privacy&&input.privacy!=='SHARED'?{dataScope:input.privacy}:{}),dependencies:[],inputs:[artifact.ref.artifactId],
       // Reference numeric/text transforms: bound expansion conservatively rather
       // than pricing every tiny vector result as the global 8 MiB limit.
       // Raster expansion depends on crop/resize parameters; retain its declared maximum.
@@ -98,7 +100,7 @@ export class CpuJobs {
       memoryBytes:pack.manifest.resourceLimit.find(r=>r.resourcePoolId==='ram')?.amount??0,minimumQuality:pack.manifest.qualityThreshold,candidates:[]}],
       artifacts:[{id:artifact.ref.artifactId,bytes:artifact.bytes,replicas:[input.inputLocation==='ORIGIN'?{deviceId:peer.deviceId,holderInstanceId:peer.holderInstanceId,readMs:0}:{deviceId:this.store.senderInstanceId,readMs:0}]}],links:[],deviceResources:[],
       ...(input.inputLocation==='ORIGIN'?{inputRelayId:this.store.senderInstanceId,localResultHolderId:peer.holderInstanceId}:{}),
-      ...(graph?{localResultHolderId:peer.holderInstanceId}:{}),originHolderId:peer.holderInstanceId,appInstanceId:app.identity.appInstanceId,domain:this.directory.domain,remainingBudgetMs:input.budgetMs??30000,networkAllowed:true,privacy:'AUTHORIZED_REMOTE',localDeviceId:peer.deviceId,
+      ...(graph?{localResultHolderId:peer.holderInstanceId}:{}),originHolderId:peer.holderInstanceId,appInstanceId:app.identity.appInstanceId,domain:this.directory.domain,remainingBudgetMs:input.budgetMs??30000,networkAllowed:true,privacy:input.privacy==='LOCAL_ONLY'?'LOCAL_ONLY':'AUTHORIZED_REMOTE',localDeviceId:peer.deviceId,
       now,committedNodeIds:[],committedArtifacts:[],materializeOutputsAt:this.store.senderInstanceId,finalDestination:this.store.senderInstanceId};
     const parent=graph?.source?await this.owned(peer,graph.source.attemptId):null;
     if(graph?.source&&artifact.expiresAt<=Date.now())throw Error('ARTIFACT_UNAVAILABLE:ARTIFACT_EXPIRED');
@@ -113,11 +115,11 @@ export class CpuJobs {
     const selectedRequest=choices?.[planned.selected]?.request??request,selectedParameters=choices?.[planned.selected]?.parameters??parameters;
     const offer:DispatchOfferV2={task:{groupId:peer.groupId,sessionId:null,originDeviceId:peer.deviceId,resultDestination:peer.deviceId,workflowId:graph?.workflowId??id,nodeId:graph?.nodeId??'compute',attemptId:id,
       coordinatorEpoch:this.epoch(),planRevision:1,app:app.identity,
-      contract:executor.contract,budget:{remainingMs:request.remainingBudgetMs,deadlineAt:now+request.remainingBudgetMs},inputs:[artifact.ref],allowedTargetIds:[executor.target.targetId],qualityTarget:'reference',privacy:'AUTHORIZED_REMOTE',
-      priority:request.priority!,parameters:selectedParameters,allowedConfigurations:executor.configurations.map(c=>c.id),businessIdempotencyKey:null},target:executor.target,resources:executor.resources,allowedConfigs:executor.configurations,
+      contract:executor.contract,budget:{remainingMs:request.remainingBudgetMs,deadlineAt:now+request.remainingBudgetMs},inputs:[artifact.ref],allowedTargetIds:[executor.target.targetId],qualityTarget:'reference',privacy:request.privacy,
+      priority:request.priority!,parameters:selectedParameters,allowedConfigurations:executor.configurations.map(c=>c.id),businessIdempotencyKey:input.businessIdempotencyKey??null},target:executor.target,resources:executor.resources,allowedConfigs:executor.configurations,
       allotmentId:grant.allotmentId,allotmentVersion:grant.version,leaseMs:request.remainingBudgetMs,
       transferPlan:[{ref:artifact.ref,from:this.store.senderInstanceId,to:executor.target.deviceId,via:null}],dependencies:graph?.dependencies.map(nodeId=>({nodeId,planRevision:1,committed:true}))??[],reasonCode:decision.decision.reason};
-    const data:JobData={sourcePeer:peer,sourceAttemptId:graph?.source?.attemptId,sourceNodeId:graph?.source?.nodeId,offer,holderId:profile.holderInstanceId,input:artifact,output:null,traceId:graph?.workflowId??randomUUID(),budgetMs:request.remainingBudgetMs,deadlineAt:graph?.deadlineAt??now+request.remainingBudgetMs,request:selectedRequest,choices,fingerprint,plan:decision,planTiming,
+    const data:JobData={privacy:input.privacy??'SHARED',sourcePeer:peer,sourceAttemptId:graph?.source?.attemptId,sourceNodeId:graph?.source?.nodeId,offer,holderId:profile.holderInstanceId,input:artifact,output:null,traceId:graph?.workflowId??randomUUID(),budgetMs:request.remainingBudgetMs,deadlineAt:graph?.deadlineAt??now+request.remainingBudgetMs,request:selectedRequest,choices,fingerprint,plan:decision,planTiming,
       decisionEvidence:this.evidence(planned)};
     if(parent?.retainOutput)data.delivery={id:randomUUID(),senderHolderId:parent.holderId,senderEndpointId:parent.retainOutput.id,senderEpoch:parent.retainOutput.epoch};
     if(this.localInput(peer,data)){data.offer.transferPlan=[];data.decisionEvidence!.resultDelivery='ORIGIN_LOCAL';}
@@ -169,7 +171,7 @@ export class CpuJobs {
   }
   private evidence(p:Awaited<ReturnType<CpuJobs['choose']>>){
     const placement=p.decision.decision.suggestion?.[0];
-    return {snapshotVersion:p.decision.snapshotVersion,policyVersion:p.decision.policyVersion,profileSequence:p.profile.sequence,profileSampledAt:p.profile.ownerActivity.sampledAt,
+    return {candidateCount:placement?p.decision.decision.candidateCounts?.[placement.nodeId]:undefined,snapshotVersion:p.decision.snapshotVersion,policyVersion:p.decision.policyVersion,profileSequence:p.profile.sequence,profileSampledAt:p.profile.ownerActivity.sampledAt,
       resultDelivery:'SOURCE_PULL_NOT_ESTIMATED',executionIdentity:p.executionIdentity,calibrationGeneration:p.calibrationGeneration,inFlightP90:p.profile.inFlight?.filter(f=>f.history&&f.resources.some(d=>p.executor.resources.some(e=>e.resourcePoolId===d.resourcePoolId))).map(f=>({attemptId:f.attemptId,p90RemainingMs:f.history!.p90RemainingMs})),plannedStartMs:placement?.startMs,plannedResourceWaitMs:placement?.dagResourceWaitMs,costSource:placement?.costSource,costConfidence:placement?.costConfidence,phaseCosts:placement?.phaseCosts};
   }
   private localInput(peer:Peer,d:JobData){return !d.delivery&&d.request.inputRelayId!==undefined&&d.holderId===peer.holderInstanceId&&d.offer.task.app.appInstanceId===peer.app?.appInstanceId;}

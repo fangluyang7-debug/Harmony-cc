@@ -31,6 +31,7 @@ import { StandardSessionViewAdapterService } from './application/standard-sessio
 import { SearchDebugService } from './application/search-debug.service';
 import { SessionsController } from './controllers/sessions.controller';
 import { SearchDebugController } from './controllers/search-debug.controller';
+import { ShoppingCommitV2Controller } from './controllers/shopping-commit-v2.controller';
 
 @Module({
   imports: [
@@ -48,7 +49,7 @@ import { SearchDebugController } from './controllers/search-debug.controller';
     UserMemoryModule,
     RuntimeModule,
   ],
-  controllers: [ShoppingTaskController, SessionsController, SearchDebugController],
+  controllers: [ShoppingTaskController, SessionsController, SearchDebugController, ShoppingCommitV2Controller],
   providers: [
     ShoppingRuntimeService, ShoppingImageStagesService,
     SessionsService,

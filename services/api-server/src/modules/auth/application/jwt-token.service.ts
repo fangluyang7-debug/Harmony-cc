@@ -52,6 +52,25 @@ export class JwtTokenService {
     return typed as unknown as JwtUserPayload;
   }
 
+  /** Task-scoped tickets (STATUS §87 R-17a): HS256 like access tokens, but a separate `kind` so one can never pass for the other. */
+  signScoped(payload: Record<string, unknown>) {
+    const header = { alg: 'HS256', typ: 'JWT' };
+    const encodedHeader = this.base64Url(JSON.stringify(header)), encodedPayload = this.base64Url(JSON.stringify(payload));
+    return `${encodedHeader}.${encodedPayload}.${this.signContent(`${encodedHeader}.${encodedPayload}`)}`;
+  }
+  verifyScoped(token: string): Record<string, unknown> {
+    const parts = token.split('.');
+    if (parts.length !== 3) throw new UnauthorizedException('TICKET_INVALID');
+    const [encodedHeader, encodedPayload, signature] = parts;
+    if (!this.safeEqual(signature, this.signContent(`${encodedHeader}.${encodedPayload}`))) throw new UnauthorizedException('TICKET_INVALID');
+    let payload: unknown;
+    try { payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')); } catch { throw new UnauthorizedException('TICKET_INVALID'); }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) throw new UnauthorizedException('TICKET_INVALID');
+    const typed = payload as Record<string, unknown>;
+    if (typeof typed.exp !== 'number' || typed.exp < Math.floor(Date.now() / 1000)) throw new UnauthorizedException('TICKET_EXPIRED');
+    return typed;
+  }
+
   private signContent(content: string) {
     return createHmac('sha256', this.getSecret()).update(content).digest('base64url');
   }

@@ -36,6 +36,8 @@ export interface PlacementCandidate {
 export interface PlacementNode {
   workKey?:string;
   serviceId?:string;
+  /** Where this node's data may go: LOCAL_ONLY = origin device only; OWNER_SERVICE = only targets that register a logical service; SHARED/absent = any qualified target. */
+  dataScope?:'LOCAL_ONLY'|'OWNER_SERVICE'|'SHARED';
   allowedTargetIds?: string[];
   modelManifest?:ModelManifestV2|null;
   qualityRequirements?: QualityEvidence[];
@@ -68,7 +70,7 @@ export interface PlannerLimits { maxCandidates: number; lookahead: number; beamW
 export interface DeviceResources { capacity?:number|null; deviceId: string; resourcePoolId: string; availableMemoryBytes: number | null; availableSlots: number | null; available?:number|null; observedAt: number; ttlMs: number; }
 export interface PlannerAssignment { costSource?:string;costConfidence?:string; phaseCosts?:{EXECUTE:number;QUEUE:number;PUBLISH:number}; inputSourceHolderId?:string;inputSourceEndpointId?:string;inputSourceEndpointEpoch?:string; inputRelayId?:string;inputUploadMs?:number;inputDownloadMs?:number; outputEndpointId?:string; outputEndpointEpoch?:string; inputEndpointOperation?:'READ'|'WRITE'; inputEndpointId?:string; inputEndpointEpoch?:string; policyQueueMs?:number; dagResourceWaitMs?:number; startMs?:number; finishMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; inputTransferMs: number; executionMs: number; uncertaintyMs: number; }
 export interface PlannerRejection { retryAfterMs?:number; targetId: string; nodeId: string; deviceId: string; executorId: string; code: string; }
-export interface WorkflowPlacementDecision { status: 'ready' | 'blocked'; baseline: PlannerAssignment[] | null; suggestion: PlannerAssignment[] | null;
+export interface WorkflowPlacementDecision { status: 'ready' | 'blocked'; candidateCounts?:Record<string,number>; baseline: PlannerAssignment[] | null; suggestion: PlannerAssignment[] | null;
   baselineMs: number | null; suggestionMs: number | null; rejections: PlannerRejection[]; truncated: number; planningMs: number; reason: string; }
 export function poolOccupancyKey(deviceId:string,poolId:string,holderId?:string):string {
   return JSON.stringify([deviceId,poolId,holderId??null]);
@@ -100,10 +102,10 @@ export class WorkflowPlacementPlanner {
       ![limits.planningBudgetMs,limits.switchCostMs,limits.hysteresisMs].every(n=>Number.isFinite(n)&&n>=0)) throw new Error('PLANNER_CONFIG_INVALID');
   }
   plan(request: PlacementRequest): WorkflowPlacementDecision {
-    const started=this.clock(),rejections:PlannerRejection[]=[];let truncated=0;
+    const started=this.clock(),rejections:PlannerRejection[]=[];const candidateCounts:Record<string,number>={};let truncated=0;
     const result=(baseline:Beam|null,suggestion:Beam|null,reason:string):WorkflowPlacementDecision=>({status:suggestion?'ready':'blocked',
       baseline:baseline?.assignments??null,suggestion:suggestion?.assignments??null,baselineMs:baseline?.cost??null,suggestionMs:suggestion?.cost??null,
-      rejections,truncated,planningMs:Math.max(0,this.clock()-started),reason});
+      candidateCounts,rejections,truncated,planningMs:Math.max(0,this.clock()-started),reason});
     if(request.nodes.length>64||request.nodes.some(n=>n.candidates.length>64)||request.links.length>4096||request.artifacts.length+request.committedArtifacts.length>4096||!Number.isFinite(request.now))return result(null,null,'REQUEST_LIMIT_OR_CLOCK_INVALID');
     if(!Number.isFinite(request.remainingBudgetMs)||request.remainingBudgetMs<=0)return result(null,null,'BUDGET_EXHAUSTED');
     if(request.nodes.some(n=>new Set(n.candidates.map(c=>c.targetId)).size!==n.candidates.length))return result(null,null,'DUPLICATE_TARGET');
@@ -119,6 +121,7 @@ export class WorkflowPlacementPlanner {
           rejections.push({targetId:c.targetId,nodeId:node.id,deviceId:c.deviceId,executorId:c.executorId,code,...(delay>0?{retryAfterMs:delay}:{})});
         }return !code;})
         .sort((a,b)=>(a.computeMs!+a.queueMs!+a.coldMs!+a.uncertaintyMs!)-(b.computeMs!+b.queueMs!+b.coldMs!+b.uncertaintyMs!)||a.targetId.localeCompare(b.targetId));
+      candidateCounts[node.id]=candidates.length;
       const selected=candidates.slice(0,this.limits.maxCandidates);
       const baseline=candidates.find(c=>c.targetId===node.baselineTargetId);
       if(baseline&&!selected.includes(baseline))selected[selected.length-1]=baseline;
@@ -149,7 +152,8 @@ export class WorkflowPlacementPlanner {
     if(!c.trusted||!['REAL','SIMULATED'].includes(r.domain)||c.source!==r.domain)return 'UNTRUSTED_OR_WRONG_DOMAIN';
     if(r.recoveryFromDeviceId===c.deviceId)return 'RECOVERY_PRIMARY_DEVICE';
     if(c.capability!==node.capability)return 'CAPABILITY_UNSUPPORTED';
-    if(node.serviceId!==c.serviceId||node.serviceId!==undefined&&(r.originHolderId===undefined||r.appInstanceId===undefined||c.holderInstanceId!==r.originHolderId||c.appInstanceId!==r.appInstanceId))return 'SERVICE_PLACEMENT_FORBIDDEN';
+    if(node.serviceId!==c.serviceId)return 'SERVICE_PLACEMENT_FORBIDDEN';
+    if(node.dataScope==='LOCAL_ONLY'&&c.deviceId!==r.localDeviceId||node.dataScope==='OWNER_SERVICE'&&c.serviceId===undefined)return 'DATA_SCOPE_FORBIDDEN';
     if(node.model&&(!c.model||!compatibleModel(node.model,c.model)))return 'MODEL_INDEX_MISMATCH';
     if(node.modelManifest!==undefined&&!sameModelV2(node.modelManifest,c.modelManifest??null))return 'MODEL_MANIFEST_MISMATCH';
     if(!Number.isFinite(c.ttlMs)||!Number.isFinite(c.observedAt)||c.observedAt>r.now||r.now-c.observedAt>c.ttlMs||c.ttlMs<=0)return 'OBSERVATION_EXPIRED';
