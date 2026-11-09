@@ -22,7 +22,7 @@ import { normalizeProductCategory } from '../../../common/catalog/product-catego
 interface TicketRequest { workflowId: string; inputHash: string; scope: string[]; ttlMs?: number }
 interface CommitQuery { text: string; categoryHint?: string; filters?: Record<string, unknown> }
 interface CommitRequest { ticket: string; query: CommitQuery; candidates: CandidateSeed[]; answer?: string }
-interface TicketPayload { kind: 'service-ticket'; sub: string; wf: string; ih: string; scope: string[]; jti: string; exp: number }
+type TicketPayload = { kind: 'service-ticket'; sub: string; wf: string; ih: string; scope: string[]; jti: string; exp: number };
 export const commitCapability = 'shopping.commit.v1';
 export const dryRunTicket = 'dry-run';
 const stockStates = new Set(['in_stock', 'out_of_stock', 'unknown']);
