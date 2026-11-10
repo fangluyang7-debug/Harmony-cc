@@ -133,7 +133,11 @@ function renderFaults(){
 function renderApplications(){
   $('applications').innerHTML=(snapshot?.applications??[]).map(a=>`<article class="device-card"><h3>${esc(a.label)}</h3><p>声明版本：${esc(a.declaration?.revision??'未声明')} · 并发额度 ${esc(a.maxConcurrent)}</p><p>${a.contracts.map(esc).join(' · ')}</p>${(a.declaration?.workflows??[]).map(w=>`<p>${esc(w.id)}：${w.capabilities.map(esc).join(' → ')}</p>`).join('')}<p>${a.installations.map(i=>`${esc(shortId(i.deviceId))} · ${esc(i.state)}`).join('<br>')}</p><small>ACTIVE 表示安装身份有效，不代表应用当前在线或执行能力已就绪。</small></article>`).join('')||empty('尚无注册应用');
 }
-function render(){renderRecentJobs();renderMetrics();renderTopology();renderDevices();renderApplications();renderNetwork();renderJobs();renderDecision();renderTrace();renderFaults();}
+function renderGaps(){
+  const gaps=snapshot?.capabilityGaps??[];
+  $('capability-gaps').innerHTML=gaps.length?`<div class="table-wrap"><table><thead><tr><th>能力</th><th>需要它的应用</th><th>合格目标</th><th>登记但未就绪</th><th>缺少它的设备</th><th>如何补齐</th></tr></thead><tbody>${gaps.map(g=>`<tr><td><strong>${esc(g.label)}</strong><br><small>${esc(g.capability)}</small></td><td>${g.requiredBy.map(esc).join('<br>')}</td><td><span class="tag ${g.status==='READY'?'good':g.status==='PENDING'?'warn':'bad'}">${g.status==='READY'?esc(g.qualifiedTargets+' 个'):g.status==='PENDING'?'评测中':'无'}</span></td><td>${g.providers.filter(p=>!['CANARY','ACTIVE'].includes(p.state)).map(p=>esc(p.deviceName+' · '+p.state+(p.reasonCode?' · '+p.reasonCode:''))).join('<br>')||'—'}</td><td>${g.missingDevices.map(d=>esc(d.name)).join('<br>')||'—'}</td><td><small>${esc(g.install)}</small></td></tr>`).join('')}</tbody></table></div><small>缺口 = 应用声明 − 设备实际登记并通过评测的能力。调度器不会把任务派给未登记该能力的设备，也不会替任何设备安装东西；安装由设备主人决定，装好后代理自动登记、评测并进入候选。</small>`:empty('所有已声明的能力都有合格目标');
+}
+function render(){renderRecentJobs();renderMetrics();renderTopology();renderDevices();renderApplications();renderGaps();renderNetwork();renderJobs();renderDecision();renderTrace();renderFaults();}
 async function loadTrace(){
   const id=selected,current=group,serial=++traceSerial;if(!id)return;
   try{const result=await get(`/v2/spaces/${encodeURIComponent(group)}/telemetry/traces/${encodeURIComponent(id)}`);if(serial!==traceSerial||id!==selected||current!==group)return;trace=result;traceError='';}
@@ -154,6 +158,7 @@ async function refresh(){
 function schedule(){clearTimeout(timer);timer=setTimeout(()=>void refresh(),150);}
 function selectSpace(id){
   $('shopping-link').href='shopping.html?space='+encodeURIComponent(id);
+  $('photo-studio-link').href='photo.html?space='+encodeURIComponent(id)+'&view=judge';
   stream?.close();group=id;snapshot=null;trace=null;traceError='';selected='';traceSerial++;serverAnchor=0;$('domain').className='tag neutral';$('domain').textContent='UNKNOWN';$('updated').textContent='尚未取得快照';render();
   const requestedUrl=new URL(location.href);if(requestedUrl.searchParams.get('space')===id)selected=requestedUrl.searchParams.get('job')||'';
   const url=new URL(location.href);if(id)url.searchParams.set('space',id);else url.searchParams.delete('space');history.replaceState(null,'',url);

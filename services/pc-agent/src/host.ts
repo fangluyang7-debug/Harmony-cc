@@ -34,7 +34,9 @@ export interface CpuHostConfig {
   services?:ServiceAdapter[];
   controlIntervalMs?:number;
   directory:string;identity:{groupId:string;deviceId:string;holderInstanceId:string;appInstanceId:string|null};connection:RecoveryConnection;
-  contribution:{ownerMode:'dedicated'|'windows-idle'|'paused';maxCpuThreads:number;maxMemoryBytes:number;maxVramBytes?:number;reserveMemoryBytes:number;idleThresholdMs?:number};
+  contribution:{ownerMode:'dedicated'|'windows-idle'|'paused';maxCpuThreads:number;maxMemoryBytes:number;maxVramBytes?:number;reserveMemoryBytes:number;idleThresholdMs?:number;capacityMode?:'auto'|'fixed'};
+  /** Called when the coordinator derives a new automatic ceiling from this machine's measurements. */
+  onContributionChanged?:(contribution:CpuHostConfig['contribution'])=>void;
 }
 /** Standalone CPU host assembled from paired identity, owner policy, installed packs and network services. */
 export class CpuHost {
@@ -205,12 +207,20 @@ export class CpuHost {
       if(this.agent.ready&&syncSettings&&!this.appPolicy){
         // HTTPS Date is rounded down to seconds. Anchor at receipt time so telemetry is conservatively
         // aged by network delay, never moved into the coordinator's future by a fast device wall clock.
-        const reply=await allotmentTransport(this.config.connection,time=>{this.clockOffset=time-Date.now();})('/v2/device-settings',{} ) as {settings:CpuHostConfig['contribution']|null};
-        const settings=reply.settings;
+        const measured=collectSystemResources();
+        const reply=await allotmentTransport(this.config.connection,time=>{this.clockOffset=time-Date.now();})('/v2/device-settings',{measured:{cpuThreads:measured.cpuThreads,totalMemoryBytes:measured.totalMemoryBytes}}) as {settings:CpuHostConfig['contribution']|null};
+        const settings=reply.settings,local=this.config.contribution;
         if(settings&&['dedicated','windows-idle','paused'].includes(settings.ownerMode)){
-          // Cloud preferences may pause/yield this installation; original local ceilings remain authoritative.
-          this.config.contribution.ownerMode=settings.ownerMode;
-          this.config.contribution.reserveMemoryBytes=Math.max(this.config.contribution.reserveMemoryBytes,settings.reserveMemoryBytes);
+          local.ownerMode=settings.ownerMode;
+          const ceiling=settings.capacityMode==='auto'&&Number.isSafeInteger(settings.maxCpuThreads)&&settings.maxCpuThreads>=1&&Number.isSafeInteger(settings.maxMemoryBytes)&&settings.maxMemoryBytes>=67108864&&Number.isSafeInteger(settings.reserveMemoryBytes)&&settings.reserveMemoryBytes>=0;
+          if(ceiling&&(local.maxCpuThreads!==settings.maxCpuThreads||local.maxMemoryBytes!==settings.maxMemoryBytes||local.reserveMemoryBytes!==settings.reserveMemoryBytes||local.capacityMode!=='auto')){
+            // Automatic capacity: the coordinator derived this ceiling from the measurements reported above.
+            local.capacityMode='auto';local.maxCpuThreads=settings.maxCpuThreads;local.maxMemoryBytes=settings.maxMemoryBytes;local.reserveMemoryBytes=settings.reserveMemoryBytes;
+            this.config.onContributionChanged?.({...local});
+          }else if(!ceiling){
+            // Fixed capacity: cloud preferences may pause/yield this installation; original local ceilings remain authoritative.
+            local.reserveMemoryBytes=Math.max(local.reserveMemoryBytes,settings.reserveMemoryBytes);
+          }
         }
       }
       const links=this.agent.ready?await this.relayLinks.sample(Date.now()+this.clockOffset):[];

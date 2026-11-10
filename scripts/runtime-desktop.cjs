@@ -1,9 +1,92 @@
 // Local control surface. No LAN listener and no unauthenticated process controls.
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
+const https=require('node:https');
 const {randomBytes}=require('node:crypto'),{spawn,execFileSync}=require('node:child_process');
 const {lanEnvironment}=require('./start-coordinator-lan.cjs');
 const {discoverCenters:discover}=require('../apps/windows-agent/discovery.cjs');
 const root=path.resolve(__dirname,'..');
+const consoleAssets=new Set(['/index.html','/style.css','/app.js','/dispatch.html','/dispatch.css',
+  '/dispatch.js','/dispatch-view.mjs','/dispatch-layout.js','/dispatch-charts.mjs','/scheduler-sdk.js',
+  '/qrcode.js','/join-key.mjs','/photo.html','/photo.css','/photo.js','/photo-workflow.mjs','/photo-gallery.mjs','/photo-app-port.mjs']);
+function consoleApi(target,ca,route,body,cookie){
+  return new Promise((resolve,reject)=>{
+    const payload=body===undefined?null:JSON.stringify(body);
+    const headers=cookie?{cookie}:{};
+    if(payload)Object.assign(headers,{origin:target.origin,'content-type':'application/json','content-length':Buffer.byteLength(payload)});
+    const request=https.request(target,{path:'/v2/spaces'+route,method:payload?'POST':'GET',headers,ca},reply=>{
+      let text='';
+      reply.setEncoding('utf8').on('data',chunk=>{text+=chunk;});
+      reply.on('error',reject);
+      reply.on('end',()=>{
+        try{resolve({status:reply.statusCode,data:JSON.parse(text),cookie:reply.headers['set-cookie']?.[0]?.split(';')[0]});}
+        catch(error){reject(error);}
+      });
+    });
+    request.setTimeout(10000,()=>request.destroy(Error('LOCAL_CONSOLE_TIMEOUT')));
+    request.on('error',reject);
+    request.end(payload??undefined);
+  });
+}
+async function openLocalSpace(directory,target,ca){
+  const file=path.join(directory,'local-console-account.json');
+  let identity;
+  try{identity=JSON.parse(fs.readFileSync(file,'utf8'));}
+  catch(error){
+    if(error.code!=='ENOENT')throw error;
+    identity={account:'local-'+randomBytes(12).toString('hex'),password:randomBytes(32).toString('hex')};
+    fs.writeFileSync(file,JSON.stringify(identity),{flag:'wx',mode:0o600});
+  }
+  let session=await consoleApi(target,ca,'/login',identity);
+  if(session.data.error==='LOGIN_INVALID')session=await consoleApi(target,ca,'/register',{...identity,name:'本机协调者'});
+  if(session.status!==200||!session.cookie)throw Error('LOCAL_CONSOLE_SESSION_FAILED');
+  const account=await consoleApi(target,ca,'/me',undefined,session.cookie);
+  if(account.status!==200)throw Error('LOCAL_CONSOLE_SESSION_FAILED');
+  if(account.data.spaces.length===0){
+    const space=await consoleApi(target,ca,'/',{name:'本地调度空间'},session.cookie);
+    if(space.status!==200)throw Error('LOCAL_CONSOLE_SPACE_FAILED');
+  }
+  return session.cookie;
+}
+async function consoleRequest(req,res,control,origin,sessionCookie,spaceRoute){
+  if(['same-site','cross-site'].includes(req.headers['sec-fetch-site'])||(req.headers.origin&&req.headers.origin!==origin)||
+     (req.method!=='GET'&&req.headers.origin!==origin)){res.writeHead(403).end();return;}
+  if(!req.headers.cookie?.split(/;\s*/).includes(sessionCookie)){res.writeHead(403).end();return;}
+  res.setHeader('X-Harmony-Local-Console','1');
+  if(control.state!=='RUNNING'||control.mode!=='center'){
+    res.writeHead(503,{'Content-Type':'text/plain; charset=utf-8'}).end('请返回启动页，先启动协调中心。');return;
+  }
+  const fail=()=>{
+    if(res.headersSent){res.destroy();return;}
+    res.writeHead(502,{'Content-Type':'application/json; charset=utf-8'}).end(JSON.stringify({error:'协调中心本机连接失败，请查看运行日志'}));
+  };
+  try{
+    const target=new URL(control.url);
+    const directory=control.coordinatorDirectory??path.join(control.dataRoot,'desktop-'+target.hostname);
+    const ca=fs.readFileSync(path.join(directory,'coordinator-public.crt'));
+    const headers={};
+    for(const name of ['content-type','content-length','last-event-id']){
+      if(req.headers[name]!==undefined)headers[name]=req.headers[name];
+    }
+    if(spaceRoute){
+      if(!control.localSpace||control.localSpace.expiresAt<=Date.now()){
+        const pending={expiresAt:Date.now()+86400000,cookie:openLocalSpace(directory,target,ca)};
+        control.localSpace=pending;
+        pending.cookie.catch(()=>{if(control.localSpace===pending)control.localSpace=null;});
+      }
+      headers.cookie=await control.localSpace.cookie;
+    }
+    if(req.headers.origin)headers.origin=target.origin;
+    const upstream=https.request(target,{path:req.url,method:req.method,headers,ca},reply=>{
+      if(reply.headers['content-type']!==undefined)res.setHeader('Content-Type',reply.headers['content-type']);
+      res.writeHead(reply.statusCode);
+      reply.on('error',fail);
+      reply.pipe(res);
+    });
+    upstream.on('error',fail);
+    res.on('close',()=>upstream.destroy());
+    req.pipe(upstream);
+  }catch{fail();}
+}
 function addresses(){return Object.entries(os.networkInterfaces()).flatMap(([name,list])=>(list||[]).filter(i=>i.family==='IPv4'&&!i.internal).map(i=>({name,address:i.address})));}
 function deviceDirectory(directory){return path.resolve(directory||path.join(os.homedir(),'HarmonyRuntime','device'));}
 async function openDesktop(){
@@ -35,9 +118,13 @@ class RuntimeControl {
     const address=input.address,port=String(input.port||7443);
     // Keep each network identity in its own directory, never replace an existing certificate.
     const env=lanEnvironment(address,port,process.env.HARMONY_COORDINATOR_DATA_DIR||path.join(this.dataRoot,'desktop-'+address),{...process.env,COORDINATOR_OPENSSL:openssl()});
+    const bundledSchemaEngine=path.join(root,'node_modules/@prisma/engines/schema-engine-windows.exe');
+    if(process.platform==='win32'&&!env.PRISMA_SCHEMA_ENGINE_BINARY&&fs.existsSync(bundledSchemaEngine))env.PRISMA_SCHEMA_ENGINE_BINARY=bundledSchemaEngine;
     if(input.suite){if(!path.isAbsolute(input.suite)||!fs.existsSync(input.suite))throw Error('协调中心的评测套件路径不存在');env.COORDINATOR_IMAGE_ENCODING_SUITE=input.suite;}
     if(!fs.existsSync(path.join(root,'services/coordinator/dist/main.js')))throw Error('请先完成协调者构建');
     this.mode='center';this.url=env.COORDINATOR_PUBLIC_URL;
+    this.coordinatorDirectory=env.COORDINATOR_DATA_DIR;
+    this.localSpace=null;
     this.launch(path.join(root,'scripts/start-coordinator-lan.cjs'),[address,port,env.COORDINATOR_DATA_DIR],env);
   }
   startAgent(input){
@@ -84,6 +171,8 @@ class RuntimeControl {
 async function main(options={openBrowser:true}){
   process.chdir(root);const control=new RuntimeControl(),token=randomBytes(32).toString('hex');let origin='';let mutating=false;
   const role=options.role??'both';
+  const localToken=randomBytes(32).toString('hex');
+  let sessionCookie;
   if(!['both','center','agent'].includes(role))throw Error('DESKTOP_ROLE_INVALID');
   const server=http.createServer(async(req,res)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
@@ -97,11 +186,21 @@ async function main(options={openBrowser:true}){
       res.setHeader('Content-Type',asset.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8');
       res.end(fs.readFileSync(path.join(root,'apps/runtime-desktop',asset)));return;
     }
+    const pathname=req.url.split('?')[0];
+    const webAsset=req.method==='GET'&&(consoleAssets.has(pathname)||/^\/fonts\/[\w.-]+\.woff2?$/.test(pathname));
+    const spaceRoute=['GET','POST','PUT'].includes(req.method)&&/^\/v2\/spaces(?:\/|$)/.test(pathname);
+    if(role!=='agent'&&(webAsset||spaceRoute)){
+      if(/^\/v2\/spaces\/(login|register|logout)\/?$/.test(pathname)){res.writeHead(404).end();return;}
+      await consoleRequest(req,res,control,origin,sessionCookie,spaceRoute);return;
+    }
     if(req.headers['x-runtime-token']!==token||req.headers.origin&&req.headers.origin!==origin){res.writeHead(403).end();return;}
     try{
       if(req.method==='GET'&&req.url==='/state'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({...control.snapshot(),role}));return;}
       if(req.method==='GET'&&req.url==='/discover'&&role!=='center'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({centers:await discover()}));return;}
       if(req.method!=='POST'||req.headers.origin!==origin)throw Error('REQUEST_REJECTED');
+      if(req.url==='/console/session'&&role!=='agent'&&control.mode==='center'&&control.state==='RUNNING'){
+        res.writeHead(200,{'Set-Cookie':sessionCookie+'; Path=/; HttpOnly; SameSite=Strict','Content-Type':'application/json'}).end('{}');return;
+      }
       let body='';for await(const chunk of req){body+=chunk;if(body.length>32768)throw Error('REQUEST_LIMIT');}
       if(mutating)throw Error('操作进行中');mutating=true;
       try{const input=JSON.parse(body||'{}');let result={};
@@ -116,6 +215,7 @@ async function main(options={openBrowser:true}){
     }catch(e){res.writeHead(400,{'Content-Type':'application/json'}).end(JSON.stringify({error:e.message}));}
   });
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
+  sessionCookie='harmony_local_'+server.address().port+'='+localToken;
   const url=origin+'/#'+token;
   if(options.openBrowser){if(process.platform==='win32')spawn('rundll32.exe',['url.dll,FileProtocolHandler',url],{windowsHide:true,stdio:'ignore'}).on('error',()=>console.log('请在本机浏览器打开：'+url));else console.log('请在本机浏览器打开：'+url);}
   process.on('SIGINT',()=>{control.stop();if(!control.child)server.close();else control.child.once('exit',()=>server.close());});

@@ -27,7 +27,7 @@ import { QualificationLoop } from './qualification-loop';
 import { RemoteEvaluationRunner } from './remote-evaluation';
 import { ReferencePack, builtinCpuPacks, builtinReferencePacks, cpuSchemas } from '@harmony/reference-capabilities';
 import { CpuJobs } from './cpu-jobs';
-import { TeamSpaces } from './spaces';
+import { TeamSpaces, measuredCapacity } from './spaces';
 import {TelemetryView} from './telemetry-view';
 import { AppRegistry } from './apps';
 import { SdkJobs } from './sdk';
@@ -103,7 +103,9 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
           (body.mode==='upload'?(typeof body.padding!=='string'||body.padding.length!==body.bytes||!/^[x]+$/.test(body.padding)):body.padding!==undefined))throw new BadRequestException('PROBE_INVALID');
         return {relayId:identity.id,padding:body.mode==='download'?'x'.repeat(body.bytes):''};
       }
-      @Post('device-settings')async deviceSettings(@Headers('authorization') header:string){return this.jobResponse(async()=>({settings:await spaces.deviceSettings(await auth.authenticate(bearer(header)))}));}
+      @Post('device-settings')async deviceSettings(@Headers('authorization') header:string,@Body() body:any){
+        return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));const measured=body&&typeof body==='object'&&body.measured!==undefined?measuredCapacity(body.measured):undefined;return {settings:await spaces.deviceSettings(peer,measured)};});
+      }
       private async jobResponse(work:()=>Promise<unknown>){if(!ready)throw new ServiceUnavailableException('RECOVERY_PENDING');try{return await work();}catch(error){options.onError?.(error);const code=error instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(retryableJobError(code))throw new ConflictException({message:code,error:code,retryable:true});throw new BadRequestException({message:code,error:code,retryable:false});}}
       @Get('devices')@Header('Cache-Control','no-store')async devices(@Headers('authorization') header:string){
         return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));return {profiles:await directory.profiles(peer.groupId)};});
@@ -161,14 +163,23 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       @Get('traces/:traceId')async trace(@Headers('authorization') header:string,@Param('traceId') traceId:string){
         if(!ready)throw new ServiceUnavailableException();try{return await traces.read(await auth.authenticate(bearer(header)),traceId);}catch{throw new UnauthorizedException('TRACE_REJECTED');}
       }
+      @Get('pairing/certificate')@Header('Content-Type','application/x-pem-file')@Header('Cache-Control','no-store')
+      pairingCertificate(){
+        if(!ready||config.proxy||!config.publicUrl)throw new ServiceUnavailableException();
+        return identity.cert;
+      }
+      @Post('pairing/bootstrap')@Header('Cache-Control','no-store')
+      async pairingBootstrap(@Body() body:any){
+        if(!ready||config.proxy||!config.publicUrl)throw new ServiceUnavailableException();
+        try{return await auth.readDeviceInvite(body,config.publicUrl);}catch{throw new UnauthorizedException('PAIRING_REJECTED');}
+      }
       @Post('pair')async pair(@Body() body:any){if(!ready)throw new ServiceUnavailableException();try{return {...await auth.exchange(body),epoch};}catch(error){if((error as Error).message==='SPACE_SWITCH_BUSY')throw new ConflictException('SPACE_SWITCH_BUSY');throw new UnauthorizedException('PAIRING_REJECTED');}}
       @Post('apps/registrations')async registerApp(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>apps.register(await auth.authenticate(bearer(header)),body,config.publicUrl??'https://'+config.certificateHost+':'+app.getHttpServer().address().port));}
       @Post('apps/exchange')async exchangeApp(@Body() body:any){return this.jobResponse(async()=>apps.exchange(body));}
       @Get('apps/me')async appIdentity(@Headers('authorization') header:string){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),context=await apps.context(peer),budget=await db.device.findUnique({where:{id:JSON.stringify(['budget',peer.deviceId])}});return {...context,deviceCapacity:budget?JSON.parse(budget.metadataJson).capacity:[]};});}
       /** Qualified-target counts per allowed contract. A count is a registration fact for the App's own routing report; the planner still chooses. */
       @Get('apps/me/capabilities')async appCapabilities(@Headers('authorization') header:string){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),context=await apps.context(peer);
-        let candidates:{capability:string;targetId:string;serviceId?:string}[]=[];try{candidates=(await snapshots.build(peer.groupId)).snapshot.candidates;}catch{candidates=[];}
-        return {capabilities:context.identity.allowedContracts.map((capability:string)=>{const mine=candidates.filter(c=>c.capability===capability);return {capability,targets:new Set(mine.map(c=>c.targetId)).size,services:new Set(mine.filter(c=>c.serviceId!==undefined).map(c=>c.targetId)).size};})};});}
+        return {capabilities:await planning.availability(peer.groupId,context.identity.allowedContracts)};});}
       @Get('apps/registrations')async listApps(@Headers('authorization') header:string){return this.jobResponse(async()=>apps.list(await auth.authenticate(bearer(header))));}
       @Post('apps/registrations/:id/revoke')async revokeApp(@Headers('authorization') header:string,@Param('id') id:string){return this.jobResponse(async()=>apps.revoke(await auth.authenticate(bearer(header)),id));}
       @Post('credentials/rotate')async rotate(@Headers('authorization') header:string){try{return await auth.rotate(bearer(header));}catch{throw new UnauthorizedException('CREDENTIAL_REJECTED');}}

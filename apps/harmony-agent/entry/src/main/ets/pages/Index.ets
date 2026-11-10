@@ -3,7 +3,9 @@ import { webview } from '@kit.ArkWeb';
 import { DevicePanel } from './DevicePanel';
 import { ConsoleDeviceBridge } from '../ConsoleDeviceBridge';
 import { ConsoleConnection, consoleConnection, saveConsoleAddress, saveInvitedConsole, belongsToConsole, matchesConsoleCertificate } from '../ConsoleConnection';
-import { parseJoinInvitation, scanJoinInvitation } from '../JoinInvitation';
+import { parseJoinInvitation, scanConnectionInvitation } from '../JoinInvitation';
+import { resolveDevicePairingLink } from '../DevicePairingLink';
+import { openAgent } from '../AgentRuntime';
 import { discoverCenters } from '../Discovery';
 
 @Entry
@@ -28,7 +30,8 @@ struct Index {
  aboutToAppear():void {void this.restoreConnection();}
  private context():common.UIAbilityContext{return this.getUIContext().getHostContext() as common.UIAbilityContext;}
  private async joinInvitation(value:string):Promise<void>{
-  try{const invitation=parseJoinInvitation(value);await saveInvitedConsole(this.context(),invitation.connection);
+  try{if(value.trim().includes('/#device=')){const bootstrap=await resolveDevicePairingLink(value.trim(),'',this.context());await openAgent(this.context(),bootstrap);await this.restoreConnection();this.openSection('device');return;}
+   const invitation=parseJoinInvitation(value);await saveInvitedConsole(this.context(),invitation.connection);
    this.connection=invitation.connection;this.origin=invitation.connection.address;this.address=this.origin;this.section='space';this.message='';
    this.webUrl=this.origin+'/#join='+encodeURIComponent(invitation.code);if(this.attached)this.controller.loadUrl(this.webUrl);
   }catch(e){this.message=(e as Error).message;}
@@ -84,7 +87,7 @@ struct Index {
      Button('搜索附近的协调中心').onClick(()=>{void this.discover();});
      if(this.discovered){Text(this.discovered).fontSize(13).fontColor('#64748B');}
      Text('连接团队的协调中心，即可在应用内创建或加入空间、查看调度盘。设备配对后会自动填写地址。').fontSize(16).fontColor('#64748B');
-     Button('扫码加入空间').width('100%').onClick(()=>{void scanJoinInvitation(this.context()).then(value=>this.joinInvitation(value)).catch((e:Error)=>{this.message=e.message;});});
+     Button('扫码加入空间 / 配对设备').width('100%').onClick(()=>{void scanConnectionInvitation(this.context()).then(value=>this.joinInvitation(value)).catch((e:Error)=>{this.message=e.message;});});
      TextInput({placeholder:'粘贴完整接入密钥',text:this.joinKey}).onChange(v=>{this.joinKey=v;});
      Button('使用密钥加入').width('100%').onClick(()=>{void this.joinInvitation(this.joinKey);});
      TextInput({placeholder:'或输入 https://协调中心地址:7443',text:this.address}).onChange(v=>{this.address=v;});

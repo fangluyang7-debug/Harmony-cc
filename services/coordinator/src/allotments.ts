@@ -23,6 +23,7 @@ export class AllotmentIssuer {
     return ()=>{listeners.delete(notify);if(!listeners.size)this.confirmations.delete(key);};
   }
   constructor(private readonly db:PrismaClient,private readonly privateKey:string,private readonly epoch:()=>number){}
+  async budget(deviceId:string):Promise<Budget|null>{const row=await this.db.device.findUnique({where:{id:key(deviceId)}});return row?JSON.parse(row.metadataJson) as Budget:null;}
   async confirmDevice(deviceId:string,capacity:ResourceAmountV2[],bindings:Binding[]){
     if(!protocolId(deviceId)||!validResourceVectorV2(capacity)||!capacity.length||!bindings.length||bindings.some(b=>!protocolId(b.groupId)||!protocolId(b.holderInstanceId)||b.appInstanceId!==null&&!protocolId(b.appInstanceId))||new Set(bindings.map(b=>b.holderInstanceId)).size!==bindings.length||new Set(bindings.filter(b=>b.appInstanceId!==null).map(b=>b.appInstanceId)).size!==bindings.filter(b=>b.appInstanceId!==null).length)throw Error('BUDGET_INVALID');
     await this.db.$transaction(async tx=>{

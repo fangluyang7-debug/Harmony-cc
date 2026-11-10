@@ -21,6 +21,23 @@ export class PairingService {
     await this.db.invite.create({data:{id,groupId,revision:1,metadataJson:JSON.stringify(data)}});
     return {version:2,inviteId:id,code,address:url.origin,certificate:this.cert,fingerprint:certificateFingerprint(this.cert),expiresAt,groupId};
   }
+  private checkInvite(invite:InviteData,code:string){
+    if(invite.used||invite.expiresAt<=this.now()||invite.secretHash!==hash(code)||invite.domain!==this.domain)throw Error('INVITE_INVALID');
+  }
+  async readDeviceInvite(request:{inviteId:string;code:string},address:string){
+    if(!request||Object.keys(request).sort().join('|')!=='code|inviteId'||!protocolId(request.inviteId)||
+       typeof request.code!=='string'||!/^[A-Za-z0-9_-]{24}$/.test(request.code))throw Error('INVITE_INVALID');
+    const row=await this.db.invite.findUnique({where:{id:request.inviteId}});
+    if(!row)throw Error('INVITE_INVALID');
+    const invite=JSON.parse(row.metadataJson) as InviteData;
+    this.checkInvite(invite,request.code);
+    const device=await this.db.spaceDevice.findUnique({where:{id:invite.deviceId}});
+    if(!device||device.spaceId!==row.groupId||device.userId!==invite.principalId)throw Error('INVITE_INVALID');
+    const invitation:Invitation={version:2,inviteId:row.id,code:request.code,address:new URL(address).origin,certificate:this.cert,
+      fingerprint:certificateFingerprint(this.cert),expiresAt:invite.expiresAt,groupId:row.groupId};
+    return {invitation:{...invitation,tlsMode:'pinned'},holderInstanceId:device.holderId,
+      domain:this.domain,contribution:JSON.parse(device.settingsJson)};
+  }
   async exchange(request:{inviteId:string;code:string;holderInstanceId:string;installationId?:string;previousDeviceId?:string;knownDeviceIds?:string[]}){
     if(!request||Object.keys(request).some(k=>!['code','holderInstanceId','inviteId','installationId','previousDeviceId','knownDeviceIds'].includes(k))||![request.inviteId,request.holderInstanceId].every(protocolId)||typeof request.code!=='string'||!/^[A-Za-z0-9_-]{24}$/.test(request.code))throw Error('PAIRING_INVALID');
     const credential=randomBytes(32).toString('base64url'),credentialId=randomUUID();
@@ -29,7 +46,7 @@ export class PairingService {
       const row=await tx.invite.findUnique({where:{id:request.inviteId}});
       if(!row)throw Error('INVITE_INVALID');
       const invite=JSON.parse(row.metadataJson) as InviteData;
-      if(invite.used||invite.expiresAt<=this.now()||invite.secretHash!==hash(request.code)||invite.domain!==this.domain)throw Error('INVITE_INVALID');
+      this.checkInvite(invite,request.code);
       const history=await tx.credential.findMany({where:{groupId:row.groupId,holderInstanceId:request.holderInstanceId}});
       if(history.some(old=>{const binding=JSON.parse(old.metadataJson) as CredentialData;return binding.peer.deviceId!==invite.deviceId||binding.peer.principalId!==invite.principalId;}))throw Error('HOLDER_BINDING_CHANGED');
       if(await tx.credential.findFirst({where:{groupId:row.groupId,holderInstanceId:request.holderInstanceId,revoked:false}}))throw Error('HOLDER_ALREADY_REGISTERED');

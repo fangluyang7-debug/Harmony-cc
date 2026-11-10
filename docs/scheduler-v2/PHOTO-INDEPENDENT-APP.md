@@ -2,6 +2,20 @@
 
 2026-11-10，分支 `codex/real-device-acceptance`。实现基线为 `7a3a1fa`。后续已通过 DevEco 为新包生成独立调试签名，HDC 安装成功并启动到手机首次连接页；尚未验收新 App 的授权、选图或完整协作任务。已有 agent / SoleAI 安装包未被替换。
 
+## 新版调度中心整合（STATUS §109）
+
+本次以本地 `8f10aa5` 与协作者 `codex/scheduler-v2-foundation` 的 `b840a99` 合并。保留协作者桌面启停、设备配对弹窗、自动 CPU/RAM 额度、能力缺口表；保留本地空间 WebView、8 位成员加入码、单设备单空间、独立图片 App 和电脑评委页。没有另设任务派发路径。
+
+操作链路：电脑启动新版协调中心 → “设备配对”生成当前本地空间的短二维码 → 手机协作空间首页扫码或“设备连接面板”扫码 → 打开独立图片 App 并首次授权 → 手机选图、开始处理 → 电脑“打开调度盘”→“照片任务展示”。成员扫码/加入码仍属于另一种接入方式，加入账号空间后要确认共享本机；设备配对二维码直接登记设备，不应作为可重复使用的成员邀请。
+
+桌面本机代理已放行照片页及其依赖，调度盘照片链接携带当前空间 ID 与 `view=judge`。成员邀请使用协调者公开局域网地址，不能把启动器的 `127.0.0.1` 地址发送给手机。启动器自动创建/登录自己的本地控制账号；历史网页账号的其他空间不会自动获得访问权。已有用户继续用原协调者网页/协作空间 App 登录，或在新本地空间重新配对。复用旧数据目录要显式设置 `HARMONY_COORDINATOR_DATA_DIR`，不能同时启动占用该目录的两个中心。
+
+能力表使用实际 `photo.analyze.v1`、`photo.prepare.v1`、`photo.enhance.v1`、`photo.assemble.v1`、`photo.deliver.v1`，不要求把 App 改为历史示例 `image.superres.v1`。照片增强 GPU 引擎为 ncnn Vulkan；CUDA 图像编码套件是不同能力。图片 App 新授权声明允许 GPU/显存逻辑预算，实际资源仍由设备上报、资格评测和所有者额度控制；这不表示手机拥有显卡。先前已授予的 App 凭据不会自动扩大权限，需要在协调中心撤销旧授权后重新连接授权；保留旧任务记录。
+
+本地测试已从真实新版启动器点击进入调度盘和评委页，并以独立 App 身份执行实际 CPU 模型七个阶段，核对全部 committed、唯一尝试及逐图交付；原生桥由浏览器替代，未调用真机。本轮 agent / photo 签名 HAP、HAR 与 probe 未签名 HAP 均完成 API 24 构建。未更新运行中的既有中心和手机安装包，下一轮需部署同一整合版本，再验收扫码、授权、相册、手机与电脑协作及 GPU。
+
+分发脚本新增 `05-Photo-HarmonyOS`。`scripts/build-distribution.cjs` 接收 `PHOTO_HAP`、`PHOTO_HAP_API`、`PHOTO_HAP_SIGNED`（与原有 agent / SoleAI 参数同规则）；不提供则记录 `NOT_BUILT`。`scripts/prepare-harmony-distribution.cjs` 默认收集 `.test/s2-harmony-photo` 的 API 22 未签名包，缺包明确标记，不能用 API 24 冒充。没有重发旧 Release；下方 `photo-app-api24-20261110` 附件仍是整合前版本，使用整合源码需重新构建相关包。
+
 ## 三个 App 的职责
 
 | App | 包名 / 源码目录 | 职责 |
@@ -45,7 +59,7 @@ npm run harmony:v2:agent
 
 新包的 DevEco 工程为 `.test/photo-api24-harmony-photo`；必须给 `org.harmonycc.photo` 生成独立调试签名，再用同一命令重建。不能套用 agent 或 SoleAI 的 profile。生成的证书、私有配置及大模型不提交 Git。
 
-当前 HAR、图片 HAP（已签名并安装）、agent HAP（已签名）及 probe HAP（未签名）均构建通过。图片包位于 `.test/photo-api24-harmony-photo/entry/build/default/outputs/default/entry-default-signed.hap`，手机已显示独立首页。协调中心正在运行的旧进程和手机现有 agent 尚未更新；完整联调前需更新中心并核对授权链路。标准分发包清单尚未加入新包；当前通过上述独立构建命令生成。
+HAR、图片 HAP（已签名）、agent HAP（已签名）及 probe HAP（未签名）均构建通过。图片包位于 `.test/photo-api24-harmony-photo/entry/build/default/outputs/default/entry-default-signed.hap`；手机已安装的是整合前版本并显示过独立首页。整合版尚未覆盖安装；完整联调前需更新中心并核对授权链路。分发清单现已包含第 05 组，详见上方整合说明。
 
 ## 本地验证和边界
 

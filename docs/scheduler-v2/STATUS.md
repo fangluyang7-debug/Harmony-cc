@@ -1838,11 +1838,11 @@ Require stack:
 ### 5. App 统一入口改造（WP-C5，实施步骤）
 
 1. `CooperativeSession.ets` 的 `manifest` 按 §3 扩展，`allowedContracts` 覆盖全部能力；`revision` 升为 `soleai.app.1`（声明变化会触发 `APP_DECLARATION_CONFLICT`，需在协调中心重新授权应用版本，`setEnabled` 已有该检查）。 **实施记录（2026-11-09 第二批）**：完整声明改为随包资源 `apps/harmony/entry/src/main/resources/rawfile/ai-declaration.json`（6 条工作流、14 个契约、`revision soleai.app.1`，写会话工作流末尾为显式 `commit` 节点，图片购物以 `alternatives` 表达先编码再检索 / 服务端收图检索两条结构等价路径；原 §11.2 的手机编码与 PC 编码合并为同一 `encode` 节点，差别只是放置）。`CooperativeSession.ets` 开启开关时读取该文件注册，状态文案如实写出当前可协同执行的环节。`services/coordinator/test/soleai-declaration.test.cjs` 直接读同一文件用 `validDeclaration` 校验并断言不含任何放置字样，通过。API 22 HAP 构建通过（`entry-default-signed.hap` 25,191,667 字节，SignHap 3.8 s），未安装真机。`allowedContracts` 中 9 个能力尚无能力包，提交会被 `CAPABILITY_UNSUPPORTED` 拒绝，见 §12 第 8 项。
-2. 新增 `AiTaskGateway.ets`：唯一的 AI 任务入口，签名按工作流 ID + 输入；内部按 `cooperative.enabled()` 分流——打开走 `sdk.submit`（整图提交，含 `alternatives`），关闭走原 `ShoppingTaskService`/`ModelEngineRegistry`。`preparePhoto()` 删除，其逻辑并入图片工作流的 crop 节点。
-3. 调用点逐个改接：`Index.ets:387`（图片购物）、`ShoppingTaskService.ets:41/45/48/54`（文字、图片、刷新、会话操作）、`V2ImageSearch.ets`（并入 `shopping.image`，不再是独立入口）、建议词与画像的调用点（实施时 `grep CloudShoppingExecutor` 核对无遗漏）。
+2. 新增 `AiTaskGateway.ets`：唯一的 AI 任务入口，签名按工作流 ID + 输入；内部按 `cooperative.enabled()` 分流——打开走 `sdk.submit`（整图提交，含 `alternatives`），关闭走原 `ShoppingTaskService`/`ModelEngineRegistry`。`preparePhoto()` 删除，其逻辑并入图片工作流的 crop 节点。 **实施记录（2026-11-10 第五批 b）**：已新增 `apps/harmony/entry/src/main/ets/services/AiTaskGateway.ets`；`preparePhoto` 已从 `CooperativeSession` 删除。分流规则见 §19：按随包声明逐节点对照协调者"有合格目标的能力"，有目标的前缀节点经 SDK 提交，其余本机模式，并生成执行报告；整图提交路径 `runCooperativeChain` 已实现但受 SDK 单输入限制只对链式工作流生效（当前无工作流全部节点可派，尚未触发）。
+3. 调用点逐个改接：`Index.ets:387`（图片购物）、`ShoppingTaskService.ets:41/45/48/54`（文字、图片、刷新、会话操作）、`V2ImageSearch.ets`（并入 `shopping.image`，不再是独立入口）、建议词与画像的调用点（实施时 `grep CloudShoppingExecutor` 核对无遗漏）。 **实施记录（2026-11-10 第五批 b）**：`Index.ets` 的文字搜索、图片搜索、会话操作三处调用点已全部改走 `aiGateway`；取消亦经网关。`V2ImageSearchPage` 仍为独立开发者入口（直接用 `cooperative.availableClient()`），未并入；建议词/画像在 App 中无独立调用点。
 4. `CloudShoppingExecutor` 保留，但只在本机模式被 `ModelEngineRegistry` 的 `CloudModelProxyProvider` 路径使用；协同模式下业务服务通过执行器协议被派发，App 不再直连 `/api/v1/shopping/tasks`。
 5. 首页「v2 裁剪验收」「v2 图像候选检索」两个按钮降为开发者入口（设置页），不再出现在主流程旁。
-6. 状态文案：`cooperativeStatus` 从"图片预处理与图像编码交由调度器选择设备"改为"已接入调度系统 · N 条工作流已声明"；每次任务完成显示"执行目标：本机 / <设备名> / 业务服务"，由回执 `targetId` 决定。
+6. 状态文案：`cooperativeStatus` 从"图片预处理与图像编码交由调度器选择设备"改为"已接入调度系统 · N 条工作流已声明"；每次任务完成显示"执行目标：本机 / <设备名> / 业务服务"，由回执 `targetId` 决定。 **实施记录（2026-11-10 第五批 b）**：开关行下新增 `aiExecutionReport`：`本机模式 · shopping.text` / `协同执行 · …` / `部分协同 · 调度器：crop→<目标前 8 位> · 本机：chat.understand.v1（无合格目标）…`。
 
 ### 6. 本机模式定义（拟写入规格 §11.6）
 
@@ -1983,7 +1983,7 @@ if(node.serviceId!==c.serviceId||node.serviceId!==undefined&&(r.originHolderId==
 6. **（已定并实施，第三批）参数与模型身份的分离**（第二批发现）：`services/pc-agent/src/business-gate.ts:10` 与 `image-encoder.ts:53` 把 `task.parameters` 当作模型清单全等比对，这是图像编码包的私有约定被提升成了通用准入门。建议契约新增可选字段（如 `parameterRole: MODEL_MANIFEST | EXECUTION`，缺省沿用旧行为），准入门只在 `MODEL_MANIFEST` 时比对参数，模型一致性统一走 `node.modelManifest` 对 `executor.model` 的 `sameModelV2`。D10 只加可选字段；ArkTS `NativeAgent.ets` 同步。在此之前服务包只能声明 `model:null`。
 7. **（已定：(a) 干跑；第四批已实施）COMMIT 能力的评测方式**：`qualification.ts` 只接受 `sideEffectPolicy=PURE` 的受信包，`execution-runtime.ts` 也只执行 PURE 派发；`shopping.commit.v1` 这类写会话的能力无法用参考用例评测（跑用例会写真实会话）。可选：(a) 业务服务提供带幂等键的"干跑"模式，评测只校验结构与幂等回放；(b) COMMIT 能力不做质量评测，登记即 ACTIVE 但只允许登记了该 `serviceId` 的业务服务目标声明它，质量证据写 `UNKNOWN`。两种都要改 §7.6 状态机与宿主运行时，须先定。
 8. **（已定：声明先行）App 声明已随包发布**（`apps/harmony/entry/src/main/resources/rawfile/ai-declaration.json`，6 条工作流、14 个契约，`revision soleai.app.1`）。其中 `image.search.v1`、`image.quality.v1`、`chat.*`、`vision.*`、`catalog.price-stock.v1`、`rank.v1`、`shopping.commit.v1` 尚无能力包，协同模式下提交会被 `CAPABILITY_UNSUPPORTED` 拒绝；在统一入口接入前，App 仍只把裁剪/编码节点交给调度器。需要你确认：声明先行、能力逐个登记的节奏是否接受，还是等能力包齐全再切声明版本。
-9. **（用户 2026-11-10 确定方向）敏感数据不离开任务设备，由算法作为约束处理，不做隐私确认弹窗。** 现有机制：请求级 `privacy: LOCAL_ONLY | AUTHORIZED_REMOTE`（`planner.ts:157` 对非本机候选返回 `TRANSFER_FORBIDDEN`），但 `cpu-jobs.ts` 目前对所有业务任务固定写 `AUTHORIZED_REMOTE`。拟实施：声明的输入契约/节点带数据敏感级（`LOCAL_ONLY` 原始个人数据只在来源设备；`OWNER_SERVICE` 只可去 App 自己的业务服务；`SHARED` 任何合格目标），由 SDK 按节点输入自动推导并允许开发者在声明中收紧；规划器把它当作候选过滤条件（数据事实，非位置指定），调度盘显示被排除的原因。待写入规格 §11.5 与 D6。
+9. **（用户 2026-11-10 确定方向）敏感数据不离开任务设备，由算法作为约束处理，不做隐私确认弹窗。** 现有机制：请求级 `privacy: LOCAL_ONLY | AUTHORIZED_REMOTE`（`planner.ts:157` 对非本机候选返回 `TRANSFER_FORBIDDEN`），但 `cpu-jobs.ts` 目前对所有业务任务固定写 `AUTHORIZED_REMOTE`。拟实施：声明的输入契约/节点带数据敏感级（`LOCAL_ONLY` 原始个人数据只在来源设备；`OWNER_SERVICE` 只可去 App 自己的业务服务；`SHARED` 任何合格目标），由 SDK 按节点输入自动推导并允许开发者在声明中收紧；规划器把它当作候选过滤条件（数据事实，非位置指定），调度盘显示被排除的原因。待写入规格 §11.5 与 D6。 **实施记录（2026-11-10 第五批 a）**：已实现为规划器节点约束 `dataScope`（见 §18）；规格修订稿见 §18 末。
 
 ### 14. 本批复核与验收记录（2026-11-09）
 
@@ -2048,6 +2048,55 @@ if(node.serviceId!==c.serviceId||node.serviceId!==undefined&&(r.originHolderId==
 **边界**：ArkTS `NativeAgent.ets` 的服务适配器仍只允许 PURE（R22 待同步，手机端目前不会作为写能力的目标）；`shopping-image-stages.service.ts` 原图片流水线未改走 commit；`TRANSACTIONAL/NO_REPLAY` 策略仍不受理。
 
 **验证（2026-11-10）**：全量 `scheduler:v2:test`：核心 56/56、T1 541 / T2 374、传输 3/3、SDK 10/10、PC 代理 52/52、架构 26/26；协调者 154 项首轮 153/154（`service-host` 业务任务 60 s 等待在全量并行负载下超时，单独复跑 17 s 通过），三份服务集成测试等待上限统一改为 180 s 后协调者复跑 153/154（这次超时的是既有重负载用例 `workflow-reassign-process`，108 s；单独复跑 72 s 通过）。两次超时均为负载抖动，无断言失败；中间一轮无干扰全量 152/152。业务服务：`shopping-stages-v2` 1/1、`shopping-commit-v2` 1/1；既有 `image-search-v2.test.cjs`（不在 v2 门禁内）在 `staged` 断言失败，涉及的 `V2ImageSearch.ets`、SDK 分段逻辑与控制器本轮未改动，原因待查，登记为遗留项。
+
+### 18. 第五批 a 实施记录：数据范围作为规划约束（2026-11-10）
+
+用户 2026-11-10 确定：不做隐私确认弹窗，敏感数据由调度约束保证不离开任务设备。实现为**节点级数据范围**，由声明给出、SDK 透传、规划器作为候选过滤条件处理；它是数据事实，不是位置指定——被过滤掉的目标以拒绝码出现在决策证据里，调度盘可见。
+
+| 层 | 文件 | 要点 |
+| --- | --- | --- |
+| 核心规划器 | `packages/scheduler-core/src/planner.ts`、`test/planner.test.ts` | `PlacementNode.dataScope?: LOCAL_ONLY | OWNER_SERVICE | SHARED`；`reject()` 新增 `DATA_SCOPE_FORBIDDEN`：LOCAL_ONLY 只留来源设备，OWNER_SERVICE 只留登记了逻辑服务的目标；核心用例验证"可共享时更便宜的远端胜出 / LOCAL_ONLY 回到本机且候选数 1 / OWNER_SERVICE 在无服务目标时 blocked、有服务目标时命中" |
+| 协调者 | `services/coordinator/src/cpu-jobs.ts`、`sdk.ts`、`workflow-jobs.ts`、`app-declaration.ts`、`telemetry-view.ts`、`apps/team-space-web/dispatch.js` | 提交与图节点接受可选 `privacy`（枚举校验，等价路径须一致）；LOCAL_ONLY 同时映射为协议 `privacy: LOCAL_ONLY`（传输/中继路径同样禁用），其余为 `AUTHORIZED_REMOTE`；任务元数据记录 `privacy`，调度盘任务详情新增"数据范围"行；声明节点可选 `privacy` |
+| SDK | `packages/scheduler-client/src/index.ts`、`apps/harmony/scheduler/.../SchedulerSdk.ets`（同步） | `SdkNode.privacy?` |
+| App 声明 | `apps/harmony/entry/src/main/resources/rawfile/ai-declaration.json`、`services/coordinator/test/soleai-declaration.test.cjs` | 用户原始文字（`chat.understand/suggest`、文字 `text.embed`）与写步骤 `shopping.commit` 声明 `OWNER_SERVICE`（只去 SoleAI 自己的服务，不去别人的设备）；商品图像节点保持可共享，规划器才有东西可派。开发者只能在声明中收紧，默认 SHARED |
+| 测试 | `services/coordinator/test/service-host.test.cjs` | 手机 App 以 `LOCAL_ONLY` 提交而手机无执行器 → 协调者拒绝（无合法计划）；非法枚举 → `JOB_INPUT_INVALID`；`OWNER_SERVICE` → 规划到服务宿主。测试 App 的并发与资源配额调高以容纳多次提交 |
+
+**边界**：声明中的 `privacy` 目前由开发者手写；"按输入契约自动推导默认值"放在 App 统一入口里做（第五批 b），不进调度核心（核心不含契约名，R4）。`OWNER_SERVICE` 判定依据是候选是否登记了 `serviceId`，尚未区分"哪个 App 的服务"——同一空间内若有第二个业务服务登记同名能力，需要在目录层按 App 归属过滤，登记为后续项。ArkTS `NativeAgent` 不涉及（约束在规划器）。
+
+**规格修订稿（供用户写入）**：
+- §11.5 声明清单末尾加：“节点可声明数据范围 `privacy`：`LOCAL_ONLY`（只在来源设备处理）、`OWNER_SERVICE`（只可交给该 App 自己的业务服务）、`SHARED`（任何合格目标，缺省）。它是候选过滤条件，由规划器执行并在决策证据中给出被排除目标与原因；开发者只能收紧，不能放宽。”
+- D6 控制与数据分离末尾加：“数据范围约束优先于成本：被 `DATA_SCOPE_FORBIDDEN` 排除的目标不参与比较，也不以提示或确认对话的方式交给用户决定。”
+
+**验证（2026-11-10）**：核心 57/57（新增 data scope 用例）；SDK 10/10（TS/ArkTS SdkNode 同步）；协调者 `soleai-declaration`、`app-declaration`、`effects`、`service-host` 定向通过（含 LOCAL_ONLY 拒绝 / 非法枚举 / OWNER_SERVICE 命中服务）；协调者全量 154 项两轮各 153/154，超时的分别是既有重负载用例 `workflow-reassign-process`（单独 72 s 通过）与 `sdk-host`（单独 61 s 通过，全量中 77 s 后 `ALLOTMENT_REJECTED`），均无断言失败；第一轮全量在协调者构建阶段因上一轮被中止的测试进程占用 Prisma 查询引擎 DLL 而 `EPERM`，重跑后恢复。
+
+### 19. 第五批 b 实施记录：App 统一入口与能力可用性（2026-11-10）
+
+| 层 | 文件 | 要点 |
+| --- | --- | --- |
+| 协调者 | `services/coordinator/src/app.ts`（`GET /v2/apps/me/capabilities`）、`packages/scheduler-client/src/node.ts`（路由白名单） | 对 App 的每个允许契约返回当前**合格目标数**与其中服务目标数（取自规划快照的候选，即 CANARY/ACTIVE）。这是登记事实供 App 做执行报告，放置仍由规划器决定 |
+| App 网关 | `apps/harmony/entry/src/main/ets/services/AiTaskGateway.ets`、`CooperativeSession.ets`（`declaration()`、`capabilities()` 10 s 缓存、删除 `preparePhoto`）、`pages/Index.ets`、`entryability/EntryAbility.ets` | 关闭：全部本机模式，报告每个节点"协同未开启"。打开：按随包声明逐节点对照可用性——有合格目标的节点标 scheduler，无目标的标 local 并给出原因（未登记 / 无合格目标 / 上游在本机）；图片工作流把可派的前缀（quality、crop）作为链提交给调度器（规划器选设备，回执 targetId 写回报告），其余交本机流水线；文字/会话工作流当前全部节点无目标，报告如实显示。链式且全部可派的工作流走 `runCooperativeChain`（COMMIT 节点带 `op-<id>` 幂等键，节点 `privacy` 来自声明，commit 回执的 sessionId 回读结果） |
+| 验证 | `services/coordinator/test/service-host.test.cjs`（可用性读取 `{vector.search.v1: targets 1, services 1}`）；SoleAI API 22 HAP 构建通过（2 min 18 s） | ArkTS 仅编译验证，未在模拟器/真机运行网关 |
+
+**与 §9 第 2 条的关系**：`preparePhoto` 这个单点旁路已删除；现在"哪些节点进调度器"由声明 × 协调者可用性决定，App 不再自己挑环节。但 SDK 仍只支持单输入节点（S5 边界），购物 DAG 的 `rank` 等多输入节点无法整图提交，因此本机流水线在能力齐全前仍是下游节点的执行者——报告中逐节点可见，不属于隐藏旁路。
+
+**边界**：可用性按"合格目标数"判断，未区分目标属于哪个 App 的服务（与 §18 同一后续项）；`V2ImageSearchPage` 仍是独立开发者入口；网关未在设备上运行验证。
+
+**验证（2026-11-10）**：SoleAI API 22 HAP 构建通过（含网关、声明 privacy、ArkTS SDK 字段）；`service-host.test.cjs` 可用性读取断言通过；架构检查首轮报 `app.ts DISPATCH_OUTSIDE_PLANNING`（在 app.ts 直接读快照 candidates 违反 R21 候选只在 planning 读取），已把计数移入 `PlanningService.availability()`，复跑 26/26；T1 541 / T2 374、传输 3/3、PC 代理 52/52；业务服务 `shopping-stages-v2`、`shopping-commit-v2` 2/2。网关未在设备上运行。
+
+### 20. 调度盘能力缺口与补齐提示（2026-11-10）
+
+来源：用户提出"设备缺某个关键能力时，总调度盘应提示出来，用户看到后可以去安装"。设计原则不变：缺口是**信息**，不是指令——调度器不会把任务派给未登记该能力的设备，也不会替任何设备安装东西；安装由设备主人决定，装好后代理自动登记、评测、进入候选。
+
+| 层 | 文件 | 要点 |
+| --- | --- | --- |
+| 协调者 | `services/coordinator/src/telemetry-view.ts` | 快照新增 `capabilityGaps`：对所有已注册 App 声明过的契约，对照各设备宿主实际登记的执行器与其评测状态，给出 `providers`（设备、目标、后端、serviceId、状态、原因）、`qualifiedTargets`、`missingDevices`、`status`（MISSING / PENDING / READY，缺口排前）与补齐提示。只读；不读规划候选（R21 架构检查 26/26） |
+| 提示数据 | `capabilities/capability-hints.json` | 每个能力的中文名与补齐方式（内置 / PC 代理套件 / 服务宿主声明 / 尚无能力包）；未知能力给通用提示。数据文件，协调者运行时按相对路径读取——**分发包必须包含 `capabilities/` 目录**（已核对打包脚本，见下） |
+| 调度盘 | `apps/team-space-web/dispatch.html`、`dispatch.js` | 资源视图新增"能力缺口与补齐提示"表：能力 / 需要它的应用 / 合格目标（绿·黄·红）/ 登记但未就绪（状态·原因）/ 缺少它的设备 / 如何补齐 |
+| 测试 | `services/coordinator/test/telemetry.test.cjs` | 夹具设备登记 `capability1` 无评测记录 → PENDING / DISCOVERED；声明的 `image.superres.v1` 无人提供 → MISSING，缺少设备列出夹具设备，提示含"超分"；`text.count.v1` 无提供者 → MISSING；MISSING 排序在前。3/3 通过 |
+
+**与超分演示的关系**：队友的 App 声明 `image.superres.v1` 后，显卡机未装模型时调度盘这一行是红色"无"，缺少它的设备里列出显卡机，提示写明"在 PC 代理安装超分模型与评测套件后自动登记"；装好后变为"评测中"再到绿色，候选数从 0 到 1，再加手机端模型到 2——整个过程都在同一张表上可见，调度器一行不改。
+
+**边界**：提示文案是人工维护的数据文件，新增能力需同步补一条，否则显示通用提示；缺口按"合格目标数"统计，未区分目标是否属于该 App 自己的服务（与 §18 同一后续项）；未在真实多设备空间上视觉验收。
 
 
 <!-- Local real-device acceptance continuation, preserved during integration. -->
@@ -2355,3 +2404,19 @@ VisualReviewFlow.ets 共享编排、HVG1 原生压缩输入、手机每轮解码
 **签名安装补充（2026-11-10）：** 实现已推送为 `7a3a1fa`。用户随后要求安装，已完成 `org.harmonycc.photo` 独立自动签名、API 24 HAP 重建、手机 HDC 安装和启动；实屏确认标题“ Harmony 图片演示”及首次连接按钮。签名材料仅在本机忽略目录，未入库。此次没有更新正在运行的旧协调中心或 agent / SoleAI，没有验收新包授权和照片任务，不应把安装成功等同于完整协作通过。
 
 分发入口：[photo-app-api24-20261110](https://github.com/fangluyang7-debug/Harmony-cc/releases/tag/photo-app-api24-20261110)。提供 API 24 未签名 HAP、SHA-256 清单和包清单，供协作者重新签名；设备专用调试签名包及签名材料不公开上传。整合边界仍见上文，尚未将新包认定为完整真机验收通过。
+
+## §109 新版调度中心与独立图片 App 整合（2026-11-10）
+
+按用户要求拉取并合并协作者 `codex/scheduler-v2-foundation` 的 `b840a99`，本地起点 `8f10aa5`，工作仍在 `codex/real-device-acceptance`。协作者原有第五批 a/b、能力缺口表的进度记录保留；本节为两条分支的最终整合状态。
+
+保留新版桌面启动/设备配对界面、短设备二维码 `/配对链接/#device=...&pin=...`、CPU/RAM 实测自动额度与规划可用性接口；保留本地空间页面、8 位成员加入码、原生单设备单空间及三个独立 App。协作者原生连接页纳入 `ConnectionLauncher.ets`，首页与本机设备页兼容新设备短链接，旧完整 JSON 与成员邀请继续各走原来的入口。保留原生切换中的 `switching` 保护，自动额度不绕过任务结算和所有者设置。
+
+整合修复：桌面本机代理转发照片页、共享脚本、二维码和加入码模块；调度盘“照片任务展示”携带当前空间与 `view=judge`；成员邀请返回协调者公开 LAN 地址，防止代理页面生成 `127.0.0.1` 邀请；本机代理沿用显式指定的数据目录。能力表同时识别执行器 `contractId` / `capability`，补充真实五项 `photo.*.v1` 名称和安装提示。照片 GPU 使用 ncnn Vulkan，非 CUDA 编码器；图片 App 新授权允许 GPU/显存逻辑预算，物理配额仍以设备事实为准。既有已授权身份需撤销后重新授权才会扩大 App 权限。
+
+分发脚本均增加 `05-Photo-HarmonyOS`，缺少新 HAP 时明确标记 NOT_BUILT；支持显式提供图片 HAP 的 API 与签名状态。旧 Release 仍为 `7a3a1fa` 构建，没有覆盖其二进制，也没有发布整合版全套分发 ZIP。
+
+验证结果：协调者 / PC agent TypeScript 通过；空间、自动额度、设备短码、发现、App 身份、遥测首组 8/8；单空间切换、批量交付/存储、真实 CPU 照片 DAG 与遥测补充组 12/12；SDK 11/11；架构 177 文件与 26/26 规则。桌面控制/启动与加入码/照片输入测试 6/6，追加真正启动中心的本机代理测试 1/1，覆盖自动本地账号、照片模块转发、LAN 成员邀请和正常退出。原生切换测试补齐 ArkUI AppStorage 的测试替身后 2/2；图片桥与 CPU 画像测试通过。
+
+`node scripts/photo-local-rehearsal.cjs --check-app` 现覆盖“新版启动器 → 调度盘 → 评委页”，并通过独立 App 身份、真实 SDK HTTP、真实 CPU 模型执行 7 个唯一阶段，全部 committed、原图/结果交付及手机视口不展示评委图表检查通过。输入在执行器就绪后生成，未预放远端；使用隔离数据库及浏览器原生桥替身，来源/执行器均在本机，不能称为手机实测、真实照片质量或加速证据。截图及完整隔离证据在 `.test/photo-tools/independent-app/`。
+
+API 24 HAR、agent 签名 HAP、photo 签名 HAP、probe 未签名 HAP 重建通过；仅有既有弃用/权限/兼容性编译警告，无构建错误。本轮未更新运行中的旧中心、Windows 安装版或手机。待同版本部署后验证新短二维码首次配对、App 授权、相册/ArkWeb、前后台及手机 + PC / GPU；不改变 §107 的“尚未证明稳定提速”。API 22 与模拟器未重验。入口与复现见 [独立图片 App](PHOTO-INDEPENDENT-APP.md)。

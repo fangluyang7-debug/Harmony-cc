@@ -1,8 +1,9 @@
 import { common } from '@kit.AbilityKit';
-import { scanBarcode } from '@kit.ScanKit';
+import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { discoverCenters } from '../Discovery';
 import { Bootstrap } from '../NativePlatform';
 import { openAgent, contributeAgent } from '../AgentRuntime';
+import { resolveDevicePairingLink } from '../DevicePairingLink';
 
 @Entry
 @Component
@@ -13,6 +14,7 @@ struct ConnectionLauncher {
   @StorageLink('contributing') contributing: boolean = true;
   @StorageLink('maxCpuLimit') maxCpu: number = 0;
   @StorageLink('maxMemoryLimitMB') maxMemory: number = 0;
+  @StorageLink('deviceTotalMemoryMB') deviceMemory: number = 0;
 
   @State private centers: string[] = [];
   @State private searching: boolean = false;
@@ -26,22 +28,53 @@ struct ConnectionLauncher {
   @State private scanning: boolean = false;
   @State private changingContribution: boolean = false;
 
-  aboutToAppear(): void {
+  private discoveryTimer: number = -1;
+  private discoveryActive: boolean = false;
+  private discoveryGeneration: number = 0;
+
+  aboutToAppear(): void { this.startDiscovery(); }
+  onPageShow(): void { this.startDiscovery(); }
+  onPageHide(): void { this.stopDiscovery(); }
+  aboutToDisappear(): void { this.stopDiscovery(); }
+
+  private startDiscovery(): void {
+    if (this.discoveryActive) return;
+    this.discoveryActive = true;
     if (!this.paired) void this.discover();
+    this.discoveryTimer = setInterval(() => {
+      if (!this.paired && !this.scanning && !this.pairing) void this.discover(false);
+    }, 5000);
   }
 
-  private async discover(): Promise<void> {
+  private stopDiscovery(): void {
+    this.discoveryActive = false;
+    this.discoveryGeneration++;
+    if (this.discoveryTimer !== -1) clearInterval(this.discoveryTimer);
+    this.discoveryTimer = -1;
+    this.searching = false;
+    this.centers = [];
+  }
+
+  private async discover(clearPrevious: boolean = true): Promise<void> {
     if (this.searching) return;
+    const generation = ++this.discoveryGeneration;
     this.searching = true;
-    this.searchMessage = '正在搜索附近的协调中心…';
+    if (clearPrevious) {
+      this.centers = [];
+      this.searchMessage = '正在搜索附近的协调中心…';
+    }
     try {
-      this.centers = await discoverCenters();
+      const centers = await discoverCenters();
+      if (!this.discoveryActive || generation !== this.discoveryGeneration) return;
+      this.centers = centers;
+      if (!this.pairingOpen && this.centers.indexOf(this.selected) < 0) this.selected = '';
       this.searchMessage = this.centers.length > 0 ? '发现 ' + this.centers.length + ' 个协调中心' : '未发现附近的协调中心';
     } catch (e) {
+      if (!this.discoveryActive || generation !== this.discoveryGeneration) return;
       this.centers = [];
       this.searchMessage = '搜索失败，可以直接扫描设备邀请二维码';
     } finally {
-      this.searching = false;
+      if (generation === this.discoveryGeneration) this.searching = false;
     }
   }
 
@@ -66,14 +99,24 @@ struct ConnectionLauncher {
     return bootstrap;
   }
 
+  private async resolveInvitation(value: string): Promise<Bootstrap> {
+    const input = value.trim();
+    if (input.length > 16384) throw Error('设备邀请过大');
+    if (!input.startsWith('https://')) return this.parseInvitation(input);
+    const bootstrap = await resolveDevicePairingLink(input, this.selected, getContext(this) as common.UIAbilityContext);
+    return this.parseInvitation(JSON.stringify(bootstrap));
+  }
+
   private async scan(): Promise<void> {
     if (this.scanning || this.pairing) return;
     this.scanning = true;
     this.error = '';
     try {
-      const result = await scanBarcode.startScanForResult(getContext(this) as common.UIAbilityContext);
-      const bootstrap = this.parseInvitation(result.originalValue);
-      this.invitation = result.originalValue;
+      const result = await scanBarcode.startScanForResult(getContext(this) as common.UIAbilityContext, {
+        scanTypes: [scanCore.ScanType.QR_CODE], enableMultiMode: false, enableAlbum: true
+      });
+      const bootstrap = await this.resolveInvitation(result.originalValue);
+      this.invitation = JSON.stringify(bootstrap);
       this.details = bootstrap.invitation.address + '\n证书指纹 · ' + bootstrap.invitation.fingerprint;
       this.pairingOpen = true;
     } catch (e) {
@@ -88,7 +131,7 @@ struct ConnectionLauncher {
     this.pairing = true;
     this.error = '';
     try {
-      const bootstrap = this.parseInvitation(this.invitation);
+      const bootstrap = await this.resolveInvitation(this.invitation);
       await openAgent(getContext(this) as common.UIAbilityContext, bootstrap);
       this.invitation = '';
       this.pairingOpen = false;
@@ -187,7 +230,10 @@ struct ConnectionLauncher {
         this.quota('CPU 槽位', this.maxCpu > 0 ? String(this.maxCpu) : '待分配')
         this.quota('内存', this.maxMemory > 0 ? this.maxMemory + ' MiB' : '待分配')
       }.width('100%')
-      Text('额度来自协调中心的设备配对配置。').fontSize(14).fontColor('#A1A1AA')
+      Text(this.deviceMemory > 0
+        ? '本机运行内存 ' + this.deviceMemory + ' MiB。额度由协调中心按上报的运行内存自动确定，预留系统及日常应用所需后分配；存储空间不计入。'
+        : '额度由协调中心按本机上报的运行内存自动确定，连接后更新。')
+        .fontSize(14).fontColor('#A1A1AA')
       Column({ space: 10 }) {
         Row() {
           Text('允许接收任务').fontSize(16).fontColor(Color.White).layoutWeight(1)
@@ -211,7 +257,7 @@ struct ConnectionLauncher {
         Text(this.details || this.selected || '使用协调中心生成的一次性设备邀请。')
           .fontSize(14).fontColor('#A1A1AA')
         if (!this.details) {
-          TextArea({ placeholder: '也可粘贴完整设备邀请', text: this.invitation })
+          TextArea({ placeholder: '也可粘贴设备配对链接或完整邀请', text: this.invitation })
             .height(96).maxLength(16384).backgroundColor('#121216').fontColor(Color.White)
             .enabled(!this.pairing && !this.scanning)
             .onChange(value => { this.invitation = value; })

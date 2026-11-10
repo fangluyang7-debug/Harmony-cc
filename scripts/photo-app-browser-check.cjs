@@ -1,7 +1,7 @@
 // Local browser substitute for the native bridge. Real SDK HTTP, CPU model and
 // receipts; this is not Harmony hardware or a performance comparison.
 const https=require('node:https'),fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
-module.exports=async({r,paired,group,url,root,api})=>{
+module.exports=async({r,paired,group,url,root,api,desktopUrl})=>{
  const contracts=['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'];
  const registration=await r.apps.register(paired.peer,{label:'Photo isolated integration',allowedContracts:contracts,maxConcurrent:4,resources:[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:2147483648}],offlineBase:[],onlineExtra:[]},r.url);
  const app=await r.apps.exchange({registrationId:registration.registrationId,code:registration.code});
@@ -34,7 +34,23 @@ module.exports=async({r,paired,group,url,root,api})=>{
   assert.equal(await mobile.locator('.live-plan').isVisible(),false);assert.equal(await mobile.locator('#watch').isVisible(),false);
   await mobile.click('#native-pick');await mobile.selectOption('#mode','LOCAL');
   await mobile.screenshot({path:path.join(directory,'phone-ready.png'),fullPage:true});
-  await judge.goto(url+'&view=judge');await mobile.click('#run');
+  if(desktopUrl){
+   await judge.goto(desktopUrl);
+   await judge.waitForFunction(()=>!document.querySelector('#dashboard').disabled);
+   const dashboardResponse=judge.waitForResponse(response=>new URL(response.url()).pathname==='/dispatch.html');
+   await judge.click('#dashboard');const loaded=await dashboardResponse;
+   assert.equal(loaded.status(),200,'Desktop proxy: '+await loaded.text());
+   await judge.waitForFunction(()=>document.querySelector('#photo-studio-link')?.href.includes('space='));
+   const telemetry=await judge.evaluate(async group=>(await fetch('/v2/spaces/'+group+'/telemetry')).json(),group);
+   const enhanced=telemetry.capabilityGaps.find(g=>g.capability==='photo.enhance.v1');
+   assert.ok(enhanced.providers.length,'Photo executor must be recognized in the new capability panel');
+   assert.ok(enhanced.requiredBy.includes('Photo isolated integration'));
+   await judge.screenshot({path:path.join(directory,'desktop-dashboard.png'),fullPage:true});
+   await judge.click('#photo-studio-link');await judge.waitForURL('**/photo.html*');
+   assert.equal(new URL(judge.url()).searchParams.get('space'),group);
+   assert.equal(new URL(judge.url()).searchParams.get('view'),'judge');
+  }else await judge.goto(url+'&view=judge');
+  await mobile.click('#run');
   await judge.waitForFunction(()=>document.querySelectorAll('.node').length>0,{},{timeout:60000});
   await judge.screenshot({path:path.join(directory,'desktop-running.png'),fullPage:true});
   await mobile.waitForFunction(()=>!document.querySelector('#run').disabled,{},{timeout:240000});

@@ -102,7 +102,9 @@ Remove-Item Env:HARMONY_TEST_LAN_ADDRESS
 3. 像 PC 执行设备一样为服务宿主生成设备邀请并配对（`npm --workspace @harmony/pc-agent run pair -- <invitation.json> <目录>`），准备 `contribution.json`。
 4. 复制 `examples/service-host/service.json`，填入 `packs`（同一声明文件）、`baseUrl`（业务服务地址）、`tokenEnv`（存放业务服务访问令牌的环境变量名）。令牌只从环境变量读取，不写入账本、追踪或任务元数据。
 5. 启动：`npm --workspace @harmony/pc-agent run service-host -- <目录>/agent.json <contribution.json> <service.json>`。宿主先核对线上索引与声明一致（不一致报 `SERVICE_INDEX_MISMATCH`），再登记声明文件中的能力（向量检索 `vector.search.v1`，以及 `stages` 段里的 `catalog.price-stock.v1`、`rank.v1`），协调者自动用参考用例评测，通过后进入候选集。
-6. 在调度盘查看任务详情的"候选目标数（资格过滤后）"：只有服务宿主登记该能力时为 1，这是登记事实而非固定；再有一台设备登记同一 `serviceId` 的能力后会变为 2 并按成本比较。
+6. 在调度盘查看任务详情的"候选目标数（资格过滤后）"与"数据范围"（`LOCAL_ONLY / OWNER_SERVICE / SHARED`，由 App 声明决定该节点的数据能去哪，被排除的目标以 `DATA_SCOPE_FORBIDDEN` 出现在拒绝列表）：只有服务宿主登记该能力时为 1，这是登记事实而非固定；再有一台设备登记同一 `serviceId` 的能力后会变为 2 并按成本比较。
+
+调度盘资源视图的"能力缺口与补齐提示"会列出所有应用声明过、但当前没有合格目标的能力，以及缺少它的设备和补齐方式（见 `capabilities/capability-hints.json`）；调度器不会替设备安装任何东西。
 
 当前提供三项只读能力：`vector.search.v1`、`catalog.price-stock.v1`（对应业务服务 `POST /api/v2/stages/price-stock`）、`rank.v1`（`POST /api/v2/stages/rank`），以及唯一的写能力 `shopping.commit.v1`（`POST /api/v2/stages/commit`，幂等键必填，评测走 `X-Dry-Run`，用户授权由 `POST /api/v2/tickets` 签发的任务票据随任务携带）。视觉分类与文字理解能力的服务登记尚未实现，见 STATUS §87 §16–§17。
 

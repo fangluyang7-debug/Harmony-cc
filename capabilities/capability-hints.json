@@ -1,0 +1,91 @@
+{
+  "_comment": "Human guidance shown on the dashboard when a declared capability has no qualified target. Data only: the coordinator never installs anything; the device owner does.",
+  "text.count.v1": {
+    "label": "文本计数（参考能力）",
+    "install": "PC 代理与设备调度件内置；配对并启动代理后自动登记与评测。"
+  },
+  "vector.normalize.v1": {
+    "label": "向量归一化（参考能力）",
+    "install": "PC 代理与设备调度件内置；配对并启动代理后自动登记与评测。"
+  },
+  "image.crop.v1": {
+    "label": "图片裁剪 / 预处理",
+    "install": "PC 代理内置（sharp）；手机由设备调度件的 ImageKit 执行器提供。启动代理后自动评测。"
+  },
+  "image.encode.v1": {
+    "label": "图像编码（向量化）",
+    "install": "在 PC 代理所在机器安装 Python 与图像编码模型，配置 PC_IMAGE_ENCODING_SUITE 指向可信评测套件（协调中心需配置同一套件）；有 CUDA 时设置 PC_IMAGE_BACKEND=CUDA。"
+  },
+  "image.quality.v1": {
+    "label": "图片质量检查",
+    "install": "尚无能力包；需提供图片质量检查的参考评测套件与执行器后登记。"
+  },
+  "image.search.v1": {
+    "label": "服务端收图检索",
+    "install": "由业务服务提供；需在服务宿主声明文件 stages 段登记该能力并实现适配器。"
+  },
+  "vector.search.v1": {
+    "label": "商品向量检索",
+    "install": "由业务服务提供：运行服务宿主（npm --workspace @harmony/pc-agent run service-host），声明文件 spaces 段填入激活索引的元数据，协调中心以 COORDINATOR_SERVICE_PACKS 装载同一文件。"
+  },
+  "catalog.price-stock.v1": {
+    "label": "价格与库存刷新",
+    "install": "由业务服务提供：服务宿主声明文件 stages 段加入 catalog.price-stock.v1。"
+  },
+  "rank.v1": {
+    "label": "候选最终排序",
+    "install": "由业务服务提供：服务宿主声明文件 stages 段加入 rank.v1。"
+  },
+  "shopping.commit.v1": {
+    "label": "购物会话提交（唯一写步骤）",
+    "install": "由业务服务提供：服务宿主声明文件 stages 段加入 shopping.commit.v1；评测以干跑模式运行，不写入会话。"
+  },
+  "chat.understand.v1": {
+    "label": "文字意图理解",
+    "install": "尚无能力包；需业务服务拆出独立阶段接口并提供属性评测套件后登记。"
+  },
+  "chat.answer.v1": {
+    "label": "结果文字回答",
+    "install": "尚无能力包；需业务服务拆出独立阶段接口并提供属性评测套件后登记。"
+  },
+  "chat.suggest.v1": {
+    "label": "建议词生成",
+    "install": "尚无能力包；需业务服务拆出独立阶段接口并提供属性评测套件后登记。"
+  },
+  "text.embed.v1": {
+    "label": "文本向量化",
+    "install": "尚无能力包；手机端 MindSpore 文本模型或业务服务均可提供，需先定义评测套件。"
+  },
+  "vision.category.v1": {
+    "label": "视觉类目识别",
+    "install": "尚无能力包；需业务服务或装有视觉模型的 PC 提供属性评测套件与执行器后登记。"
+  },
+  "vision.profile.v1": {
+    "label": "商品视觉画像",
+    "install": "尚无能力包；需业务服务或装有视觉模型的 PC 提供属性评测套件与执行器后登记。"
+  },
+  "image.superres.v1": {
+    "label": "图像超分辨率增强",
+    "install": "在显卡机的 PC 代理安装超分模型与评测套件后自动登记（CUDA 优先，CPU 回退）；手机可由设备调度件装载轻量模型作为本地候选。调度器只在登记并通过评测的设备间比较成本。"
+  },
+  "photo.analyze.v1": {
+    "label": "照片分析与校正",
+    "install": "照片工作流的内置 CPU 能力；使用包含照片执行器的 PC 代理或 Harmony 图片演示 App，连接后完成能力评测。"
+  },
+  "photo.prepare.v1": {
+    "label": "照片分块准备",
+    "install": "照片工作流的内置 CPU 能力；使用包含照片执行器的 PC 代理或 Harmony 图片演示 App，连接后完成能力评测。"
+  },
+  "photo.assemble.v1": {
+    "label": "照片合成与校验",
+    "install": "照片工作流的内置 CPU 能力；使用包含照片执行器的 PC 代理或 Harmony 图片演示 App，连接后完成能力评测。"
+  },
+  "photo.deliver.v1": {
+    "label": "照片成品与预览",
+    "install": "照片工作流的内置 CPU 能力；使用包含照片执行器的 PC 代理或 Harmony 图片演示 App，连接后完成能力评测。"
+  },
+  "photo.enhance.v1": {
+    "label": "AI 照片高清增强",
+    "install": "正式照片能力为 photo.enhance.v1。PC 配置 HARMONY_PHOTO_MODEL 与 HARMONY_PHOTO_RUNNER；GPU 路径为 ncnn Vulkan，需 HARMONY_PHOTO_VULKAN、NVIDIA 驱动及共享显存额度（不是 CUDA 执行器）。鸿蒙构建需 HARMONY_PHOTO_MODEL 与 HARMONY_NCNN_DIR。安装模型后启动宿主，通过评测才可参与；模型预装不包含任务照片。"
+  }
+}

@@ -14,3 +14,9 @@ export async function scanJoinInvitation(context:common.UIAbilityContext):Promis
  const result=await scanBarcode.startScanForResult(context,{scanTypes:[scanCore.ScanType.QR_CODE],enableMultiMode:false,enableAlbum:true});
  parseJoinInvitation(result.originalValue);return result.originalValue;
 }
+/** The connection home accepts both member invitations and the center's device-pairing links. */
+export async function scanConnectionInvitation(context:common.UIAbilityContext):Promise<string>{
+ const result=await scanBarcode.startScanForResult(context,{scanTypes:[scanCore.ScanType.QR_CODE],enableMultiMode:false,enableAlbum:true});
+ if(!result.originalValue.includes('/#device='))parseJoinInvitation(result.originalValue);
+ return result.originalValue;
+}

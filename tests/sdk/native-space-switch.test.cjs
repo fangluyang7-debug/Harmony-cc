@@ -29,8 +29,11 @@ test('application runtime switches the existing host instead of silently accepti
  const source=fs.readFileSync(path.join(root,'apps/harmony-agent/entry/src/main/ets/AgentRuntime.ets'),'utf8'),module={exports:{}};let active='old',closed=0,busy=false;
  const host=id=>({displayHolderId:()=>id,setForeground(){},closeForSwitch:async()=>{if(busy)throw Error('SPACE_SWITCH_BUSY');closed++;},close:async()=>{}});
  const NativeAgent={start:async(_ctx,bootstrap)=>{active=bootstrap?.holderInstanceId??active;return host(active);}};
- new Function('require','module','exports',transform(source))(()=>({NativeAgent}),module,module.exports);
- await module.exports.openAgent({},null);await module.exports.openAgent({},{holderInstanceId:'new'});assert.equal(active,'new');assert.equal(closed,1);
+ const storage=new Map();
+ new Function('require','module','exports','AppStorage',transform(source))(()=>({NativeAgent}),module,module.exports,{setOrCreate:(key,value)=>storage.set(key,value)});
+ await module.exports.openAgent({},null);await module.exports.openAgent({},{holderInstanceId:'new',invitation:{address:'https://new-center.test'}});assert.equal(active,'new');assert.equal(closed,1);
+ assert.equal(storage.get('agentPaired'),true);assert.equal(storage.get('agentCenter'),'https://new-center.test');
  busy=true;await assert.rejects(module.exports.openAgent({},{holderInstanceId:'third'}),/SPACE_SWITCH_BUSY/);assert.equal(active,'new');
  assert.equal((await module.exports.openAgent({},null)).displayHolderId(),'new');
+ assert.equal(storage.get('agentCenter'),'https://new-center.test','Rejected switches preserve the current displayed center');
 });

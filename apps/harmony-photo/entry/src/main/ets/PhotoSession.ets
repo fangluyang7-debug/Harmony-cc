@@ -8,7 +8,7 @@ interface Identity {appInstanceId:string;}
 interface AppContext {identity:Identity;}
 interface Manifest {label:string;allowedContracts:string[];maxConcurrent:number;resources:ResourceAmountV2[];offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
 export interface PhotoConnection {address:string;fingerprint:string;groupId:string;deviceId:string;appInstanceId:string;}
-const manifest:Manifest={label:'Harmony 图片演示 v1',allowedContracts:['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'],maxConcurrent:4,resources:[{resourcePoolId:'cpu',amount:8},{resourcePoolId:'ram',amount:4294967296}],offlineBase:[],onlineExtra:[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:1073741824}]};
+const manifest:Manifest={label:'Harmony 图片演示 v1',allowedContracts:['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'],maxConcurrent:4,resources:[{resourcePoolId:'cpu',amount:8},{resourcePoolId:'ram',amount:4294967296},{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:8589934592}],offlineBase:[],onlineExtra:[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:1073741824}]};
 
 /** Independent application credentials and foreground executor, like SoleAI. */
 export class PhotoSession {

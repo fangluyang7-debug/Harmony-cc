@@ -18,7 +18,7 @@ SDK 的 TS/ArkTS 源码一致性测试只验证同步，不验证 ArkTS 语法�
 
 ## 照片工作流本地实现（2026-11-10）
 
-最新本地拆分见 [独立图片 App 与电脑评委页](PHOTO-INDEPENDENT-APP.md)：手机保留协作空间、SoleAI、图片演示三个独立 App，评委可视化仅用于电脑；新图片包已构建，待独立签名和真机验收，见 STATUS §108。
+最新整合见 STATUS §109 与 [独立图片 App 与电脑评委页](PHOTO-INDEPENDENT-APP.md)：已合并协作者 `b840a99` 的新版调度中心、设备短二维码、自动额度和能力缺口面板，接通独立图片 App 与电脑评委页。原图片 App 已独立签名安装；本轮整合版 HAR / agent / photo / probe API 24 构建通过，尚未覆盖安装或真机验收。
 
 最新接续见 [照片演示联调交接](HANDOFF-PHOTO-DEMO-20261110.md)，实现细节见 [AI 照片处理与展示实现记录](PHOTO-WORKFLOW-LOCAL-20261110.md)。保留已有调度盘，增加实际 AI 推理、多输入 DAG 与评委实时展示页。手机与 Windows 已完成同输入无线对照，尚未证明稳定提速；鸿蒙电脑和 NVIDIA GPU 尚未参加本轮验收，见 STATUS §107。
 

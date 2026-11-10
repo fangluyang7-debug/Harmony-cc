@@ -32,7 +32,19 @@ async function main(){
  const deadline=Date.now()+360000;let ready=false;while(Date.now()<deadline){try{const c=(await r.snapshots.build(group)).snapshot.candidates;ready=photoPacks().every(p=>c.some(t=>t.capability===p.manifest.contract.capability));if(ready)break;}catch{}await new Promise(resolve=>setTimeout(resolve,2000));}
  if(!ready)throw Error('PHOTO_QUALIFICATION_TIMEOUT');console.log('PHOTO_READY');
  const stop=async()=>{await host.close();await new Promise(resolve=>preview.close(resolve));await r.close();};process.once('SIGINT',()=>void stop().then(()=>process.exit(0)));
- if(process.argv.includes('--check-app')){try{await require('./photo-app-browser-check.cjs')({r,paired,group,url,root,api});}finally{await stop();}return;}
+ if(process.argv.includes('--check-app')){
+  // Production coordinator/main writes this public certificate for its launcher.
+  fs.writeFileSync(path.join(r.config.dataDir,'coordinator-public.crt'),r.identity.cert);
+  const desktop=await require('./runtime-desktop.cjs').main({openBrowser:false,role:'center'});
+  // Attach the isolated coordinator/account to the actual desktop proxy. No
+  // production process, console credentials or existing device is involved.
+  Object.assign(desktop.control,{state:'RUNNING',mode:'center',url:r.url,coordinatorDirectory:r.config.dataDir,
+   localSpace:{expiresAt:Date.now()+3600000,cookie:Promise.resolve(cookie)}});
+  const snapshot=desktop.control.snapshot.bind(desktop.control);
+  desktop.control.snapshot=()=>({...snapshot(),addresses:[{name:'Isolated loopback test',address:new URL(r.url).hostname}]});
+  try{await require('./photo-app-browser-check.cjs')({r,paired,group,url,root,api,desktopUrl:desktop.url});}
+  finally{await new Promise(resolve=>desktop.server.close(resolve));await stop();}return;
+ }
  if(process.argv.includes('--check-ui')){
   const {chromium}=require(path.join(root,'.test/photo-ui/node_modules/playwright')),browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true}),context=await browser.newContext({viewport:{width:1600,height:1050}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));let passed=false;
   try{

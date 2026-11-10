@@ -72,7 +72,7 @@ function windowsPackage(name, role) {
   const service = 'services/' + (center ? 'coordinator' : 'pc-agent');
   const manifest = path.join(root, service, 'package.json');
   const files = [service + '/dist', 'scripts/runtime-desktop.cjs', 'scripts/start-coordinator-lan.cjs',
-    'capabilities/coverage-requirements.json'];
+    'capabilities/coverage-requirements.json', 'capabilities/capability-hints.json'];
   if (center) files.push(service + '/generated/client', service + '/scripts/migrate.cjs',
     service + '/prisma', 'apps/team-space-web');
   else files.push('services/image-worker/encode_once.py', 'services/image-worker/app/main.py',
@@ -160,9 +160,15 @@ const archives = [zipPackage('01-Coordinator-Windows-x64'), zipPackage('02-Devic
 const haps = [];
 for (const [dir, project, filename] of [
   ['03-Device-Agent-HarmonyOS', 'harmony-agent', 'Harmony-Device-Agent-API22-unsigned.hap'],
-  ['04-SoleAI-HarmonyOS', 'harmony', 'SoleAI-Cooperative-API22-unsigned.hap']
+  ['04-SoleAI-HarmonyOS', 'harmony', 'SoleAI-Cooperative-API22-unsigned.hap'],
+  ['05-Photo-HarmonyOS', 'harmony-photo', 'Harmony-Photo-API22-unsigned.hap']
 ]) {
   const hap = path.join(root, '.test/s2-' + project, 'entry/build/default/outputs/default/entry-default-unsigned.hap');
+  if(project==='harmony-photo'&&!fs.existsSync(hap)){
+    fs.mkdirSync(path.join(out,dir),{recursive:true});
+    fs.writeFileSync(path.join(out,dir,'NOT-BUILT.txt'),'Photo API 22 HAP was not built. Build harmony-photo with the API 22 SDK, or use build-distribution.cjs with PHOTO_HAP and its explicit API/signing metadata.\n');
+    continue;
+  }
   copy(hap, path.join(stage, dir, filename));
   fs.mkdirSync(path.join(out, dir), {recursive: true});
   fs.copyFileSync(hap, path.join(out, dir, filename));
@@ -186,10 +192,13 @@ fs.writeFileSync(path.join(out, '00-使用说明.md'), `# 智调鸿枢分发包
 | 02-Device-Agent-Windows-x64 | Windows x64 执行设备 | 完整解压后双击 Start.cmd |
 | 03-Device-Agent-HarmonyOS | HarmonyOS 6.0.2 / API 22 执行设备 | 用 org.harmonycc.agent 对应的签名配置签名后安装 |
 | 04-SoleAI-HarmonyOS | HarmonyOS 6.0.2 / API 22 业务演示手机 | 用 org.harmonycc.soleai 对应的签名配置签名后安装 |
+| 05-Photo-HarmonyOS | HarmonyOS 6.0.2 / API 22 照片演示手机 | 用 org.harmonycc.photo 独立签名后安装；若目录为 NOT-BUILT.txt，表示没有提供安装包 |
 
-两份 Windows ZIP 内含运行依赖。两份 HAP 为未签名产物。
+两份 Windows ZIP 内含运行依赖。实际提供的 HAP 均为未签名产物，校验清单列出本次文件。
 
 先启动协调中心并创建空间，再为每台设备生成独立邀请。Windows 导入邀请文件，鸿蒙调度件扫描邀请二维码。演示手机安装第 03、04 包，先配对设备，再打开 SoleAI 的「使用协同调度」并授权。
+
+照片演示另安装第 05 包，首次连接第 03 包授权，随后从手机选图并开始处理。电脑从调度盘打开“照片任务展示”。照片模型和引擎须按 PHOTO-WORKFLOW-LOCAL-20261110.md 配置，不能把 CUDA 图像编码配置当作照片增强引擎。
 
 校验值见 SHA256SUMS.txt。完整签名和联调步骤见仓库 docs/scheduler-v2/分发包分组与联调说明.md。
 `);

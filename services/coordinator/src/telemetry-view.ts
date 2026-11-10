@@ -1,5 +1,7 @@
 import {recentJobs,recentTransfers,traceRows} from './dashboard-history';
 import {raceKey,raceIntervals} from './race-timing';
+// Human install guidance per capability (data file; see capabilities/capability-hints.json).
+const capabilityHints=require('../../../capabilities/capability-hints.json') as Record<string,{label?:string;install?:string}>;
 import {PrismaClient} from '../generated/client';
 import {DeviceDirectory} from './directory';
 import {TraceService} from './traces';
@@ -69,9 +71,22 @@ export class TelemetryView {
       endpointDeviceId:a.endpoint.deviceId,requesterHolderId:a.requesterHolderId,issuedAt:a.issuedAt};}).sort((a,b)=>b.issuedAt-a.issuedAt).slice(0,100);
     const registeredApps=await this.db.registeredApp.findMany({where:{groupId},select:{id:true,label:true,declarationJson:true,contractsJson:true,maxConcurrent:true}});
     const installations=await this.db.registeredInstallation.findMany({where:{groupId},select:{id:true,appId:true,deviceId:true,state:true}});
+    // Capability gaps: every contract some App declares, compared with what devices actually register and have qualified.
+    // A gap is information for the device owner; the scheduler never dispatches to an unregistered device nor installs anything.
+    const requiredBy=new Map<string,string[]>();
+    for(const a of registeredApps)for(const c of (parsed(a.contractsJson)??[]) as string[])requiredBy.set(c,[...(requiredBy.get(c)??[]),a.label]);
+    const order:Record<string,number>={MISSING:0,PENDING:1,READY:2};
+    const capabilityGaps=[...requiredBy.entries()].map(([capability,requiredByApps])=>{
+      const providers=devices.flatMap(d=>d.holders.flatMap(h=>h.profile.executors.filter((e:any)=>e.contract.contractId===capability||e.contract.capability===capability).map((e:any)=>{const q=h.qualification.find((x:any)=>x.targetId===e.target.targetId) as any;
+        return {deviceId:d.id,deviceName:d.name,targetId:e.target.targetId,backend:e.target.backend,serviceId:e.contract.serviceId??null,state:q?.state??'DISCOVERED',reasonCode:q?.reasonCode??null};})));
+      const qualified=providers.filter(p=>['CANARY','ACTIVE'].includes(p.state));
+      const hint=(capabilityHints as Record<string,{label?:string;install?:string}>)[capability];
+      return {capability,label:hint?.label??capability,requiredBy:requiredByApps,providers,qualifiedTargets:qualified.length,missingDevices:devices.filter(d=>!providers.some(p=>p.deviceId===d.id)).map(d=>({id:d.id,name:d.name})),
+        status:qualified.length?'READY':providers.length?'PENDING':'MISSING',install:hint?.install??'该能力尚无能力包或执行器；需由能力提供方提供能力包、参考评测套件与执行器，再由设备主人在对应设备安装并登记。'};
+    }).sort((a,b)=>order[a.status]-order[b.status]||a.capability.localeCompare(b.capability));
     return {version:1,space:{id:space.id,name:space.name},updatedAt:now,domain:this.directory.domain,devices,network,links,transfers,
       applications:registeredApps.map(a=>({id:a.id,label:a.label,declaration:parsed(a.declarationJson),contracts:parsed(a.contractsJson),maxConcurrent:a.maxConcurrent,installations:installations.filter(i=>i.appId===a.id)})),
-      jobs:jobs.slice(0,100),jobWindow:100,jobCount,
+      capabilityGaps,jobs:jobs.slice(0,100),jobWindow:100,jobCount,
       workflows:graphs.map(row=>{const d=parsed(row.metadataJson);return {id:row.id,state:row.state,nodes:d.nodes.map((n:any)=>({id:n.id,jobId:n.jobId,state:n.state}))};}),
       features:{hedging:'PURE_INTERACTIVE_RELAY_INPUT',reassignment:'AVAILABLE',candidateCosts:'PERSISTED_BASELINE_AND_SELECTED_ONLY',traceAccess:'EXISTING_PRINCIPAL_READERS',readOnly:true}};
   }
