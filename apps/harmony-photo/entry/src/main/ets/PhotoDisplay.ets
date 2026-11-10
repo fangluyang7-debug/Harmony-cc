@@ -1,5 +1,7 @@
 import { http } from '@kit.NetworkKit';
 import { image } from '@kit.ImageKit';
+import { common } from '@kit.AbilityKit';
+import { preferences } from '@kit.ArkData';
 import { factory, base64, hash } from 'scheduler';
 import { PhotoInput, readPhoto } from './PhotoFiles';
 interface DisplayInput {name:string;width:number;height:number;hash:string;preview:string;}
@@ -11,20 +13,30 @@ export class PhotoDisplay {
  private address:string='';private key:string='';private seq:number=0;private runId:string='';
  private queue:Promise<void>=Promise.resolve();
  private failedConnection:boolean=false;
+ private store:preferences.Preferences|null=null;
+ private invitation:string='';
  private report:(message:string)=>void;
  constructor(report:(message:string)=>void){this.report=report;}
- connected():boolean{return this.address!=='';}
+ connected():boolean{return this.address!==''&&!this.failedConnection;}
+ async restore(context:common.UIAbilityContext):Promise<string>{
+  this.store=await preferences.getPreferences(context,{name:'photo-display-v1'});
+  const value=await this.store.get('invitation','') as string;
+  if(!value){this.report('未连接电脑展示屏 · 本轮仅在手机显示');return '';}
+  this.report('正在恢复电脑展示连接…');
+  try{await this.connect(value);}catch(e){this.report('展示屏未连接：'+(e as Error).message+'；本机处理仍可使用。');}
+  return value;
+ }
  private async post(route:string,body:string):Promise<string>{
   const request=http.createHttp();
-  try{const r=await request.request(this.address+route,{method:http.RequestMethod.POST,header:{'Content-Type':'application/json','X-Display-Key':this.key},extraData:body,connectTimeout:2500,readTimeout:5000});if(r.responseCode!==200)throw Error('展示连接返回 '+r.responseCode);return r.result as string;}finally{request.destroy();}
+  try{const r=await request.request(this.address+route,{method:http.RequestMethod.POST,header:{'Content-Type':'application/json','X-Display-Key':this.key},extraData:body,connectTimeout:2500,readTimeout:5000});if(r.responseCode===403)throw Error('展示连接码已失效，请重新扫描电脑二维码');if(r.responseCode!==200)throw Error('展示连接返回 '+r.responseCode);return r.result as string;}finally{request.destroy();}
  }
  async connect(value:string):Promise<void>{
   await this.queue;const match=/^(http:\/\/\d{1,3}(?:\.\d{1,3}){3}:\d{1,5})\/#display=([a-f0-9]{36})$/.exec(value.trim());
   if(!match)throw Error('请扫描展示页二维码或粘贴完整展示连接码');
   this.address=match[1];this.key=match[2];this.failedConnection=false;
-  try{const reply=JSON.parse(await this.post('/connect','{}')) as ConnectionReply;if(!reply.displayOnly||!Number.isSafeInteger(reply.nextSeq))throw Error('不是仅展示接收端');this.seq=reply.nextSeq-1;this.report('已连接展示屏 · Windows 不参与计算');}catch(e){this.address='';this.key='';throw e as Error;}
+  try{const reply=JSON.parse(await this.post('/connect','{}')) as ConnectionReply;if(!reply.displayOnly||!Number.isSafeInteger(reply.nextSeq))throw Error('不是仅展示接收端');this.seq=reply.nextSeq-1;this.invitation=value.trim();if(this.store){await this.store.put('invitation',this.invitation);await this.store.flush();}this.report('已连接展示屏 · Windows 不参与计算');}catch(e){this.address='';this.key='';throw e as Error;}
  }
- async disconnect():Promise<void>{await this.queue;this.address='';this.key='';this.report('展示屏已断开，本机处理仍可使用');}
+ async disconnect():Promise<void>{await this.queue;this.address='';this.key='';this.invitation='';if(this.store){await this.store.put('invitation','');await this.store.flush();}this.report('展示屏已断开 · 本轮仅在手机显示');}
  private send(event:DisplayEvent):void{
   if(!this.connected())return;event.seq=++this.seq;const body=JSON.stringify(event);
   this.queue=this.queue.then(async()=>{if(this.failedConnection)return;try{await this.post('/event',body);}catch(e){try{await this.post('/event',body);}catch{this.failedConnection=true;this.report('展示同步中断，请重连；手机本机处理继续。');}}});
