@@ -9,7 +9,7 @@ const release = process.argv[2] || '调度系统分发-20261110-r2';
 if (!/^调度系统分发-\d{8}(?:-r\d+)?$/.test(release)) throw Error('发行目录格式须为 调度系统分发-YYYYMMDD，可追加 -rN');
 const out = path.join(root, 'dist', release);
 const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'harmony-distribution-'));
-const nodeHome = path.join(root, 'dist/node-v24.16.0-win-x64');
+const nodeHome = process.env.HARMONY_NODE_DIST || path.join(root, 'dist/node-v24.16.0-win-x64');
 const electronDist = process.env.HARMONY_ELECTRON_DIST || path.join(root, 'node_modules/electron/dist');
 if (!fs.existsSync(path.join(electronDist, 'electron.exe'))) {
   throw Error('ELECTRON_RUNTIME_MISSING: install Electron or set HARMONY_ELECTRON_DIST to its dist directory');
@@ -75,10 +75,10 @@ function windowsPackage(name, role) {
   const center = role === 'center';
   const service = 'services/' + (center ? 'coordinator' : 'pc-agent');
   const manifest = path.join(root, service, 'package.json');
-  const files = [service + '/dist', 'scripts/runtime-desktop.cjs', 'scripts/start-coordinator-lan.cjs', 'apps/windows-agent/discovery.cjs',
+  const files = [service + '/dist', 'scripts/runtime-desktop.cjs', 'scripts/runtime-device-binding.cjs', 'scripts/start-coordinator-lan.cjs', 'apps/windows-agent/discovery.cjs',
     'capabilities/coverage-requirements.json', 'capabilities/capability-hints.json'];
   if (center) files.push(service + '/generated/client', service + '/scripts/migrate.cjs',
-    service + '/prisma', 'apps/team-space-web');
+    service + '/prisma', 'apps/team-space-web','scripts/photo-display-server.cjs','scripts/photo-display-coordinator.cjs','scripts/photo-display-records.cjs');
   else files.push('services/image-worker/encode_once.py', 'services/image-worker/app/main.py',
     'services/image-worker/app/__init__.py', 'services/image-worker/requirements.txt',
     'services/image-worker/README.md');
@@ -106,6 +106,9 @@ function windowsPackage(name, role) {
       for (const target of [relative, workspacePath]) {
         copy(pkg, path.join(dest, target, 'package.json'));
         copy(path.join(pkgDir, 'dist'), path.join(dest, target, 'dist'));
+        // Runtime photo calibration/reference metadata is required by photo.js.
+        // This is an engine fixture, never a user's photo or a cached task result.
+        if (fs.existsSync(path.join(pkgDir, 'fixtures'))) copy(path.join(pkgDir, 'fixtures'), path.join(dest, target, 'fixtures'));
       }
     } else {
       copy(pkgDir, path.join(dest, relative));
@@ -120,7 +123,9 @@ function windowsPackage(name, role) {
   for (const key of Object.keys(JSON.parse(fs.readFileSync(manifest, 'utf8')).dependencies))
     dependency(key, manifest);
   if (center) dependency('prisma', manifest);
-  for (const file of ['node.exe', 'LICENSE']) copy(path.join(nodeHome, file), path.join(dest, 'runtime', file));
+  for (const file of ['node.exe']) copy(path.join(nodeHome, file), path.join(dest, 'runtime', file));
+  if(fs.existsSync(path.join(nodeHome,'LICENSE')))copy(path.join(nodeHome,'LICENSE'),path.join(dest,'runtime/LICENSE'));
+  if(!center&&process.env.HARMONY_PHOTO_RUNTIME){const configPath=path.resolve(process.env.HARMONY_PHOTO_RUNTIME),config=JSON.parse(fs.readFileSync(configPath)),base=path.dirname(configPath),target=path.join(dest,service,'dist/photo');fs.mkdirSync(target,{recursive:true});const settings={};for(const key of ['model','runner','vulkan'])if(config[key]){const src=path.resolve(base,config[key]),name=key==='model'?'models':path.basename(src);copy(src,path.join(target,name));settings[key]=name;}fs.writeFileSync(path.join(target,'runtime.json'),JSON.stringify(settings));}
   if (center) bundleOpenSsl(dest);
   copy(path.join(root, 'capabilities/coverage-requirements.json'), path.join(dest, 'node_modules/capabilities/coverage-requirements.json'));
   for (const file of [center ? 'index.html' : 'agent.html', 'desktop.js']) {
@@ -171,20 +176,24 @@ for (const [dir, project, filename] of [
   ['04-SoleAI-HarmonyOS', 'harmony', 'SoleAI-Cooperative-API22-unsigned.hap'],
   ['05-Photo-HarmonyOS', 'harmony-photo', 'Harmony-Photo-API22-unsigned.hap']
 ]) {
-  const hap = path.join(root, '.test/s2-' + project, 'entry/build/default/outputs/default/entry-default-unsigned.hap');
-  if(project==='harmony-photo'&&!fs.existsSync(hap)){
+  const api=process.env.HARMONY_DISTRIBUTION_API||'22';if(!['22','24'].includes(api))throw Error('INVALID_HAP_API');
+  const prefix=process.env.HARMONY_DISTRIBUTION_PREFIX||(api==='24'?'photo-api24-':'s2-');
+  const actualName=filename.replace('API22','API'+api);
+  const hap = path.join(root, '.test/'+prefix + project, 'entry/build/default/outputs/default/entry-default-unsigned.hap');
+  if(!fs.existsSync(hap)){
     fs.mkdirSync(path.join(out,dir),{recursive:true});
-    fs.writeFileSync(path.join(out,dir,'NOT-BUILT.txt'),'Photo API 22 HAP was not built. Build harmony-photo with the API 22 SDK, then rerun npm run dist:prepare.\n');
+    fs.writeFileSync(path.join(out,dir,'NOT-BUILT.txt'),`${project} API ${api} HAP was not built. Build this project with the matching SDK, then rerun npm run dist:prepare.\n`);
     continue;
   }
-  copy(hap, path.join(stage, dir, filename));
+  copy(hap, path.join(stage, dir, actualName));
+  fs.rmSync(path.join(out,dir,'NOT-BUILT.txt'),{force:true});
   fs.mkdirSync(path.join(out, dir), {recursive: true});
-  fs.copyFileSync(hap, path.join(out, dir, filename));
-  haps.push(path.join(out, dir, filename));
+  fs.copyFileSync(hap, path.join(out, dir, actualName));
+  haps.push(path.join(out, dir, actualName));
 }
 const signedAgent = process.env.HARMONY_AGENT_SIGNED_HAP || path.join(root, '.test/s2-harmony-agent/entry/build/default/outputs/default/entry-default-signed.hap');
 if (fs.existsSync(signedAgent)) {
-  const signed = path.join(out, '03-Device-Agent-HarmonyOS/Harmony-Device-Agent-API22-signed.hap');
+  const signed = path.join(out, '03-Device-Agent-HarmonyOS/Harmony-Device-Agent-API'+(process.env.HARMONY_DISTRIBUTION_API||'22')+'-signed.hap');
   if (!process.env.HARMONY_AGENT_SIGNED_HAP && fs.statSync(signedAgent).mtimeMs < fs.statSync(path.join(root, '.test/s2-harmony-agent/entry/build/default/outputs/default/entry-default-unsigned.hap')).mtimeMs) throw Error('SIGNED_AGENT_OUTDATED: rebuild the signed HAP');
   fs.copyFileSync(path.resolve(signedAgent), signed);
   const alias = path.join(path.dirname(signed), 'Harmony-Device-Agent-API22-MateBook-signed.hap');
@@ -196,6 +205,7 @@ const sums = [...archives, ...haps].map(file => {
   const hash = createHash('sha256').update(fs.readFileSync(file)).digest('hex');
   return hash + '  ' + path.relative(out, file).replaceAll('\\', '/');
 });
+if(process.env.HARMONY_PHOTO_SIGNED_HAP){const file=path.join(out,'05-Photo-HarmonyOS/Harmony-Photo-API'+(process.env.HARMONY_DISTRIBUTION_API||'22')+'-signed.hap');fs.mkdirSync(path.dirname(file),{recursive:true});fs.copyFileSync(process.env.HARMONY_PHOTO_SIGNED_HAP,file);sums.push(createHash('sha256').update(fs.readFileSync(file)).digest('hex')+'  '+path.relative(out,file).replaceAll('\\','/'));}
 fs.writeFileSync(path.join(out, 'SHA256SUMS.txt'), sums.join('\n') + '\n');
 const baseline = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim();
 const dirty = execFileSync('git', ['status', '--porcelain', '--untracked-files=no'], {cwd: root, encoding: 'utf8'}).trim();
@@ -207,9 +217,9 @@ fs.writeFileSync(path.join(out, '00-使用说明.md'), `# 智调鸿枢分发包
 | --- | --- | --- |
 | 01-Coordinator-Windows-x64 | 运行协调中心的 Windows x64 电脑 | 完整解压后双击 ZhiDiaoCenter.exe |
 | 02-Device-Agent-Windows-x64 | Windows x64 执行设备 | 完整解压后双击 ZhiDiaoHongShu.exe |
-| 03-Device-Agent-HarmonyOS | HarmonyOS 6.0.2 / API 22 执行设备 | 用 org.harmonycc.agent 对应的签名配置签名后安装 |
-| 04-SoleAI-HarmonyOS | HarmonyOS 6.0.2 / API 22 业务演示手机 | 用 org.harmonycc.soleai 对应的签名配置签名后安装 |
-| 05-Photo-HarmonyOS | HarmonyOS 6.0.2 / API 22 照片演示手机 | 用 org.harmonycc.photo 独立签名后安装；若目录为 NOT-BUILT.txt，表示没有提供安装包 |
+| 03-Device-Agent-HarmonyOS | HarmonyOS / API ${process.env.HARMONY_DISTRIBUTION_API||'22'} 执行设备 | 用 org.harmonycc.agent 对应的签名配置签名后安装 |
+| 04-SoleAI-HarmonyOS | HarmonyOS / API ${process.env.HARMONY_DISTRIBUTION_API||'22'} 业务演示手机 | 用 org.harmonycc.soleai 对应的签名配置签名后安装 |
+| 05-Photo-HarmonyOS | HarmonyOS / API ${process.env.HARMONY_DISTRIBUTION_API||'22'} 照片演示手机 | 用 org.harmonycc.photo 独立签名后安装；若目录为 NOT-BUILT.txt，表示没有提供安装包 |
 
 两份 Windows ZIP 内含运行依赖。HAP 默认提供未签名产物；若额外提供 signed.hap，则使用本机调试签名，仅适用于该 Profile 授权设备。校验清单列出本次文件。
 

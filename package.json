@@ -86,7 +86,8 @@
     "distribution:build": "npm run dist:prepare",
     "photo:prepare": "node scripts/prepare-photo-runtime.cjs",
     "photo:rehearse": "node scripts/photo-local-rehearsal.cjs",
-    "photo:test": "node --test services/pc-agent/test/photo.test.cjs && npm --workspace @harmony/coordinator exec -- node --test test/photo-workflow.test.cjs"
+    "photo:test": "node --test services/pc-agent/test/photo.test.cjs && npm --workspace @harmony/coordinator exec -- node --test test/photo-workflow.test.cjs",
+    "photo:display": "node scripts/photo-display-server.cjs"
   },
   "devDependencies": {
     "ajv": "8.20.0",

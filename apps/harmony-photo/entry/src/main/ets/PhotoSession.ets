@@ -21,6 +21,10 @@ export class PhotoSession {
  initialize(context:common.UIAbilityContext):void{this.context=context;}
  lifecycle(value:boolean):void{this.foreground=value;this.host?.setForeground(value);}
  async close():Promise<void>{this.foreground=false;await this.host?.close();this.host=null;this.port=null;}
+ async prepareLocal():Promise<void>{
+  // Do not run unaccounted local inference alongside this App's unsettled v2 work.
+  if(this.host){await this.host.closeForSwitch();this.host=null;this.port=null;}
+ }
  connection():PhotoConnection|null{const i=this.installation;if(!i)return null;return {address:i.bootstrap.invitation.address,fingerprint:i.bootstrap.invitation.fingerprint,groupId:i.paired.peer.groupId,deviceId:i.paired.peer.deviceId,appInstanceId:i.appInstanceId??''};}
  private async activate(i:Installation):Promise<void>{
   if(!this.context)throw Error('APP_CONTEXT_REQUIRED');
@@ -35,11 +39,12 @@ export class PhotoSession {
   const store=await preferences.getPreferences(this.context,{name:'photo-app-v1'}),raw=await store.get('installation','') as string;
   if(!raw)return false;await this.activate(JSON.parse(raw) as Installation);return true;
  }
- async connect():Promise<void>{
+ async connect(force:boolean=false):Promise<void>{
   if(!this.context||this.changing)throw Error('APP_CONNECT_BUSY');this.changing=true;
   try{
    const context=this.context,store=await preferences.getPreferences(context,{name:'photo-app-v1'});let raw=await store.get('installation','') as string;
-   if(raw){try{await this.activate(JSON.parse(raw) as Installation);return;}catch(e){if(!['APP_CREDENTIAL_REVOKED','CREDENTIAL_REVOKED','DEVICE_LEFT_SPACE','APP_HOST_IDENTITY_MISMATCH'].includes((e as Error).message))throw e as Error;await store.put('previousInstallation',raw);}}
+   if(raw&&!force){try{await this.activate(JSON.parse(raw) as Installation);return;}catch(e){if(!['APP_CREDENTIAL_REVOKED','CREDENTIAL_REVOKED','DEVICE_LEFT_SPACE','APP_HOST_IDENTITY_MISMATCH'].includes((e as Error).message))throw e as Error;await store.put('previousInstallation',raw);}}
+   if(force){await this.prepareLocal();if(raw)await store.put('previousInstallation',raw);}
    if(await store.get('exchangePending',false) as boolean)throw Error('上次授权结果待核对，请勿重复注册');
    const result=await context.startAbilityForResult({bundleName:'org.harmonycc.agent',abilityName:'EnrollmentAbility',parameters:{declaration:JSON.stringify(manifest)}}),encoded=result.want?.parameters?.['registration'];
    if(result.resultCode!==0||typeof encoded!=='string')throw Error('图片应用授权已取消');

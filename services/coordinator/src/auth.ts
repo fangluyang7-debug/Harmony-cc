@@ -121,5 +121,23 @@ export class PairingService {
     for(const listener of this.revocations)listener(old.credentialId);
     return {credential,peer};
   }
+  async leaveDevice(peer:Peer){
+    if(peer.app)throw Error('DEVICE_OWNER_REQUIRED');
+    const revoked=await this.db.$transaction(async tx=>{
+      const apps=await tx.registeredInstallation.findMany({where:{deviceId:peer.deviceId,groupId:peer.groupId}});
+      const holders=[peer.holderInstanceId,...apps.map(a=>a.holderInstanceId)];
+      const pending=await tx.attempt.findMany({where:{groupId:peer.groupId,holderInstanceId:{in:holders}}});
+      if(pending.some(a=>a.state!=='REJECTED'&&(!a.recordJson||!JSON.parse(a.recordJson).resourcesSettled)))throw Error('SPACE_SWITCH_BUSY');
+      const reservations=await tx.appJobReservation.findMany({where:{appInstanceId:{in:apps.map(a=>a.id)}}});
+      for(const r of reservations){const a=await tx.attempt.findUnique({where:{id:r.id}});if(!a||a.state!=='REJECTED'&&(!a.recordJson||!JSON.parse(a.recordJson).resourcesSettled))throw Error('SPACE_SWITCH_BUSY');}
+      const credentials=(await tx.credential.findMany({where:{groupId:peer.groupId,revoked:false}})).filter(c=>JSON.parse(c.metadataJson).peer.deviceId===peer.deviceId);
+      for(const c of credentials)await tx.credential.update({where:{id:c.id},data:{revoked:true,revision:{increment:1}}});
+      await tx.registeredInstallation.updateMany({where:{deviceId:peer.deviceId,groupId:peer.groupId},data:{state:'REVOKED',secretHash:null}});
+      const registration=await tx.device.findUnique({where:{id:JSON.stringify(['space-device-installation',peer.deviceId])}});
+      if(registration){const key=JSON.stringify(['space-installation',JSON.parse(registration.metadataJson).installationId]),binding=await tx.device.findUnique({where:{id:key}});if(binding&&JSON.parse(binding.metadataJson).deviceId===peer.deviceId)await tx.device.update({where:{id:key},data:{revision:{increment:1},metadataJson:JSON.stringify({left:true})}});}
+      return credentials.map(c=>c.id);
+    });
+    for(const id of revoked)for(const listener of this.revocations)listener(id);return {left:true};
+  }
   async revoke(credentialId:string){await this.db.credential.update({where:{id:credentialId},data:{revoked:true,revision:{increment:1}}});for(const listener of this.revocations)listener(credentialId);}
 }

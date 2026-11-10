@@ -4,6 +4,7 @@ const https=require('node:https');
 const {randomBytes}=require('node:crypto'),{spawn,execFileSync}=require('node:child_process');
 const {lanEnvironment}=require('./start-coordinator-lan.cjs');
 const {discoverCenters:discover}=require('../apps/windows-agent/discovery.cjs');
+const {DeviceBinding}=require('./runtime-device-binding.cjs');
 const root=path.resolve(__dirname,'..');
 const consoleAssets=new Set(['/index.html','/style.css','/app.js','/dispatch.html','/dispatch.css',
   '/dispatch.js','/dispatch-view.mjs','/dispatch-layout.js','/dispatch-charts.mjs','/scheduler-sdk.js',
@@ -122,8 +123,8 @@ async function consoleRequest(req,res,control,origin,sessionCookie,spaceRoute){
 function addresses(){return Object.entries(os.networkInterfaces()).flatMap(([name,list])=>(list||[]).filter(i=>i.family==='IPv4'&&!i.internal).map(i=>({name,address:i.address})));}
 function deviceDirectory(directory){return path.resolve(directory||path.join(os.homedir(),'HarmonyRuntime','device'));}
 async function openDesktop(){
-  const candidates=[path.resolve(root,'../02-Device-Agent-Windows-x64/Harmony.exe'),path.join(process.env.LOCALAPPDATA||os.homedir(),'Programs/Harmony/Harmony.exe'),path.join(root,'.test/windows-app/Harmony/Harmony.exe')];
-  const executable=candidates.find(p=>fs.existsSync(p));if(!executable)throw Error('请先构建或安装 Harmony 协作空间应用');
+  const candidates=[path.resolve(root,'../02-Device-Agent-Windows-x64/ZhiDiaoHongShu.exe'),path.join(process.env.LOCALAPPDATA||os.homedir(),'Programs/ZhiDiao/02-Device-Agent-Windows-x64/ZhiDiaoHongShu.exe')];
+  const executable=candidates.find(p=>fs.existsSync(p));if(!executable)throw Error('请先安装新版智调鸿枢设备调度件');
   const child=spawn(executable,[],{windowsHide:true,detached:true,stdio:'ignore'});
   await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});
   child.unref();return {opened:true};
@@ -134,7 +135,7 @@ function openssl(){if(process.env.COORDINATOR_OPENSSL)return process.env.COORDIN
   for(const dir of dirs)for(const candidate of [path.join(dir,'openssl.exe'),path.resolve(dir,'../usr/bin/openssl.exe')])if(fs.existsSync(candidate))return candidate;
   return 'openssl';}
 class RuntimeControl {
-  constructor(options={}){this.dataRoot=options.dataRoot||path.join(root,'services/coordinator/data');this.child=null;this.state='STOPPED';this.logs=[];this.url=null;this.mode=null;}
+  constructor(options={}){this.dataRoot=options.dataRoot||path.join(root,'services/coordinator/data');this.binding=options.bindingFile?new DeviceBinding(options.bindingFile):null;this.child=null;this.state='STOPPED';this.logs=[];this.url=null;this.mode=null;}
   log(value){this.logs.push(value);this.logs=this.logs.slice(-100);}
   launch(script,args,env){
     if(this.child)throw Error('请先停止当前服务');
@@ -161,22 +162,26 @@ class RuntimeControl {
   }
   startAgent(input){
     if(this.child)throw Error('服务已在运行');
-    const directory=deviceDirectory(input.directory);
+    const directory=deviceDirectory(input.directory||this.binding?.data.active?.directory);
+    this.binding?.assertActive(directory);
     if(!fs.existsSync(path.join(directory,'agent.json'))||!fs.existsSync(path.join(directory,'contribution.json')))throw Error('请先导入邀请并完成配对');
     const env={...process.env};
     if(input.backend){if(!['CPU','CUDA'].includes(input.backend))throw Error('图像后端无效');env.PC_IMAGE_BACKEND=input.backend;}
     if(input.python){if(!path.isAbsolute(input.python)||!fs.existsSync(input.python))throw Error('Python 路径不存在');env.PC_IMAGE_PYTHON=input.python;}
     if(input.suite){if(!path.isAbsolute(input.suite)||!fs.existsSync(input.suite))throw Error('评测套件路径不存在');env.PC_IMAGE_ENCODING_SUITE=input.suite;}
     if(input.backend&&!env.PC_IMAGE_ENCODING_SUITE)throw Error('请先配置可信编码套件');
+    if(this.binding&&!this.binding.data.active)this.binding.activate(directory);
     this.mode='agent';this.url=null;
     this.launch(path.join(root,'services/pc-agent/dist/host-main.js'),[path.join(directory,'agent.json'),path.join(directory,'contribution.json')],env);
   }
   async pair(input){
     if(this.child)throw Error('请先停止当前服务');
     if(typeof input.invitation!=='string')throw Error('请导入完整设备邀请');
-    const directory=deviceDirectory(input.directory);
-    if(fs.existsSync(directory))throw Error('安装目录已存在，请恢复该设备或选择新目录；不覆盖账本');
+    this.binding?.assertSettled();
     const bootstrap=await resolvePairingInput(input);
+    let directory=deviceDirectory(input.directory);
+    if(fs.existsSync(directory)){if(!this.binding)throw Error('安装目录已存在，请恢复该设备或选择新目录；不覆盖账本');directory=path.join(path.dirname(directory),'device-'+bootstrap.holderInstanceId);}
+    if(this.binding)bootstrap.localDevice=this.binding.context();
     if(!bootstrap?.invitation||!bootstrap.contribution||!bootstrap.holderInstanceId)throw Error('请导入完整设备邀请');
     fs.mkdirSync(path.dirname(directory),{recursive:true});
     const staging=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-pair-')),file=path.join(staging,'invitation.json');
@@ -187,25 +192,42 @@ class RuntimeControl {
         child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(Error('配对失败；保留安装目录用于对账，勿重复兑换')));
       });
       fs.writeFileSync(path.join(directory,'contribution.json'),JSON.stringify(bootstrap.contribution),{flag:'wx',mode:0o600});
-      return {directory};
+      this.binding?.activate(directory);return {directory};
     }finally{fs.unlinkSync(file);fs.rmdirSync(staging);}
   }
   deviceStatus(input){
-    const directory=deviceDirectory(input.directory);
+    const directory=deviceDirectory(input.directory||this.binding?.data.active?.directory);
+    this.binding?.assertActive(directory);
     try{
       const {connection}=JSON.parse(fs.readFileSync(path.join(directory,'agent.json'),'utf8'));
       const policy=JSON.parse(fs.readFileSync(path.join(directory,'contribution.json'),'utf8'));
-      return {paired:true,address:connection.address,cpu:policy.maxCpuThreads,memory:policy.maxMemoryBytes};
+      return {paired:true,directory,groupId:JSON.parse(fs.readFileSync(path.join(directory,'agent.json'))).identity.groupId,address:connection.address,cpu:policy.maxCpuThreads,memory:policy.maxMemoryBytes};
     }catch(e){if(e.code==='ENOENT')return {paired:false};throw Error('设备配对记录无法读取，请检查安装目录');}
   }
   stop(){if(this.child){this.state='STOPPING';if(this.child.connected)this.child.send({type:'shutdown'},error=>{if(error)this.log('停止请求未确认，请查看进程状态');});}}
   snapshot(){return {state:this.state,mode:this.mode,url:this.url,logs:this.logs,addresses:addresses()};}
 }
 async function main(options={openBrowser:true}){
-  process.chdir(root);const control=new RuntimeControl(),token=randomBytes(32).toString('hex');let origin='';let mutating=false;
+  process.chdir(root);const control=new RuntimeControl({bindingFile:options.bindingFile??path.join(os.homedir(),'HarmonyRuntime','device-binding.json')}),token=randomBytes(32).toString('hex');let origin='';let mutating=false;
   const role=options.role??'both';
   const localToken=randomBytes(32).toString('hex');
   let sessionCookie;
+  async function localCall(route,body){
+    if(control.state!=='RUNNING'||control.mode!=='center')throw Error('请先启动协调中心');
+    const target=new URL(control.url),directory=control.coordinatorDirectory,ca=fs.readFileSync(path.join(directory,'coordinator-public.crt'));
+    if(!control.localSpace||control.localSpace.expiresAt<=Date.now())control.localSpace={expiresAt:Date.now()+86400000,cookie:openLocalSpace(directory,target,ca)};
+    const response=await consoleApi(target,ca,route,body,await control.localSpace.cookie);if(response.status!==200)throw Error(response.data.error||'WORKSPACE_REQUEST_FAILED');return response.data;
+  }
+  let workspaceQueue=Promise.resolve();
+  function currentWorkspace(name){const next=workspaceQueue.then(()=>readWorkspace(name));workspaceQueue=next.catch(()=>{});return next;}
+  async function readWorkspace(name){
+    const account=await localCall('/me'),file=path.join(control.coordinatorDirectory,'current-workspace.json');let current;try{current=JSON.parse(fs.readFileSync(file));}catch(e){if(e.code!=='ENOENT')throw e;}
+    let space=account.spaces.find(s=>s.id===current?.id);
+    if(name!==undefined){if(typeof name!=='string'||!name.trim()||name.length>80)throw Error('SPACE_NAME_REQUIRED');const created=await localCall('/',{name:name.trim()});space={id:created.id,name:name.trim()};}
+    else space??=account.spaces[0];
+    if(!space)throw Error('SPACE_NOT_FOUND');fs.writeFileSync(file,JSON.stringify(space));return space;
+  }
+  let display=null;
   if(!['both','center','agent'].includes(role))throw Error('DESKTOP_ROLE_INVALID');
   const server=http.createServer(async(req,res)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
@@ -219,6 +241,10 @@ async function main(options={openBrowser:true}){
       res.setHeader('Content-Type',asset.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8');
       res.end(fs.readFileSync(path.join(root,'apps/runtime-desktop',asset)));return;
     }
+    if(req.method==='GET'&&req.url==='/console/workspace'){
+      if(!sessionCookie||!req.headers.cookie?.split(/;\s*/).includes(sessionCookie)||req.headers['sec-fetch-site']==='cross-site'){res.writeHead(403).end();return;}
+      try{res.setHeader('Content-Type','application/json');res.end(JSON.stringify(await currentWorkspace()));}catch(e){res.writeHead(503).end(JSON.stringify({error:e.message}));}return;
+    }
     const pathname=req.url.split('?')[0];
     const webAsset=req.method==='GET'&&(consoleAssets.has(pathname)||/^\/fonts\/[\w.-]+\.woff2?$/.test(pathname));
     const spaceRoute=['GET','POST','PUT'].includes(req.method)&&/^\/v2\/spaces(?:\/|$)/.test(pathname);
@@ -229,6 +255,7 @@ async function main(options={openBrowser:true}){
     if(req.headers['x-runtime-token']!==token||req.headers.origin&&req.headers.origin!==origin){res.writeHead(403).end();return;}
     try{
       if(req.method==='GET'&&req.url==='/state'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({...control.snapshot(),role}));return;}
+      if(req.method==='GET'&&req.url==='/workspace'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(await currentWorkspace()));return;}
       if(req.method==='GET'&&req.url==='/discover'&&role!=='center'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({centers:await discover()}));return;}
       if(req.method!=='POST'||req.headers.origin!==origin)throw Error('REQUEST_REJECTED');
       if(req.url==='/console/session'&&role!=='agent'&&control.mode==='center'&&control.state==='RUNNING'){
@@ -238,6 +265,8 @@ async function main(options={openBrowser:true}){
       if(mutating)throw Error('操作进行中');mutating=true;
       try{const input=JSON.parse(body||'{}');let result={};
         if(req.url==='/center/start'&&role!=='agent')control.startCenter(input);
+        else if(req.url==='/workspace/create'&&role!=='agent')result=await currentWorkspace(input.name);
+        else if(req.url==='/display/open'&&role!=='agent'){if(!display)throw Error('DISPLAY_UNAVAILABLE');result={url:display.url};}
         else if(req.url==='/agent/start'&&role!=='center')control.startAgent(input);
         else if(req.url==='/agent/certificate'&&role!=='center')result=await pairingCertificate(input.address);
         else if(req.url==='/agent/pair'&&role!=='center')result=await control.pair(input);
@@ -251,9 +280,14 @@ async function main(options={openBrowser:true}){
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
   sessionCookie='harmony_local_'+server.address().port+'='+localToken;
   const url=origin+'/#'+token;
+  if(role==='center'&&options.display!==false){
+    const {startDisplay}=require('./photo-display-server.cjs');
+    try{display=await startDisplay({port:Number(process.env.HARMONY_DISPLAY_PORT||7460),dataDir:process.env.HARMONY_DISPLAY_DIR||path.join(os.homedir(),'HarmonyRuntime','photo-display'),coordinatorProvider:()=>control.state==='RUNNING'?{desktop:url,followCurrent:true}:null});}catch(e){control.log('展示服务未启动：'+e.message);}
+    server.on('close',()=>display?.server.close());
+  }
   if(options.openBrowser){if(process.platform==='win32')spawn('rundll32.exe',['url.dll,FileProtocolHandler',url],{windowsHide:true,stdio:'ignore'}).on('error',()=>console.log('请在本机浏览器打开：'+url));else console.log('请在本机浏览器打开：'+url);}
   process.on('SIGINT',()=>{control.stop();if(!control.child)server.close();else control.child.once('exit',()=>server.close());});
-  return {server,control,url};
+  return {server,control,url,display};
 }
 module.exports={RuntimeControl,addresses,main,pairingCertificate,resolvePairingInput};
 if(require.main===module)main({openBrowser:true,role:process.argv[2]}).catch(e=>{console.error(e.message);process.exitCode=1;});

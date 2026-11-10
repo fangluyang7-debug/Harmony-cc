@@ -1,5 +1,5 @@
 import {createPhotoGallery,terminalRun} from './photo-gallery.mjs';
-import {nativePhotoClient} from './photo-app-port.mjs';
+import {nativePhotoClient,retainPhotoOutput} from './photo-app-port.mjs';
 import {SchedulerSdk} from './scheduler-sdk.js';
 import {photoPort,photoWorkflow,stageLabels,comparable} from './photo-workflow.mjs';
 const $=id=>document.getElementById(id),params=new URL(location.href).searchParams,group=params.get('space')||'',judge=params.get('view')==='judge'||!!window.harmonyDevice&&!window.harmonyPhoto;
@@ -17,7 +17,7 @@ async function api(route,body){const r=await photoFetch(base+route,{credentials:
 let updates=Promise.resolve();
 function update(changes){const next=updates.then(async()=>{record=await api('/photo-runs/'+record.id,{revision:record.revision,...(typeof changes==='function'?changes(record):changes)});directoryAt=0;});updates=next.catch(()=>{});return next;}
 const tasks=new Map();let localPreviews=[],selectionPending=false;
-const gallery=createPhotoGallery({source:$('source-gallery'),output:$('preview'),base,digest,device,onError:error,fetcher:photoFetch,...(appClient?{resolveInput:appClient.input}:{})});
+const gallery=createPhotoGallery({source:$('source-gallery'),output:$('preview'),base,digest,device,onError:error,fetcher:photoFetch,...(appClient?{resolveInput:appClient.input}:{}),...(window.harmonyPhoto?.stageResult?{onProduct:(product,name)=>window.harmonyPhoto.stageResult(JSON.stringify(product),name)}:{})});
 function device(id){return snapshot?.devices?.find(d=>d.id===id)?.name||id?.slice(0,12)||'等待选择';}
 function rows(){return current?.workflows?.flatMap(w=>w.nodes.map(n=>({...n,workflow:w.id,imageIndex:w.imageIndex})))||[];}
 function render(){
@@ -97,13 +97,12 @@ $('run').onclick=async()=>{
   }
   await update({state:'RUNNING'});let next=0;const failures=[];
   async function worker(){while(next<inputs.length&&!cancelled){const i=next++,src=inputs[i],remaining=Math.floor(budgetMs-(performance.now()-timerStart));if(remaining<1000){failures.push('总预算已耗尽');break;}
-   const port=appClient?appClient.port():photoPort(group,fetch,digest,()=>{},sourceDeviceId);port.cancelled=()=>cancelled;const sdk=new SchedulerSdk(port),input=await sdk.registerInput(src.data,'image.raster'),id=crypto.randomUUID(),graph=photoWorkflow(id,input,src.width,src.height);let task;
+   const port=appClient?retainPhotoOutput(appClient.port(),()=>api('/photo-runs/'+record.id+'/capture-result?image='+i,{})):photoPort(group,fetch,digest,()=>{},sourceDeviceId);port.cancelled=()=>cancelled;const sdk=new SchedulerSdk(port),input=await sdk.registerInput(src.data,'image.raster'),id=crypto.randomUUID(),graph=photoWorkflow(id,input,src.width,src.height);let task;
    if(mode==='LOCAL')for(const node of graph.workflow.nodes)node.executionScope='ORIGIN_DEVICE';
    try{task=await sdk.submit(graph.workflow,{requestId:id,budgetMs:remaining,resultDestination:'ORIGIN'});tasks.set(id,task);await update(r=>({jobs:[...r.jobs,{id:task.id,imageIndex:i}]}));
     if(cancelled){await task.cancel();throw Error('已取消');}
     const result=await task.result(Math.min(300000,remaining+5000)),product=JSON.parse(new TextDecoder().decode(result.output)),decoded=Uint8Array.from(atob(product.image),c=>c.charCodeAt(0));
     if(await digest(decoded)!==product.hash)throw Error('成品哈希校验失败');
-    if(appClient)await api('/photo-runs/'+record.id+'/capture-result?image='+i,{});
     await update({deliveredImage:{imageIndex:i,hash:product.hash}});void refresh().catch(error);
    }catch(e){failures.push(src.name+'：'+e.message);try{await (task||sdk.resume(id)).cancel();}catch{}}
    finally{tasks.delete(id);sdk.releaseInput(input);}

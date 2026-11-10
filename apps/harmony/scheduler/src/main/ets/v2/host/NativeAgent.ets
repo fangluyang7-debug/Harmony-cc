@@ -1,6 +1,7 @@
 import {executeLocal,encoderCapability,localExecutorVersion,hasLocalExecutor} from './executors/Registry';
 import {EngineResult} from './executors/Types';
 import { NativePeerLinks } from '../platform/NativePeerLinks';
+import { pairingHistory } from './PairingHistory';
 import { HarmonySdkPort } from '../client/HarmonySdkPort';
 import { SchedulerSdk, SdkInput } from '../client/SchedulerSdk';
 import { NativeInputStore } from '../platform/NativeInputStore';
@@ -169,8 +170,8 @@ export class NativeAgent {
    const info=await transport.json('/v2/identity') as Identity;if(info.version!==2||info.domain!==bootstrap.domain)throw Error('PAIR_DOMAIN_INVALID');
    await db.put('pairing-pending:'+bootstrap.holderInstanceId,bootstrap.invitation.inviteId);
    let installationId=await db.get('device-installation-id');if(installationId===null){installationId=factory.id();await db.put('device-installation-id',installationId);}
-   const oldIdentity=await db.get('identity'),previousDeviceId=oldIdentity===null?undefined:(JSON.parse(oldIdentity) as Installation).paired.peer.deviceId;
-   const knownDeviceIds=(await db.storedIdentities()).map((value:string)=>(JSON.parse(value) as Installation).paired.peer.deviceId);
+   const oldIdentity=await db.get('identity'),history=pairingHistory(bootstrap,oldIdentity===null?null:JSON.parse(oldIdentity) as Installation,(await db.storedIdentities()).map((value:string)=>JSON.parse(value) as Installation));
+   const previousDeviceId=history.previousDeviceId,knownDeviceIds=history.knownDeviceIds;
    const pairInput:PairInput={inviteId:bootstrap.invitation.inviteId,code:bootstrap.invitation.code,holderInstanceId:bootstrap.holderInstanceId,installationId,previousDeviceId,knownDeviceIds};let paired:Paired;
    try{paired=await transport.json('/v2/pair',pairInput) as Paired;}
    catch(error){if((error as Error).message==='SPACE_SWITCH_BUSY')await db.put('pairing-pending:'+bootstrap.holderInstanceId,'');throw error as Error;}
@@ -199,6 +200,11 @@ export class NativeAgent {
    if(this.refreshing||this.calibrating||this.grantBusy||this.connecting||this.store.read().state.entries.some(e=>!e.record.resourcesSettled))throw Error('SPACE_SWITCH_BUSY');
    await this.close();
   }catch(e){this.switching=false;throw e as Error;}
+ }
+ async leaveSpace():Promise<void>{
+  this.switching=true;
+  try{const port=await HarmonySdkPort.open(this.context,this.installation.bootstrap.invitation,this.installation.paired.credential);await this.closeForSwitch();await port.request('/v2/devices/leave','{}');}
+  catch(e){this.switching=false;throw e as Error;}
  }
  async registerApplication(declaration:Object):Promise<string>{
   if(!this.isConnected())throw Error('SDK_COORDINATOR_OFFLINE');

@@ -1,6 +1,13 @@
 // Independent photo App: credentials stay native; all computation uses the SDK.
 const encode=bytes=>{let value='';for(let i=0;i<bytes.length;i+=32768)value+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(value);};
 const decode=value=>Uint8Array.from(atob(value),c=>c.charCodeAt(0));
+// SDK acknowledges receipt after read() returns. Retain the verified display copy
+// before that acknowledgment releases the artifact's source retention lease.
+export function retainPhotoOutput(port,capture){
+ const read=port.read;
+ port.read=async ticket=>{const bytes=await read(ticket);if(bytes.byteLength!==ticket.bytes||await port.digest(bytes)!==ticket.ref.contentHash)throw Error('SDK_OUTPUT_INTEGRITY');await capture();return bytes;};
+ return port;
+}
 export function nativePhotoClient(bridge,group,digest){
  const clockDomainId='photo-app-'+crypto.randomUUID();
  const prefix='/v2/spaces/'+encodeURIComponent(group);
@@ -13,7 +20,8 @@ export function nativePhotoClient(bridge,group,digest){
   catch(e){return new Response(JSON.stringify({error:e.message||String(e)}),{status:400,headers:{'Content-Type':'application/json'}});}
  }
  return {fetch:request,input:async url=>{const r=await request(url);if(!r.ok)throw Error((await r.json()).error);const value=await r.json();return 'data:'+value.mime+';base64,'+value.data;},port:()=>({
-  request:(route,body)=>bridge.sdkRequest(route,body),
+  // ArkWeb proxy arguments use strings: null may arrive as a non-JSON sentinel.
+  request:(route,body)=>bridge.sdkRequest(route,body??''),
   write:(ticket,data)=>bridge.sdkWrite(JSON.stringify(ticket),encode(data)),
   read:async ticket=>decode(await bridge.sdkRead(JSON.stringify(ticket))),
   digest,now:Date.now,measure:()=>({clockDomainId,milliseconds:performance.now()}),wait:ms=>new Promise(r=>setTimeout(r,ms))

@@ -13,13 +13,14 @@ module.exports=async({r,paired,group,url,root,api,desktopUrl})=>{
  const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
  const directory=path.join(root,'.test/photo-tools/independent-app');fs.mkdirSync(directory,{recursive:true});
  try{
-  const mobile=await browser.newPage({viewport:{width:390,height:844}}),judge=await browser.newPage({viewport:{width:1600,height:1050}}),errors=[];
+  const mobile=await browser.newPage({viewport:{width:390,height:844}}),judge=await browser.newPage({viewport:{width:1600,height:1050}}),errors=[],staged=[];
   mobile.on('pageerror',e=>errors.push(e.message));judge.on('pageerror',e=>errors.push(e.message));
   // Generated after the empty execution host is ready; never installed in it.
   const input=await require('sharp')({create:{width:72,height:16,channels:3,background:{r:127,g:74,b:31}}}).png().toBuffer();
   await mobile.exposeFunction('photoTestBridge',async(method,args)=>{
    if(method==='info')return JSON.stringify({deviceId:paired.peer.deviceId,groupId:group});
    if(method==='pickPhoto')return JSON.stringify({name:'local-integration.png',mime:'image/png',data:input.toString('base64')});
+   if(method==='stageResult'){const p=JSON.parse(args[0]);assert.equal(require('node:crypto').createHash('sha256').update(Buffer.from(p.image,'base64')).digest('hex'),p.hash);staged.push(p.hash);return;}
    if(method==='request')return json('/v2/apps/photo',args[0]);
    if(method==='sdkRequest')return json(args[0],args[1]);
    const ticket=JSON.parse(args[0]);assert.equal(ticket.direct,undefined,'This rehearsal must use the relay transport');
@@ -28,7 +29,7 @@ module.exports=async({r,paired,group,url,root,api,desktopUrl})=>{
    if(method==='sdkRead')return (await request(route,'GET',undefined,headers)).toString('base64');
    throw Error('UNKNOWN_BRIDGE_METHOD');
   });
-  await mobile.addInitScript(()=>{window.harmonyPhoto=Object.fromEntries(['info','pickPhoto','request','sdkRequest','sdkWrite','sdkRead'].map(m=>[m,(...args)=>window.photoTestBridge(m,args)]));});
+  await mobile.addInitScript(()=>{window.harmonyPhoto=Object.fromEntries(['info','pickPhoto','request','sdkRequest','sdkWrite','sdkRead','stageResult'].map(m=>[m,(...args)=>window.photoTestBridge(m,args)]));});
   await mobile.goto(url.replace('/photo.html?','/photo-mobile.html?')+'&app=photo');
   await mobile.waitForFunction(()=>!document.querySelector('#native-pick').hidden);
   assert.equal(await mobile.locator('.live-plan').isVisible(),false);assert.equal(await mobile.locator('#watch').isVisible(),false);
@@ -57,6 +58,7 @@ module.exports=async({r,paired,group,url,root,api,desktopUrl})=>{
   assert.equal(await mobile.locator('#state').innerText(),'全部结果已交付',await mobile.locator('#error').innerText());
   await judge.waitForFunction(()=>document.querySelector('#preview img'),{},{timeout:15000});
   await mobile.waitForFunction(()=>document.querySelector('#preview img'),{},{timeout:15000});
+  assert.equal(staged.length,1);assert.equal(await mobile.locator('#preview a[download]').count(),0,'Native App uses its explicit album SaveButton instead of a blob download');
   assert.equal(await mobile.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'Mobile layout overflow');
   await mobile.screenshot({path:path.join(directory,'phone-result.png'),fullPage:true});
   await judge.screenshot({path:path.join(directory,'desktop-result.png'),fullPage:true});

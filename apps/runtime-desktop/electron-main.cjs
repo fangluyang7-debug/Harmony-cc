@@ -29,7 +29,7 @@ else {
       window = new BrowserWindow({width: 1180, height: 820, minWidth: 760, minHeight: 560,
         title: role === 'center' ? '智调鸿枢 · 协调中心' : '智调鸿枢 · 设备调度件', backgroundColor: '#0b0e14',
         webPreferences: {nodeIntegration: false, contextIsolation: true, sandbox: true}});
-      window.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
+      window.webContents.setWindowOpenHandler(({url}) => {const u=new URL(url);return u.origin==='http://127.0.0.1:'+String(process.env.HARMONY_DISPLAY_PORT||7460)&&u.pathname==='/'?{action:'allow',overrideBrowserWindowOptions:{width:1440,height:960,webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}}}:{action:'deny'};});
       window.webContents.on('will-navigate', (event, url) => {
         if (new URL(url).origin !== origin) event.preventDefault();
       });

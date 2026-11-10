@@ -17,6 +17,17 @@ async function pixels(data:Uint8Array):Promise<image.PixelMap>{const source=imag
 async function png(p:image.PixelMap):Promise<Uint8Array>{const packer=image.createImagePacker();try{return new Uint8Array(await packer.packing(p,{format:'image/png',quality:100}));}finally{await packer.release();}}
 function write(name:string,data:Uint8Array):void{const f=fileIo.openSync(name,fileIo.OpenMode.CREATE|fileIo.OpenMode.WRITE_ONLY|fileIo.OpenMode.TRUNC);try{fileIo.writeSync(f.fd,data.slice().buffer as ArrayBuffer);}finally{fileIo.closeSync(f);}}
 function read(name:string):Uint8Array{const f=fileIo.openSync(name,fileIo.OpenMode.READ_ONLY);try{const b=new ArrayBuffer(fileIo.statSync(f.fd).size);fileIo.readSync(f.fd,b);return new Uint8Array(b);}finally{fileIo.closeSync(f);}}
+const modelPreparations=new Map<string,Promise<string>>();
+function prepareModel(r:EngineInput):Promise<string>{
+ const model=r.context.filesDir+'/realesrgan-x4plus',expected=r.model?.weightsHash??'713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf',key=model+':'+expected;
+ const existing=modelPreparations.get(key);if(existing)return existing;
+ const pending=(async():Promise<string>=>{
+  // Concurrent first-use tiles must never truncate model files while a sibling loads them.
+  for(const ext of ['param','bin']){const name=model+'.'+ext;if(!fileIo.accessSync(name))write(name,await r.context.resourceManager.getRawFileContent('realesrgan-x4plus.'+ext));}
+  if(hash(read(model+'.param'))!=='35330ececcea33b6c397a72548e788d5d53becee4734c50b7fada36e89f10a86'||hash(read(model+'.bin'))!==expected)throw Error('PHOTO_MODEL_HASH');
+  return model;
+ })();modelPreparations.set(key,pending);void pending.catch(()=>{modelPreparations.delete(key);});return pending;
+}
 export function photoAvailable():boolean{return photo!==undefined&&photo!==null&&photo.available();}
 export async function executePhoto(capability:string,r:EngineInput):Promise<EngineResult>{
  if(r.cancelled())throw Error('CANCELLED_SETTLED');
@@ -33,9 +44,7 @@ export async function executePhoto(capability:string,r:EngineInput):Promise<Engi
    if(!photo.available())throw Error('PHOTO_MODEL_NOT_INSTALLED');const e=JSON.parse(text(r.input)) as Envelope;if(e.stage!=='prepared'||!e.crop||!e.rect)throw Error('PHOTO_INVALID');geometry(r.parameters,e.rect.width,e.rect.height);const pm=await pixels(decode(e)),info=await pm.getImageInfo();
    const rgba=new Uint8Array(info.size.width*info.size.height*4);await pm.readPixelsToBuffer(rgba.buffer as ArrayBuffer);await pm.release();
    const input=new Uint8Array(8+info.size.width*info.size.height*3),view=new DataView(input.buffer);view.setUint32(0,info.size.width,true);view.setUint32(4,info.size.height,true);for(let i=0;i<rgba.length/4;i++){input[8+i*3]=rgba[i*4];input[9+i*3]=rgba[i*4+1];input[10+i*3]=rgba[i*4+2];}
-   const prefix=r.context.cacheDir+'/photo-'+factory.id(),source=prefix+'.rgb',dest=prefix+'.out',model=r.context.filesDir+'/realesrgan-x4plus';
-   for(const ext of ['param','bin']){const name=model+'.'+ext;if(!fileIo.accessSync(name))write(name,await r.context.resourceManager.getRawFileContent('realesrgan-x4plus.'+ext));}
-   if(hash(read(model+'.param'))!=='35330ececcea33b6c397a72548e788d5d53becee4734c50b7fada36e89f10a86'||hash(read(model+'.bin'))!==(r.model?.weightsHash??'713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf'))throw Error('PHOTO_MODEL_HASH');
+   const prefix=r.context.cacheDir+'/photo-'+factory.id(),source=prefix+'.rgb',dest=prefix+'.out',model=await prepareModel(r);
    write(source,input);try{await photo.run(model+'.param',model+'.bin',source,dest);if(r.cancelled())throw Error('CANCELLED_SETTLED');
     const raw=read(dest),dv=new DataView(raw.buffer),w=dv.getUint32(0,true),h=dv.getUint32(4,true);if(w!==info.size.width*4||h!==info.size.height*4||raw.length!==8+w*h*3)throw Error('PHOTO_INVALID');
     const out=new Uint8Array(w*h*4);for(let i=0;i<w*h;i++){out[i*4]=raw[8+i*3];out[i*4+1]=raw[9+i*3];out[i*4+2]=raw[10+i*3];out[i*4+3]=255;}
