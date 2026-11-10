@@ -1,3 +1,8 @@
+// Deprecated historical implementation. All release packaging uses prepare-harmony-distribution.cjs.
+if (require.main === module) {
+  console.error('此旧打包入口已废弃，请运行 npm run dist:prepare。');
+  process.exit(1);
+}
 // Portable Windows application; includes Electron, the existing CPU host and sharp.
 const fs=require('node:fs'),path=require('node:path'),esbuild=require('esbuild');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'.test/windows-app/Harmony'),application=path.join(out,'resources/app');

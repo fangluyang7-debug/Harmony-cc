@@ -19,7 +19,7 @@ function copy(src, dest) {
   fs.mkdirSync(path.dirname(dest), {recursive: true});
   fs.cpSync(src, dest, {
     recursive: true,
-    filter: name => !/\.(?:tmp\d*|log|tsbuildinfo)$/.test(name) && path.basename(name) !== 'node_modules'
+    filter: name => !/\.(?:tmp\d*|log|tsbuildinfo|bak)$/i.test(name) && path.basename(name) !== 'node_modules'
   });
 }
 
@@ -174,7 +174,7 @@ for (const [dir, project, filename] of [
   const hap = path.join(root, '.test/s2-' + project, 'entry/build/default/outputs/default/entry-default-unsigned.hap');
   if(project==='harmony-photo'&&!fs.existsSync(hap)){
     fs.mkdirSync(path.join(out,dir),{recursive:true});
-    fs.writeFileSync(path.join(out,dir,'NOT-BUILT.txt'),'Photo API 22 HAP was not built. Build harmony-photo with the API 22 SDK, or use build-distribution.cjs with PHOTO_HAP and its explicit API/signing metadata.\n');
+    fs.writeFileSync(path.join(out,dir,'NOT-BUILT.txt'),'Photo API 22 HAP was not built. Build harmony-photo with the API 22 SDK, then rerun npm run dist:prepare.\n');
     continue;
   }
   copy(hap, path.join(stage, dir, filename));

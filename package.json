@@ -82,8 +82,8 @@
     "s4:core-check": "node scripts/check-s4-core-baseline.cjs",
     "harmony:v2:soleai": "npm run references:build && node scripts/harmony-v2-app-build.cjs harmony --har",
     "dist:prepare": "node scripts/prepare-harmony-distribution.cjs",
-    "desktop:build": "node scripts/build-windows-agent.cjs",
-    "distribution:build": "node scripts/build-distribution.cjs",
+    "desktop:build": "npm run dist:prepare",
+    "distribution:build": "npm run dist:prepare",
     "photo:prepare": "node scripts/prepare-photo-runtime.cjs",
     "photo:rehearse": "node scripts/photo-local-rehearsal.cjs",
     "photo:test": "node --test services/pc-agent/test/photo.test.cjs && npm --workspace @harmony/coordinator exec -- node --test test/photo-workflow.test.cjs"

@@ -1,4 +1,8 @@
-# Harmony Windows 应用
+# Harmony Windows 应用（旧实现，已废弃）
+
+当前发布使用 `apps/runtime-desktop/` 的独立 EXE 窗口。唯一打包入口是 `npm run dist:prepare`，默认覆盖 `dist/调度系统分发-20261110-r2/`。下面内容仅供历史追溯，不再按旧说明构建或分发。
+
+本目录的 `discovery.cjs` 仍是当前运行链路复用的发现模块，需要保留；其余文件属于旧客户端。`scripts/build-windows-agent.cjs`、`scripts/build-distribution.cjs` 已禁止直接执行。
 
 Windows 客户端复用团队空间和调度盘，通过受限 preload / IPC 管理已有 PC 代理，不增加任务派发入口。所有任务继续进入协调者的 SchedulerSdk 链路。
 

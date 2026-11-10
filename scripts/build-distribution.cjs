@@ -1,3 +1,8 @@
+// Deprecated historical implementation. All release packaging uses prepare-harmony-distribution.cjs.
+if (require.main === module) {
+  console.error('此旧打包入口已废弃，请运行 npm run dist:prepare。');
+  process.exit(1);
+}
 // Build platform packages from an explicit working-tree snapshot. Never copy runtime identities.
 const fs=require('node:fs'),path=require('node:path'),{execFileSync}=require('node:child_process'),{createRequire}=require('node:module'),{createHash}=require('node:crypto'),esbuild=require('esbuild');
 const root=path.resolve(__dirname,'..'),builtins=new Set(require('node:module').builtinModules);
