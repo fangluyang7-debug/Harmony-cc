@@ -17,7 +17,7 @@ async function pixels(data:Uint8Array):Promise<image.PixelMap>{const source=imag
 async function png(p:image.PixelMap):Promise<Uint8Array>{const packer=image.createImagePacker();try{return new Uint8Array(await packer.packing(p,{format:'image/png',quality:100}));}finally{await packer.release();}}
 function write(name:string,data:Uint8Array):void{const f=fileIo.openSync(name,fileIo.OpenMode.CREATE|fileIo.OpenMode.WRITE_ONLY|fileIo.OpenMode.TRUNC);try{fileIo.writeSync(f.fd,data.slice().buffer as ArrayBuffer);}finally{fileIo.closeSync(f);}}
 function read(name:string):Uint8Array{const f=fileIo.openSync(name,fileIo.OpenMode.READ_ONLY);try{const b=new ArrayBuffer(fileIo.statSync(f.fd).size);fileIo.readSync(f.fd,b);return new Uint8Array(b);}finally{fileIo.closeSync(f);}}
-export function photoAvailable():boolean{return photo.available();}
+export function photoAvailable():boolean{return photo!==undefined&&photo!==null&&photo.available();}
 export async function executePhoto(capability:string,r:EngineInput):Promise<EngineResult>{
  if(r.cancelled())throw Error('CANCELLED_SETTLED');
  try{

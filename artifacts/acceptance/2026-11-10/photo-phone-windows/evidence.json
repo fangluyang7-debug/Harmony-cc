@@ -1,0 +1,2335 @@
+{
+  "note": "Real CPU test, one explicit 96x64 test photo; USB source preparation authorized, business traffic via Wi-Fi. Not a GPU or full-size benchmark. LOCAL still uses network coordinator.",
+  "prepared": {
+    "preparedAt": "2026-11-10T06:54:14.613Z",
+    "method": "USB source setup explicitly authorized by user; not timed",
+    "width": 96,
+    "height": 64,
+    "sha256": "5d1b06dda6041e071592780e6d80bf495f7cdf788462b760dcf5ab556fd10aea",
+    "bytes": 15381,
+    "phoneFile": "/data/storage/el2/base/haps/entry/files/usb-photo-input.png",
+    "windowsWorkerInputPrepared": false
+  },
+  "workerBeforeBaseline": {
+    "at": "2026-11-10T07:00:54.668Z",
+    "directory": ".test/photo-real-20261110/windows-ready/ledger",
+    "files": [
+      "calibration",
+      "data-endpoint",
+      "ledger.initialized",
+      "ledger.json"
+    ],
+    "taskInputsExist": false
+  },
+  "workerBeforeFirstCooperation": {
+    "at": "2026-11-10T07:18:35.114Z",
+    "files": [
+      "calibration",
+      "data-endpoint",
+      "ledger.initialized",
+      "ledger.json"
+    ],
+    "taskInputsExist": false
+  },
+  "runs": [
+    {
+      "label": "phone-baseline",
+      "runId": "526d8b72-b5b7-4e29-ae90-3d8df23c2e24",
+      "domain": "REAL",
+      "mode": "LOCAL",
+      "sourceDeviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+      "budgetMs": 180000,
+      "sourceDurationMs": 26251.09999999404,
+      "remainingBudgetMs": 153748.90000000596,
+      "input": {
+        "name": "usb-test-photo.png",
+        "bytes": 15299,
+        "originalHash": "5d1b06dda6041e071592780e6d80bf495f7cdf788462b760dcf5ab556fd10aea",
+        "hash": "6fbe0feb8405a3964ca19248555649386131fb8ad77c9f2bbfd86750e132cf1d",
+        "width": 96,
+        "height": 64
+      },
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "output": {
+        "hash": "222247a2eeabc57dffc6fcbeb07808a6feee4ed2f8db4b5bb57e5511917cefec",
+        "width": 384,
+        "height": 256
+      },
+      "allCommitted": true,
+      "uniqueAttempts": 7,
+      "nodes": [
+        {
+          "id": "analyze",
+          "attemptId": "ed035554-c25b-4051-9808-298d8f9a0f4a",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "6fbe0feb8405a3964ca19248555649386131fb8ad77c9f2bbfd86750e132cf1d",
+          "outputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "inputBytes": 15299,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.23840000003110617,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 283108.4223,
+              "endMono": 283108.6607
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 285.32910000003176,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 283123.4725,
+              "endMono": 283408.8016
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 27,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131213160,
+              "endMono": 131213187
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 209,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131213588,
+              "endMono": 131213797
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 44,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131213821,
+              "endMono": 131213865
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 45,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131213821,
+              "endMono": 131213866
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 12,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131213999,
+              "endMono": 131214011
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 47,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131214314,
+              "endMono": 131214361
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 351,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131214011,
+              "endMono": 131214362
+            }
+          ]
+        },
+        {
+          "id": "prepare-0",
+          "attemptId": "dd4b5925-76f6-4ecf-b272-c7b8b2fa749d",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "outputHash": "eb8623014b7b71c062c45f4a3cce1934dc959cb4b42519315b99711172d0705c",
+          "inputBytes": 16805,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.1675000000395812,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 286620.4663,
+              "endMono": 286620.6338
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 239.27740000002086,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 286635.6067,
+              "endMono": 286874.8841
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 30,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131216565,
+              "endMono": 131216595
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 144,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131216792,
+              "endMono": 131216936
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 38,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217003,
+              "endMono": 131217041
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 39,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217003,
+              "endMono": 131217042
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 25,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217208,
+              "endMono": 131217233
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 47,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217342,
+              "endMono": 131217389
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 156,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217233,
+              "endMono": 131217389
+            }
+          ]
+        },
+        {
+          "id": "enhance-0",
+          "attemptId": "38893442-23d8-413e-9ecd-9c5c64de5aaa",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "eb8623014b7b71c062c45f4a3cce1934dc959cb4b42519315b99711172d0705c",
+          "outputHash": "4ea59293e2e48d7eaa685567750d8bd72efd58c88ee696c8543e8bfc2951760c",
+          "inputBytes": 14183,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.18099999998230487,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 289288.0759,
+              "endMono": 289288.2569
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 339.41359999997076,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 289305.1584,
+              "endMono": 289644.572
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 53,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131219294,
+              "endMono": 131219347
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 162,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131219556,
+              "endMono": 131219718
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 45,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131219751,
+              "endMono": 131219796
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 46,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131219750,
+              "endMono": 131219796
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 2385,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131220065,
+              "endMono": 131222450
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 109,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131222568,
+              "endMono": 131222677
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 227,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131222451,
+              "endMono": 131222678
+            }
+          ]
+        },
+        {
+          "id": "prepare-1",
+          "attemptId": "40535c60-ac7e-4e6a-a0a4-34092660a3c0",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "outputHash": "cdeeb1fcd474e8fa0bcdae98cb0471cd37ce374460ff8027eee111116cbbb6e9",
+          "inputBytes": 16805,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.2238999999826774,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 287262.1561,
+              "endMono": 287262.38
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 270.82179999997607,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 287273.9941,
+              "endMono": 287544.8159
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 20,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217183,
+              "endMono": 131217203
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 80,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217583,
+              "endMono": 131217663
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 50,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217681,
+              "endMono": 131217731
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 50,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217681,
+              "endMono": 131217731
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 14,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217859,
+              "endMono": 131217873
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 38,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131218210,
+              "endMono": 131218248
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 375,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131217873,
+              "endMono": 131218248
+            }
+          ]
+        },
+        {
+          "id": "enhance-1",
+          "attemptId": "f959aa89-166a-42ac-adab-fcffe73ba831",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "cdeeb1fcd474e8fa0bcdae98cb0471cd37ce374460ff8027eee111116cbbb6e9",
+          "outputHash": "b447d6fe89b8d7bd053c436afd2c6c352a0729e28ee50d7c753e053827571870",
+          "inputBytes": 8645,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.38169999996898696,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 295053.428,
+              "endMono": 295053.8097
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 370.2984999999753,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 295070.7575,
+              "endMono": 295441.056
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 29,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131225172,
+              "endMono": 131225201
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 207,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131225515,
+              "endMono": 131225722
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 43,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131225758,
+              "endMono": 131225801
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 44,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131225758,
+              "endMono": 131225802
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 1696,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131225935,
+              "endMono": 131227631
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 97,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131227972,
+              "endMono": 131228069
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 438,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131227632,
+              "endMono": 131228070
+            }
+          ]
+        },
+        {
+          "id": "assemble",
+          "attemptId": "fb8ab96a-2238-4928-afc9-8fe814d02ff2",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "f8eeca85a6729f04a5448a7c91fd6d2eea8c746429a2d5fd73198b2aea26f6a3",
+          "outputHash": "edc7b43ca9260271c65ec63602c17986f7ec5971067d53d213c19f2c18890449",
+          "inputBytes": 234088,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.17090000002644956,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 300260.3478,
+              "endMono": 300260.5187
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 335.0338000000338,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 300277.1453,
+              "endMono": 300612.1791
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 37,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131230356,
+              "endMono": 131230393
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 221,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131230751,
+              "endMono": 131230972
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 184,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131230993,
+              "endMono": 131231177
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 186,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131230993,
+              "endMono": 131231179
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 111,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131231307,
+              "endMono": 131231418
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 241,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131231718,
+              "endMono": 131231959
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 540,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131231419,
+              "endMono": 131231959
+            }
+          ]
+        },
+        {
+          "id": "deliver",
+          "attemptId": "5ac2e039-2155-4977-844f-b7a2a26771f3",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "edc7b43ca9260271c65ec63602c17986f7ec5971067d53d213c19f2c18890449",
+          "outputHash": "a59821c241ef8303c739e4cb6e05b7cc6cdd03d6d6731a85ed3423b6972faa8e",
+          "inputBytes": 129830,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.15150000003632158,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 304108.0513,
+              "endMono": 304108.2028
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 276.47669999999925,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 304122.0128,
+              "endMono": 304398.4895
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 29,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131234085,
+              "endMono": 131234114
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 135,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131234360,
+              "endMono": 131234495
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 92,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131234557,
+              "endMono": 131234649
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 94,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131234556,
+              "endMono": 131234650
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 105,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131234825,
+              "endMono": 131234930
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 97,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131235198,
+              "endMono": 131235295
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 364,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131234931,
+              "endMono": 131235295
+            },
+            {
+              "phase": "DELIVER",
+              "durationMs": 25483,
+              "clockDomainId": "photo-browser-460a4f08-1247-43d1-9709-227c0edd2c5e",
+              "startMono": 40866.90000000596,
+              "endMono": 66349.90000000596
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "cooperative-first",
+      "runId": "ebaa0f3c-986b-4f56-90dd-344ea41c2e1d",
+      "domain": "REAL",
+      "mode": "COOPERATIVE",
+      "sourceDeviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+      "budgetMs": 180000,
+      "sourceDurationMs": 23037.89999999106,
+      "remainingBudgetMs": 156962.10000000894,
+      "input": {
+        "name": "usb-test-photo.png",
+        "bytes": 15299,
+        "originalHash": "5d1b06dda6041e071592780e6d80bf495f7cdf788462b760dcf5ab556fd10aea",
+        "hash": "6fbe0feb8405a3964ca19248555649386131fb8ad77c9f2bbfd86750e132cf1d",
+        "width": 96,
+        "height": 64
+      },
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "output": {
+        "hash": "9320509a4998bcbf4f61a70c31d17766bcb7ac53ffd624f497edcbe0ae78d643",
+        "width": 384,
+        "height": 256
+      },
+      "allCommitted": true,
+      "uniqueAttempts": 7,
+      "nodes": [
+        {
+          "id": "analyze",
+          "attemptId": "64ad6b97-41a3-4d5a-95ed-501ba49d95b7",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "6fbe0feb8405a3964ca19248555649386131fb8ad77c9f2bbfd86750e132cf1d",
+          "outputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "inputBytes": 15299,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.28340000001480803,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 337828.0301,
+              "endMono": 337828.3135
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 392.6184999999823,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 337896.3511,
+              "endMono": 338288.9696
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 30,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131267920,
+              "endMono": 131267950
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 89,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131268418,
+              "endMono": 131268507
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 43,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131268525,
+              "endMono": 131268568
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 44,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131268525,
+              "endMono": 131268569
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 20,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131268695,
+              "endMono": 131268715
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 238,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131269065,
+              "endMono": 131269303
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 587,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131268716,
+              "endMono": 131269303
+            }
+          ]
+        },
+        {
+          "id": "prepare-0",
+          "attemptId": "6bcac44d-358d-46af-a2c9-f551a26005b9",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "outputHash": "1e91ce2ffe8ae9d61caa32f5b17edfe48d7594d6b33e56b7faf6434445edf4b4",
+          "inputBytes": 16805,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.25069999997504056,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 341170.51,
+              "endMono": 341170.7607
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 277.40159999998286,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 341184.6334,
+              "endMono": 341462.035
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 2.246599999954924,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1794189.7149,
+              "endMono": 1794191.9615
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 26.552200000034645,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1794192.2229,
+              "endMono": 1794218.7751
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 8.226699999999255,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1794220.8135,
+              "endMono": 1794229.0402
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 9.93460000003688,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1794219.1993,
+              "endMono": 1794229.1339
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 316.56019999994896,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1794244.3905,
+              "endMono": 1794560.9507
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 11.015700000105426,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1794630.9673,
+              "endMono": 1794641.983
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 80.82930000009947,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1794561.2391,
+              "endMono": 1794642.0684
+            }
+          ]
+        },
+        {
+          "id": "enhance-0",
+          "attemptId": "eb16164a-0b14-4778-b42f-209f4a804853",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "1e91ce2ffe8ae9d61caa32f5b17edfe48d7594d6b33e56b7faf6434445edf4b4",
+          "outputHash": "1088e3e036eb54cd974d993a66a4085a43267cb6693788f7afe30b7f8ded35bb",
+          "inputBytes": 18143,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.20439999998779967,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 343848.804,
+              "endMono": 343849.0084
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 275.0978999999934,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 343865.0504,
+              "endMono": 344140.1483
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 1.6192000000737607,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1796945.3098,
+              "endMono": 1796946.929
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 181.98279999988154,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1796947.0064,
+              "endMono": 1797128.9892
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 8.506599999964237,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1797130.5251,
+              "endMono": 1797139.0317
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 9.965799999888986,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1797129.1487,
+              "endMono": 1797139.1145
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 4414.116599999834,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1797155.9062,
+              "endMono": 1801570.0228
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 15.039300000062212,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1802010.5243,
+              "endMono": 1802025.5636
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 455.48340000002645,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1801570.167,
+              "endMono": 1802025.6504
+            }
+          ]
+        },
+        {
+          "id": "prepare-1",
+          "attemptId": "71f55ce3-2795-444c-90b8-bb9554372570",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "outputHash": "65927f242cdc04c3fb2a0523b7191dcb9baf1a8c1a8fd3d9eec3f4c370b1e697",
+          "inputBytes": 16805,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.2248000000254251,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 342023.6098,
+              "endMono": 342023.8346
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 494.257099999988,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 342061.9649,
+              "endMono": 342556.222
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 1.4850999999325722,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1795373.3732,
+              "endMono": 1795374.8583
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 143.62679999996908,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1795374.9142,
+              "endMono": 1795518.541
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 8.368699999991804,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1795520.0728,
+              "endMono": 1795528.4415
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 9.828499999828637,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1795518.7135,
+              "endMono": 1795528.542
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 279.96710000000894,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1795546.7996,
+              "endMono": 1795826.7667
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 8.849299999885261,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1795870.1154,
+              "endMono": 1795878.9647
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 52.13980000000447,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1795826.891,
+              "endMono": 1795879.0308
+            }
+          ]
+        },
+        {
+          "id": "enhance-1",
+          "attemptId": "6b239698-494e-4333-ad5c-b9563e1dc508",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "65927f242cdc04c3fb2a0523b7191dcb9baf1a8c1a8fd3d9eec3f4c370b1e697",
+          "outputHash": "2f047314f833a0b67302c78e14ffa61f1d21e830b012b14866b3f9e5f6680c75",
+          "inputBytes": 11753,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.2581999999820255,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 346211.1742,
+              "endMono": 346211.4324
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 367.33869999996386,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 346232.2393,
+              "endMono": 346599.578
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 1.796400000108406,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1799437.7437,
+              "endMono": 1799439.5401
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 168.03260000003502,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1799439.6024,
+              "endMono": 1799607.635
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 8.770000000018626,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1799609.3414,
+              "endMono": 1799618.1114
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 10.314800000051036,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1799607.9152,
+              "endMono": 1799618.23
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 2877.024699999951,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1799637.3028,
+              "endMono": 1802514.3275
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 14.527899999869987,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1802564.7213,
+              "endMono": 1802579.2492
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 64.94440000015311,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1802514.4396,
+              "endMono": 1802579.384
+            }
+          ]
+        },
+        {
+          "id": "assemble",
+          "attemptId": "f48ec122-b044-4496-a306-8b41f913832f",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "f92ffed00c3859d35011772bf982203c97fee83b6085d21bee382e7aa52a254b",
+          "outputHash": "9320509a4998bcbf4f61a70c31d17766bcb7ac53ffd624f497edcbe0ae78d643",
+          "inputBytes": 320144,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.6979999999748543,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 353155.3261,
+              "endMono": 353156.0241
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 394.09949999995297,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 353182.3423,
+              "endMono": 353576.4418
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 1.7227000000420958,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1806389.831,
+              "endMono": 1806391.5537
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 144.2003000001423,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1806391.683,
+              "endMono": 1806535.8833
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 9.215000000083819,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1806537.568,
+              "endMono": 1806546.783
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 10.93859999999404,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1806536.0701,
+              "endMono": 1806547.0087
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 353.20230000000447,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1806562.1432,
+              "endMono": 1806915.3455
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 19.946800000034273,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1807122.4807,
+              "endMono": 1807142.4275
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 227.07750000013039,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1806915.4414,
+              "endMono": 1807142.5189
+            }
+          ]
+        },
+        {
+          "id": "deliver",
+          "attemptId": "be6d396b-a2d2-4d69-b235-46b8fca78140",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "9320509a4998bcbf4f61a70c31d17766bcb7ac53ffd624f497edcbe0ae78d643",
+          "outputHash": "05c68608e2b914673bc399c41da3563320b2393152d0e5b2a7cf66a3f7bfe12f",
+          "inputBytes": 187994,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.31669999996665865,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 356707.2602,
+              "endMono": 356707.5769
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 420.22970000002533,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 356733.0439,
+              "endMono": 357153.2736
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 1.677000000141561,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1809837.552,
+              "endMono": 1809839.229
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 27.596200000029057,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1809839.2881,
+              "endMono": 1809866.8843
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 27.246499999891967,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1809868.5046,
+              "endMono": 1809895.7511
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 28.871899999910966,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1809867.0612,
+              "endMono": 1809895.9331
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 295.18069999990985,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1809911.0416,
+              "endMono": 1810206.2223
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 9.200599999865517,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1810340.4125,
+              "endMono": 1810349.6131
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 143.36979999998584,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1810206.3167,
+              "endMono": 1810349.6865
+            },
+            {
+              "phase": "DELIVER",
+              "durationMs": 21995.39999999106,
+              "clockDomainId": "photo-browser-a0aba43d-be30-4fd1-828a-d1fd8d934e1c",
+              "startMono": 96046.10000000894,
+              "endMono": 118041.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "phone-repeat",
+      "runId": "03dd0d98-7bea-4e3e-ae34-e9b5764bda53",
+      "domain": "REAL",
+      "mode": "LOCAL",
+      "sourceDeviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+      "budgetMs": 180000,
+      "sourceDurationMs": 20586.79999999702,
+      "remainingBudgetMs": 159413.20000000298,
+      "input": {
+        "name": "usb-test-photo.png",
+        "bytes": 15299,
+        "originalHash": "5d1b06dda6041e071592780e6d80bf495f7cdf788462b760dcf5ab556fd10aea",
+        "hash": "6fbe0feb8405a3964ca19248555649386131fb8ad77c9f2bbfd86750e132cf1d",
+        "width": 96,
+        "height": 64
+      },
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "output": {
+        "hash": "222247a2eeabc57dffc6fcbeb07808a6feee4ed2f8db4b5bb57e5511917cefec",
+        "width": 384,
+        "height": 256
+      },
+      "allCommitted": true,
+      "uniqueAttempts": 7,
+      "nodes": [
+        {
+          "id": "analyze",
+          "attemptId": "40746aa2-0709-4ffc-856c-56ee79b70a25",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "6fbe0feb8405a3964ca19248555649386131fb8ad77c9f2bbfd86750e132cf1d",
+          "outputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "inputBytes": 15299,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.2051000000210479,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 386321.6789,
+              "endMono": 386321.884
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 319.93029999994906,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 386337.987,
+              "endMono": 386657.9173
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 29,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131316336,
+              "endMono": 131316365
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 138,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131316536,
+              "endMono": 131316674
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 42,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131316724,
+              "endMono": 131316766
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 44,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131316724,
+              "endMono": 131316768
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 13,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131316913,
+              "endMono": 131316926
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 99,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131317122,
+              "endMono": 131317221
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 294,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131316927,
+              "endMono": 131317221
+            }
+          ]
+        },
+        {
+          "id": "prepare-0",
+          "attemptId": "81c5a581-adf1-4988-950e-9fa3ee10f3ab",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "outputHash": "eb8623014b7b71c062c45f4a3cce1934dc959cb4b42519315b99711172d0705c",
+          "inputBytes": 16805,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.21679999999469146,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 388979.3653,
+              "endMono": 388979.5821
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 335.2827999999863,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 388992.9062,
+              "endMono": 389328.189
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 27,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131318983,
+              "endMono": 131319010
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 114,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131319316,
+              "endMono": 131319430
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 24,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131319460,
+              "endMono": 131319484
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 24,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131319460,
+              "endMono": 131319484
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 20,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131319637,
+              "endMono": 131319657
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 34,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131319924,
+              "endMono": 131319958
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 300,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131319658,
+              "endMono": 131319958
+            }
+          ]
+        },
+        {
+          "id": "enhance-0",
+          "attemptId": "f88964ef-5266-48ed-ab25-1885e23e528c",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "eb8623014b7b71c062c45f4a3cce1934dc959cb4b42519315b99711172d0705c",
+          "outputHash": "4ea59293e2e48d7eaa685567750d8bd72efd58c88ee696c8543e8bfc2951760c",
+          "inputBytes": 14183,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.2263999999850057,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 391803.4585,
+              "endMono": 391803.6849
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 326.8707000000286,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 391818.3023,
+              "endMono": 392145.173
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 40,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131321857,
+              "endMono": 131321897
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 203,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131322228,
+              "endMono": 131322431
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 41,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131322489,
+              "endMono": 131322530
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 43,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131322489,
+              "endMono": 131322532
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 2658,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131322742,
+              "endMono": 131325400
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 91,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131325544,
+              "endMono": 131325635
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 235,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131325401,
+              "endMono": 131325636
+            }
+          ]
+        },
+        {
+          "id": "prepare-1",
+          "attemptId": "773cc326-44f8-495b-b8f8-a9e3ff049afc",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "outputHash": "cdeeb1fcd474e8fa0bcdae98cb0471cd37ce374460ff8027eee111116cbbb6e9",
+          "inputBytes": 16805,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.30619999999180436,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 389843.9642,
+              "endMono": 389844.2704
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 271.6142000000109,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 389856.3477,
+              "endMono": 390127.9619
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 35,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131319816,
+              "endMono": 131319851
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 116,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131320146,
+              "endMono": 131320262
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 65,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131320300,
+              "endMono": 131320365
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 66,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131320300,
+              "endMono": 131320366
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 31,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131320609,
+              "endMono": 131320640
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 37,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131320764,
+              "endMono": 131320801
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 162,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131320640,
+              "endMono": 131320802
+            }
+          ]
+        },
+        {
+          "id": "enhance-1",
+          "attemptId": "fc2aa71d-39b8-40a6-a9ba-538094b1503d",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "cdeeb1fcd474e8fa0bcdae98cb0471cd37ce374460ff8027eee111116cbbb6e9",
+          "outputHash": "b447d6fe89b8d7bd053c436afd2c6c352a0729e28ee50d7c753e053827571870",
+          "inputBytes": 8645,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.5741000000271015,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 393384.2961,
+              "endMono": 393384.8702
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 325.93800000002375,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 393403.2279,
+              "endMono": 393729.1659
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 46,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131323395,
+              "endMono": 131323441
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 206,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131323696,
+              "endMono": 131323902
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 28,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131323928,
+              "endMono": 131323956
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 30,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131323927,
+              "endMono": 131323957
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 2004,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131324081,
+              "endMono": 131326085
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 131,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131326357,
+              "endMono": 131326488
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 403,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131326086,
+              "endMono": 131326489
+            }
+          ]
+        },
+        {
+          "id": "assemble",
+          "attemptId": "20f60b55-f34b-42b6-9117-f2a08dc64a06",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "f8eeca85a6729f04a5448a7c91fd6d2eea8c746429a2d5fd73198b2aea26f6a3",
+          "outputHash": "edc7b43ca9260271c65ec63602c17986f7ec5971067d53d213c19f2c18890449",
+          "inputBytes": 234088,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.22870000003604218,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 398778.4274,
+              "endMono": 398778.6561
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 379.8781000000308,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 398799.3245,
+              "endMono": 399179.2026
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 36,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131328985,
+              "endMono": 131329021
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 127,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131329427,
+              "endMono": 131329554
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 110,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131329611,
+              "endMono": 131329721
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 112,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131329611,
+              "endMono": 131329723
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 135,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131329928,
+              "endMono": 131330063
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 131,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131330284,
+              "endMono": 131330415
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 352,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131330064,
+              "endMono": 131330416
+            }
+          ]
+        },
+        {
+          "id": "deliver",
+          "attemptId": "3319e4f6-43bb-46eb-9be0-122e75d2d0f8",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "edc7b43ca9260271c65ec63602c17986f7ec5971067d53d213c19f2c18890449",
+          "outputHash": "a59821c241ef8303c739e4cb6e05b7cc6cdd03d6d6731a85ed3423b6972faa8e",
+          "inputBytes": 129830,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.4021000000066124,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 402163.2645,
+              "endMono": 402163.6666
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 339.4144999999553,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 402177.9955,
+              "endMono": 402517.41
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 31,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131332209,
+              "endMono": 131332240
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 282,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131332427,
+              "endMono": 131332709
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 41,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131332745,
+              "endMono": 131332786
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 42,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131332745,
+              "endMono": 131332787
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 77,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131332927,
+              "endMono": 131333004
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 248,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131333100,
+              "endMono": 131333348
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 343,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131333005,
+              "endMono": 131333348
+            },
+            {
+              "phase": "DELIVER",
+              "durationMs": 19936.29999999702,
+              "clockDomainId": "photo-browser-ceb16471-881e-4345-a6b2-0dad64460774",
+              "startMono": 144549.90000000596,
+              "endMono": 164486.20000000298
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "label": "cooperative-repeat",
+      "runId": "f15150a7-e86a-4217-8d5f-b95577c63a0e",
+      "domain": "REAL",
+      "mode": "COOPERATIVE",
+      "sourceDeviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+      "budgetMs": 180000,
+      "sourceDurationMs": 24879.90000000596,
+      "remainingBudgetMs": 155120.09999999404,
+      "input": {
+        "name": "usb-test-photo.png",
+        "bytes": 15299,
+        "originalHash": "5d1b06dda6041e071592780e6d80bf495f7cdf788462b760dcf5ab556fd10aea",
+        "hash": "6fbe0feb8405a3964ca19248555649386131fb8ad77c9f2bbfd86750e132cf1d",
+        "width": 96,
+        "height": 64
+      },
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "output": {
+        "hash": "9320509a4998bcbf4f61a70c31d17766bcb7ac53ffd624f497edcbe0ae78d643",
+        "width": 384,
+        "height": 256
+      },
+      "allCommitted": true,
+      "uniqueAttempts": 7,
+      "nodes": [
+        {
+          "id": "analyze",
+          "attemptId": "c2021f51-d4ae-4ace-9598-61aea0a0fad0",
+          "deviceId": "3f720353-f10d-4e99-a5b4-11265bdec5b2",
+          "backend": "CPU",
+          "inputHash": "6fbe0feb8405a3964ca19248555649386131fb8ad77c9f2bbfd86750e132cf1d",
+          "outputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "inputBytes": 15299,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.2335000000311993,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 426268.8271,
+              "endMono": 426269.0606
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 363.28040000004694,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 426338.5043,
+              "endMono": 426701.7847
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 33,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131356397,
+              "endMono": 131356430
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 231,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131356642,
+              "endMono": 131356873
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 44,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131356902,
+              "endMono": 131356946
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 45,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131356902,
+              "endMono": 131356947
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 10,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131357093,
+              "endMono": 131357103
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 42,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131357414,
+              "endMono": 131357456
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 352,
+              "clockDomainId": "f801fbe0-141a-4fa1-a68b-67517d74eb4a",
+              "startMono": 131357104,
+              "endMono": 131357456
+            }
+          ]
+        },
+        {
+          "id": "prepare-0",
+          "attemptId": "a4f2ff07-8df6-4e8f-95c8-f598c14b6c06",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "outputHash": "1e91ce2ffe8ae9d61caa32f5b17edfe48d7594d6b33e56b7faf6434445edf4b4",
+          "inputBytes": 16805,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.24609999998938292,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 429623.4532,
+              "endMono": 429623.6993
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 269.2605999999796,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 429695.5134,
+              "endMono": 429964.774
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 1.7497000000439584,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1882694.7449,
+              "endMono": 1882696.4946
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 28.892500000074506,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1882696.555,
+              "endMono": 1882725.4475
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 7.382299999939278,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1882727.1713,
+              "endMono": 1882734.5536
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 9.048900000052527,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1882725.5912,
+              "endMono": 1882734.6401
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 354.4790999998804,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1882749.7811,
+              "endMono": 1883104.2602
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 23.0675999999512,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1883146.3935,
+              "endMono": 1883169.4611
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 65.20770000014454,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1883104.3557,
+              "endMono": 1883169.5634
+            }
+          ]
+        },
+        {
+          "id": "enhance-0",
+          "attemptId": "9d26c03f-3db1-4527-9519-ae38c2cc5e72",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "1e91ce2ffe8ae9d61caa32f5b17edfe48d7594d6b33e56b7faf6434445edf4b4",
+          "outputHash": "1088e3e036eb54cd974d993a66a4085a43267cb6693788f7afe30b7f8ded35bb",
+          "inputBytes": 18143,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.1999000000068918,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 432931.1161,
+              "endMono": 432931.316
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 408.7693000000436,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 432950.2839,
+              "endMono": 433359.0532
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 1.9146999998483807,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1886168.3626,
+              "endMono": 1886170.2773
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 147.97340000001714,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1886170.346,
+              "endMono": 1886318.3194
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 8.790999999968335,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1886320.1577,
+              "endMono": 1886328.9487
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 10.537500000093132,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1886318.507,
+              "endMono": 1886329.0445
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 4044.745300000068,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1886344.6962,
+              "endMono": 1890389.4415
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 12.712400000076741,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1890666.5753,
+              "endMono": 1890679.2877
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 289.8573000000324,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1890389.5112,
+              "endMono": 1890679.3685
+            }
+          ]
+        },
+        {
+          "id": "prepare-1",
+          "attemptId": "0d0c6b34-aa96-4ff0-9680-a3379be8ffe8",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "9c84e6e66f898a03bfc67ae546c7b8d388e05909254a1ae6745bd61ab5a13190",
+          "outputHash": "65927f242cdc04c3fb2a0523b7191dcb9baf1a8c1a8fd3d9eec3f4c370b1e697",
+          "inputBytes": 16805,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.16809999995166436,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 430535.5948,
+              "endMono": 430535.7629
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 472.50150000001304,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 430554.4609,
+              "endMono": 431026.9624
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 2.147300000069663,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1883848.8887,
+              "endMono": 1883851.036
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 174.8410000000149,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1883851.1388,
+              "endMono": 1884025.9798
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 13.936600000131875,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1884028.4644,
+              "endMono": 1884042.401
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 16.211899999994785,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1884026.2969,
+              "endMono": 1884042.5088
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 325.4148999999743,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1884059.0643,
+              "endMono": 1884384.4792
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 70.49780000001192,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1884622.5126,
+              "endMono": 1884693.0104
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 308.5209000001196,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1884384.5701,
+              "endMono": 1884693.091
+            }
+          ]
+        },
+        {
+          "id": "enhance-1",
+          "attemptId": "72fafec2-69a0-4973-8c14-450ab5f8362d",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "65927f242cdc04c3fb2a0523b7191dcb9baf1a8c1a8fd3d9eec3f4c370b1e697",
+          "outputHash": "2f047314f833a0b67302c78e14ffa61f1d21e830b012b14866b3f9e5f6680c75",
+          "inputBytes": 11753,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.2927999999956228,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 436449.5525,
+              "endMono": 436449.8453
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 488.75660000002244,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 436481.5227,
+              "endMono": 436970.2793
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 2.1270999999251217,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1889795.8373,
+              "endMono": 1889797.9644
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 182.8436999998521,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1889798.0408,
+              "endMono": 1889980.8845
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 8.787499999860302,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1889983.4802,
+              "endMono": 1889992.2677
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 11.22470000013709,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1889981.2007,
+              "endMono": 1889992.4254
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 2594.4544999999925,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1890012.8307,
+              "endMono": 1892607.2852
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 11.570199999958277,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1892765.3199,
+              "endMono": 1892776.8901
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 169.75059999991208,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1892607.3458,
+              "endMono": 1892777.0964
+            }
+          ]
+        },
+        {
+          "id": "assemble",
+          "attemptId": "d21a6c72-30ba-4c8f-b3bd-25f9e2252fc7",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "f92ffed00c3859d35011772bf982203c97fee83b6085d21bee382e7aa52a254b",
+          "outputHash": "9320509a4998bcbf4f61a70c31d17766bcb7ac53ffd624f497edcbe0ae78d643",
+          "inputBytes": 320144,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.18970000004628673,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 442884.9959,
+              "endMono": 442885.1856
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 404.3136999999988,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 442904.8558,
+              "endMono": 443309.1695
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 1.7587999999523163,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1896119.85,
+              "endMono": 1896121.6088
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 197.4515000001993,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1896121.6729,
+              "endMono": 1896319.1244
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 8.67160000000149,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1896320.9299,
+              "endMono": 1896329.6015
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 10.538200000068173,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1896319.2963,
+              "endMono": 1896329.8345
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 320.5263000000268,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1896347.2434,
+              "endMono": 1896667.7697
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 14.703100000042468,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1896894.2529,
+              "endMono": 1896908.956
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 241.13240000000224,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1896667.8988,
+              "endMono": 1896909.0312
+            }
+          ]
+        },
+        {
+          "id": "deliver",
+          "attemptId": "c51ae525-81a7-4395-9f6f-6b08d0a4a2bc",
+          "deviceId": "83372c13-82fd-4978-aca6-aceb4bf805c4",
+          "backend": "CPU",
+          "inputHash": "9320509a4998bcbf4f61a70c31d17766bcb7ac53ffd624f497edcbe0ae78d643",
+          "outputHash": "05c68608e2b914673bc399c41da3563320b2393152d0e5b2a7cf66a3f7bfe12f",
+          "inputBytes": 187994,
+          "committed": true,
+          "timing": [
+            {
+              "phase": "PLAN",
+              "durationMs": 0.3008999999728985,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 445792.0827,
+              "endMono": 445792.3836
+            },
+            {
+              "phase": "OFFER",
+              "durationMs": 455.6968000000343,
+              "clockDomainId": "cef64aa0-bc7c-403b-a05e-b4a3ca5b59c2",
+              "startMono": 445811.0561,
+              "endMono": 446266.7529
+            },
+            {
+              "phase": "QUEUE",
+              "durationMs": 1.8334000001195818,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1898952.0912,
+              "endMono": 1898953.9246
+            },
+            {
+              "phase": "ADMIT",
+              "durationMs": 29.05159999988973,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1898953.9938,
+              "endMono": 1898983.0454
+            },
+            {
+              "phase": "TRANSFER_RECV",
+              "durationMs": 9.67809999990277,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1898985.1576,
+              "endMono": 1898994.8357
+            },
+            {
+              "phase": "LOAD",
+              "durationMs": 11.83599999989383,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1898983.1776,
+              "endMono": 1898995.0136
+            },
+            {
+              "phase": "EXECUTE",
+              "durationMs": 322.20799999986775,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1899010.6462,
+              "endMono": 1899332.8542
+            },
+            {
+              "phase": "TRANSFER_SEND",
+              "durationMs": 9.856300000101328,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1899463.0906,
+              "endMono": 1899472.9469
+            },
+            {
+              "phase": "PUBLISH",
+              "durationMs": 140.1014000000432,
+              "clockDomainId": "66d5614c-8259-4b99-bc7e-0b9191cb7064",
+              "startMono": 1899332.9492,
+              "endMono": 1899473.0506
+            },
+            {
+              "phase": "DELIVER",
+              "durationMs": 24029.70000000298,
+              "clockDomainId": "photo-browser-7722cd30-d8ea-49df-8c08-7ee09608e625",
+              "startMono": 183914.5,
+              "endMono": 207944.20000000298
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "decodedPixelComparisons": [
+    {
+      "against": "cooperative-first",
+      "meanAbsoluteChannelError": 0.00010172526041666667,
+      "maxChannelError": 1,
+      "changedChannels": 30,
+      "totalChannels": 294912
+    },
+    {
+      "against": "phone-repeat",
+      "meanAbsoluteChannelError": 0,
+      "maxChannelError": 0,
+      "changedChannels": 0,
+      "totalChannels": 294912
+    },
+    {
+      "against": "cooperative-repeat",
+      "meanAbsoluteChannelError": 0.00010172526041666667,
+      "maxChannelError": 1,
+      "changedChannels": 30,
+      "totalChannels": 294912
+    }
+  ]
+}

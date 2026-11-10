@@ -178,6 +178,7 @@ export class TeamSpaces {
         const photo=this.photoRuns??(this.photoRuns=new PhotoRuns(this.config.dataDir,this.db,this.config.domain));
         if(method==='GET'){if(id&&parts[3]==='input'){res.type('image/png').send(await photo.input(spaceId,id,Number(req.query.image??0)));return;}if(id&&parts[3]==='result'){res.type('application/json').send(await photo.result(spaceId,id,Number(req.query.image??0)));return;}res.json(id?await photo.view(spaceId,id):await photo.list(spaceId));return;}
         await this.member(user.id,spaceId,['OWNER','MEMBER']);
+        if(method==='PUT'&&id&&parts[3]==='input'){if(!Buffer.isBuffer(body))throw Error('BINARY_INPUT_REQUIRED');await photo.preview(spaceId,id,user.id,Number(req.query.image),body);res.json({uploaded:true});return;}
         if(method==='POST'){res.json(id?await photo.update(spaceId,id,user.id,body):await photo.create(spaceId,user.id,body));return;}
       }
       if(action==='sdk'&&parts[2]==='jobs'){

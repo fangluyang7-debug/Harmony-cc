@@ -77,6 +77,26 @@ test('same-device App contribution ceilings are not mistaken for the shared phys
   assert.equal((await dir.snapshot('g1','p1',1,policy)).resources.find(r=>r.resourcePoolId===poolId).available,0,'another group without a fresh profile retains its whole reservation');
  }finally{await r.close();}
 });
+test('expired sibling profile retains its whole reservation without expiring fresh device capacity',async()=>{
+ const r=await runtime();try{
+  let now=100;const dir=new DeviceDirectory(r.db,'SIMULATED',()=>now),stale=fixture(),fresh=fixture();
+  const poolId=fresh.pools[0].resourcePoolId;
+  for(const p of [stale,fresh]){p.pools[0].total.value=4;p.pools[0].contributionLimit=4;p.pools[0].ownerReserved=0;p.pools[0].occupied.value=0;}
+  stale.holderInstanceId='h2';stale.deviceInstanceId='instance2';stale.executors.forEach(e=>e.target.targetId+='-stale');
+  await dir.ingest({...peer,holderInstanceId:'h2'},stale);await qualifySimulated(r.db,stale);
+  now=1200;
+  const refresh=value=>{if(value&&typeof value==='object'){if('sampledAt' in value)value.sampledAt=now;for(const child of Object.values(value))refresh(child);}};
+  refresh(fresh);await dir.ingest(peer,fresh);await qualifySimulated(r.db,fresh);
+  await r.allotments.confirmDevice('device1',[{resourcePoolId:poolId,amount:4}],['h1','h2'].map(holderInstanceId=>({groupId:'g1',holderInstanceId,appInstanceId:null})));
+  assert.equal((await dir.snapshot('g1','p1',1,policy)).resources.find(p=>p.resourcePoolId===poolId).available,null,'unreserved stale holder remains unknown');
+  const invite=await r.auth.invite('g1','p2','device1',r.url),other=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:'h2'});
+  await r.allotments.issue(other.peer,{ledgerEpoch:1,leaseRequestId:'stale-reservation',leaseMs:30000,base:[],extra:[{resourcePoolId:poolId,amount:2}]});
+  const snapshot=await dir.snapshot('g1','p1',2,policy),pool=snapshot.resources.find(p=>p.resourcePoolId===poolId);
+  assert.equal(pool.available,2,'whole dormant reservation is retained, even with last reported occupancy zero');
+  assert.equal(pool.observedAt,1200);assert.ok(snapshot.candidates.some(c=>c.holderInstanceId==='h1'));assert.ok(snapshot.candidates.every(c=>c.holderInstanceId!=='h2'));
+ }finally{await r.close();}
+});
+
 test('an overdue non-interruptible shared pool holder has no promised release time',()=>{
  const {availability}=require('@harmony/scheduler-core');
  const p=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DeviceProfile.json')),e=p.executors[0];

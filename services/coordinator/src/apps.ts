@@ -116,7 +116,13 @@ export class AppRegistry {
    // Installation holders are globally unique; the logical browser holder is reused
    // across spaces. Keep existing mappings intact and scope only new installations.
    const holderInstanceId='console-'+hash(JSON.stringify([owner.groupId,owner.principalId,owner.holderInstanceId]));
-   await this.create(tx,owner,{label:'浏览器控制台',allowedContracts:contracts,maxConcurrent:4,resources,offlineBase:[],onlineExtra:[]},{appId:mapping.appId,appInstanceId:mapping.appInstanceId,holderInstanceId});
+   // A newly connected source device shares the owner's console App policy with
+   // existing browser installations. Renew it on this authenticated submission,
+   // just as above, before enrolling the additional device installation.
+   const shared=await tx.registeredApp.findUnique({where:{groupId_principalId_label:{groupId:owner.groupId,principalId:owner.principalId,label:'浏览器控制台'}}});
+   if(shared&&confirmCapabilities&&(canonical(JSON.parse(shared.contractsJson))!==canonical(contracts)||canonical(JSON.parse(shared.resourcesJson))!==canonical(resources)))await tx.registeredApp.update({where:{id:shared.id},data:{contractsJson:JSON.stringify(contracts),resourcesJson:JSON.stringify(resources)}});
+   const created=await this.create(tx,owner,{label:'浏览器控制台',allowedContracts:contracts,maxConcurrent:4,resources,offlineBase:[],onlineExtra:[]},{appId:mapping.appId,appInstanceId:mapping.appInstanceId,holderInstanceId});
+   if(mapping.appId!==created.app.id)await tx.consoleApp.update({where:{id:mapping.id},data:{appId:created.app.id}});
    return (await this.activate(tx,mapping.appInstanceId)).peer;
   });
  }

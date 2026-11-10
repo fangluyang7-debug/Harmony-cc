@@ -22,6 +22,7 @@ if(signing){
 }
 const filter=p=>!/[\\/](?:oh_modules|build|\.hvigor|node_modules)(?:[\\/]|$)/.test(p);
 fs.cpSync(source,stage,{recursive:true,filter});
+if(!process.argv.includes('--har'))require('./package-harmony-photo-runtime.cjs').packagePhotoRuntime(path.join(stage,'entry'),sdk);
 const rootPackage=JSON.parse(fs.readFileSync(path.join(stage,'oh-package.json5'),'utf8'));
 rootPackage.modelVersion=metadata.platformVersion;
 fs.writeFileSync(path.join(stage,'oh-package.json5'),JSON.stringify(rootPackage));

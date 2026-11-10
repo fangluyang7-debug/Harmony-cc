@@ -25,7 +25,14 @@ export class ConsoleDeviceBridge {
   const installationId=await this.installation,db=await NativeDatabase.open(this.context()),saved=await db.get('identity');
   const identity:Installation|null=saved===null?null:JSON.parse(saved) as Installation;
   const knownDeviceIds=(await db.storedIdentities()).map((value:string)=>(JSON.parse(value) as Installation).paired.peer.deviceId);
-  return JSON.stringify({installationId,knownDeviceIds,deviceId:identity?.paired.peer.deviceId??'',name:deviceInfo.deviceType==='phone'?'鸿蒙手机':'鸿蒙电脑',platform:'harmony',groupId:this.connection()?.groupId??''});
+  return JSON.stringify({installationId,knownDeviceIds,deviceId:identity?.paired.peer.deviceId??'',name:deviceInfo.deviceType==='phone'?'鸿蒙手机':'鸿蒙电脑',platform:'harmony',groupId:this.connection()?.groupId??'',importedPhotoAvailable:fileIo.accessSync(this.context().filesDir+'/usb-photo-input.png')});
+ }
+ // Explicit source-side acceptance input transferred by HDC, never a worker fixture.
+ // The UI exposes this only when a tester has actually imported the file.
+ async pickImportedPhoto():Promise<string>{
+  const current=this.connection();if(current===null||!belongsToConsole(current,this.caller()))throw Error('CONSOLE_DEVICE_SCOPE');
+  const file=fileIo.openSync(this.context().filesDir+'/usb-photo-input.png',fileIo.OpenMode.READ_ONLY);
+  try{const size=fileIo.statSync(file.fd).size;if(size<1||size>8388608)throw Error('PHOTO_INPUT_TOO_LARGE');const data=new ArrayBuffer(size);fileIo.readSync(file.fd,data);return JSON.stringify({name:'usb-test-photo.png',mime:'image/png',data:base64.encodeToStringSync(new Uint8Array(data))});}finally{fileIo.closeSync(file);}
  }
  async pickPhoto():Promise<string>{
   const current=this.connection();if(current===null||!belongsToConsole(current,this.caller()))throw Error('CONSOLE_DEVICE_SCOPE');

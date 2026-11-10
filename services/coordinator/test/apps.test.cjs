@@ -2,6 +2,22 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const {runtime}=require('./helpers.cjs'),{pinnedRequest}=require('../dist/pinned-client');
 const capacity=[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:268435456}],base=[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:67108864}];
 const registration=label=>({label,allowedContracts:['text.count.v1'],maxConcurrent:1,resources:capacity,offlineBase:base,onlineExtra:[]});
+
+test('new phone console installation renews an existing browser policy only on submission',async()=>{
+ const r=await runtime();try{
+  const browser={groupId:'photo-upgrade',principalId:'owner',deviceId:'web-owner',holderInstanceId:'web-owner',credentialId:'web-owner'};
+  const old=await r.apps.console(browser,['text.count.v1'],capacity);
+  const phone={...browser,deviceId:'phone',holderInstanceId:'photo-source-phone'};
+  const contracts=['text.count.v1','photo.enhance.v1'],resources=[{resourcePoolId:'cpu',amount:4},{resourcePoolId:'ram',amount:1073741824}];
+  await assert.rejects(r.apps.console(phone,contracts,resources),/APP_POLICY_CONFLICT/);
+  assert.deepEqual((await r.apps.context(old)).identity.allowedContracts,['text.count.v1']);
+  const next=await r.apps.console(phone,contracts,resources,true);
+  assert.equal(next.app.appId,old.app.appId);assert.notEqual(next.app.appInstanceId,old.app.appInstanceId);assert.equal(next.deviceId,'phone');
+  const mapping=await r.db.consoleApp.findUniqueOrThrow({where:{groupId_principalId_holderInstanceId:{groupId:phone.groupId,principalId:phone.principalId,holderInstanceId:phone.holderInstanceId}}});
+  assert.equal(mapping.appId,next.app.appId);assert.deepEqual((await r.apps.context(next)).identity.allowedContracts,contracts);
+  assert.equal((await r.apps.console(browser,contracts,resources)).app.appInstanceId,old.app.appInstanceId);
+ }finally{await r.close();}
+});
 test('new installed console capabilities require a submit confirmation; native grants remain separate',async()=>{
  const r=await runtime();try{
   const owner={groupId:'catalog-grant',principalId:'account',deviceId:'web-account',holderInstanceId:'web-account',credentialId:'web-account'};

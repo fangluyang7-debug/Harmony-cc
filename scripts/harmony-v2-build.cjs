@@ -10,6 +10,7 @@ const stage=path.join(root,'.test',buildPrefix+'har');fs.mkdirSync(stage,{recurs
 const copy=(from,to)=>fs.cpSync(path.join(root,from),path.join(stage,to),{recursive:true,filter:p=>!/[\\/](?:oh_modules|build|\.hvigor|node_modules)(?:[\\/]|$)/.test(p)});
 copy('apps/harmony/scheduler','scheduler');copy('apps/harmony/AppScope','AppScope');
 copy('apps/harmony/hvigorfile.ts','hvigorfile.ts');
+require('./package-harmony-photo-runtime.cjs').packagePhotoRuntime(path.join(stage,'scheduler'),sdk);
 fs.mkdirSync(path.join(stage,'hvigor'),{recursive:true});
 fs.writeFileSync(path.join(stage,'hvigor/hvigor-config.json5'),JSON.stringify({modelVersion:metadata.platformVersion,dependencies:{}}));
 fs.writeFileSync(path.join(stage,'oh-package.json5'),JSON.stringify({modelVersion:metadata.platformVersion,name:'harmony-v2-har-build',version:'1.0.0',dependencies:{}}));

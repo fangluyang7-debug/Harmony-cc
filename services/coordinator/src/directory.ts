@@ -136,8 +136,19 @@ export class DeviceDirectory {
     for(const [key,state] of states)if(state.admission&&validCapabilityAdmissionV2(state.admission)&&['CANARY','ACTIVE'].includes(state.admission.state))identities.set(key,state.admission.identity);
     const histories=await computeHistories(db,groupId,identities,now,estimatePolicy);
     const installations=await db.registeredInstallation.findMany({where:{groupId},select:{id:true,holderInstanceId:true,deviceId:true,state:true}});
+    const reservations=(await db.allotment.findMany()).filter(row=>row.id.startsWith('["allotment",')).map(row=>JSON.parse(row.metadataJson));
+    const budgets=new Map<string,any>();
+    for(const deviceId of new Set(profiles.map(p=>p.deviceId))){
+      const row=await db.device.findUnique({where:{id:JSON.stringify(['budget',deviceId])}});
+      if(row)budgets.set(deviceId,JSON.parse(row.metadataJson));
+    }
+    // A dormant App must not expire a live sibling's physical capacity. Its durable
+    // reservation remains fully deducted below; expiry never releases resources.
+    const capacityProfiles=profiles.filter(p=>p.pools.every(pool=>sampleUsableV2(pool.total,now,this.domain)&&sampleUsableV2(pool.occupied,now,this.domain))||
+      !budgets.get(p.deviceId)?.bindings.some((b:any)=>b.groupId===groupId&&b.holderInstanceId===p.holderInstanceId)||
+      !reservations.some(r=>r.grant.deviceId===p.deviceId&&r.grant.groupId===groupId&&r.grant.holderInstanceId===p.holderInstanceId));
     const capacity=new Map<string,{deviceId:string;poolId:string;total:number|null;occupied:number|null;sampledAt:number;ttlMs:number;kind:string}>();
-    for(const p of profiles)for(const pool of p.pools){
+    for(const p of capacityProfiles)for(const pool of p.pools){
       const key=JSON.stringify([p.deviceId,pool.resourcePoolId]),old=capacity.get(key);
       const valid=sampleUsableV2(pool.total,now,this.domain)&&sampleUsableV2(pool.occupied,now,this.domain);
       const total=valid?Math.min(pool.contributionLimit,pool.total.value!-pool.ownerReserved):null;
@@ -146,10 +157,9 @@ export class DeviceDirectory {
     }
     // A process contribution is its own ceiling, not the capacity of the entire device.
     // Use the owner-confirmed physical budget when multiple bound holders report one device.
-    const reservations=(await db.allotment.findMany()).filter(row=>row.id.startsWith('["allotment",')).map(row=>JSON.parse(row.metadataJson));
     for(const deviceId of new Set(profiles.map(p=>p.deviceId))){
-      const row=await db.device.findUnique({where:{id:JSON.stringify(['budget',deviceId])}});if(!row)continue;
-      const budget=JSON.parse(row.metadataJson),members=profiles.filter(p=>p.deviceId===deviceId);
+      const budget=budgets.get(deviceId);if(!budget)continue;
+      const members=capacityProfiles.filter(p=>p.deviceId===deviceId);
       const unissued=(await db.registeredInstallation.findMany({where:{deviceId}})).filter(i=>!reservations.some(r=>r.grant.deviceId===deviceId&&r.grant.holderInstanceId===i.holderInstanceId));
       for(const c of capacity.values())if(c.deviceId===deviceId){
         const physical=budget.capacity.find((r:any)=>r.resourcePoolId===c.poolId)?.amount;
@@ -165,7 +175,7 @@ export class DeviceDirectory {
     for(const profile of profiles){
       const live=profile.inFlight;
       const connection=this.controlState?.(groupId,profile.holderInstanceId,profile.deviceInstanceId,profile.ledgerEpoch);
-      if((connection===undefined||connection==='ONLINE')&&live!==undefined&&profile.pools.every(pool=>!pool.draining&&sampleUsableV2(pool.occupied,now,this.domain)&&sampleUsableV2(pool.admissionLimit,now,this.domain)&&live.reduce((sum,f)=>sum+(f.resources.find(r=>r.resourcePoolId===pool.resourcePoolId)?.amount??0),0)===pool.occupied.value)){
+      if(capacityProfiles.includes(profile)&&(connection===undefined||connection==='ONLINE')&&live!==undefined&&profile.pools.every(pool=>!pool.draining&&sampleUsableV2(pool.occupied,now,this.domain)&&sampleUsableV2(pool.admissionLimit,now,this.domain)&&live.reduce((sum,f)=>sum+(f.resources.find(r=>r.resourcePoolId===pool.resourcePoolId)?.amount??0),0)===pool.occupied.value)){
         projected.add(profile.holderInstanceId);
         for(const f of live){
           const contract=profile.executors.find(e=>e.target.targetId===f.targetId)?.contract;
