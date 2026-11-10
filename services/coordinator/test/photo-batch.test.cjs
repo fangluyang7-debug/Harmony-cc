@@ -1,6 +1,17 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs/promises'),os=require('node:os'),path=require('node:path'),crypto=require('node:crypto');
 const {PhotoRuns}=require('../dist/photo-runs');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+
+test('photo timing reads only this run attempts and never parses unrelated historical metadata',async()=>{
+ const {runtime}=require('./helpers.cjs'),r=await runtime();
+ try{
+  const {attemptTraceRows}=require('../dist/dashboard-history');
+  for(const [id,group,attempt] of [['current','space','active'],['old','space','old-attempt'],['foreign','other-space','active']])
+   await r.db.traceSpan.create({data:{id,groupId:group,revision:1,metadataJson:JSON.stringify({span:{attemptId:attempt,phase:'EXECUTE',durationMs:12}})}});
+  assert.deepEqual((await attemptTraceRows(r.db,'space',['active'])).map(s=>s.id),['current']);
+  assert.deepEqual(await attemptTraceRows(r.db,'space',[]),[]);
+ }finally{await r.close();}
+});
 test('fan-in planning accounts for base64 padding without fractional work-key bytes',()=>{
  const {fanInByteBound}=require('../dist/workflow-jobs'),{encodeBundle}=require('@harmony/reference-capabilities');
  for(const sizes of [[17,53],[4097,401],[16384,63]]){

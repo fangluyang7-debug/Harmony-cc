@@ -11,6 +11,11 @@ export function traceRows(db:PrismaClient,groupId:string,traceId:string){
   return db.$queryRaw<TraceSpan[]>`SELECT * FROM TraceSpan WHERE groupId = ${groupId}
     AND json_extract(metadataJson, '$.span.traceId') = ${traceId}`;
 }
+export function attemptTraceRows(db:PrismaClient,groupId:string,attemptIds:string[]){
+  if(!attemptIds.length)return Promise.resolve([] as TraceSpan[]);
+  return db.$queryRaw<TraceSpan[]>`SELECT * FROM TraceSpan WHERE groupId = ${groupId}
+    AND json_extract(metadataJson, '$.span.attemptId') IN (SELECT value FROM json_each(${JSON.stringify(attemptIds)}))`;
+}
 export function traceJobs(db:PrismaClient,groupId:string,traceId:string){
   return db.$queryRaw<CpuJob[]>`SELECT * FROM CpuJob WHERE groupId = ${groupId}
     AND json_extract(metadataJson, '$.traceId') = ${traceId}`;

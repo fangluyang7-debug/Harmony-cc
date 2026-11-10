@@ -42,19 +42,19 @@ export function measuredCapacity(v:any):MeasuredCapacity{
   return {cpuThreads:cpu,totalMemoryBytes:ram};
 }
 /**
- * Automatic ceiling for a device that reported its hardware. The device keeps the larger of 1 GiB or a
- * quarter of its RAM for the system and the owner's own apps; the remainder (rounded down to 64 MiB) is
- * the contribution ceiling. CPU contributes half of the hardware threads, at least one. Storage capacity
+ * Automatic ceiling, not a reservation of all that memory. Keep 1/16 of RAM free,
+ * bounded to 256 MiB..1 GiB; the host additionally gates admission on CURRENT free RAM.
+ * Dedicated devices contribute 3/4 of logical CPUs; idle-mode devices keep half. Storage capacity
  * is deliberately not part of this: only RAM backs task execution. Unknown measurements keep the current value.
  */
 export function autoContribution(current:Contribution,measured:MeasuredCapacity):Contribution{
   const next:Contribution={...current,capacityMode:'auto'};
   if(measured.totalMemoryBytes!==null){
-    const reserve=Math.min(TiB,Math.max(GiB,Math.ceil(measured.totalMemoryBytes/4/MiB)*MiB));
+    const reserve=Math.min(GiB,Math.max(256*MiB,Math.ceil(measured.totalMemoryBytes/16/MiB)*MiB));
     next.reserveMemoryBytes=reserve;
     next.maxMemoryBytes=Math.min(TiB,Math.max(64*MiB,Math.floor((measured.totalMemoryBytes-reserve)/(64*MiB))*64*MiB));
   }
-  if(measured.cpuThreads!==null)next.maxCpuThreads=Math.min(64,Math.max(1,Math.floor(measured.cpuThreads/2)));
+  if(measured.cpuThreads!==null)next.maxCpuThreads=Math.min(64,Math.max(1,Math.floor(measured.cpuThreads*(current.ownerMode==='dedicated'?0.75:0.5))));
   return next;
 }
 

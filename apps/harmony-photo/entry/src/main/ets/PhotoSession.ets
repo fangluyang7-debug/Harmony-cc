@@ -1,6 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
-import { HarmonySdkPort, TrustedCoordinator, NativeAgent, Installation, Paired, ResourceAmountV2, SdkTicket, SdkPort, base64, hash, monotonic, factory } from 'scheduler';
+import { HarmonySdkPort, TrustedCoordinator, NativeAgent, Installation, Paired, ResourceAmountV2, SdkTicket, SdkInput, SdkPort, base64, hash, monotonic, factory } from 'scheduler';
 
 interface Registration extends TrustedCoordinator {registrationId:string;code:string;expiresAt:number;domain:string;}
 interface Exchange extends Paired {offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
@@ -32,7 +32,7 @@ export class PhotoSession {
   if(info.identity.appInstanceId!==i.appInstanceId)throw Error('APP_HOST_IDENTITY_MISMATCH');
   if(this.host&&this.host.displayHolderId()!==i.paired.peer.holderInstanceId){await this.host.closeForSwitch();this.host=null;}
   if(!this.host)this.host=await NativeAgent.start(this.context,null,()=>this.foreground,i);
-  this.installation=i;this.port=port;
+  this.installation=i;this.port=await this.host.sdkPort();
  }
  async restore():Promise<boolean>{
   if(!this.context)return false;
@@ -69,6 +69,7 @@ export class PhotoSession {
    request:(route:string,body:string|null):Promise<string>=>this.sdkRequest(route,body),
    write:(ticket:SdkTicket,data:Uint8Array):Promise<void>=>port.write(ticket,data),
    writeDirect:(jobId:string,endpointId:string,ticket:SdkTicket,data:Uint8Array):Promise<void>=>port.writeDirect(jobId,endpointId,ticket,data),
+   stageInput:async(input:SdkInput,data:Uint8Array):Promise<void>=>{if(!port.stageInput)throw Error('APP_HOST_REQUIRED');await port.stageInput(input,data);},
    read:async(ticket:SdkTicket):Promise<Uint8Array>=>{const data=await port.read(ticket);if(data.length!==ticket.bytes||hash(data)!==ticket.ref.contentHash)throw Error('SDK_OUTPUT_INTEGRITY');if(ticket.ref.schemaId==='photo.product')await capture();return data;},
    digest:async(data:Uint8Array):Promise<string>=>hash(data),now:():number=>Date.now(),
    measure:()=>({clockDomainId:domain,milliseconds:monotonic()}),

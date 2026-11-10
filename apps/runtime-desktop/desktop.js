@@ -94,7 +94,14 @@ function render() {
 let refreshing;
 async function refresh() {
   if (!refreshing) {
-    refreshing = api('/state').then(async result => { snapshot = result;if(isCenter&&result.state==='RUNNING'){try{snapshot.workspace=await api('/workspace');}catch{}}render(); })
+    refreshing = api('/state').then(async result => {
+      snapshot = result;
+      if(isCenter&&result.state==='RUNNING'){try{snapshot.workspace=await api('/workspace');}catch{}}
+      // Automatic policy changes are persisted by the host after pairing. Do
+      // not keep showing the invitation's provisional 2 CPU / 1 GiB forever.
+      if(!isCenter&&installation.paired&&!busy){try{installation=await api('/agent/status',{directory:installation.directory});}catch{}}
+      render();
+    })
       .finally(() => { refreshing = null; });
   }
   await refreshing;

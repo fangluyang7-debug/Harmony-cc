@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
 import {PrismaClient} from '../generated/client';
+import {attemptTraceRows} from './dashboard-history';
 /** Read model only. Submission and execution remain exclusively in SchedulerSdk. */
 export class PhotoRuns {
  private mutations=Promise.resolve();
@@ -66,15 +67,16 @@ export class PhotoRuns {
   const rows=await Promise.all(names.filter(n=>n.endsWith('.json')).map(n=>this.read(group,n.slice(0,-5))));return rows.sort((a,b)=>b.createdAt-a.createdAt).slice(0,20);
  }
  async view(group:string,id:string){const r=await this.read(group,id),workflows:any[]=[];
-  const spans=(await this.db.traceSpan.findMany({where:{groupId:group}})).map(t=>JSON.parse(t.metadataJson).span);
   const graphs=await this.db.sdkWorkflowJob.findMany({where:{id:{in:r.jobs.map((j:any)=>j.id)},groupId:group}}),graphMap=new Map(graphs.map(row=>[row.id,row]));
   const ids=graphs.flatMap(row=>JSON.parse(row.metadataJson).nodes.map((n:any)=>n.jobId));
-  const [children,attempts,receipts]=await Promise.all([this.db.cpuJob.findMany({where:{id:{in:ids},groupId:group}}),this.db.attempt.findMany({where:{id:{in:ids},groupId:group}}),this.db.receipt.findMany({where:{id:{in:ids}}})]);
+  const [children,attempts,receipts,traceRows]=await Promise.all([this.db.cpuJob.findMany({where:{id:{in:ids},groupId:group}}),this.db.attempt.findMany({where:{id:{in:ids},groupId:group}}),this.db.receipt.findMany({where:{id:{in:ids}}}),attemptTraceRows(this.db,group,ids)]);
+  const spansByAttempt=new Map<string,any[]>();
+  for(const row of traceRows){const span=JSON.parse(row.metadataJson).span,list=spansByAttempt.get(span.attemptId)??[];list.push(span);spansByAttempt.set(span.attemptId,list);}
   const childMap=new Map(children.map(row=>[row.id,JSON.parse(row.metadataJson)])),attemptMap=new Map(attempts.map(row=>[row.id,row])),receiptMap=new Map(receipts.map(row=>[row.id,row]));
   for(const job of r.jobs){const row=graphMap.get(job.id);if(!row)continue;const g=JSON.parse(row.metadataJson);
    const nodes=[];for(const n of g.workflow.nodes){const state=g.nodes.find((s:any)=>s.id===n.id),d=state?childMap.get(state.jobId):null;
     const attempt=state?attemptMap.get(state.jobId):null,receipt=state?receiptMap.get(state.jobId):null;
-    const timing=spans.filter(s=>s.attemptId===state?.jobId).map(s=>({phase:s.phase,durationMs:s.durationMs,clockDomainId:s.clockDomainId,startMono:s.startMono,endMono:s.endMono}));
+    const timing=(spansByAttempt.get(state?.jobId)??[]).map(s=>({phase:s.phase,durationMs:s.durationMs,clockDomainId:s.clockDomainId,startMono:s.startMono,endMono:s.endMono}));
     nodes.push({timing,id:n.id,capability:n.capability,dependsOn:n.dependsOn,inputFroms:n.inputFroms,state:state?.state==='COMMITTED'?'SUCCEEDED':attempt?.state??state?.state??'PENDING',attemptId:state?.jobId,target:d?.offer.target??null,reason:d?.offer.reasonCode??null,inputBytes:d?.input.bytes??null,inputHash:d?.input.ref.contentHash??null,outputBytes:d?.output?.bytes??null,outputHash:d?.output?.ref.contentHash??null,committed:receipt?.committed??false,decision:d?.decisionEvidence??null});
    }
    workflows.push({id:job.id,imageIndex:job.imageIndex,state:row.state,nodes,plan:g.plan.decision,deadlineAt:g.deadlineAt});

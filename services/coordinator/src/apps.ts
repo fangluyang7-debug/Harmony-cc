@@ -70,11 +70,15 @@ export class AppRegistry {
  async reserveJob(tx:Prisma.TransactionClient,peer:Peer,id:string,resources:ResourceAmountV2[],deadlineAt:number){
   const context=await this.context(peer,tx),existing=await tx.appJobReservation.findUnique({where:{id}});
   if(existing&&(existing.appInstanceId!==context.identity.appInstanceId||existing.appId!==context.identity.appId))throw Error('JOB_SCOPE');
-  const rows=await tx.appJobReservation.findMany({where:{groupId:peer.groupId,principalId:peer.principalId,appId:context.identity.appId}}),active:ResourceAmountV2[][]=[];
-  for(const row of rows){if(row.id===id)continue;const attempt=await tx.attempt.findUnique({where:{id:row.id}}),job=await tx.cpuJob.findUnique({where:{id:row.id}});
-   if(attempt){if(attempt.state!=='REJECTED'&&!(attempt.recordJson&&JSON.parse(attempt.recordJson).resourcesSettled))active.push(JSON.parse(row.resourcesJson));}
-   else if(job&&['WAITING_INPUT','DISPATCHING'].includes(job.state)&&row.deadlineAt>this.now())active.push(JSON.parse(row.resourcesJson));
-  }
+  // Keep admission atomic, but do not issue two SQL reads for every historical
+  // reservation. Completed history is evidence, not active resource occupancy.
+  const rows=await tx.$queryRaw<{resourcesJson:string}[]>`SELECT r.resourcesJson FROM AppJobReservation r
+    LEFT JOIN Attempt a ON a.id=r.id LEFT JOIN CpuJob j ON j.id=r.id
+    WHERE r.groupId=${peer.groupId} AND r.principalId=${peer.principalId} AND r.appId=${context.identity.appId} AND r.id<>${id}
+    AND CASE WHEN a.id IS NOT NULL THEN a.state<>'REJECTED' AND
+      (a.recordJson IS NULL OR json_extract(a.recordJson,'$.resourcesSettled') IS NOT 1)
+    ELSE j.id IS NOT NULL AND j.state IN ('WAITING_INPUT','DISPATCHING') AND r.deadlineAt>${this.now()} END`;
+  const active=rows.map(row=>JSON.parse(row.resourcesJson) as ResourceAmountV2[]);
   if(active.length>=context.quota.maxConcurrent||!vectorFitsV2(vectorSumV2(...active,resources),context.quota.resources))throw Error('APP_QUOTA_EXCEEDED');
   if(existing)await tx.appJobReservation.update({where:{id},data:{resourcesJson:JSON.stringify(resources),deadlineAt}});
   else await tx.appJobReservation.create({data:{id,groupId:peer.groupId,principalId:peer.principalId,appId:context.identity.appId,appInstanceId:context.identity.appInstanceId,resourcesJson:JSON.stringify(resources),deadlineAt}});

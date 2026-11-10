@@ -35,3 +35,11 @@ for(const blocked of [false,true])test('stale center timeout '+(blocked?'keeps u
  else{await session.connect(false,s=>statuses.push(s));assert.deepEqual(events,['settle','authorize','exchange','activate']);assert.equal(session.connection().groupId,'new-space');assert.equal(values.get('exchangePending'),false);assert.equal(JSON.parse(values.get('previousInstallation')).appInstanceId,'old-app');assert.ok(statuses.includes('授权已收到，正在连接当前协作空间…'));}
  assert.equal(session.changing,false);
 });
+
+test('photo SDK stages actual inputs in the same app host used for execution',async()=>{
+ const code=transformSync(fs.readFileSync('apps/harmony-photo/entry/src/main/ets/PhotoSession.ets','utf8'),{loader:'ts',format:'cjs'}).code,m={exports:{}};
+ new Function('require','module','exports',code)(name=>name==='scheduler'?{factory:{id:()=> 'clock'}}:{},m,m.exports);
+ const session=new m.exports.PhotoSession(),input={contentHash:'hash',bytes:3},data=new Uint8Array([1,2,3]),staged=[];
+ session.port={stageInput:async(i,b)=>staged.push([i,b])};const port=session.workflowPort(()=>false,async()=>{});
+ assert.equal(staged.length,0);await port.stageInput(input,data);assert.deepEqual(staged,[[input,data]]);
+});

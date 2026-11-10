@@ -49,7 +49,7 @@ export class PhotoBatch {
      const port=photoSession.workflowPort(options.cancelled,async()=>{if(!run)throw Error('PHOTO_RUN_REQUIRED');await request('/photo-runs/'+run.id+'/capture-result?image='+i,'POST',{});});
      const sdk=new SchedulerSdk(port),input=await sdk.registerInput(src.data,'image.raster');
      try{
-      check();task=await sdk.submit(photoWorkflow(id,input,src.meta.width,src.meta.height),{requestId:id,budgetMs:Math.floor(budget-(monotonic()-began)),resultDestination:'ORIGIN'});this.tasks.push(task);
+      check();task=await sdk.submit(photoWorkflow(id,input,src.meta.width,src.meta.height),{requestId:id,budgetMs:Math.floor(budget-(monotonic()-began)),inputLocation:'ORIGIN',resultDestination:'ORIGIN'});this.tasks.push(task);
       // The capture hook must know this job before read/received can release output.
       await update({},{id:task.id,imageIndex:i});
       if(options.cancelled()){await task.cancel();throw Error('已取消');}

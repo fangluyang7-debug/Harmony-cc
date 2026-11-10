@@ -12,7 +12,7 @@ test('native batch serializes concurrent job links, retains output, and delivers
  const scheduler={factory:{id:()=>`job-${++counter}`},hash:()=> 'a'.repeat(64),base64:{encodeToStringSync:b=>Buffer.from(b).toString('base64')},text:b=>Buffer.from(b).toString(),monotonic:()=>performance.now(),SchedulerSdk:class{
   constructor(port){this.port=port;}
   async registerInput(data){events.push('register-input');return {contentHash:'a'.repeat(64),bytes:data.length,schemaId:'image.raster',schemaVersion:1};}
-  async submit(graph,options){assert.ok(options.budgetMs<=180000&&options.budgetMs>0);events.push('submit');const port=this.port;return {id:options.requestId,cancel:async()=>{},result:async()=>{await port.capture();return {output:Buffer.from('{}')};}};}
+  async submit(graph,options){assert.ok(options.budgetMs<=180000&&options.budgetMs>0);assert.equal(options.inputLocation,'ORIGIN');events.push('submit');const port=this.port;return {id:options.requestId,cancel:async()=>{},result:async()=>{await port.capture();return {output:Buffer.from('{}')};}};}
   releaseInput(){events.push('release');}resume(){return {cancel:async()=>{}};}
  }};
  const photoSession={workflowPort:(cancelled,capture)=>({capture}),request:async(_url,encoded)=>{

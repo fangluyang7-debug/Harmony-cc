@@ -10,7 +10,9 @@ test('a multi-artifact sweep reads group ownership once and preserves unknown by
    await r.db.cpuJob.create({data:{id:'tile-'+i,groupId:group,principalId:'owner',sourceHolderId:'source',state:'SUCCEEDED',metadataJson:JSON.stringify({output:d,resultReceivedAt:Date.now(),offer:{task:{workflowId:'done',nodeId:'render'}}})}});
   }
   await r.db.transferAuthorization.create({data:{id:'active-transfer',groupId:group,attemptId:'tile-6',endpointId:'endpoint',requesterCredentialId:'credential',state:'ISSUED',expiresAt:Date.now()+60000,metadataJson:JSON.stringify({authorization:{ref:objects[6].ref}})}});
-  let scans=0;const observed=r.db.$extends({query:{cpuJob:{findMany:({args,query})=>{scans++;return query(args);}}}});
+  // Historical jobs must not be materialized/parsed during this cache sweep.
+  await r.db.cpuJob.create({data:{id:'unrelated',groupId:group,principalId:'owner',sourceHolderId:'source',state:'SUCCEEDED',metadataJson:JSON.stringify({output:{ref:{artifactId:'unrelated-bytes'}}})}});
+  let scans=0;const observed=r.db.$extends({query:{cpuJob:{findMany:({args,query})=>{scans++;assert.ok(args.where.id.in.length<=7);assert.ok(!args.where.id.in.includes('unrelated'));return query(args);}}}});
   const retention=new ArtifactRetention(observed,r.directTransfers,r.artifacts);await retention.sweepRelay();assert.equal(scans,1);
   for(let i=0;i<6;i++)assert.equal(r.artifacts.lookup(group,objects[i].ref),null);
   assert.equal(r.artifacts.available(objects[6]),true);assert.equal(r.artifacts.available(objects[7]),true);
