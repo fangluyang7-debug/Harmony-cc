@@ -26,7 +26,7 @@ import { QualificationLoop } from './qualification-loop';
 import { RemoteEvaluationRunner } from './remote-evaluation';
 import { ReferencePack, builtinCpuPacks, builtinReferencePacks, cpuSchemas } from '@harmony/reference-capabilities';
 import { CpuJobs } from './cpu-jobs';
-import { TeamSpaces } from './spaces';
+import { TeamSpaces, measuredCapacity } from './spaces';
 import {TelemetryView} from './telemetry-view';
 import { AppRegistry } from './apps';
 import { SdkJobs } from './sdk';
@@ -96,7 +96,9 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
           (body.mode==='upload'?(typeof body.padding!=='string'||body.padding.length!==body.bytes||!/^[x]+$/.test(body.padding)):body.padding!==undefined))throw new BadRequestException('PROBE_INVALID');
         return {relayId:identity.id,padding:body.mode==='download'?'x'.repeat(body.bytes):''};
       }
-      @Post('device-settings')async deviceSettings(@Headers('authorization') header:string){return this.jobResponse(async()=>({settings:await spaces.deviceSettings(await auth.authenticate(bearer(header)))}));}
+      @Post('device-settings')async deviceSettings(@Headers('authorization') header:string,@Body() body:any){
+        return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));const measured=body&&typeof body==='object'&&body.measured!==undefined?measuredCapacity(body.measured):undefined;return {settings:await spaces.deviceSettings(peer,measured)};});
+      }
       private async jobResponse(work:()=>Promise<unknown>){if(!ready)throw new ServiceUnavailableException('RECOVERY_PENDING');try{return await work();}catch(error){options.onError?.(error);const code=error instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(error.message)?error.message:'JOB_FAILED';if(error instanceof UnauthorizedException||code.startsWith('CREDENTIAL_'))throw new UnauthorizedException(code);if(retryableJobError(code))throw new ConflictException({message:code,error:code,retryable:true});throw new BadRequestException({message:code,error:code,retryable:false});}}
       @Get('devices')@Header('Cache-Control','no-store')async devices(@Headers('authorization') header:string){
         return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));return {profiles:await directory.profiles(peer.groupId)};});
@@ -153,6 +155,16 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       }
       @Get('traces/:traceId')async trace(@Headers('authorization') header:string,@Param('traceId') traceId:string){
         if(!ready)throw new ServiceUnavailableException();try{return await traces.read(await auth.authenticate(bearer(header)),traceId);}catch{throw new UnauthorizedException('TRACE_REJECTED');}
+      }
+      @Get('pairing/certificate')@Header('Content-Type','application/x-pem-file')@Header('Cache-Control','no-store')
+      pairingCertificate(){
+        if(!ready||config.proxy||!config.publicUrl)throw new ServiceUnavailableException();
+        return identity.cert;
+      }
+      @Post('pairing/bootstrap')@Header('Cache-Control','no-store')
+      async pairingBootstrap(@Body() body:any){
+        if(!ready||config.proxy||!config.publicUrl)throw new ServiceUnavailableException();
+        try{return await auth.readDeviceInvite(body,config.publicUrl);}catch{throw new UnauthorizedException('PAIRING_REJECTED');}
       }
       @Post('pair')async pair(@Body() body:any){if(!ready)throw new ServiceUnavailableException();try{return {...await auth.exchange(body),epoch};}catch{throw new UnauthorizedException('PAIRING_REJECTED');}}
       @Post('apps/registrations')async registerApp(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>apps.register(await auth.authenticate(bearer(header)),body,config.publicUrl??'https://'+config.certificateHost+':'+app.getHttpServer().address().port));}

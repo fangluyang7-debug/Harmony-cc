@@ -19,10 +19,40 @@ const qrCode=require('qrcode') as {toDataURL:(text:string,options:object)=>Promi
 const hash=(s:string|Buffer)=>createHash('sha256').update(s).digest('hex');
 const passwordHash=(password:string,salt:string)=>new Promise<Buffer>((resolve,reject)=>scrypt(password,salt,64,(e,v)=>e?reject(e):resolve(v)));
 function label(v:unknown,max=60){if(typeof v!=='string'||!v.trim()||v.trim().length>max)throw Error('INPUT_INVALID');return v.trim();}
-export function contribution(v:any){
+const MiB=1048576,GiB=1073741824,TiB=1099511627776;
+export interface Contribution {ownerMode:string;maxCpuThreads:number;maxMemoryBytes:number;reserveMemoryBytes:number;maxVramBytes?:number;capacityMode?:'auto';}
+export function contribution(v:any):Contribution{
   if(!v||!['dedicated','windows-idle','paused'].includes(v.ownerMode)||!Number.isInteger(v.maxCpuThreads)||v.maxCpuThreads<1||v.maxCpuThreads>256||!Number.isSafeInteger(v.maxMemoryBytes)||v.maxMemoryBytes<67108864||v.maxMemoryBytes>1099511627776||!Number.isSafeInteger(v.reserveMemoryBytes)||v.reserveMemoryBytes<0||v.reserveMemoryBytes>1099511627776)throw Error('CONTRIBUTION_INVALID');
   if(v.maxVramBytes!==undefined&&(!Number.isSafeInteger(v.maxVramBytes)||v.maxVramBytes<0||v.maxVramBytes>1099511627776))throw Error('CONTRIBUTION_INVALID');
-  return {...(v.maxVramBytes?{maxVramBytes:v.maxVramBytes}:{}),ownerMode:v.ownerMode,maxCpuThreads:v.maxCpuThreads,maxMemoryBytes:v.maxMemoryBytes,reserveMemoryBytes:v.reserveMemoryBytes};
+  if(v.capacityMode!==undefined&&!['auto','fixed'].includes(v.capacityMode))throw Error('CONTRIBUTION_INVALID');
+  return {...(v.maxVramBytes?{maxVramBytes:v.maxVramBytes}:{}),...(v.capacityMode==='auto'?{capacityMode:'auto' as const}:{}),ownerMode:v.ownerMode,maxCpuThreads:v.maxCpuThreads,maxMemoryBytes:v.maxMemoryBytes,reserveMemoryBytes:v.reserveMemoryBytes};
+}
+export function capacityVector(settings:Contribution){
+  return [{resourcePoolId:'cpu',amount:settings.maxCpuThreads},{resourcePoolId:'ram',amount:settings.maxMemoryBytes},...(settings.maxVramBytes?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:settings.maxVramBytes}]:[])];
+}
+/** What a paired device measured about itself. Either field may be unknown; neither is trusted beyond its own device. */
+export interface MeasuredCapacity {cpuThreads:number|null;totalMemoryBytes:number|null;}
+export function measuredCapacity(v:any):MeasuredCapacity{
+  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).some(k=>!['cpuThreads','totalMemoryBytes'].includes(k)))throw Error('MEASUREMENT_INVALID');
+  const cpu=v.cpuThreads??null,ram=v.totalMemoryBytes??null;
+  if(cpu!==null&&(!Number.isInteger(cpu)||cpu<1||cpu>1024)||ram!==null&&(!Number.isSafeInteger(ram)||ram<64*MiB||ram>64*TiB))throw Error('MEASUREMENT_INVALID');
+  return {cpuThreads:cpu,totalMemoryBytes:ram};
+}
+/**
+ * Automatic ceiling for a device that reported its hardware. The device keeps the larger of 1 GiB or a
+ * quarter of its RAM for the system and the owner's own apps; the remainder (rounded down to 64 MiB) is
+ * the contribution ceiling. CPU contributes half of the hardware threads, at least one. Storage capacity
+ * is deliberately not part of this: only RAM backs task execution. Unknown measurements keep the current value.
+ */
+export function autoContribution(current:Contribution,measured:MeasuredCapacity):Contribution{
+  const next:Contribution={...current,capacityMode:'auto'};
+  if(measured.totalMemoryBytes!==null){
+    const reserve=Math.min(TiB,Math.max(GiB,Math.ceil(measured.totalMemoryBytes/4/MiB)*MiB));
+    next.reserveMemoryBytes=reserve;
+    next.maxMemoryBytes=Math.min(TiB,Math.max(64*MiB,Math.floor((measured.totalMemoryBytes-reserve)/(64*MiB))*64*MiB));
+  }
+  if(measured.cpuThreads!==null)next.maxCpuThreads=Math.min(64,Math.max(1,Math.floor(measured.cpuThreads/2)));
+  return next;
 }
 
 /** Browser accounts and room membership are separate from device execution credentials. */
@@ -45,7 +75,25 @@ export class TeamSpaces {
   }
   peer(userId:string,spaceId:string):Peer{return {groupId:spaceId,principalId:userId,deviceId:'web-'+userId,holderInstanceId:'web-'+userId,credentialId:'web-'+userId};}
   private appPeer(userId:string,spaceId:string){return this.apps.console(this.peer(userId,spaceId),this.sdk.contractIds(),[{resourcePoolId:'cpu',amount:4},{resourcePoolId:'ram',amount:1073741824}]);}
-  async deviceSettings(peer:Peer){const d=await this.db.spaceDevice.findUnique({where:{id:peer.deviceId}});return d&&d.spaceId===peer.groupId&&d.holderId===peer.holderInstanceId?JSON.parse(d.settingsJson):null;}
+  /** Devices poll their settings; an auto-capacity device also reports its hardware so the ceiling follows the real machine. */
+  async deviceSettings(peer:Peer,measured?:MeasuredCapacity):Promise<Contribution|null>{
+    const d=await this.db.spaceDevice.findUnique({where:{id:peer.deviceId}});
+    if(!d||d.spaceId!==peer.groupId||d.holderId!==peer.holderInstanceId)return null;
+    const settings=JSON.parse(d.settingsJson) as Contribution;
+    if(!measured||settings.capacityMode!=='auto')return settings;
+    const next=autoContribution(settings,measured);
+    if(next.maxCpuThreads===settings.maxCpuThreads&&next.maxMemoryBytes===settings.maxMemoryBytes&&next.reserveMemoryBytes===settings.reserveMemoryBytes)return settings;
+    const budget=await this.allotments.budget(d.id);
+    try{await this.allotments.confirmDevice(d.id,capacityVector(next),budget?.bindings??[{groupId:d.spaceId,holderInstanceId:d.holderId,appInstanceId:null}]);}
+    catch(error){
+      // Shrinking below what is already reserved waits until those reservations settle; the old ceiling stays.
+      if(error instanceof Error&&['BUDGET_RECONCILIATION_REQUIRED','BINDING_HAS_UNSETTLED_RESERVATION'].includes(error.message))return settings;
+      throw error;
+    }
+    await this.db.spaceDevice.update({where:{id:d.id},data:{settingsJson:JSON.stringify(next)}});
+    this.events.changed(d.spaceId);
+    return next;
+  }
   async dashboard(userId:string,spaceId:string){
     const me=await this.member(userId,spaceId),space=await this.db.teamSpace.findUniqueOrThrow({where:{id:spaceId}}),now=Date.now();
     const [members,users,registered,profiles,states,rows,attempts]=await Promise.all([
@@ -141,12 +189,14 @@ export class TeamSpaces {
           await this.db.spaceDevice.update({where:{id},data:{settingsJson:JSON.stringify(settings)}});res.json({ok:true});return;}
         const address=this.config.publicUrl;if(!address)throw Error('PUBLIC_URL_REQUIRED');
         const deviceId=randomUUID(),holderId=randomUUID();
-        await this.allotments.confirmDevice(deviceId,[{resourcePoolId:'cpu',amount:settings.maxCpuThreads},{resourcePoolId:'ram',amount:settings.maxMemoryBytes},...(settings.maxVramBytes?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:settings.maxVramBytes}]:[])],[{groupId:spaceId,holderInstanceId:holderId,appInstanceId:null}]);
+        await this.allotments.confirmDevice(deviceId,capacityVector(settings),[{groupId:spaceId,holderInstanceId:holderId,appInstanceId:null}]);
         const invitation=await this.auth.invite(spaceId,user.id,deviceId,address,600000);
         await this.db.spaceDevice.create({data:{id:deviceId,spaceId,userId:user.id,holderId,name:label(body.name),settingsJson:JSON.stringify(settings),createdAt:Date.now()}});
         const bootstrap={invitation:{...invitation,tlsMode:this.config.proxy?'public':'pinned'},holderInstanceId:holderId,domain:this.config.domain,contribution:settings};
-        // Full pinned bootstrap stays in this member-authorized, no-store response. No external QR service.
-        const qr=await qrCode.toDataURL(JSON.stringify(bootstrap),{errorCorrectionLevel:'L',margin:4,width:640});
+        const qrPayload=body.qrFormat==='link'&&!this.config.proxy
+          ? invitation.address+'/#device='+invitation.inviteId+'.'+invitation.code+'&pin='+invitation.fingerprint
+          : JSON.stringify(bootstrap);
+        const qr=await qrCode.toDataURL(qrPayload,{errorCorrectionLevel:'L',margin:4,width:640});
         res.json({...bootstrap,qr});return;
       }
       if(action==='sdk'&&parts[2]==='jobs'){

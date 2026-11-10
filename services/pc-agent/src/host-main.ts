@@ -7,6 +7,8 @@ process.on('message',(message:any)=>{if(message==='stop'||message?.type==='shutd
 async function main(){
   const [pairedFile,contributionFile]=process.argv.slice(2);if(!pairedFile||!contributionFile)throw Error('HOST_ARGUMENTS');
   const config={...JSON.parse(fs.readFileSync(pairedFile,'utf8')),contribution:JSON.parse(fs.readFileSync(contributionFile,'utf8'))} as CpuHostConfig;
+  // Keep the on-disk policy in step with the automatic ceiling so the desktop quota panel and restarts see it.
+  config.onContributionChanged=contribution=>{try{fs.writeFileSync(contributionFile,JSON.stringify(contribution),{mode:0o600});}catch{console.error('CONTRIBUTION_SAVE_FAILED');}};
   const suite=process.env.PC_IMAGE_ENCODING_SUITE;
   if(suite){
     const backend=process.env.PC_IMAGE_BACKEND??'CPU';

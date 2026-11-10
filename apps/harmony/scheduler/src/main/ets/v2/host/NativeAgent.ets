@@ -33,6 +33,8 @@ function referenceBytes(encoded:string):Uint8Array{return encoded.length?base64.
 interface Identity {version:number;domain:string;coordinatorId:string;epoch:number;}
 interface AckPayload {messageId:string;}
 interface Settings {settings:Contribution|null;}
+interface MeasuredCapacity {cpuThreads:number|null;totalMemoryBytes:number;}
+interface SettingsRequest {measured?:MeasuredCapacity;}
 interface Qualification {executor:ExecutorV2;admission:CapabilityAdmissionV2;}
 interface Ticket {token:string;ref:ArtifactRefV2;bytes:number;operation:string;expiresAt:number;}
 interface Authorization {offer:DispatchOfferV2;snapshotVersion:number;inputTicket:Ticket;}
@@ -180,6 +182,26 @@ export class NativeAgent {
   this.enabled=(await this.db.get('contribution-enabled'))!=='false';this.showPreferences();
  }
  private withinCeiling(value:Contribution):boolean {const ceiling=this.installation.bootstrap.contribution;return validContribution(value)&&value.maxCpuThreads<=ceiling.maxCpuThreads&&value.maxMemoryBytes<=ceiling.maxMemoryBytes;}
+ /** The settings poll carries this device's measured hardware so an auto-capacity ceiling follows the real phone, not the invitation's provisional 1 GiB. */
+ private settingsRequest():SettingsRequest {
+  const request:SettingsRequest={};
+  if(this.totalRam!==null){const measured:MeasuredCapacity={cpuThreads:null,totalMemoryBytes:this.totalRam};request.measured=measured;}
+  return request;
+ }
+ /** Adopt a ceiling the coordinator derived from our measurements. A contribution the owner left at the old ceiling follows it; one they lowered is only clamped. */
+ private async adoptCeiling(settings:Contribution):Promise<void>{
+  const ceiling=this.installation.bootstrap.contribution;
+  if(!validContribution(settings)||settings.maxCpuThreads===ceiling.maxCpuThreads&&settings.maxMemoryBytes===ceiling.maxMemoryBytes&&settings.reserveMemoryBytes===ceiling.reserveMemoryBytes)return;
+  const atCeiling=this.contribution.maxCpuThreads===ceiling.maxCpuThreads&&this.contribution.maxMemoryBytes===ceiling.maxMemoryBytes;
+  const next:Contribution={ownerMode:ceiling.ownerMode,maxCpuThreads:settings.maxCpuThreads,maxMemoryBytes:settings.maxMemoryBytes,reserveMemoryBytes:settings.reserveMemoryBytes};
+  this.installation.bootstrap.contribution=next;
+  await this.db.put('identity',JSON.stringify(this.installation));
+  const current:Contribution={ownerMode:this.contribution.ownerMode,maxCpuThreads:atCeiling?next.maxCpuThreads:Math.min(this.contribution.maxCpuThreads,next.maxCpuThreads),
+   maxMemoryBytes:atCeiling?next.maxMemoryBytes:Math.min(this.contribution.maxMemoryBytes,next.maxMemoryBytes),reserveMemoryBytes:next.reserveMemoryBytes};
+  this.contribution=current;
+  await this.db.put('contribution',JSON.stringify(current));
+  this.showPreferences();
+ }
  private showPreferences():void {AppStorage.setOrCreate('cpuLimit',String(this.contribution.maxCpuThreads));AppStorage.setOrCreate('memoryLimitMB',String(this.contribution.maxMemoryBytes/1048576));AppStorage.setOrCreate('maxCpuLimit',this.installation.bootstrap.contribution.maxCpuThreads);AppStorage.setOrCreate('maxMemoryLimitMB',this.installation.bootstrap.contribution.maxMemoryBytes/1048576);AppStorage.setOrCreate('contributing',this.enabled);}
  async configure(cpu:number,memoryMB:number):Promise<void>{const next:Contribution={ownerMode:'dedicated',maxCpuThreads:cpu,maxMemoryBytes:memoryMB*1048576,reserveMemoryBytes:this.contribution.reserveMemoryBytes};if(!this.withinCeiling(next))throw Error('CONTRIBUTION_EXCEEDS_PAIRED_CEILING');this.contribution=next;await this.db.put('contribution',JSON.stringify(next));this.showPreferences();await this.tick();}
  async setEnabled(value:boolean):Promise<void>{this.enabled=value;await this.db.put('contribution-enabled',String(value));if(!value)await this.yield();this.showPreferences();if(this.ready)await this.profile();}
@@ -266,7 +288,7 @@ export class NativeAgent {
  }
  private async tick():Promise<void>{
   if(this.stopped||this.refreshing)return;if(this.foreground!==this.lifecycleForeground())this.setForeground(this.lifecycleForeground());this.refreshing=true;
-  try{try{const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;this.availableRam=Number(memory.availableMem)*1024;}catch(e){this.totalRam=null;this.availableRam=null;}try{const mode=power.getPowerMode();this.powerSaving=mode===power.DevicePowerMode.MODE_NORMAL||mode===power.DevicePowerMode.MODE_PERFORMANCE?'OFF':'ON';}catch(e){this.powerSaving=null;}this.sampleEnergy();await this.connect();if(!this.ready)return;void this.peerLinks?.sample().catch((e:Error)=>{this.peerLinks?.invalidate();this.error(e);});const reply:Settings=this.policy===null?await this.transport.json('/v2/device-settings',{} as Record<string,Object>) as Settings:{settings:null};const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
+  try{try{const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;this.availableRam=Number(memory.availableMem)*1024;}catch(e){this.totalRam=null;this.availableRam=null;}try{const mode=power.getPowerMode();this.powerSaving=mode===power.DevicePowerMode.MODE_NORMAL||mode===power.DevicePowerMode.MODE_PERFORMANCE?'OFF':'ON';}catch(e){this.powerSaving=null;}this.sampleEnergy();await this.connect();if(!this.ready)return;void this.peerLinks?.sample().catch((e:Error)=>{this.peerLinks?.invalidate();this.error(e);});AppStorage.setOrCreate('deviceTotalMemoryMB',this.totalRam===null?0:Math.floor(this.totalRam/1048576));const reply:Settings=this.policy===null?await this.transport.json('/v2/device-settings',this.settingsRequest()) as Settings:{settings:null};if(reply.settings!==null)await this.adoptCeiling(reply.settings);const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
    await this.pollCancellation();this.pumpQueue();try{await this.renew();}catch(e){this.error(e as Error);}if(this.links.length===0||this.links[0].fixedMs.sampledAt+10000<this.transport.now())await this.probeLinks();await this.profile();this.pumpQueue();if(this.idle())void this.calibrate().catch((e:Error)=>this.error(e as Error));
   }finally{this.refreshing=false;}
  }

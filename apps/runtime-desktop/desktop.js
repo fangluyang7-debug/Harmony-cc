@@ -56,6 +56,8 @@ function render() {
       select.dataset.items = options;
     }
     const ready = running && !otherRole;
+    const advertised = ready ? new URL(url) : null;
+    const addressLost = advertised !== null && !addresses.some(item => item.address === advertised.hostname);
     const action = ready ? '关闭协调中心' : pending && !otherRole ? labels[state] : '启动协调中心';
     $('power-title').textContent = action;
     $('power').setAttribute('aria-label', action);
@@ -63,10 +65,12 @@ function render() {
     select.disabled = busy || pending || running;
     $('port').disabled = select.disabled;
     $('center-suite').disabled = select.disabled;
-    $('dashboard').disabled = !ready;
-    $('devices').disabled = !ready || busy;
+    $('dashboard').disabled = !ready || addressLost;
+    $('devices').disabled = !ready || addressLost || busy;
+    if (addressLost && $('pair-dialog').open) $('pair-dialog').close();
+    message('network-change', addressLost ? '网络已切换，旧地址已停止发布。请关闭协调中心，选择新的局域网地址后重新启动。' : '');
     message('public-url', ready ? url : '');
-    $('actual-port').value = ready ? new URL(url).port || '443' : '预设 ' + $('port').value;
+    $('actual-port').value = advertised ? advertised.port || '443' : '预设 ' + $('port').value;
     return;
   }
 
@@ -155,12 +159,14 @@ function initCenter() {
         const space = spaces.find(item => item.name === '本地调度空间') ?? spaces[0];
         if (!space) throw Error('本地调度空间不可用。');
         if (!pairing.open) return;
-        // Legacy agents require an initial CPU/memory ceiling inside the invitation.
+        // The invitation carries a provisional 2-slot / 1 GiB ceiling for the first connection. With
+        // capacityMode 'auto' the coordinator replaces it from the device's reported RAM/CPU once paired.
         const { invitation, holderInstanceId, domain, contribution, qr } = await api(
           '/v2/spaces/' + encodeURIComponent(space.id) + '/devices', {
             name: '设备 ' + new Date().toLocaleString('zh-CN', { hour12: false }),
+            qrFormat: 'link',
             settings: {
-              ownerMode: 'dedicated', maxCpuThreads: 2, maxMemoryBytes: 1073741824,
+              ownerMode: 'dedicated', capacityMode: 'auto', maxCpuThreads: 2, maxMemoryBytes: 1073741824,
               reserveMemoryBytes: 1073741824
             }
           }
@@ -177,7 +183,7 @@ function initCenter() {
         ));
         download.hidden = false;
         $('pair-details').hidden = false;
-        $('pair-status').textContent = '请用鸿蒙设备调度件扫码。Windows 设备也可下载邀请后导入。';
+        $('pair-status').textContent = '请用新版鸿蒙设备调度件扫码。Windows 和旧版鸿蒙调度件可使用下载的完整邀请。配对后，额度会按设备上报的运行内存和 CPU 自动确定。';
         invitationTimer = setTimeout(() => {
           clearInvitation();
           $('pair-status').textContent = '邀请已过期。请关闭弹窗后重新点击「设备配对」。';
