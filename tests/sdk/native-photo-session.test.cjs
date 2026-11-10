@@ -1,4 +1,15 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{transformSync}=require('esbuild');
+test('native result transport verifies bytes and retains the product before SDK acknowledgement can run',async()=>{
+ const events=[],data=new Uint8Array([1,2,3]);let corrupt=false;
+ const code=transformSync(fs.readFileSync('apps/harmony-photo/entry/src/main/ets/PhotoSession.ets','utf8'),{loader:'ts',format:'cjs'}).code,m={exports:{}};
+ new Function('require','module','exports',code)(name=>name==='scheduler'?{factory:{id:()=> 'clock'},hash:()=>corrupt?'bad':'valid'}:{},m,m.exports);
+ const session=new m.exports.PhotoSession();session.port={read:async()=>{events.push('read');return data;}};
+ const port=session.workflowPort(()=>false,async()=>{await new Promise(r=>setTimeout(r,5));events.push('retained');});
+ const ticket={bytes:3,ref:{contentHash:'valid',schemaId:'photo.product'}};
+ assert.equal(await port.read(ticket),data);events.push('sdk-can-acknowledge');
+ assert.deepEqual(events,['read','retained','sdk-can-acknowledge']);
+ corrupt=true;await assert.rejects(port.read(ticket),/SDK_OUTPUT_INTEGRITY/);assert.equal(events.filter(e=>e==='retained').length,1);
+});
 test('switching to local work waits for the cooperative host to settle and preserves it if settlement fails',async()=>{
  const code=transformSync(fs.readFileSync('apps/harmony-photo/entry/src/main/ets/PhotoSession.ets','utf8'),{loader:'ts',format:'cjs'}).code,m={exports:{}};
  new Function('require','module','exports',code)(()=>({}),m,m.exports);

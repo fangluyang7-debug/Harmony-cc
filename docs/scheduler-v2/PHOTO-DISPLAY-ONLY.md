@@ -8,7 +8,7 @@
 2. Windows 双击 `scripts/start-photo-display.cmd`，保持该窗口运行；已有展示服务时无需重复启动。也可在仓库根目录运行 `npm run photo:display`。
 3. Windows 浏览器打开 `http://127.0.0.1:7460/`，点击“连接手机”展开二维码；大屏投放这个页面。
 4. 手机打开 **Harmony 图片演示**，留在本机处理首页。在“仅展示连接”中点“扫码连接展示屏”，扫描电脑二维码。不需要打开协作空间或点击协作授权。不能扫码时可粘贴页面完整展示连接码，点击“连接”。
-5. 手机从相册选择原始样例图。电脑左侧实时显示缩略图，右侧为空。点击“开始本机高清增强”，电脑同步展示手机的实际阶段；每张成品完成并通过哈希、尺寸校验后出现在右侧。
+5. 手机从相册选择原始样例图。电脑左侧实时显示缩略图，右侧为空。点击“开始高清增强”，电脑同步展示手机的实际阶段；每张成品完成并通过哈希、尺寸校验后出现在右侧。
 6. 所有照片处理完成后显示耗时、交付数量。手机成品仍在私有目录，只有点击“保存到相册”才写入系统图库。电脑可点击“导出展示记录”。
 
 页面右上角“清空并断开”会清除本次展示记录、断开旧展示连接并生成新二维码。手机需重新扫码或输入新码；旧连接排队中的事件不会恢复已清空内容。此按钮不取消手机正在进行的本机计算，也不删除系统相册照片。
@@ -30,7 +30,7 @@
 - 评委页面：`apps/team-space-web/photo-display.html`、`photo-display.js`、`photo-display.css`，复用现有 `photo.css`。
 - 手机显示连接：`apps/harmony-photo/entry/src/main/ets/PhotoDisplay.ets`；入口和本机流程接线在 `pages/Index.ets`。
 - 本机算法：`apps/harmony/scheduler/src/main/ets/v2/host/executors/PhotoLocal.ets`。
-- 协作业务页仍使用已有 `photo.html`；电脑评委统一使用 `photo-display.html`。服务端只读桥接：`scripts/photo-display-coordinator.cjs`；历史记录：`photo-display-records.cjs`；比较规则：`apps/team-space-web/photo-display-compare.mjs`。
+- 手机协作与本机共用原生 `pages/Index.ets`，协作批处理由 `PhotoBatch.ets` 接入现有 SDK；电脑评委统一使用 `photo-display.html`。服务端只读桥接：`scripts/photo-display-coordinator.cjs`；历史记录：`photo-display-records.cjs`；比较规则：`apps/team-space-web/photo-display-compare.mjs`。
 
 最新实测和限制见 STATUS §111—§113。
 
@@ -51,7 +51,7 @@
 
 1. 始终保持电脑 `http://127.0.0.1:7460/` 打开，不必切换到旧的 `photo.html?judge=1` 地址。
 2. 页面应显示“协调中心已连接”。当前环境已配置；重新搭建时可用 `--coordinator-config <私有 JSON 文件>`（字段 `desktop` 为启动器完整 URL、`group` 为空间 ID）。也可以展开“协调中心”，粘贴本机启动器完整地址连接；此手动设置仅当前服务有效。连接凭据只在服务端，浏览器不需要先建立控制台登录会话。
-3. 在 Harmony 协作空间中让手机和 Windows 加入同一空间并启用设备贡献。在图片 App 点击“连接协作空间”，完成首次授权，进入原有协作图片处理页。
+3. 在 Harmony 协作空间中让手机和 Windows 加入同一空间并启用设备贡献。在图片 App 点击“连接协作空间”，完成首次授权。页面保持原来的选图、处理和成品布局，连接状态变为“已连接协作空间 · 自动规划设备分工”；已选照片保留，不再跳转另一套页面。
 4. 选择与本机轮次**相同的原照片、相同顺序**，保持相同处理预算，开始协同处理。电脑统一页自动跟随新记录；任务分工来自协调中心实际节点和回执，成品实际交付后逐张显示。
 5. 完成后在“每一轮，都有记录”查看各轮耗时条形图。点击一轮回看照片及分工；点击“跟随最新一轮”恢复自动跟随。
 6. 比较期间不要点击“清空并断开”。该按钮隐藏清空前的展示历史并轮换手机展示码，但不删除协调中心任务回执、不退出协作空间、不取消正在运行的任务。

@@ -1,6 +1,6 @@
 import { common } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
-import { HarmonySdkPort, TrustedCoordinator, NativeAgent, Installation, Paired, ResourceAmountV2, SdkTicket, base64, hash } from 'scheduler';
+import { HarmonySdkPort, TrustedCoordinator, NativeAgent, Installation, Paired, ResourceAmountV2, SdkTicket, SdkPort, base64, hash, monotonic, factory } from 'scheduler';
 
 interface Registration extends TrustedCoordinator {registrationId:string;code:string;expiresAt:number;domain:string;}
 interface Exchange extends Paired {offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
@@ -63,6 +63,18 @@ export class PhotoSession {
   }finally{this.changing=false;}
  }
  async request(route:string,body:string|null):Promise<string>{if(!this.port)throw Error('PHOTO_APP_NOT_CONNECTED');return this.port.request(route,body);}
+ workflowPort(cancelled:()=>boolean,capture:()=>Promise<void>):SdkPort{
+  if(!this.port)throw Error('PHOTO_APP_NOT_CONNECTED');const port=this.port,domain='photo-native-'+factory.id();
+  return {
+   request:(route:string,body:string|null):Promise<string>=>this.sdkRequest(route,body),
+   write:(ticket:SdkTicket,data:Uint8Array):Promise<void>=>port.write(ticket,data),
+   writeDirect:(jobId:string,endpointId:string,ticket:SdkTicket,data:Uint8Array):Promise<void>=>port.writeDirect(jobId,endpointId,ticket,data),
+   read:async(ticket:SdkTicket):Promise<Uint8Array>=>{const data=await port.read(ticket);if(data.length!==ticket.bytes||hash(data)!==ticket.ref.contentHash)throw Error('SDK_OUTPUT_INTEGRITY');if(ticket.ref.schemaId==='photo.product')await capture();return data;},
+   digest:async(data:Uint8Array):Promise<string>=>hash(data),now:():number=>Date.now(),
+   measure:()=>({clockDomainId:domain,milliseconds:monotonic()}),
+   wait:async(ms:number):Promise<void>=>{await new Promise<void>(resolve=>{setTimeout(resolve,ms);});},cancelled
+  };
+ }
  async sdkRequest(route:string,body:string|null):Promise<string>{
   if(!/^\/v2\/sdk\/jobs(?:\/[A-Za-z0-9_.:-]+(?:\/(?:start|received|cancel))?)?$/.test(route))throw Error('PHOTO_SDK_ROUTE');
   if(!this.host?.isConnected())throw Error('手机正在连接或校准，请稍后重试');return this.request(route,body);
