@@ -1,6 +1,6 @@
 # 独立图片 App 与电脑评委页
 
-2026-11-10，分支 `codex/real-device-acceptance`。本轮为本地实现；新增包尚未签名、安装或真机验收。已有安装包未被替换。
+2026-11-10，分支 `codex/real-device-acceptance`。实现基线为 `7a3a1fa`。后续已通过 DevEco 为新包生成独立调试签名，HDC 安装成功并启动到手机首次连接页；尚未验收新 App 的授权、选图或完整协作任务。已有 agent / SoleAI 安装包未被替换。
 
 ## 三个 App 的职责
 
@@ -29,6 +29,10 @@
 
 ## 构建与签名
 
+协作者可从 [API 24 图片 App 分发包](https://github.com/fangluyang7-debug/Harmony-cc/releases/tag/photo-app-api24-20261110) 下载 `Harmony-Photo-API24-unsigned.hap`。源码基线 `7a3a1fa`；74,509,350 字节；SHA-256 为 `2167c2b6aa4fcef9baa44f971ef89954b443f6b07b924acbd9c5184abb16fe50`。Release 同时提供 `SHA256SUMS.txt` 和 `manifest.json`。
+
+该附件是**未签名分发包，不能直接安装到真机**，需要接收方为 `org.harmonycc.photo` 及目标设备配置自己的调试签名。当前手机已安装的设备专用签名包不用于公开分发；私有证书、密钥、profile 不上传。模型/运行库已包含，用户任务照片不包含。HAP 放在 Release 附件，不进入 Git 历史。
+
 默认仍为 API 22。照片模型与 ncnn 配置沿用 `PHOTO-WORKFLOW-LOCAL-20261110.md`，先构建 HAR，再构建消费它的 App：
 
 ```powershell
@@ -41,7 +45,7 @@ npm run harmony:v2:agent
 
 新包的 DevEco 工程为 `.test/photo-api24-harmony-photo`；必须给 `org.harmonycc.photo` 生成独立调试签名，再用同一命令重建。不能套用 agent 或 SoleAI 的 profile。生成的证书、私有配置及大模型不提交 Git。
 
-当前 HAR、图片 HAP（未签名）、agent HAP（已签名）及 probe HAP（未签名）均构建通过。签名完成前不替换手机现有 agent，以免移除旧入口而新包还不能安装。标准分发包清单尚未加入新包；当前通过上述独立构建命令生成。
+当前 HAR、图片 HAP（已签名并安装）、agent HAP（已签名）及 probe HAP（未签名）均构建通过。图片包位于 `.test/photo-api24-harmony-photo/entry/build/default/outputs/default/entry-default-signed.hap`，手机已显示独立首页。协调中心正在运行的旧进程和手机现有 agent 尚未更新；完整联调前需更新中心并核对授权链路。标准分发包清单尚未加入新包；当前通过上述独立构建命令生成。
 
 ## 本地验证和边界
 

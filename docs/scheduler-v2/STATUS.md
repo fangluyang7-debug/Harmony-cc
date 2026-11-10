@@ -2351,3 +2351,7 @@ VisualReviewFlow.ets 共享编排、HVG1 原生压缩输入、手机每轮解码
 验证：协调器 TypeScript 通过；SDK 11/11；新桥测试 1/1；App 身份/配额与新接口回归 6/6；照片批量/存储回归 4/4。隔离本机通过独立 App 身份跑完真实 CPU 模型七个唯一阶段，交付、输入/成品哈希核验、手机视口与电脑实时展示通过。原生桥由浏览器适配替代，来源与执行器在本机，不能当作真机或加速证据。HAR、photo、agent、probe API 24 构建通过；photo/probe 未签名。未更新正在使用的协调器进程或手机已安装包。
 
 本节与实现一同提交到 `codex/real-device-acceptance`，供协作者整合；本轮起点为 `3b8abce`，未合并或推送到协作者的主线分支。新包需独立 DevEco 调试签名，再安装并验收一次授权、相册、ArkWeb、前后台和双机协作；API 22 / 模拟器 / GPU 尚未验收。说明与复现命令见 [独立图片 App](PHOTO-INDEPENDENT-APP.md)。
+
+**签名安装补充（2026-11-10）：** 实现已推送为 `7a3a1fa`。用户随后要求安装，已完成 `org.harmonycc.photo` 独立自动签名、API 24 HAP 重建、手机 HDC 安装和启动；实屏确认标题“ Harmony 图片演示”及首次连接按钮。签名材料仅在本机忽略目录，未入库。此次没有更新正在运行的旧协调中心或 agent / SoleAI，没有验收新包授权和照片任务，不应把安装成功等同于完整协作通过。
+
+分发入口：[photo-app-api24-20261110](https://github.com/fangluyang7-debug/Harmony-cc/releases/tag/photo-app-api24-20261110)。提供 API 24 未签名 HAP、SHA-256 清单和包清单，供协作者重新签名；设备专用调试签名包及签名材料不公开上传。整合边界仍见上文，尚未将新包认定为完整真机验收通过。
