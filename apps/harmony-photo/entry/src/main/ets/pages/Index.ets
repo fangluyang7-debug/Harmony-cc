@@ -17,6 +17,8 @@ struct Index {
  @State private displayBusy:boolean=false;
  private display:PhotoDisplay=new PhotoDisplay((message:string)=>{this.displayStatus=message;});
  @State private connecting:boolean=false;
+ @State private connectionStatus:string='未连接协作空间 · 当前为手机本机处理';
+ @State private connectionFailed:boolean=false;
  @State private picking:boolean=false;
  @State private busy:boolean=false;
  @State private saving:boolean=false;
@@ -36,9 +38,9 @@ struct Index {
  });
  private context():common.UIAbilityContext{return this.getUIContext().getHostContext() as common.UIAbilityContext;}
  private async connect(force:boolean=false):Promise<void>{
-  if(this.busy||this.connecting)return;this.connecting=true;
-  try{await photoSession.connect(force);const c=photoSession.connection();if(c){this.remoteResults=[];this.url=c.address+'/photo-mobile.html?space='+encodeURIComponent(c.groupId)+'&app=photo';this.status='已连接协作空间';}}
-  catch(e){this.status='协作暂未连接，本机处理仍可使用：'+(e as Error).message;}
+  if(this.busy||this.connecting)return;this.connecting=true;this.connectionFailed=false;this.connectionStatus='正在连接协作空间…';
+  try{await photoSession.connect(force,(message:string)=>{this.connectionStatus=message;});const c=photoSession.connection();if(c){this.remoteResults=[];this.url=c.address+'/photo-mobile.html?space='+encodeURIComponent(c.groupId)+'&app=photo';this.status='已连接协作空间';this.connectionStatus='已授权并连接 · '+c.address;}}
+  catch(e){this.connectionFailed=true;this.connectionStatus='协作连接未完成：'+(e as Error).message;this.status='本机处理仍可使用。请检查调度连接 App 的当前空间，或点击重新授权。';}
   finally{this.connecting=false;}
  }
  private async connectDisplay(scan:boolean):Promise<void>{
@@ -98,12 +100,12 @@ struct Index {
    if(this.url){Button('本机处理').fontSize(13).onClick(()=>{this.url='';});}
   }.padding(20).width('100%').backgroundColor(Color.White);
   if(this.url){
+   Text(this.connectionStatus).fontSize(13).fontColor('#16815D').padding(12).width('100%').backgroundColor(Color.White);
    Web({src:this.url,controller:this.controller}).width('100%').layoutWeight(1).javaScriptAccess(true).domStorageAccess(true)
     .javaScriptProxy({object:this.bridge,name:'harmonyPhoto',methodList:['info','request','sdkRequest','sdkWrite','sdkRead','pickPhoto','stageResult'],asyncMethodList:[],controller:this.controller})
     .onSslErrorEvent((event:SslErrorEvent)=>{if(!event.isFatalError&&event.error===SslError.Untrusted&&event.certChainData?.length&&photoSession.matches(event.url,event.certChainData[0]))event.handler.handleConfirm();else event.handler.handleCancel();})
     .onLoadIntercept(event=>{if(!event.data.isMainFrame())return false;const c=photoSession.connection();return c===null||!event.data.getRequestUrl().startsWith(c.address+'/photo-mobile.html?');});
    if(this.remoteResults.length){
-    if(this.status.startsWith('协作暂未连接')){Button('重新授权当前协作空间').enabled(!this.busy&&!this.connecting).onClick(()=>{void this.connect(true);});}
     Column({space:8}){
      Scroll(){Row({space:8}){ForEach(this.remoteResults,(result:PhotoResult,index:number)=>{Button(result.name).fontSize(12).backgroundColor(index===this.selectedRemote?'#2457EB':'#64748B').onClick(()=>{this.selectedRemote=index;});},(result:PhotoResult)=>result.id);}}.scrollable(ScrollDirection.Horizontal).width('100%');
      this.saveButton(this.remoteResults[this.selectedRemote],true);
@@ -118,6 +120,8 @@ struct Index {
      Row({space:10}){Button(this.connecting?'正在连接…':'连接协作空间').fontSize(14).enabled(!this.busy&&!this.connecting).onClick(()=>{void this.connect();});
       Button('打开协作空间').fontSize(13).backgroundColor('#EAF0FF').fontColor('#2457EB').enabled(!this.busy).onClick(()=>{void this.context().startAbility({bundleName:'org.harmonycc.agent',abilityName:'EntryAbility'}).catch(()=>{this.status='请先安装 Harmony 协作空间';});});
      }.width('100%');
+     Text(this.connectionStatus).fontSize(14).fontColor(this.connectionFailed?'#B42318':'#2457EB').lineHeight(22).width('100%');
+     if(this.connectionFailed){Button('重新授权当前协作空间').fontSize(14).enabled(!this.busy&&!this.connecting).onClick(()=>{void this.connect(true);});}
     }.padding(20).backgroundColor(Color.White).borderRadius(20).width('100%');
     Column({space:8}){
      Text('仅展示连接').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#172B49').width('100%');

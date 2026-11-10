@@ -39,20 +39,27 @@ export class PhotoSession {
   const store=await preferences.getPreferences(this.context,{name:'photo-app-v1'}),raw=await store.get('installation','') as string;
   if(!raw)return false;await this.activate(JSON.parse(raw) as Installation);return true;
  }
- async connect(force:boolean=false):Promise<void>{
+ async connect(force:boolean=false,onStatus:(message:string)=>void=()=>{}):Promise<void>{
   if(!this.context||this.changing)throw Error('APP_CONNECT_BUSY');this.changing=true;
   try{
    const context=this.context,store=await preferences.getPreferences(context,{name:'photo-app-v1'});let raw=await store.get('installation','') as string;
-   if(raw&&!force){try{await this.activate(JSON.parse(raw) as Installation);return;}catch(e){if(!['APP_CREDENTIAL_REVOKED','CREDENTIAL_REVOKED','DEVICE_LEFT_SPACE','APP_HOST_IDENTITY_MISMATCH'].includes((e as Error).message))throw e as Error;await store.put('previousInstallation',raw);}}
+   if(raw&&!force){onStatus('正在检查上次的协作连接…');try{await this.activate(JSON.parse(raw) as Installation);onStatus('已连接协作空间');return;}catch(e){
+    // A migrated center may no longer answer at the saved address. Settle any
+    // previous work before asking the device app to authorize its current space.
+    await this.prepareLocal();await store.put('previousInstallation',raw);
+    onStatus('上次连接已不可用，正在请求当前空间授权…');
+   }}
    if(force){await this.prepareLocal();if(raw)await store.put('previousInstallation',raw);}
    if(await store.get('exchangePending',false) as boolean)throw Error('上次授权结果待核对，请勿重复注册');
+   onStatus('请在调度连接 App 中点击“允许并返回应用”');
    const result=await context.startAbilityForResult({bundleName:'org.harmonycc.agent',abilityName:'EnrollmentAbility',parameters:{declaration:JSON.stringify(manifest)}}),encoded=result.want?.parameters?.['registration'];
    if(result.resultCode!==0||typeof encoded!=='string')throw Error('图片应用授权已取消');
+   onStatus('授权已收到，正在连接当前协作空间…');
    const registration=JSON.parse(encoded) as Registration,port=await HarmonySdkPort.open(context,registration);
    await store.put('exchangePending',true);await store.flush();
    const paired=JSON.parse(await port.exchange(registration.registrationId,registration.code)) as Exchange,info=JSON.parse(await port.request('/v2/apps/me',null)) as AppContext;
    const saved:Installation={appInstanceId:info.identity.appInstanceId,paired,bootstrap:{domain:registration.domain,holderInstanceId:paired.peer.holderInstanceId,invitation:{version:2,inviteId:registration.registrationId,groupId:paired.peer.groupId,address:registration.address,certificate:registration.certificate,fingerprint:registration.fingerprint,code:'',expiresAt:registration.expiresAt},contribution:{ownerMode:'dedicated',maxCpuThreads:2,maxMemoryBytes:1073741824,reserveMemoryBytes:0}}};
-   await store.put('installation',JSON.stringify(saved));await store.put('exchangePending',false);await store.flush();await this.activate(saved);
+   await store.put('installation',JSON.stringify(saved));await store.put('exchangePending',false);await store.flush();await this.activate(saved);onStatus('已连接协作空间');
   }finally{this.changing=false;}
  }
  async request(route:string,body:string|null):Promise<string>{if(!this.port)throw Error('PHOTO_APP_NOT_CONNECTED');return this.port.request(route,body);}
