@@ -13,5 +13,5 @@ export default class EntryAbility extends UIAbility {
  onForeground():void {foregroundAgent(true);void this.mainWindow?.setWindowKeepScreenOn(true).catch(()=>{});}
  onBackground():void {foregroundAgent(false);void this.mainWindow?.setWindowKeepScreenOn(false).catch(()=>{});}
  onDestroy():void {void closeAgent();}
- onWindowStageCreate(stage:window.WindowStage):void {this.mainWindow=stage.getMainWindowSync();void this.mainWindow.setWindowKeepScreenOn(true).catch(()=>{});stage.loadContent('pages/Index');}
+ onWindowStageCreate(stage:window.WindowStage):void {this.mainWindow=stage.getMainWindowSync();void this.mainWindow.setWindowKeepScreenOn(true).catch(()=>{});stage.loadContent('pages/ConnectionLauncher');}
 }

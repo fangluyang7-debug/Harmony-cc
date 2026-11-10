@@ -1,3 +1,4 @@
+import { deviceInfo } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { discoverCenters } from '../Discovery';
@@ -27,6 +28,10 @@ struct ConnectionLauncher {
   @State private pairing: boolean = false;
   @State private scanning: boolean = false;
   @State private changingContribution: boolean = false;
+
+  @State private desktop: boolean = deviceInfo.deviceType === '2in1';
+  @State private viewportWidth: number = 1100;
+  @State private desktopSection: string = 'auto';
 
   private numericTrust: PairingTrust | null = null;
   private discoveryTimer: number = -1;
@@ -143,6 +148,7 @@ struct ConnectionLauncher {
         ? await resolvePairingCode(input, this.numericTrust, getContext(this) as common.UIAbilityContext)
         : await this.resolveInvitation(this.invitation);
       await openAgent(getContext(this) as common.UIAbilityContext, bootstrap);
+      this.desktopSection = 'quota';
       this.invitation = '';
       this.pairingOpen = false;
     } catch (e) {
@@ -255,6 +261,8 @@ struct ConnectionLauncher {
         }.width('100%')
         Text('关闭后暂停接收新任务。鸿蒙调度件切到后台时也会暂停接单。').fontSize(13).fontColor('#A1A1AA')
       }.width('100%').alignItems(HorizontalAlign.Start).padding(16).borderRadius(20).backgroundColor('#1C1C1E')
+      Button('空间与调度盘').backgroundColor('#1C1C1E')
+        .onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/Index' }); })
       Button('结果展示').backgroundColor('#1C1C1E')
         .onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/Display' }); })
       if (this.error) Text(this.error).fontSize(14).fontColor('#FDA4AF')
@@ -288,19 +296,101 @@ struct ConnectionLauncher {
             .onClick(() => { void this.join(); })
         }.width('100%')
       }.width('100%').alignItems(HorizontalAlign.Start).padding(22)
-    }.width('100%').constraintSize({ maxHeight: '80%' })
+    }.width(this.desktop ? '80%' : '100%').constraintSize({ maxHeight: '80%', maxWidth: this.desktop ? 520 : '100%' })
       .borderRadius({ topLeft: 24, topRight: 24 }).backgroundColor('#1C1C1E')
   }
 
-  build() {
-    Stack({ alignContent: Alignment.Bottom }) {
+  // Native desktop translation of apps/runtime-desktop/agent.html.
+  @Builder
+  private desktopPage() {
+    Row() {
+      Column({ space: 14 }) {
+        Text('智调鸿枢').fontSize(19).fontWeight(FontWeight.Bold).fontColor('#F1F5F9')
+        Text('HarmonyOS 设备调度件').fontSize(14).fontColor('#A0ABC0')
+        Button('搜索协调中心').width('100%').backgroundColor('#162647')
+          .onClick(() => { this.desktopSection = 'discover'; void this.discover(); })
+        Button('输入配对码或邀请链接').width('100%').backgroundColor('#25314A')
+          .onClick(() => { this.openPair(''); })
+        Button('扫一扫').width('100%').backgroundColor('#25314A').enabled(!this.scanning && !this.pairing)
+          .onClick(() => { this.selected = ''; void this.scan(); })
+        Button('贡献上限').width('100%').backgroundColor('#25314A').enabled(this.paired)
+          .onClick(() => { this.desktopSection = 'quota'; })
+        Button('空间与调度盘').width('100%').backgroundColor('#25314A').enabled(this.paired)
+          .onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/Index' }); })
+      }.width(this.viewportWidth < 800 ? 170 : 220).height('100%').padding({ top: 24, left: 16, right: 16 })
+        .alignItems(HorizontalAlign.Start).backgroundColor('#11141C')
       Scroll() {
-        if (this.paired) {
-          this.contributionPage()
-        } else {
-          this.discoveryPage()
-        }
-      }.width('100%').height('100%').align(Alignment.Top)
+        Column({ space: 16 }) {
+          Row({ space: 12 }) {
+            Column({ space: 4 }) {
+              Text('设备接入与调度控制台').fontSize(23).fontWeight(FontWeight.Bold).fontColor('#F1F5F9')
+              Text(this.status || '未连接协调中心').fontSize(14).fontColor('#A0ABC0')
+            }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+            Button('重新搜索').backgroundColor('#25314A').enabled(!this.searching)
+              .onClick(() => { this.desktopSection = 'discover'; void this.discover(); })
+          }.width('100%').padding({ bottom: 16 })
+          if (this.paired && this.desktopSection !== 'discover') {
+            Column({ space: 16 }) {
+              Row({ space: 12 }) {
+                Column({ space: 6 }) {
+                  Text('贡献上限').fontSize(17).fontColor('#F1F5F9')
+                  Text(this.center).fontSize(14).fontColor('#A0ABC0')
+                }.layoutWeight(1).alignItems(HorizontalAlign.Start)
+                Button(this.contributing ? '停止设备调度件' : '开启设备调度件').backgroundColor('#1756D4')
+                  .enabled(!this.changingContribution).onClick(() => { void this.setContribution(!this.contributing); })
+              }.width('100%')
+              Row({ space: 12 }) {
+                this.quota('CPU 槽位', this.maxCpu > 0 ? String(this.maxCpu) : '待分配')
+                this.quota('内存', this.maxMemory > 0 ? this.maxMemory + ' MiB' : '待分配')
+              }.width('100%')
+              Text('额度由协调中心按本机上报的运行内存和 CPU 自动确定，预留系统及日常应用所需后分配。实际在线状态请在调度盘查看。')
+                .fontSize(14).fontColor('#A0ABC0')
+              Text('鸿蒙调度件切到后台时暂停接收新任务。').fontSize(13).fontColor('#A0ABC0')
+            }.width('100%').padding(20).borderRadius(16).backgroundColor('#161B26')
+          } else {
+            Column({ space: 16 }) {
+              Text('局域网自动发现').fontSize(16).fontColor('#F1F5F9')
+              Text(this.searchMessage).fontSize(14).fontColor('#A0ABC0')
+              Text('附近的协调中心').fontSize(17).fontColor('#F1F5F9')
+              Flex({ wrap: FlexWrap.Wrap }) {
+                ForEach(this.centers, (address: string) => {
+                  Column({ space: 10 }) {
+                    Text('协调中心').fontSize(17).fontColor('#F1F5F9')
+                    Text(address).fontSize(13).fontColor('#A0ABC0')
+                    Text('输入配对码连接 ›').fontSize(14).fontColor('#93C5FD')
+                  }.width(this.viewportWidth < 800 ? '100%' : 260).padding(16).margin({ right: 12, bottom: 12 }).borderRadius(12)
+                    .backgroundColor('#131926').alignItems(HorizontalAlign.Start)
+                    .onClick(() => { this.openPair(address); })
+                }, (address: string) => address)
+              }.width('100%')
+              if (!this.searching && this.centers.length === 0) {
+                Text('未发现协调中心，请确认处于同一局域网，或输入地址和配对码。').fontColor('#A0ABC0')
+              }
+            }.width('100%').padding(20).borderRadius(16).backgroundColor('#161B26').alignItems(HorizontalAlign.Start)
+          }
+          if (this.error && !this.pairingOpen) Text(this.error).fontColor('#FDA4AF')
+          Column({ space: 8 }) {
+            Text('运行状态').fontSize(17).fontColor('#F1F5F9')
+            Text(this.status || '暂无运行信息').fontSize(14).fontColor('#A0ABC0')
+          }.width('100%').padding(20).borderRadius(16).backgroundColor('#161B26').alignItems(HorizontalAlign.Start)
+        }.width('100%').padding(this.viewportWidth < 800 ? 16 : 28).alignItems(HorizontalAlign.Start)
+      }.layoutWeight(1).height('100%').align(Alignment.Top)
+    }.width('100%').height('100%').backgroundColor('#0B0E14')
+  }
+
+  build() {
+    Stack({ alignContent: this.desktop ? Alignment.Center : Alignment.Bottom }) {
+      if (this.desktop) {
+        this.desktopPage()
+      } else {
+        Scroll() {
+          if (this.paired) {
+            this.contributionPage()
+          } else {
+            this.discoveryPage()
+          }
+        }.width('100%').height('100%').align(Alignment.Top)
+      }
       if (this.pairingOpen) {
         Column().width('100%').height('100%').backgroundColor('#99000000').onClick(() => {
           if (!this.pairing && !this.scanning) {
@@ -312,5 +402,6 @@ struct ConnectionLauncher {
         this.pairingSheet()
       }
     }.width('100%').height('100%').backgroundColor(Color.Black)
+      .onAreaChange((_old: Area, area: Area) => { this.viewportWidth = Number(area.width); })
   }
 }

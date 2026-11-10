@@ -5,11 +5,15 @@ const {createRequire} = require('node:module');
 const {execFileSync} = require('node:child_process');
 const {createHash} = require('node:crypto');
 const root = path.resolve(__dirname, '..');
-const release = process.argv[2] || '调度系统分发-20261108';
+const release = process.argv[2] || '调度系统分发-20261110-r2';
 if (!/^调度系统分发-\d{8}(?:-r\d+)?$/.test(release)) throw Error('发行目录格式须为 调度系统分发-YYYYMMDD，可追加 -rN');
 const out = path.join(root, 'dist', release);
 const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'harmony-distribution-'));
 const nodeHome = path.join(root, 'dist/node-v24.16.0-win-x64');
+const electronDist = process.env.HARMONY_ELECTRON_DIST || path.join(root, 'node_modules/electron/dist');
+if (!fs.existsSync(path.join(electronDist, 'electron.exe'))) {
+  throw Error('ELECTRON_RUNTIME_MISSING: install Electron or set HARMONY_ELECTRON_DIST to its dist directory');
+}
 
 function copy(src, dest) {
   fs.mkdirSync(path.dirname(dest), {recursive: true});
@@ -21,14 +25,14 @@ function copy(src, dest) {
 
 const README_CENTER = `# Windows x64 协调中心
 
-完整解压后双击 Start.cmd。选择可供其他设备访问的局域网 IPv4，点击中央电源按钮启动。就绪后点击“设备配对”进入空间并生成设备邀请，点击“打开调度盘”查看运行状态。
+完整解压后双击 ZhiDiaoCenter.exe。选择可供其他设备访问的局域网 IPv4，点击中央电源按钮启动。就绪后点击“设备配对”进入空间并生成设备邀请，点击“打开调度盘”查看运行状态。
 
 包内已带 Node.js 运行时和 OpenSSL。首次启动会在 services/coordinator/data/desktop-<IP> 下生成证书和数据库，请保留该目录用于备份与迁移。默认 HTTPS TCP 7443，发现使用 UDP 7444，设备之间须能互访。端口冲突可在高级设置中更改。停止服务时再次点击中央电源按钮。
 `;
 
 const README_AGENT = `# Windows x64 设备调度件
 
-完整解压后双击 Start.cmd。选择发现的协调中心或直接点击“导入设备邀请”，导入由中心生成的设备邀请 JSON。配对后进入“贡献上限”，点击“开启设备调度件”。安装身份默认保存在当前用户的 HarmonyRuntime/device，重新启动时可直接使用。
+完整解压后双击 ZhiDiaoHongShu.exe，在独立程序窗口中选择协调中心，输入 6 位配对码或导入邀请链接。关闭程序会停止本机贡献。配对后进入“贡献上限”，点击“开启设备调度件”。安装身份默认保存在当前用户的 HarmonyRuntime/device，重新启动时可直接使用。
 
 基础 CPU 能力使用包内运行时，不需要在本机安装 Node.js。若需要执行图像编码，请另配 Python、模型与可信评测套件；包内 services/image-worker/requirements.txt 列出了 Python 依赖。使用 CUDA 时另外准备 NVIDIA 驱动和支持 CUDA 的 PyTorch，启动页选择 CUDA 并填写 Python 和套件路径，中心需配置同一评测套件。
 `;
@@ -123,14 +127,18 @@ function windowsPackage(name, role) {
     const asset = path.join('apps/runtime-desktop', file);
     copy(path.join(root, asset), path.join(dest, asset));
   }
+  {
+    copy(electronDist, dest);
+    fs.renameSync(path.join(dest, 'electron.exe'), path.join(dest, center ? 'ZhiDiaoCenter.exe' : 'ZhiDiaoHongShu.exe'));
+    for (const file of ['electron-main.cjs', 'electron-runtime.cjs'])
+      copy(path.join(root, 'apps/runtime-desktop', file), path.join(dest, 'apps/runtime-desktop', file));
+    fs.mkdirSync(path.join(dest, 'resources/app'), {recursive: true});
+    fs.writeFileSync(path.join(dest, 'resources/app/main.cjs'), "require('../../apps/runtime-desktop/electron-main.cjs');\n");
+    fs.writeFileSync(path.join(dest, 'resources/app/package.json'), JSON.stringify({
+      name: 'zhidiao-device', version: '0.1.0', main: 'main.cjs', runtimeRole: role
+    }));
+  }
   fs.writeFileSync(path.join(dest, 'README.md'), center ? README_CENTER : README_AGENT);
-  // The bundled OpenSSL must be reachable through PATH: the launcher only accepts an
-  // absolute COORDINATOR_OPENSSL or an openssl.exe found next to a PATH entry.
-  fs.writeFileSync(path.join(dest, 'Start.cmd'), [
-    '@echo off', 'cd /d "%~dp0"',
-    'if exist "runtime\\openssl\\openssl.exe" set "PATH=%PATH%;%~dp0runtime\\openssl"',
-    '"runtime/node.exe" scripts/runtime-desktop.cjs ' + role, 'pause', ''
-  ].join('\r\n').replaceAll('/', '\\').replace('cd \\d', 'cd /d'));
   console.log(name + ': ' + visited.size + ' runtime dependencies');
   return dest;
 }
@@ -174,6 +182,15 @@ for (const [dir, project, filename] of [
   fs.copyFileSync(hap, path.join(out, dir, filename));
   haps.push(path.join(out, dir, filename));
 }
+const signedAgent = process.env.HARMONY_AGENT_SIGNED_HAP || path.join(root, '.test/s2-harmony-agent/entry/build/default/outputs/default/entry-default-signed.hap');
+if (fs.existsSync(signedAgent)) {
+  const signed = path.join(out, '03-Device-Agent-HarmonyOS/Harmony-Device-Agent-API22-signed.hap');
+  if (!process.env.HARMONY_AGENT_SIGNED_HAP && fs.statSync(signedAgent).mtimeMs < fs.statSync(path.join(root, '.test/s2-harmony-agent/entry/build/default/outputs/default/entry-default-unsigned.hap')).mtimeMs) throw Error('SIGNED_AGENT_OUTDATED: rebuild the signed HAP');
+  fs.copyFileSync(path.resolve(signedAgent), signed);
+  const alias = path.join(path.dirname(signed), 'Harmony-Device-Agent-API22-MateBook-signed.hap');
+  if (fs.existsSync(alias)) {fs.copyFileSync(signed, alias);haps.push(alias);}
+  haps.push(signed);
+}
 // Checksums are regenerated from the files that were just written, so they cannot drift.
 const sums = [...archives, ...haps].map(file => {
   const hash = createHash('sha256').update(fs.readFileSync(file)).digest('hex');
@@ -188,15 +205,15 @@ fs.writeFileSync(path.join(out, '00-使用说明.md'), `# 智调鸿枢分发包
 
 | 分组 | 安装设备 | 启动方式 |
 | --- | --- | --- |
-| 01-Coordinator-Windows-x64 | 运行协调中心的 Windows x64 电脑 | 完整解压后双击 Start.cmd |
-| 02-Device-Agent-Windows-x64 | Windows x64 执行设备 | 完整解压后双击 Start.cmd |
+| 01-Coordinator-Windows-x64 | 运行协调中心的 Windows x64 电脑 | 完整解压后双击 ZhiDiaoCenter.exe |
+| 02-Device-Agent-Windows-x64 | Windows x64 执行设备 | 完整解压后双击 ZhiDiaoHongShu.exe |
 | 03-Device-Agent-HarmonyOS | HarmonyOS 6.0.2 / API 22 执行设备 | 用 org.harmonycc.agent 对应的签名配置签名后安装 |
 | 04-SoleAI-HarmonyOS | HarmonyOS 6.0.2 / API 22 业务演示手机 | 用 org.harmonycc.soleai 对应的签名配置签名后安装 |
 | 05-Photo-HarmonyOS | HarmonyOS 6.0.2 / API 22 照片演示手机 | 用 org.harmonycc.photo 独立签名后安装；若目录为 NOT-BUILT.txt，表示没有提供安装包 |
 
-两份 Windows ZIP 内含运行依赖。实际提供的 HAP 均为未签名产物，校验清单列出本次文件。
+两份 Windows ZIP 内含运行依赖。HAP 默认提供未签名产物；若额外提供 signed.hap，则使用本机调试签名，仅适用于该 Profile 授权设备。校验清单列出本次文件。
 
-先启动协调中心并创建空间，再为每台设备生成独立邀请。Windows 导入邀请文件，鸿蒙调度件扫描邀请二维码。演示手机安装第 03、04 包，先配对设备，再打开 SoleAI 的「使用协同调度」并授权。
+先启动协调中心并创建空间，再为每台设备生成独立邀请。Windows 和鸿蒙均可选择中心后输入 6 位配对码，也可使用邀请链接或二维码。第 03 包在手机显示手机布局，在鸿蒙电脑显示桌面布局。演示手机安装第 03、04 包，先配对设备，再打开 SoleAI 的「使用协同调度」并授权。
 
 照片演示另安装第 05 包，首次连接第 03 包授权，随后从手机选图并开始处理。电脑从调度盘打开“照片任务展示”。照片模型和引擎须按 PHOTO-WORKFLOW-LOCAL-20261110.md 配置，不能把 CUDA 图像编码配置当作照片增强引擎。
 
