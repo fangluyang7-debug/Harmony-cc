@@ -32,6 +32,7 @@ async function main(){
  const deadline=Date.now()+360000;let ready=false;while(Date.now()<deadline){try{const c=(await r.snapshots.build(group)).snapshot.candidates;ready=photoPacks().every(p=>c.some(t=>t.capability===p.manifest.contract.capability));if(ready)break;}catch{}await new Promise(resolve=>setTimeout(resolve,2000));}
  if(!ready)throw Error('PHOTO_QUALIFICATION_TIMEOUT');console.log('PHOTO_READY');
  const stop=async()=>{await host.close();await new Promise(resolve=>preview.close(resolve));await r.close();};process.once('SIGINT',()=>void stop().then(()=>process.exit(0)));
+ if(process.argv.includes('--check-app')){try{await require('./photo-app-browser-check.cjs')({r,paired,group,url,root,api});}finally{await stop();}return;}
  if(process.argv.includes('--check-ui')){
   const {chromium}=require(path.join(root,'.test/photo-ui/node_modules/playwright')),browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true}),context=await browser.newContext({viewport:{width:1600,height:1050}}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));let passed=false;
   try{

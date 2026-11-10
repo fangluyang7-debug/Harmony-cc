@@ -71,6 +71,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     }
     @Controller('/v2')
     class Pairing {
+      @Post('apps/photo')async appPhoto(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>spaces.appPhoto(await auth.authenticate(bearer(header)),body));}
       @Post('display')async inviteDisplay(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>display.invite(await auth.authenticate(bearer(header)),body));}
       @Get('display')async displayInbox(@Headers('authorization') header:string){return this.jobResponse(async()=>display.inbox(await auth.authenticate(bearer(header))));}
       @Get('display/:id')async displayStatus(@Headers('authorization') header:string,@Param('id') id:string){return this.jobResponse(async()=>display.status(await auth.authenticate(bearer(header)),id));}
@@ -163,7 +164,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       @Post('pair')async pair(@Body() body:any){if(!ready)throw new ServiceUnavailableException();try{return {...await auth.exchange(body),epoch};}catch(error){if((error as Error).message==='SPACE_SWITCH_BUSY')throw new ConflictException('SPACE_SWITCH_BUSY');throw new UnauthorizedException('PAIRING_REJECTED');}}
       @Post('apps/registrations')async registerApp(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>apps.register(await auth.authenticate(bearer(header)),body,config.publicUrl??'https://'+config.certificateHost+':'+app.getHttpServer().address().port));}
       @Post('apps/exchange')async exchangeApp(@Body() body:any){return this.jobResponse(async()=>apps.exchange(body));}
-      @Get('apps/me')async appIdentity(@Headers('authorization') header:string){return this.jobResponse(async()=>apps.context(await auth.authenticate(bearer(header))));}
+      @Get('apps/me')async appIdentity(@Headers('authorization') header:string){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),context=await apps.context(peer),budget=await db.device.findUnique({where:{id:JSON.stringify(['budget',peer.deviceId])}});return {...context,deviceCapacity:budget?JSON.parse(budget.metadataJson).capacity:[]};});}
       /** Qualified-target counts per allowed contract. A count is a registration fact for the App's own routing report; the planner still chooses. */
       @Get('apps/me/capabilities')async appCapabilities(@Headers('authorization') header:string){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),context=await apps.context(peer);
         let candidates:{capability:string;targetId:string;serviceId?:string}[]=[];try{candidates=(await snapshots.build(peer.groupId)).snapshot.candidates;}catch{candidates=[];}
@@ -193,6 +194,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     @Module({controllers:[Health,Pairing]})class AppModule{}
     const app=await NestFactory.create(AppModule,{logger:false,...(config.proxy?{}:{httpsOptions:{key:identity.key,cert:identity.cert}}),abortOnError:false});
     const express=require('express');
+    app.use('/v2/apps/photo',express.json({limit:'12mb'}));
     app.use(express.json({limit:'1mb'}));
     app.use('/v2/spaces',express.raw({type:'application/octet-stream',limit:'8mb'}));
     app.use('/v2/spaces',(req:any,res:any)=>{void spaces.handle(req,res);});

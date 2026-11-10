@@ -8,13 +8,13 @@ export class PhotoRuns {
  private mutations=Promise.resolve();
  constructor(private directory:string,private db:PrismaClient,private domain:string){}
  private file(group:string,id:string){if(!/^[a-zA-Z0-9-]{1,80}$/.test(group)||!/^[a-zA-Z0-9-]{1,80}$/.test(id))throw Error('PHOTO_RUN_INVALID');return path.join(this.directory,'photo-runs',group,id+'.json');}
- async create(group:string,userId:string,body:any){
+ async create(group:string,userId:string,body:any,appInstanceId?:string){
   if(!Array.isArray(body.inputs)||!body.inputs.length||body.inputs.length>8||!['LOCAL','COOPERATIVE','LOCAL_PROCESS_TEST'].includes(body.mode)||!Number.isSafeInteger(body.budgetMs)||body.budgetMs<1000||body.budgetMs>300000)throw Error('PHOTO_RUN_INVALID');
   for(const i of body.inputs)if(typeof i.name!=='string'||i.name.length>180||!/^[a-f0-9]{64}$/.test(i.hash)||!Number.isSafeInteger(i.bytes)||i.bytes<1||i.bytes>8388608)throw Error('PHOTO_RUN_INVALID');
   const sourceDeviceId=typeof body.sourceDeviceId==='string'?body.sourceDeviceId:'';
   if(sourceDeviceId){const device=await this.db.spaceDevice.findUnique({where:{id:sourceDeviceId}});if(!device||device.userId!==userId||device.spaceId!==group)throw Error('PHOTO_SOURCE_SCOPE');}
   if(body.mode==='LOCAL'&&!sourceDeviceId)throw Error('PHOTO_SOURCE_REQUIRED');
-  const r={domain:this.domain,sourceDeviceId,model:photoReference().model,scale:4,precision:'qualified-backend-default',id:randomUUID(),group,userId,inputs:body.inputs,mode:body.mode,budgetMs:body.budgetMs,createdAt:Date.now(),updatedAt:Date.now(),state:'PREPARING',jobs:[],sourceDurationMs:null,error:null,revision:0};await this.save(r);return r;
+  const r={domain:this.domain,sourceDeviceId,...(appInstanceId?{appInstanceId}:{}),model:photoReference().model,scale:4,precision:'qualified-backend-default',id:randomUUID(),group,userId,inputs:body.inputs,mode:body.mode,budgetMs:body.budgetMs,createdAt:Date.now(),updatedAt:Date.now(),state:'PREPARING',jobs:[],sourceDurationMs:null,error:null,revision:0};await this.save(r);return r;
  }
  private async save(r:any){
   const file=this.file(r.group,r.id);await fs.mkdir(path.dirname(file),{recursive:true});const temp=file+'.'+randomUUID()+'.tmp';await fs.writeFile(temp,JSON.stringify(r));
@@ -32,7 +32,7 @@ export class PhotoRuns {
   const r=await this.read(group,id);if(r.userId!==userId)throw Error('PHOTO_RUN_FORBIDDEN');
   if(!Number.isSafeInteger(body.revision)||body.revision!==r.revision)throw Error('PHOTO_RUN_REVISION');
   if(body.jobs!==undefined){if(!Array.isArray(body.jobs)||body.jobs.length>8||body.jobs.some((j:any)=>typeof j.id!=='string'||!Number.isInteger(j.imageIndex)||j.imageIndex<0||j.imageIndex>=r.inputs.length))throw Error('PHOTO_RUN_INVALID');
-   for(const j of body.jobs){const row=await this.db.sdkWorkflowJob.findUnique({where:{id:j.id}});if(!row||row.groupId!==group)throw Error('PHOTO_JOB_SCOPE');const g=JSON.parse(row.metadataJson),root=g.workflow.nodes.find((n:any)=>n.input);if(g.peer.principalId!==userId||g.workflow.outputContract!=='photo.product'||root?.input.contentHash!==r.inputs[j.imageIndex].hash||root?.input.bytes!==r.inputs[j.imageIndex].bytes||r.sourceDeviceId&&g.peer.deviceId!==r.sourceDeviceId)throw Error('PHOTO_JOB_SCOPE');}
+   for(const j of body.jobs){const row=await this.db.sdkWorkflowJob.findUnique({where:{id:j.id}});if(!row||row.groupId!==group)throw Error('PHOTO_JOB_SCOPE');const g=JSON.parse(row.metadataJson),root=g.workflow.nodes.find((n:any)=>n.input);if(g.peer.principalId!==userId||r.appInstanceId&&g.peer.app?.appInstanceId!==r.appInstanceId||g.workflow.outputContract!=='photo.product'||root?.input.contentHash!==r.inputs[j.imageIndex].hash||root?.input.bytes!==r.inputs[j.imageIndex].bytes||r.sourceDeviceId&&g.peer.deviceId!==r.sourceDeviceId)throw Error('PHOTO_JOB_SCOPE');}
    if(new Set(body.jobs.map((j:any)=>j.imageIndex)).size!==body.jobs.length||new Set(body.jobs.map((j:any)=>j.id)).size!==body.jobs.length)throw Error('PHOTO_RUN_INVALID');r.jobs=body.jobs;
   }
   if(body.deliveredImage!==undefined){

@@ -10,7 +10,7 @@ export function imageState(run,index){
  }
  return {kind:'waiting',label:'待处理',workflow};
 }
-export function createPhotoGallery({source,output,base,digest,device,onError}){
+export function createPhotoGallery({source,output,base,digest,device,onError,fetcher=fetch,resolveInput=async url=>url}){
  let runId='',loaded=new Map(),pending=new Set();
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function reset(run){for(const value of loaded.values())URL.revokeObjectURL(value);loaded.clear();pending.clear();runId=run.id;source.dataset.count=String(run.inputs.length);output.dataset.count=String(run.inputs.length);
@@ -21,12 +21,12 @@ export function createPhotoGallery({source,output,base,digest,device,onError}){
   for(let index=0;index<run.inputs.length;index++){
    const status=imageState(run,index),sourceCard=source.children[index],remote=run.images?.find(i=>i.imageIndex===index),src=local[index]||(remote?.inputAvailable?`${base}/photo-runs/${encodeURIComponent(id)}/input?image=${index}`:'');
    sourceCard.className='source-photo is-'+status.kind;sourceCard.querySelector('.photo-state').textContent=status.label;
-   if(src&&!sourceCard.querySelector('img')){const img=new Image();img.alt=run.inputs[index].name+' · 原图';img.src=src;sourceCard.querySelector('.photo-frame').replaceChildren(img);}
+   if(src&&!sourceCard.querySelector('img')){const resolved=local[index]?src:await resolveInput(src);if(id!==runId)return;const img=new Image();img.alt=run.inputs[index].name+' · 原图';img.src=resolved;sourceCard.querySelector('.photo-frame').replaceChildren(img);}
    if(!remote?.delivered){if(status.kind==='failed')output.children[index].querySelector('.waiting-photo span').textContent=status.label;continue;}
    if(loaded.has(index)||pending.has(index))continue;pending.add(index);
    // Only a server-verified per-image delivery may cause a finished photo to appear.
    void (async()=>{let url='';try{
-    const response=await fetch(`${base}/photo-runs/${encodeURIComponent(id)}/result?image=${index}`,{signal:AbortSignal.timeout(20000)});if(!response.ok)throw Error('成品暂未取到，将自动重试');
+    const response=await fetcher(`${base}/photo-runs/${encodeURIComponent(id)}/result?image=${index}`,{signal:AbortSignal.timeout(20000)});if(!response.ok)throw Error('成品暂未取到，将自动重试');
     const product=await response.json(),bytes=Uint8Array.from(atob(product.image),c=>c.charCodeAt(0));if(await digest(bytes)!==product.hash)throw Error('成品哈希校验失败');
     url=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));const img=new Image();img.src=url;img.alt=run.inputs[index].name+' · 真实 AI 成品';await img.decode();
     if(id!==runId){URL.revokeObjectURL(url);return;}loaded.set(index,url);

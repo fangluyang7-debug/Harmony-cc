@@ -1,9 +1,11 @@
 import {createPhotoGallery,terminalRun} from './photo-gallery.mjs';
+import {nativePhotoClient} from './photo-app-port.mjs';
 import {SchedulerSdk} from './scheduler-sdk.js';
 import {photoPort,photoWorkflow,stageLabels,comparable} from './photo-workflow.mjs';
-const $=id=>document.getElementById(id),params=new URL(location.href).searchParams,group=params.get('space')||'',judge=params.get('view')==='judge';
+const $=id=>document.getElementById(id),params=new URL(location.href).searchParams,group=params.get('space')||'',judge=params.get('view')==='judge'||!!window.harmonyDevice&&!window.harmonyPhoto;
 const base='/v2/spaces/'+encodeURIComponent(group),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])),seconds=n=>Number.isFinite(n)?(n/1000).toFixed(2):'—';
 const digest=async b=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',b)),n=>n.toString(16).padStart(2,'0')).join('');
+const appClient=window.harmonyPhoto?nativePhotoClient(window.harmonyPhoto,group,digest):null,photoFetch=appClient?.fetch||fetch;
 const labels={PENDING:'等待依赖',SUBMITTED:'正在派发',OFFERED:'已分配',ACCEPTED:'已准入',RUNNING:'正在计算',SUCCEEDED:'结果已提交',FAILED:'执行失败',REJECTED:'未准入',CANCELLED_SETTLED:'已取消'};
 const planningLabels={LEGAL_SUGGESTION:'可执行计划',PRIOR:'初始成本估计',MEASURED:'历史实测成本',UNKNOWN:'成本未知'};
 const planLabel=value=>planningLabels[value]||value;
@@ -11,11 +13,11 @@ let sourceDeviceId='',nativeFiles=[];
 let snapshot=null,current=null,record=null,history=[],busy=false,cancelled=false,selectedRun=params.get('run'),timerStart=0;
 document.body.classList.toggle('judge',judge);$('dashboard').href='dispatch.html?space='+encodeURIComponent(group);$('watch').href='photo.html?space='+encodeURIComponent(group)+'&view=judge';
 function error(e){$('error').hidden=!e;$('error').textContent=e?.message||'';}
-async function api(route,body){const r=await fetch(base+route,{credentials:'same-origin',signal:AbortSignal.timeout(60000),...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});const value=await r.json();if(!r.ok)throw Error(value.error||'请求失败');return value;}
+async function api(route,body){const r=await photoFetch(base+route,{credentials:'same-origin',signal:AbortSignal.timeout(60000),...(body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});const value=await r.json();if(!r.ok)throw Error(value.error||'请求失败');return value;}
 let updates=Promise.resolve();
 function update(changes){const next=updates.then(async()=>{record=await api('/photo-runs/'+record.id,{revision:record.revision,...(typeof changes==='function'?changes(record):changes)});directoryAt=0;});updates=next.catch(()=>{});return next;}
 const tasks=new Map();let localPreviews=[],selectionPending=false;
-const gallery=createPhotoGallery({source:$('source-gallery'),output:$('preview'),base,digest,device,onError:error});
+const gallery=createPhotoGallery({source:$('source-gallery'),output:$('preview'),base,digest,device,onError:error,fetcher:photoFetch,...(appClient?{resolveInput:appClient.input}:{})});
 function device(id){return snapshot?.devices?.find(d=>d.id===id)?.name||id?.slice(0,12)||'等待选择';}
 function rows(){return current?.workflows?.flatMap(w=>w.nodes.map(n=>({...n,workflow:w.id,imageIndex:w.imageIndex})))||[];}
 function render(){
@@ -34,6 +36,8 @@ function render(){
  const duration=terminal?current.sourceDurationMs:null;
  $('elapsed').innerHTML=seconds(duration)+'<small>秒</small>';
  $('domain').textContent=current.domain==='SIMULATED'||current.mode==='LOCAL_PROCESS_TEST'?'本机进程验证 · 不代表多设备或 GPU 性能':'实际任务记录 · 硬件与网络以设备证据为准';
+ // Phone business UI only needs progress/results, not the judge's graph and trace table.
+ if(appClient){$('selection').textContent=current.inputs.length+' 张照片 · '+(terminal?'本轮已结束':'任务处理中');return;}
  const latest=current.workflows?.find(w=>w.state!=='SUCCEEDED')??current.workflows?.at(-1);
  if(latest){
   const bands=[['analyze'],latest.nodes.filter(n=>n.id.startsWith('prepare-')).map(n=>n.id),latest.nodes.filter(n=>n.id.startsWith('enhance-')).map(n=>n.id),['assemble'],['deliver']];
@@ -84,21 +88,22 @@ $('run').onclick=async()=>{
    const normalized=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));if(!normalized)throw Error('照片解码失败');const bytes=new Uint8Array(await normalized.arrayBuffer());
    inputs.push({name:f.name,bytes:bytes.length,originalHash:await digest(original),hash:await digest(bytes),width:canvas.width,height:canvas.height,data:bytes});
   }
-  const mode=$('mode').value;if(mode==='LOCAL'&&!sourceDeviceId)throw Error('单机对照请从 Harmony 应用内打开，确保能识别发起设备。');const budgetMs=Number($('budget').value);record=await api('/photo-runs',{mode,sourceDeviceId,budgetMs,inputs:inputs.map(({data,...m})=>m)});
+  const mode=$('mode').value;if(mode==='LOCAL'&&!sourceDeviceId)throw Error('单机对照请从图片演示 App 发起，确保能识别发起设备。');const budgetMs=Number($('budget').value);record=await api('/photo-runs',{mode,sourceDeviceId,budgetMs,inputs:inputs.map(({data,...m})=>m)});
   selectionPending=false;current={...record,images:[],workflows:[]};render();await gallery.render(current,localPreviews);
   // Gallery originals are display-only. Executor inputs still go through SDK tickets.
   for(let i=0;i<inputs.length;i++){
    if(cancelled)throw Error('已取消');
-   const r=await fetch(base+'/photo-runs/'+record.id+'/input?image='+i,{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:inputs[i].data,signal:AbortSignal.timeout(60000)});if(!r.ok)throw Error((await r.json()).error);
+   const r=await photoFetch(base+'/photo-runs/'+record.id+'/input?image='+i,{method:'PUT',headers:{'Content-Type':'application/octet-stream'},body:inputs[i].data,signal:AbortSignal.timeout(60000)});if(!r.ok)throw Error((await r.json()).error);
   }
   await update({state:'RUNNING'});let next=0;const failures=[];
   async function worker(){while(next<inputs.length&&!cancelled){const i=next++,src=inputs[i],remaining=Math.floor(budgetMs-(performance.now()-timerStart));if(remaining<1000){failures.push('总预算已耗尽');break;}
-   const port=photoPort(group,fetch,digest,()=>{},sourceDeviceId);port.cancelled=()=>cancelled;const sdk=new SchedulerSdk(port),input=await sdk.registerInput(src.data,'image.raster'),id=crypto.randomUUID(),graph=photoWorkflow(id,input,src.width,src.height);let task;
+   const port=appClient?appClient.port():photoPort(group,fetch,digest,()=>{},sourceDeviceId);port.cancelled=()=>cancelled;const sdk=new SchedulerSdk(port),input=await sdk.registerInput(src.data,'image.raster'),id=crypto.randomUUID(),graph=photoWorkflow(id,input,src.width,src.height);let task;
    if(mode==='LOCAL')for(const node of graph.workflow.nodes)node.executionScope='ORIGIN_DEVICE';
    try{task=await sdk.submit(graph.workflow,{requestId:id,budgetMs:remaining,resultDestination:'ORIGIN'});tasks.set(id,task);await update(r=>({jobs:[...r.jobs,{id:task.id,imageIndex:i}]}));
     if(cancelled){await task.cancel();throw Error('已取消');}
     const result=await task.result(Math.min(300000,remaining+5000)),product=JSON.parse(new TextDecoder().decode(result.output)),decoded=Uint8Array.from(atob(product.image),c=>c.charCodeAt(0));
     if(await digest(decoded)!==product.hash)throw Error('成品哈希校验失败');
+    if(appClient)await api('/photo-runs/'+record.id+'/capture-result?image='+i,{});
     await update({deliveredImage:{imageIndex:i,hash:product.hash}});void refresh().catch(error);
    }catch(e){failures.push(src.name+'：'+e.message);try{await (task||sdk.resume(id)).cancel();}catch{}}
    finally{tasks.delete(id);sdk.releaseInput(input);}
@@ -112,9 +117,9 @@ $('run').onclick=async()=>{
 };
 async function poll(){try{await refresh();}catch(e){error(e);$('freshness').textContent='连接暂不可用，保留最后一次记录';}setTimeout(poll,1000);}
 async function initialize(){
- try{if(window.harmonyDevice?.info){const info=JSON.parse(await window.harmonyDevice.info());sourceDeviceId=info.deviceId||'';if(info.importedPhotoAvailable&&window.harmonyDevice.pickImportedPhoto){$('usb-pick').hidden=false;$('usb-pick').onclick=async()=>{try{const p=JSON.parse(await window.harmonyDevice.pickImportedPhoto());if(nativeFiles.length>=8)throw Error('每批最多添加 8 张照片');nativeFiles.push(new File([Uint8Array.from(atob(p.data),c=>c.charCodeAt(0))],p.name,{type:p.mime}));selection();}catch(e){error(e);}};}}
-  if(window.harmonyDevice?.pickPhoto){$('native-pick').hidden=false;$('files').closest('label').hidden=true;
-   $('native-pick').onclick=async()=>{try{const p=JSON.parse(await window.harmonyDevice.pickPhoto());if(!p.data)return;const bytes=Uint8Array.from(atob(p.data),c=>c.charCodeAt(0));if(nativeFiles.length>=8)throw Error('每批最多添加 8 张照片');nativeFiles.push(new File([bytes],p.name||'photo.jpg',{type:p.mime||'image/jpeg'}));selection();}catch(e){error(e);}};
+ try{if(window.harmonyPhoto?.info){const info=JSON.parse(await window.harmonyPhoto.info());sourceDeviceId=info.deviceId||'';}
+  if(window.harmonyPhoto?.pickPhoto){$('native-pick').hidden=false;$('files').closest('label').hidden=true;
+   $('native-pick').onclick=async()=>{try{const p=JSON.parse(await window.harmonyPhoto.pickPhoto());if(!p.data)return;const bytes=Uint8Array.from(atob(p.data),c=>c.charCodeAt(0));if(nativeFiles.length>=8)throw Error('每批最多添加 8 张照片');nativeFiles.push(new File([bytes],p.name||'photo.jpg',{type:p.mime||'image/jpeg'}));selection();}catch(e){error(e);}};
   }
  }catch(e){error(e);}
  $('mode').options[1].disabled=!sourceDeviceId;void poll();

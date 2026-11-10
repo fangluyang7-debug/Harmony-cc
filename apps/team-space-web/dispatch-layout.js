@@ -107,4 +107,4 @@ document.addEventListener('fullscreenchange',()=>{
 });
 showView(location.hash.slice(1));
 
-{const link=document.getElementById('photo-studio-link');if(link)link.href='photo.html?space='+encodeURIComponent(new URL(location.href).searchParams.get('space')||'');}
+{const link=document.getElementById('photo-studio-link');if(link)link.href='photo.html?space='+encodeURIComponent(new URL(location.href).searchParams.get('space')||'')+'&view=judge';}

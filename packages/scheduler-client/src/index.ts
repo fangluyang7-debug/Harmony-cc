@@ -91,7 +91,7 @@ export class SchedulerSdk {
     const code=(error as Error).message;if(!['NO_LEGAL_PLAN','PLANNING_BUDGET_BASELINE','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(code)||this.port.now()>=deadline)throw error as Error;
     await this.port.wait(500);
     const remaining=options.budgetMs-Math.max(0,Math.ceil(this.port.now()-started));if(remaining<1)throw Error('SDK_BUDGET_EXHAUSTED');
-    const retry:SubmitOptions={...options,budgetMs:remaining};const submission:SdkSubmission={workflow,options:retry};body=JSON.stringify(submission);
+    const retry=JSON.parse(JSON.stringify(options)) as SubmitOptions;retry.budgetMs=remaining;const submission:SdkSubmission={workflow,options:retry};body=JSON.stringify(submission);
    }
   }
  }

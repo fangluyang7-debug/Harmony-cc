@@ -69,7 +69,7 @@ struct Index {
    if(this.origin){
     Web({src:this.webUrl,controller:this.controller}).width('100%').height('100%')
      .javaScriptAccess(true).domStorageAccess(true)
-     .javaScriptProxy({object:this.bridge,name:'harmonyDevice',methodList:['available','joinDevice','scanInvite','info','pickPhoto','pickImportedPhoto'],asyncMethodList:[],controller:this.controller})
+     .javaScriptProxy({object:this.bridge,name:'harmonyDevice',methodList:['available','joinDevice','scanInvite','info'],asyncMethodList:[],controller:this.controller})
      .onControllerAttached(()=>{this.attached=true;})
      .onPageEnd(()=>{this.loading=false;})
      .onSslErrorEvent((event:SslErrorEvent)=>{this.ssl(event);})

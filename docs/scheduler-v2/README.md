@@ -18,6 +18,8 @@ SDK 的 TS/ArkTS 源码一致性测试只验证同步，不验证 ArkTS 语法�
 
 ## 照片工作流本地实现（2026-11-10）
 
+最新本地拆分见 [独立图片 App 与电脑评委页](PHOTO-INDEPENDENT-APP.md)：手机保留协作空间、SoleAI、图片演示三个独立 App，评委可视化仅用于电脑；新图片包已构建，待独立签名和真机验收，见 STATUS §108。
+
 最新接续见 [照片演示联调交接](HANDOFF-PHOTO-DEMO-20261110.md)，实现细节见 [AI 照片处理与展示实现记录](PHOTO-WORKFLOW-LOCAL-20261110.md)。保留已有调度盘，增加实际 AI 推理、多输入 DAG 与评委实时展示页。手机与 Windows 已完成同输入无线对照，尚未证明稳定提速；鸿蒙电脑和 NVIDIA GPU 尚未参加本轮验收，见 STATUS §107。
 
 构建默认仍是 API 22；`HARMONY_BUILD_API=24` 仅用于已有 API 24 验收工程的显式复现，输出单独目录，不代表统一 API 22 基线已经验证。

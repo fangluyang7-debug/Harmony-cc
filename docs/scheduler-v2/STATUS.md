@@ -2339,3 +2339,15 @@ VisualReviewFlow.ets 共享编排、HVG1 原生压缩输入、手机每轮解码
 96×64 相同输入、相同模型、180 秒预算，手机计算两轮 26.251 / 20.587 秒，协作两轮 23.038 / 24.880 秒。每轮七个唯一节点、完整回执和交付。协作为手机分析 + Windows 增强/合成，不是双端增强分片重叠，不能宣称已稳定加速。NVIDIA 与鸿蒙电脑未参与。当前中心使用仓库编译产物和 `.test/real-device-20261109-wifi/coordinator` 数据目录；不要误用旧部署包覆盖修复。
 
 [输入准备、证据、修复、操作与下一步](../../artifacts/acceptance/2026-11-10/photo-phone-windows/README.md)，[照片链路总说明](PHOTO-WORKFLOW-LOCAL-20261110.md)。后续重点：更大真实照片、尺寸相关成本估计、控制开销、GPU 资格与实测；保留慢于单机的记录。
+
+## §108 独立图片 App，评委展示仅用于电脑（2026-11-10）
+
+按用户新要求，从协作空间移出照片提交职责，新增 `apps/harmony-photo`（`org.harmonycc.photo` / Harmony 图片演示）。手机保留协作空间、SoleAI、图片演示三个独立 App；SoleAI 未改动。图片 App 复用 EnrollmentAbility 一次授权、独立 App 凭据及 NativeAgent 前台宿主，网页经原生 HarmonySdkPort 走既有 SDK / PlanningService。新增 `/v2/apps/photo` 只接展示元数据和已核验结果，不另开派发入口。
+
+手机加载 `photo-mobile.html`，只显示选图、开始、进度和结果；不显示或绘制评委规划图，未开放原生保存相册功能。电脑保留 `photo.html?...&view=judge` 的照片队列、实时规划/分工与结束统计，复用同一 PhotoRuns 数据。协作空间原生桥已移除选图和 USB 测试输入方法，原照片链接改为只读展示。
+
+修正 App 宿主 CPU 总量使用设备确认共享容量（PRIOR），贡献额度仍单独约束；避免较小 App 配额导致整机容量被低报。修复此前 TS/ArkTS SDK 重试选项拷贝写法不同的一致性失败，按已通过 ArkTS 构建的写法统一，提交和预算语义不变。
+
+验证：协调器 TypeScript 通过；SDK 11/11；新桥测试 1/1；App 身份/配额与新接口回归 6/6；照片批量/存储回归 4/4。隔离本机通过独立 App 身份跑完真实 CPU 模型七个唯一阶段，交付、输入/成品哈希核验、手机视口与电脑实时展示通过。原生桥由浏览器适配替代，来源与执行器在本机，不能当作真机或加速证据。HAR、photo、agent、probe API 24 构建通过；photo/probe 未签名。未更新正在使用的协调器进程或手机已安装包。
+
+本节与实现一同提交到 `codex/real-device-acceptance`，供协作者整合；本轮起点为 `3b8abce`，未合并或推送到协作者的主线分支。新包需独立 DevEco 调试签名，再安装并验收一次授权、相册、ArkWeb、前后台和双机协作；API 22 / 模拟器 / GPU 尚未验收。说明与复现命令见 [独立图片 App](PHOTO-INDEPENDENT-APP.md)。

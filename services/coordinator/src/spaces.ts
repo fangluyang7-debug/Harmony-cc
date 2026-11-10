@@ -31,6 +31,33 @@ export function contribution(v:any){
 /** Browser accounts and room membership are separate from device execution credentials. */
 export class TeamSpaces {
   private photoRuns:PhotoRuns|undefined;
+  /** App-authenticated display records. Execution remains in /v2/sdk/jobs. */
+  async appPhoto(peer:Peer,request:{route:string;method?:string;body?:any;data?:string}){
+    const context=await this.apps.context(peer),appId=context.identity.appInstanceId;
+    if(!peer.app||!['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'].every(c=>context.identity.allowedContracts.includes(c)))throw Error('PHOTO_APP_REQUIRED');
+    const url=new URL(request.route,'https://photo.invalid'),method=request.method??'GET',parts=url.pathname.split('/').filter(Boolean);
+    if(url.origin!=='https://photo.invalid'||parts[0]!=='photo-runs'||parts.length>3||!['GET','POST','PUT'].includes(method))throw Error('PHOTO_ROUTE_INVALID');
+    const photo=this.photoRuns??(this.photoRuns=new PhotoRuns(this.config.dataDir,this.db,this.config.domain)),group=peer.groupId,user=peer.principalId,id=parts[1];
+    if(id==='directory'&&method==='GET')return {space:await this.db.teamSpace.findUnique({where:{id:group},select:{id:true,name:true}}),devices:await this.db.spaceDevice.findMany({where:{spaceId:group},select:{id:true,name:true}})};
+    if(!id){
+      if(method==='GET')return (await photo.list(group)).filter(r=>r.appInstanceId===appId);
+      if(method==='POST'){if(!['LOCAL','COOPERATIVE'].includes(request.body?.mode))throw Error('PHOTO_RUN_INVALID');return photo.create(group,user,{...request.body,sourceDeviceId:peer.deviceId},appId);}
+      throw Error('PHOTO_ROUTE_INVALID');
+    }
+    const run=await photo.read(group,id);if(run.appInstanceId!==appId||run.userId!==user||run.sourceDeviceId!==peer.deviceId)throw Error('PHOTO_APP_SCOPE');
+    if(parts.length===2){if(method==='GET')return photo.view(group,id);if(method==='POST')return photo.update(group,id,user,request.body);}
+    const index=Number(url.searchParams.get('image'));if(!url.searchParams.has('image')||!Number.isInteger(index)||index<0||index>=run.inputs.length)throw Error('PHOTO_RUN_INVALID');
+    if(parts[2]==='input'){
+      if(method==='PUT'){if(typeof request.data!=='string'||request.data.length>11184812)throw Error('PHOTO_INPUT_INVALID');await photo.preview(group,id,user,index,Buffer.from(request.data,'base64'));return {uploaded:true};}
+      if(method==='GET')return {mime:'image/png',data:(await photo.input(group,id,index)).toString('base64')};
+    }
+    if(parts[2]==='capture-result'&&method==='POST'){
+      const job=run.jobs.find((j:any)=>j.imageIndex===index);if(!job)throw Error('PHOTO_JOB_SCOPE');
+      const output=await this.sdk.readOutput(peer,job.id);await photo.retainResult(group,user,job.id,output);return {retained:true};
+    }
+    if(parts[2]==='result'&&method==='GET')return JSON.parse((await photo.result(group,id,index)).toString());
+    throw Error('PHOTO_ROUTE_INVALID');
+  }
   private readonly streams=new Map<()=>void,string>();
   close(){for(const close of this.streams.keys())close();}
   private readonly authAttempts=new Map<string,{count:number;until:number}>();
