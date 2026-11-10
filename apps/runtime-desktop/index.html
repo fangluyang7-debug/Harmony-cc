@@ -397,6 +397,14 @@
       opacity: 0.6;
     }
 
+    .action-tile-btn:enabled {
+      color: #67e8f9;
+      border-color: #176d83;
+      background: #102430;
+      cursor: pointer;
+    }
+    .action-tile-btn:enabled:hover { background: #153343; }
+
     /* Collapsible Logs */
     .logs-panel {
       margin-top: 4px;
@@ -481,6 +489,25 @@
     .advanced summary { cursor: pointer; }
     .advanced label { display: block; margin-top: 10px; }
     a { color: #93c5fd; }
+    .pair-dialog {
+      width: min(620px, calc(100% - 32px));
+      max-height: calc(100% - 32px);
+      padding: 0;
+      border: 1px solid #176d83;
+      border-radius: 16px;
+      color: #e2e8f0;
+      background: #121923;
+    }
+    .pair-dialog::backdrop { background: #050a12c9; backdrop-filter: blur(5px); }
+    .pair-dialog h2 { margin: 0; padding: 14px 20px; background: #0b1119; font-size: 16px; }
+    .pair-body { padding: 20px; }
+    .pair-details { display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr); gap: 20px; align-items: start; }
+    .pair-qr { display: block; width: 100%; height: auto; background: white; border: 1px solid #176d83; border-radius: 8px; }
+    .pair-details dl { display: grid; gap: 10px; margin: 0; }
+    .pair-details dt { color: #94a3b8; font-size: 13px; }
+    .pair-details dd { margin: 4px 0 0; padding: 8px; background: #0b1119; border-radius: 6px; overflow-wrap: anywhere; }
+    .pair-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 16px; }
+    @media (max-width: 480px) { .pair-details { grid-template-columns: 1fr; } .pair-qr { max-width: 200px; margin: auto; } }
     @media (max-width: 560px) { .network-grid, .sub-actions-row { grid-template-columns: 1fr; } header { padding: 16px; } }
 </style>
 <script src="/desktop.js" defer></script>
@@ -543,5 +570,24 @@
     </div>
   </div>
 </main>
+<dialog class="pair-dialog" id="pair-dialog" aria-labelledby="pair-title">
+  <h2 id="pair-title">设备配对向导 · 安全通道连接</h2>
+  <div class="pair-body">
+    <p id="pair-status" role="status">正在生成配对二维码…</p>
+    <p class="error" id="pair-error" role="alert" hidden></p>
+    <div class="pair-details" id="pair-details" hidden>
+      <img class="pair-qr" id="pair-qr" alt="一次性设备配对二维码">
+      <dl>
+        <div><dt>协调中心地址</dt><dd id="pair-address"></dd></div>
+        <div><dt>协调端口</dt><dd id="pair-port"></dd></div>
+        <div><dt>有效期至</dt><dd id="pair-expires"></dd></div>
+      </dl>
+    </div>
+    <div class="pair-actions">
+      <a id="pair-download" download="invitation.json" hidden>下载 Windows 设备邀请</a>
+      <form method="dialog"><button type="submit" class="action-tile-btn">关闭</button></form>
+    </div>
+  </div>
+</dialog>
 </body>
 </html>

@@ -46,6 +46,11 @@ export class SnapshotBuilder {
 
 export class PlanningService {
   constructor(private readonly snapshots:SnapshotBuilder){}
+  /** Read-only qualified-target counts per capability for an App's routing report. Counting candidates is not selecting them (R21). */
+  async availability(groupId:string,capabilities:string[]):Promise<{capability:string;targets:number;services:number}[]>{
+    let candidates:PlanningSnapshot['candidates']=[];try{candidates=(await this.snapshots.build(groupId)).snapshot.candidates;}catch{candidates=[];}
+    return capabilities.map(capability=>{const mine=candidates.filter(c=>c.capability===capability);return {capability,targets:new Set(mine.map(c=>c.targetId)).size,services:new Set(mine.filter(c=>c.serviceId!==undefined).map(c=>c.targetId)).size};});
+  }
   plan(snapshot:PlanningSnapshot,request:PlacementRequest,policy:PlanningPolicy,clock:PlanningClock):SnapshotDecision {
     return plan(snapshot,request,policy,clock);
   }

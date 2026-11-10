@@ -72,7 +72,7 @@ function windowsPackage(name, role) {
   const service = 'services/' + (center ? 'coordinator' : 'pc-agent');
   const manifest = path.join(root, service, 'package.json');
   const files = [service + '/dist', 'scripts/runtime-desktop.cjs', 'scripts/start-coordinator-lan.cjs',
-    'capabilities/coverage-requirements.json'];
+    'capabilities/coverage-requirements.json', 'capabilities/capability-hints.json'];
   if (center) files.push(service + '/generated/client', service + '/scripts/migrate.cjs',
     service + '/prisma', 'apps/team-space-web');
   else files.push('services/image-worker/encode_once.py', 'services/image-worker/app/main.py',

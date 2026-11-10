@@ -46,10 +46,13 @@ function render() {
   if (isCenter) {
     const select = $('address');
     const selected = select.value;
-    const options = JSON.stringify(addresses);
+    const visibleAddresses = addresses.filter(item =>
+      !/^vEthernet\s*\(WSL\b|^VMware Network Adapter VMnet1$/i.test(item.name.trim())
+    );
+    const options = JSON.stringify(visibleAddresses);
     if (select.dataset.items !== options) {
-      select.replaceChildren(...addresses.map(item => new Option(item.name + ' · ' + item.address, item.address)));
-      if (addresses.some(item => item.address === selected)) select.value = selected;
+      select.replaceChildren(...visibleAddresses.map(item => new Option(item.name + ' · ' + item.address, item.address)));
+      if (visibleAddresses.some(item => item.address === selected)) select.value = selected;
       select.dataset.items = options;
     }
     const ready = running && !otherRole;
@@ -61,7 +64,7 @@ function render() {
     $('port').disabled = select.disabled;
     $('center-suite').disabled = select.disabled;
     $('dashboard').disabled = !ready;
-    $('devices').disabled = !ready;
+    $('devices').disabled = !ready || busy;
     message('public-url', ready ? url : '');
     $('actual-port').value = ready ? new URL(url).port || '443' : '预设 ' + $('port').value;
     return;
@@ -121,8 +124,70 @@ function initCenter() {
       }));
     }
   };
-  $('dashboard').onclick = () => window.open(snapshot.url + '/dispatch.html', '_blank', 'noopener');
-  $('devices').onclick = () => window.open(snapshot.url + '/', '_blank', 'noopener');
+  function openConsole(path) {
+    void action(async () => {
+      await api('/console/session', {});
+      location.assign(path);
+    });
+  }
+  $('dashboard').onclick = () => openConsole('/dispatch.html');
+  const pairing = $('pair-dialog');
+  const download = $('pair-download');
+  let invitationTimer;
+  function clearInvitation() {
+    clearTimeout(invitationTimer);
+    if (download.hasAttribute('href')) URL.revokeObjectURL(download.href);
+    download.removeAttribute('href');
+    download.hidden = true;
+    $('pair-qr').removeAttribute('src');
+    $('pair-details').hidden = true;
+  }
+  pairing.addEventListener('close', clearInvitation);
+  $('devices').onclick = () => {
+    if (busy) return;
+    clearInvitation();
+    $('pair-status').textContent = '正在生成配对二维码…';
+    pairing.showModal();
+    void action(async () => {
+      try {
+        await api('/console/session', {});
+        const { spaces } = await api('/v2/spaces/me');
+        const space = spaces.find(item => item.name === '本地调度空间') ?? spaces[0];
+        if (!space) throw Error('本地调度空间不可用。');
+        if (!pairing.open) return;
+        // Legacy agents require an initial CPU/memory ceiling inside the invitation.
+        const { invitation, holderInstanceId, domain, contribution, qr } = await api(
+          '/v2/spaces/' + encodeURIComponent(space.id) + '/devices', {
+            name: '设备 ' + new Date().toLocaleString('zh-CN', { hour12: false }),
+            settings: {
+              ownerMode: 'dedicated', maxCpuThreads: 2, maxMemoryBytes: 1073741824,
+              reserveMemoryBytes: 1073741824
+            }
+          }
+        );
+        if (!pairing.open) return;
+        const center = new URL(invitation.address);
+        $('pair-address').textContent = center.hostname;
+        $('pair-port').textContent = center.port || '443';
+        $('pair-expires').textContent = new Date(invitation.expiresAt).toLocaleTimeString('zh-CN');
+        $('pair-qr').src = qr;
+        download.href = URL.createObjectURL(new Blob(
+          [JSON.stringify({ invitation, holderInstanceId, domain, contribution })],
+          { type: 'application/json' }
+        ));
+        download.hidden = false;
+        $('pair-details').hidden = false;
+        $('pair-status').textContent = '请用鸿蒙设备调度件扫码。Windows 设备也可下载邀请后导入。';
+        invitationTimer = setTimeout(() => {
+          clearInvitation();
+          $('pair-status').textContent = '邀请已过期。请关闭弹窗后重新点击「设备配对」。';
+        }, Math.max(0, invitation.expiresAt - Date.now()));
+      } catch (error) {
+        $('pair-status').textContent = '未能生成配对邀请。';
+        throw error;
+      }
+    }, 'pair-error');
+  };
 }
 
 function initAgent() {
