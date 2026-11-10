@@ -248,7 +248,7 @@ export class TeamSpaces {
           ? invitation.address+'/#device='+invitation.inviteId+'.'+invitation.code+'&pin='+invitation.fingerprint
           : JSON.stringify(bootstrap);
         const qr=await qrCode.toDataURL(qrPayload,{errorCorrectionLevel:'L',margin:4,width:640});
-        res.json({...bootstrap,qr});return;
+        res.json({...bootstrap,qr,...(!this.config.proxy?this.auth.issuePairingCode(invitation):{})});return;
       }
       if(action==='photo-runs'){
         if(id==='directory'&&method==='GET'){

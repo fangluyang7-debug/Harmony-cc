@@ -71,7 +71,7 @@ function windowsPackage(name, role) {
   const center = role === 'center';
   const service = 'services/' + (center ? 'coordinator' : 'pc-agent');
   const manifest = path.join(root, service, 'package.json');
-  const files = [service + '/dist', 'scripts/runtime-desktop.cjs', 'scripts/start-coordinator-lan.cjs',
+  const files = [service + '/dist', 'scripts/runtime-desktop.cjs', 'scripts/start-coordinator-lan.cjs', 'apps/windows-agent/discovery.cjs',
     'capabilities/coverage-requirements.json', 'capabilities/capability-hints.json'];
   if (center) files.push(service + '/generated/client', service + '/scripts/migrate.cjs',
     service + '/prisma', 'apps/team-space-web');

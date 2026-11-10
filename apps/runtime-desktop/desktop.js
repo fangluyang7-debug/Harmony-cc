@@ -161,7 +161,7 @@ function initCenter() {
         if (!pairing.open) return;
         // The invitation carries a provisional 2-slot / 1 GiB ceiling for the first connection. With
         // capacityMode 'auto' the coordinator replaces it from the device's reported RAM/CPU once paired.
-        const { invitation, holderInstanceId, domain, contribution, qr } = await api(
+        const { invitation, holderInstanceId, domain, contribution, qr, pairingCode, pairingCodeExpiresAt } = await api(
           '/v2/spaces/' + encodeURIComponent(space.id) + '/devices', {
             name: '设备 ' + new Date().toLocaleString('zh-CN', { hour12: false }),
             qrFormat: 'link',
@@ -175,7 +175,9 @@ function initCenter() {
         const center = new URL(invitation.address);
         $('pair-address').textContent = center.hostname;
         $('pair-port').textContent = center.port || '443';
-        $('pair-expires').textContent = new Date(invitation.expiresAt).toLocaleTimeString('zh-CN');
+        $('pair-code').textContent = pairingCode || '请扫码';
+        $('pair-fingerprint').textContent = invitation.fingerprint;
+        $('pair-expires').textContent = new Date(pairingCodeExpiresAt || invitation.expiresAt).toLocaleTimeString('zh-CN');
         $('pair-qr').src = qr;
         download.href = URL.createObjectURL(new Blob(
           [JSON.stringify({ invitation, holderInstanceId, domain, contribution })],
@@ -183,11 +185,11 @@ function initCenter() {
         ));
         download.hidden = false;
         $('pair-details').hidden = false;
-        $('pair-status').textContent = '请用新版鸿蒙设备调度件扫码。Windows 和旧版鸿蒙调度件可使用下载的完整邀请。配对后，额度会按设备上报的运行内存和 CPU 自动确定。';
+        $('pair-status').textContent = '设备可扫码，或选择此协调中心后输入 6 位配对码。数字码首次连接请核对两端证书指纹。配对后自动确定额度。';
         invitationTimer = setTimeout(() => {
           clearInvitation();
           $('pair-status').textContent = '邀请已过期。请关闭弹窗后重新点击「设备配对」。';
-        }, Math.max(0, invitation.expiresAt - Date.now()));
+        }, Math.max(0, (pairingCodeExpiresAt || invitation.expiresAt) - Date.now()));
       } catch (error) {
         $('pair-status').textContent = '未能生成配对邀请。';
         throw error;
@@ -223,9 +225,9 @@ function initAgent() {
     : api('/agent/start', { directory: directory.value, backend: $('backend').value, python: $('python').value, suite: $('suite').value }));
 
   const pairDialog = $('pair-dialog');
-  let selectedCenter = '';
+  let onlyDiscoveredCenter = '';
   function openPair(center = '', invitation = '') {
-    selectedCenter = center;
+    $('pair-address-input').value = center;
     $('pair-center').textContent = center || '从邀请中读取协调中心地址';
     $('invitation').value = invitation;
     $('file').value = '';
@@ -247,11 +249,19 @@ function initAgent() {
   };
   $('pair').onclick = () => void action(async () => {
     const invitation = $('invitation').value.trim();
-    let address;
-    try { address = new URL(JSON.parse(invitation).invitation.address).origin; }
-    catch { throw Error('请导入有效的完整设备邀请'); }
-    if (selectedCenter && address !== selectedCenter) throw Error('邀请所属中心与所选中心不一致');
-    const result = await api('/agent/pair', { directory: directory.value, invitation });
+    let address = $('pair-address-input').value.trim();
+    let fingerprint;
+    if (/^\d{6}$/.test(invitation)) {
+      address ||= onlyDiscoveredCenter;
+      if (!address) throw Error('请选择或填写协调中心地址');
+      const trust = await api('/agent/certificate', { address });
+      if (!window.confirm('请与协调中心配对窗口核对证书指纹，一致后继续：\n' + trust.fingerprint)) return;
+      fingerprint = trust.fingerprint;
+    } else if (invitation.startsWith('{')) {
+      const target = new URL(JSON.parse(invitation).invitation.address).origin;
+      if (address && address !== target) throw Error('邀请所属中心与所选中心不一致');
+    }
+    const result = await api('/agent/pair', { directory: directory.value, invitation, address, fingerprint });
     directory.value = result.directory;
     $('invitation').value = '';
     $('file').value = '';
@@ -261,11 +271,13 @@ function initAgent() {
 
   async function discover() {
     $('discover').disabled = true;
+    onlyDiscoveredCenter = '';
     $('search-status').textContent = '正在搜索附近的协调中心…';
     $('centers').replaceChildren();
     try {
       const { centers } = await api('/discover');
       $('search-status').textContent = centers.length ? '发现 ' + centers.length + ' 个协调中心' : '未发现附近的协调中心，可直接导入邀请。';
+      onlyDiscoveredCenter = centers.length === 1 ? centers[0] : '';
       for (const address of centers) {
         const button = document.createElement('button');
         button.className = 'center';
@@ -275,7 +287,7 @@ function initAgent() {
         subtitle.textContent = address;
         const label = document.createElement('span');
         label.className = 'pair-label';
-        label.textContent = '需要设备邀请 · 立即配对 ›';
+        label.textContent = '扫码或输入配对码 ›';
         button.append(subtitle, label);
         button.onclick = () => openPair(address);
         $('centers').append(button);
@@ -314,6 +326,10 @@ function initAgent() {
         if ($('camera').readyState >= 2) {
           const [result] = await detector.detect($('camera'));
           if (result && scanDialog.open) {
+            if (result.rawValue.startsWith('https://')) {
+              const center = new URL(result.rawValue).origin;
+              scanDialog.close(); openPair(center, result.rawValue); break;
+            }
             const bootstrap = JSON.parse(result.rawValue);
             const center = new URL(bootstrap.invitation.address).origin;
             if (bootstrap.invitation.version !== 2 || bootstrap.invitation.expiresAt <= Date.now()) {

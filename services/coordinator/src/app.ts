@@ -9,7 +9,7 @@ import 'reflect-metadata';
 import fs from 'node:fs';
 import {X509Certificate} from 'node:crypto';
 import path from 'node:path';
-import { BadRequestException, ConflictException, Body, Controller, Get, Header, Headers, Param, Module, Post, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Body, Req, Controller, Get, Header, Headers, Param, Module, Post, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { PrismaClient } from '../generated/client';
 import { CoordinatorConfig, databaseUrl } from './config';
@@ -172,6 +172,12 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       async pairingBootstrap(@Body() body:any){
         if(!ready||config.proxy||!config.publicUrl)throw new ServiceUnavailableException();
         try{return await auth.readDeviceInvite(body,config.publicUrl);}catch{throw new UnauthorizedException('PAIRING_REJECTED');}
+      }
+      @Post('pairing/code')@Header('Cache-Control','no-store')
+      async pairingCode(@Body() body:any,@Req() request:any){
+        if(!ready||config.proxy||!config.publicUrl)throw new ServiceUnavailableException();
+        try{return await auth.redeemPairingCode(body?.code,config.publicUrl,request.socket.remoteAddress??'unknown');}
+        catch{throw new UnauthorizedException('配对码无效、已使用或尝试过于频繁，请重新生成或稍后重试');}
       }
       @Post('pair')async pair(@Body() body:any){if(!ready)throw new ServiceUnavailableException();try{return {...await auth.exchange(body),epoch};}catch(error){if((error as Error).message==='SPACE_SWITCH_BUSY')throw new ConflictException('SPACE_SWITCH_BUSY');throw new UnauthorizedException('PAIRING_REJECTED');}}
       @Post('apps/registrations')async registerApp(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>apps.register(await auth.authenticate(bearer(header)),body,config.publicUrl??'https://'+config.certificateHost+':'+app.getHttpServer().address().port));}

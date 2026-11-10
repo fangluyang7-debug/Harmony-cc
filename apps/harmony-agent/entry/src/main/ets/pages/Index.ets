@@ -18,7 +18,7 @@ struct Index {
  @State message:string='';
  @State loading:boolean=false;
  @State discovered:string='';
- private async discover():Promise<void>{try{const centers=await discoverCenters();this.discovered=centers.length?'附近中心：'+centers.join('，')+'。首次接入仍需扫码或完整邀请。':'未发现中心，仍可直接扫码或使用完整邀请。';}catch(e){this.discovered='发现暂不可用，请直接扫码或使用完整邀请。';}}
+ private async discover():Promise<void>{try{const centers=await discoverCenters();this.discovered=centers.length?'附近中心：'+centers.join('，')+'。可在设备连接面板输入 6 位设备配对码。':'未发现中心，可在设备连接面板填写中心地址并输入配对码。';}catch(e){this.discovered='发现暂不可用，可扫码或填写中心地址使用设备配对码。';}}
  @State joinKey:string='';
  private connection:ConsoleConnection|null=null;
  private controller:webview.WebviewController=new webview.WebviewController();
@@ -92,7 +92,7 @@ struct Index {
      Button('使用密钥加入').width('100%').onClick(()=>{void this.joinInvitation(this.joinKey);});
      TextInput({placeholder:'或输入 https://协调中心地址:7443',text:this.address}).onChange(v=>{this.address=v;});
      Button('连接协作空间').width('100%').onClick(()=>{void saveConsoleAddress(this.context(),this.address).then(()=>this.restoreConnection()).catch((e:Error)=>{this.message=e.message;});});
-     Button('设备连接面板').width('100%').onClick(()=>{this.getUIContext().getRouter().pushUrl({url:'pages/ConnectionLauncher'});});
+     Button('设备连接面板 · 6 位配对码').width('100%').onClick(()=>{this.getUIContext().getRouter().pushUrl({url:'pages/ConnectionLauncher'});});
      Button('使用设备邀请接入').width('100%').onClick(()=>{this.section='device';});
     }.constraintSize({maxWidth:640}).padding(28).width('100%').visibility(this.section==='device'?Visibility.Hidden:Visibility.Visible);
    }

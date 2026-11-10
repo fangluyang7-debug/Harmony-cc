@@ -38,9 +38,25 @@ test('short device QR uses a pinned, single-use invitation and keeps legacy down
   assert.equal((await request('/v2/pairing/bootstrap',body)).status,201,'A preview does not consume an invite');
   await pinnedRequest(invitation,'/v2/pair',{...body,holderInstanceId});
   assert.equal((await request('/v2/pairing/bootstrap',body)).status,401);
+  assert.equal((await request('/v2/pairing/code',{code:issued.body.pairingCode})).status,401,'QR exchange invalidates numeric code');
   const legacy=await owner('/'+group+'/devices',{name:'原有设备',settings});
-  const {qr:legacyQr,...legacyBootstrap}=legacy.body;
+  const {qr:legacyQr,pairingCode:legacyCode,pairingCodeExpiresAt:legacyExpiry,...legacyBootstrap}=legacy.body;
   assert.equal(legacyQr,await qrCode.toDataURL(JSON.stringify(legacyBootstrap),options));
+  assert.match(legacyCode,/^\d{6}$/);
+  assert.ok(legacyExpiry<=Date.now()+300000);
+  const {resolvePairingInput,pairingCertificate}=require('../../../scripts/runtime-desktop.cjs');
+  const trust=await pairingCertificate(r.url);
+  assert.equal(trust.fingerprint,invitation.fingerprint);
+  await assert.rejects(resolvePairingInput({invitation:legacyCode,address:r.url,fingerprint:'0'.repeat(64)}),/证书/);
+  const numeric=await resolvePairingInput({invitation:legacyCode,address:r.url,fingerprint:trust.fingerprint});
+  assert.deepEqual(numeric,legacyBootstrap);
+  assert.equal((await request('/v2/pairing/code',{code:legacyCode})).status,401,'numeric code is single use');
+  await pinnedRequest(numeric.invitation,'/v2/pair',{inviteId:numeric.invitation.inviteId,code:numeric.invitation.code,holderInstanceId:numeric.holderInstanceId});
+  const another=await owner('/'+group+'/devices',{name:'链接设备',settings,qrFormat:'link'});
+  const i=another.body.invitation;
+  const linked=await resolvePairingInput({invitation:i.address+'/#device='+i.inviteId+'.'+i.code+'&pin='+i.fingerprint});
+  assert.equal(linked.invitation.inviteId,i.inviteId);
+
  }finally{await r.close();}
 });
 test('browser spaces persist, isolate roles and operate a paired CPU host with a fast device clock',async()=>{

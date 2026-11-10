@@ -3,7 +3,7 @@ import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { discoverCenters } from '../Discovery';
 import { Bootstrap } from '../NativePlatform';
 import { openAgent, contributeAgent } from '../AgentRuntime';
-import { resolveDevicePairingLink } from '../DevicePairingLink';
+import { resolveDevicePairingLink, readPairingTrust, resolvePairingCode, PairingTrust } from '../DevicePairingLink';
 
 @Entry
 @Component
@@ -28,6 +28,7 @@ struct ConnectionLauncher {
   @State private scanning: boolean = false;
   @State private changingContribution: boolean = false;
 
+  private numericTrust: PairingTrust | null = null;
   private discoveryTimer: number = -1;
   private discoveryActive: boolean = false;
   private discoveryGeneration: number = 0;
@@ -79,7 +80,8 @@ struct ConnectionLauncher {
   }
 
   private openPair(center: string): void {
-    this.selected = center;
+    this.numericTrust = null;
+    this.selected = center || (this.centers.length === 1 ? this.centers[0] : '');
     this.invitation = '';
     this.details = '';
     this.error = '';
@@ -131,11 +133,21 @@ struct ConnectionLauncher {
     this.pairing = true;
     this.error = '';
     try {
-      const bootstrap = await this.resolveInvitation(this.invitation);
+      const input = this.invitation.trim();
+      if (/^\d{6}$/.test(input) && this.numericTrust === null) {
+        this.numericTrust = await readPairingTrust(this.selected);
+        this.details = '请核对协调中心配对窗口的证书指纹，一致后再次点击连接：\n' + this.numericTrust.fingerprint;
+        return;
+      }
+      const bootstrap = /^\d{6}$/.test(input) && this.numericTrust !== null
+        ? await resolvePairingCode(input, this.numericTrust, getContext(this) as common.UIAbilityContext)
+        : await this.resolveInvitation(this.invitation);
       await openAgent(getContext(this) as common.UIAbilityContext, bootstrap);
       this.invitation = '';
       this.pairingOpen = false;
     } catch (e) {
+      this.numericTrust = null;
+      this.details = '';
       this.error = '配对失败：' + (e as Error).message;
     } finally {
       this.pairing = false;
@@ -188,7 +200,7 @@ struct ConnectionLauncher {
             Column({ space: 4 }) {
               Text('协调中心').fontSize(17).fontWeight(FontWeight.Medium).fontColor(Color.White)
               Text(address).fontSize(13).fontColor('#A1A1AA')
-              Text('需要设备邀请').fontSize(12).fontColor('#A1A1AA')
+              Text('扫码或输入配对码').fontSize(12).fontColor('#A1A1AA')
             }.alignItems(HorizontalAlign.Start).layoutWeight(1)
             Text('›').fontSize(24).fontColor('#A1A1AA')
           }.width('100%').padding(16).backgroundColor('#1C1C1E')
@@ -200,7 +212,7 @@ struct ConnectionLauncher {
           .fontSize(14).fontColor('#A1A1AA').padding(16).width('100%')
           .borderRadius(20).backgroundColor('#1C1C1E')
       }
-      Button('粘贴设备邀请').backgroundColor('#1C1C1E')
+      Button('输入配对码或邀请链接').backgroundColor('#1C1C1E')
         .onClick(() => { this.openPair(''); })
       if (this.error && !this.pairingOpen) {
         Text(this.error).fontSize(14).fontColor('#FDA4AF')
@@ -257,10 +269,13 @@ struct ConnectionLauncher {
         Text(this.details || this.selected || '使用协调中心生成的一次性设备邀请。')
           .fontSize(14).fontColor('#A1A1AA')
         if (!this.details) {
-          TextArea({ placeholder: '也可粘贴设备配对链接或完整邀请', text: this.invitation })
+          TextInput({ placeholder: '协调中心地址（发现失败时填写）', text: this.selected })
+            .enabled(!this.pairing && !this.scanning)
+            .onChange(value => { this.selected = value.trim(); this.numericTrust = null; })
+          TextArea({ placeholder: '输入 6 位配对码，或粘贴邀请链接', text: this.invitation })
             .height(96).maxLength(16384).backgroundColor('#121216').fontColor(Color.White)
             .enabled(!this.pairing && !this.scanning)
-            .onChange(value => { this.invitation = value; })
+            .onChange(value => { this.invitation = value; this.numericTrust = null; })
           Button('扫描邀请二维码').backgroundColor('#25252A').enabled(!this.pairing && !this.scanning)
             .onClick(() => { void this.scan(); })
         }
@@ -268,7 +283,7 @@ struct ConnectionLauncher {
         Row({ space: 10 }) {
           Button('取消').layoutWeight(1).backgroundColor('#303038').enabled(!this.pairing && !this.scanning)
             .onClick(() => { this.pairingOpen = false; this.invitation = ''; this.error = ''; })
-          Button(this.pairing ? '连接中…' : '连接').layoutWeight(1).backgroundColor('#0A59F7')
+          Button(this.pairing ? '连接中…' : this.numericTrust !== null ? '确认指纹并连接' : '连接').layoutWeight(1).backgroundColor('#0A59F7')
             .enabled(this.invitation.trim().length > 0 && !this.pairing && !this.scanning)
             .onClick(() => { void this.join(); })
         }.width('100%')

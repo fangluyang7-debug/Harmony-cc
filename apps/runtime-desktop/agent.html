@@ -101,9 +101,9 @@
 <dialog id="pair-dialog" aria-labelledby="pair-title">
   <h2 id="pair-title">设备配对</h2>
   <p id="pair-center"></p>
-  <p>使用协调中心为本机生成的一次性设备邀请。</p>
+  <p>选择协调中心，输入电脑上显示的 6 位配对码，或粘贴邀请链接。</p><label>协调中心地址（未发现时可手动填写）<input id="pair-address-input" placeholder="https://192.168.1.10:7443"></label>
   <label>导入邀请文件<input id="file" type="file" accept=".json,application/json"></label>
-  <label>或粘贴完整设备邀请<textarea id="invitation"></textarea></label>
+  <label>6 位配对码或邀请链接<textarea id="invitation" placeholder="例如 012345"></textarea></label>
   <p class="error" id="pair-error" role="alert" hidden></p>
   <div class="row"><button type="button" id="cancel-pair">取消</button><button type="button" id="pair" class="primary">配对设备</button></div>
 </dialog>

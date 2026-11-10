@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomUUID, X509Certificate } from 'node:crypto';
+import { createHash, randomInt, randomBytes, randomUUID, X509Certificate } from 'node:crypto';
 import { PrismaClient } from '../generated/client';
 import { protocolId } from '@harmony/scheduler-core';
 import { Peer } from './channel';
@@ -9,6 +9,33 @@ interface CredentialData {peer:Peer;expiresAt:number;domain:string;}
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 export const certificateFingerprint=(pem:string)=>new X509Certificate(pem).fingerprint256.replaceAll(':','').toLowerCase();
 export class PairingService {
+  private readonly shortCodes=new Map<string,{inviteId:string;code:string;expiresAt:number}>();
+  private readonly codeAttempts=new Map<string,{count:number;expiresAt:number}>();
+  issuePairingCode(invitation:Invitation){
+    const now=this.now();
+    for(const [key,value] of this.shortCodes)if(value.expiresAt<=now)this.shortCodes.delete(key);
+    if(this.shortCodes.size>=1000)throw Error('PAIRING_BUSY');
+    let code:string;do{code=String(randomInt(1000000)).padStart(6,'0');}while(this.shortCodes.has(code));
+    const expiresAt=Math.min(invitation.expiresAt,now+300000);
+    this.shortCodes.set(code,{inviteId:invitation.inviteId,code:invitation.code,expiresAt});
+    return {pairingCode:code,pairingCodeExpiresAt:expiresAt};
+  }
+  async redeemPairingCode(code:unknown,address:string,remote:string){
+    const now=this.now();
+    for(const [key,value] of this.codeAttempts)if(value.expiresAt<=now)this.codeAttempts.delete(key);
+    if(this.codeAttempts.size>=2048&&!this.codeAttempts.has(remote))throw Error('PAIRING_REJECTED');
+    for(const key of ['global',remote]){
+      const attempt=this.codeAttempts.get(key)??{count:0,expiresAt:now+300000};
+      if(attempt.count>=(key==='global'?100:5))throw Error('PAIRING_RATE_LIMITED');
+      attempt.count++;this.codeAttempts.set(key,attempt);
+    }
+    if(typeof code!=='string'||!/^\d{6}$/.test(code))throw Error('PAIRING_REJECTED');
+    const value=this.shortCodes.get(code);
+    if(!value||value.expiresAt<=now)throw Error('PAIRING_REJECTED');
+    // Remove before awaiting: concurrent redeemers cannot obtain the same invitation.
+    this.shortCodes.delete(code);
+    return this.readDeviceInvite({inviteId:value.inviteId,code:value.code},address);
+  }
   private readonly revocations=new Set<(id:string)=>void>();
   constructor(private readonly db:PrismaClient,private readonly cert:string,private readonly domain:string,private readonly now:()=>number=Date.now){}
   onRevoked(listener:(id:string)=>void){this.revocations.add(listener);return ()=>this.revocations.delete(listener);}

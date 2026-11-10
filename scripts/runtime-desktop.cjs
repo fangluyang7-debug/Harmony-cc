@@ -8,6 +8,38 @@ const root=path.resolve(__dirname,'..');
 const consoleAssets=new Set(['/index.html','/style.css','/app.js','/dispatch.html','/dispatch.css',
   '/dispatch.js','/dispatch-view.mjs','/dispatch-layout.js','/dispatch-charts.mjs','/scheduler-sdk.js',
   '/qrcode.js','/join-key.mjs','/photo.html','/photo.css','/photo.js','/photo-workflow.mjs','/photo-gallery.mjs','/photo-app-port.mjs']);
+function pairingAddress(value){
+  const url=new URL(value);
+  if(url.protocol!=='https:'||url.username||url.password||url.search||url.hash||url.pathname!=='/')throw Error('请填写 HTTPS 协调中心地址');
+  return url.origin;
+}
+async function pairingRequest(address,route,body,certificate){
+  return new Promise((resolve,reject)=>{
+    const payload=body===undefined?undefined:JSON.stringify(body);
+    const req=https.request(address+route,{method:payload?'POST':'GET',...(certificate?{ca:certificate}:{rejectUnauthorized:false}),headers:payload?{'Content-Type':'application/json','Content-Length':Buffer.byteLength(payload)}:{}},res=>{
+      let text='';res.setEncoding('utf8');res.on('data',part=>{text+=part;if(text.length>32768)req.destroy(Error('响应过大'));});
+      res.on('end',()=>res.statusCode===200||res.statusCode===201?resolve(text):reject(Error('配对码无效、已使用或尝试过于频繁，请重新生成或稍后重试')));
+    });req.setTimeout(5000,()=>req.destroy(Error('协调中心连接超时')));req.on('error',reject);req.end(payload);
+  });
+}
+async function pairingCertificate(value){
+  const address=pairingAddress(value),certificate=await pairingRequest(address,'/v2/pairing/certificate');
+  const fingerprint=new (require('node:crypto').X509Certificate)(certificate).fingerprint256.replaceAll(':','').toLowerCase();
+  return {address,certificate,fingerprint};
+}
+async function resolvePairingInput(input){
+  const value=String(input.invitation||'').trim();
+  if(value.startsWith('{'))return JSON.parse(value);
+  const link=/^(https:\/\/[A-Za-z0-9.-]+(?::[0-9]{1,5})?)\/#device=([a-f0-9-]{36})\.([A-Za-z0-9_-]{24})&pin=([a-f0-9]{64})$/.exec(value);
+  const numeric=/^\d{6}$/.test(value);
+  if(!link&&!numeric)throw Error('请输入 6 位配对码或完整邀请链接');
+  const trust=await pairingCertificate(link?link[1]:input.address);
+  if(input.address&&pairingAddress(input.address)!==trust.address)throw Error('邀请与所选中心不一致');
+  if(trust.fingerprint!==(link?link[4]:input.fingerprint))throw Error('中心证书已变化，请重新核对指纹');
+  const result=JSON.parse(await pairingRequest(trust.address,numeric?'/v2/pairing/code':'/v2/pairing/bootstrap',numeric?{code:value}:{inviteId:link[2],code:link[3]},trust.certificate));
+  if(result.invitation?.address!==trust.address||result.invitation?.fingerprint!==trust.fingerprint)throw Error('中心身份不一致');
+  return result;
+}
 function consoleApi(target,ca,route,body,cookie){
   return new Promise((resolve,reject)=>{
     const payload=body===undefined?null:JSON.stringify(body);
@@ -142,9 +174,10 @@ class RuntimeControl {
   async pair(input){
     if(this.child)throw Error('请先停止当前服务');
     if(typeof input.invitation!=='string')throw Error('请导入完整设备邀请');
-    const bootstrap=JSON.parse(input.invitation),directory=deviceDirectory(input.directory);
-    if(!bootstrap.invitation||!bootstrap.contribution||!bootstrap.holderInstanceId)throw Error('请导入完整设备邀请');
+    const directory=deviceDirectory(input.directory);
     if(fs.existsSync(directory))throw Error('安装目录已存在，请恢复该设备或选择新目录；不覆盖账本');
+    const bootstrap=await resolvePairingInput(input);
+    if(!bootstrap?.invitation||!bootstrap.contribution||!bootstrap.holderInstanceId)throw Error('请导入完整设备邀请');
     fs.mkdirSync(path.dirname(directory),{recursive:true});
     const staging=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-pair-')),file=path.join(staging,'invitation.json');
     fs.writeFileSync(file,JSON.stringify(bootstrap),{mode:0o600});
@@ -206,6 +239,7 @@ async function main(options={openBrowser:true}){
       try{const input=JSON.parse(body||'{}');let result={};
         if(req.url==='/center/start'&&role!=='agent')control.startCenter(input);
         else if(req.url==='/agent/start'&&role!=='center')control.startAgent(input);
+        else if(req.url==='/agent/certificate'&&role!=='center')result=await pairingCertificate(input.address);
         else if(req.url==='/agent/pair'&&role!=='center')result=await control.pair(input);
         else if(req.url==='/agent/status'&&role!=='center')result=control.deviceStatus(input);
         else if(req.url==='/desktop/open')result=await openDesktop();
@@ -221,5 +255,5 @@ async function main(options={openBrowser:true}){
   process.on('SIGINT',()=>{control.stop();if(!control.child)server.close();else control.child.once('exit',()=>server.close());});
   return {server,control,url};
 }
-module.exports={RuntimeControl,addresses,main};
+module.exports={RuntimeControl,addresses,main,pairingCertificate,resolvePairingInput};
 if(require.main===module)main({openBrowser:true,role:process.argv[2]}).catch(e=>{console.error(e.message);process.exitCode=1;});
