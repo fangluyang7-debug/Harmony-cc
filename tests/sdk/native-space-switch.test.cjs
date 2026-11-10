@@ -7,10 +7,10 @@ test('native identity changes preserve old scoped ledgers and do not import old 
  const bootstrap=holder=>({holderInstanceId:holder,domain:'SIMULATED',contribution,invitation:{version:2,groupId:'group-'+holder,expiresAt:Date.now()+100000,fingerprint:'pin',inviteId:'invite-'+holder}});
  const installation=holder=>({bootstrap:bootstrap(holder),paired:{credential:'c'.repeat(43),peer:{holderInstanceId:holder,groupId:'group-'+holder,deviceId:'device-'+holder}}});
  const saved=new Map([['identity',JSON.stringify(installation('old'))],['ledger','OLD_LEDGER'],['contribution',JSON.stringify(contribution)],['contribution-enabled','false']]);
- let pairs=0,rejectBusy=false;const db={storedIdentities:async()=>[...saved.entries()].filter(([k])=>k==='identity'||k.startsWith('identity:')).map(([,v])=>v),get:async key=>saved.get(key)??null,put:async(key,value)=>saved.set(key,value),ledger:key=>key};
+ let pairs=0,rejectBusy=false,pairFailure=null,lastPair=null;const db={storedIdentities:async()=>[...saved.entries()].filter(([k])=>k==='identity'||k.startsWith('identity:')).map(([,v])=>v),get:async key=>saved.get(key)??null,put:async(key,value)=>saved.set(key,value),ledger:key=>key};
  const module={exports:{}};
  const script=transform('class NativeAgent { constructor(context,db,store,transport,installation,packs){this.installation=installation;this.ledgerKey=store.key;} async restorePreferences(){} async tick(){} '+source.slice(start,end)+'} module.exports=NativeAgent;');
- class Transport {constructor(invite){this.invite=invite;}async initialize(){}async json(route,body){if(route==='/v2/identity')return {version:2,domain:'SIMULATED'};if(rejectBusy)throw Error('SPACE_SWITCH_BUSY');pairs++;return installation(body.holderInstanceId).paired;}}
+ class Transport {constructor(invite){this.invite=invite;this.lastStatus=0;}async initialize(){}async json(route,body){this.lastStatus=0;if(route==='/v2/identity')return {version:2,domain:'SIMULATED'};if(rejectBusy)throw Error('SPACE_SWITCH_BUSY');if(pairFailure){this.lastStatus=pairFailure.status;throw Error(pairFailure.message);}pairs++;lastPair=body;return installation(body.holderInstanceId).paired;}}
  class PeerLinks {start(){}}
  new Function('module','NativeDatabase','NativeTransport','AgentStoreV2','NativePeerLinks','validContribution','text','setInterval','factory',script)(module,{open:async()=>db},Transport,{open:async(_binding,key)=>({key,read:()=>({state:{grant:null}})})},PeerLinks,()=>true,x=>x,()=>0,{id:()=> 'a'.repeat(36)});
  const context={resourceManager:{getRawFileContent:async()=> '[]'}};
@@ -23,6 +23,23 @@ test('native identity changes preserve old scoped ledgers and do not import old 
  await assert.rejects(module.exports.create(context,{...bootstrap('new'),invitation:{...bootstrap('new').invitation,groupId:'wrong'}},()=>true,null,[]),/PAIR_DOMAIN_INVALID/);
  rejectBusy=true;await assert.rejects(module.exports.create(context,bootstrap('busy'),()=>true,null,[]),/SPACE_SWITCH_BUSY/);
  assert.equal(saved.get('pairing-pending:busy'),'');rejectBusy=false;assert.equal((await module.exports.create(context,bootstrap('busy'),()=>true,null,[])).ledgerKey,'ledger:busy');
+ const invite=(holder,inviteId)=>({...bootstrap(holder),invitation:{...bootstrap(holder).invitation,inviteId}});
+ // Ambiguous failure (timeout, no response): the same invite is refused, a fresh invite re-pairs.
+ pairFailure={status:0,message:'TIMEOUT'};await assert.rejects(module.exports.create(context,invite('lost','i1'),()=>true,null,[]),/TIMEOUT/);
+ assert.equal(saved.get('pairing-pending:lost'),'i1');pairFailure=null;
+ await assert.rejects(module.exports.create(context,invite('lost','i1'),()=>true,null,[]),/PAIRING_RECONCILIATION_REQUIRED/);
+ assert.equal((await module.exports.create(context,invite('lost','i2'),()=>true,null,[])).ledgerKey,'ledger:lost');assert.equal(saved.get('pairing-pending:lost'),'');
+ // Ambiguous 5xx keeps the marker; explicit 4xx rejection and unreachable coordinator clear it.
+ pairFailure={status:503,message:'HTTP_503'};await assert.rejects(module.exports.create(context,invite('s5','i1'),()=>true,null,[]),/HTTP_503/);assert.equal(saved.get('pairing-pending:s5'),'i1');
+ pairFailure={status:401,message:'HTTP_401'};await assert.rejects(module.exports.create(context,invite('s4','i1'),()=>true,null,[]),/HTTP_401/);assert.equal(saved.get('pairing-pending:s4'),'');
+ pairFailure={status:-1,message:'TLS_CERTIFICATE_REJECTED'};await assert.rejects(module.exports.create(context,invite('tls','i1'),()=>true,null,[]),/TLS_CERTIFICATE_REJECTED/);assert.equal(saved.get('pairing-pending:tls'),'');
+ pairFailure=null;assert.equal((await module.exports.create(context,invite('s4','i1'),()=>true,null,[])).ledgerKey,'ledger:s4');
+ // previousDeviceId is only sent to the coordinator that issued it (same certificate pin).
+ assert.equal(lastPair.previousDeviceId,'device-lost');
+ await module.exports.create(context,{...bootstrap('foreign'),invitation:{...bootstrap('foreign').invitation,fingerprint:'other-pin'}},()=>true,null,[]);
+ assert.equal(lastPair.previousDeviceId,undefined);assert.ok(lastPair.knownDeviceIds.includes('device-s4'));
+ // Legacy global marker no longer blocks pairing forever.
+ saved.set('pairing-pending','legacy');assert.equal((await module.exports.create(context,bootstrap('legacy'),()=>true,null,[])).ledgerKey,'ledger:legacy');assert.equal(saved.get('pairing-pending'),'');
 });
 
 test('application runtime switches the existing host instead of silently accepting a different invitation',async()=>{

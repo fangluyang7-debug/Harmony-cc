@@ -154,7 +154,10 @@ struct ConnectionLauncher {
     } catch (e) {
       this.numericTrust = null;
       this.details = '';
-      this.error = '配对失败：' + (e as Error).message;
+      const code = (e as Error).message;
+      this.error = code === 'PAIRING_RECONCILIATION_REQUIRED'
+        ? '配对失败：该邀请上次配对结果未知，可能已被使用。请在协调中心重新生成邀请后再连接。'
+        : '配对失败：' + code;
     } finally {
       this.pairing = false;
     }
@@ -192,6 +195,11 @@ struct ConnectionLauncher {
   private discoveryPage() {
     Column({ space: 16 }) {
       this.headline('加入调度中心')
+      if (this.status === '协调中心已断开，请重新配对') {
+        Text('协调中心已关闭，本机已断开并清除配对。请重新扫码或输入配对码。')
+          .fontSize(14).fontColor('#FDBA74').padding(14).width('100%')
+          .borderRadius(18).backgroundColor('#2A1E12')
+      }
       Row({ space: 12 }) {
         Text(this.searchMessage).fontSize(14).fontColor('#A1A1AA').layoutWeight(1)
         Button('重新搜索').fontSize(13).backgroundColor('#21242D')
@@ -261,8 +269,6 @@ struct ConnectionLauncher {
         }.width('100%')
         Text('关闭后暂停接收新任务。鸿蒙调度件切到后台时也会暂停接单。').fontSize(13).fontColor('#A1A1AA')
       }.width('100%').alignItems(HorizontalAlign.Start).padding(16).borderRadius(20).backgroundColor('#1C1C1E')
-      Button('空间与调度盘').backgroundColor('#1C1C1E')
-        .onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/Index' }); })
       Button('结果展示').backgroundColor('#1C1C1E')
         .onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/Display' }); })
       if (this.error) Text(this.error).fontSize(14).fontColor('#FDA4AF')
@@ -315,8 +321,6 @@ struct ConnectionLauncher {
           .onClick(() => { this.selected = ''; void this.scan(); })
         Button('贡献上限').width('100%').backgroundColor('#25314A').enabled(this.paired)
           .onClick(() => { this.desktopSection = 'quota'; })
-        Button('空间与调度盘').width('100%').backgroundColor('#25314A').enabled(this.paired)
-          .onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/Index' }); })
       }.width(this.viewportWidth < 800 ? 170 : 220).height('100%').padding({ top: 24, left: 16, right: 16 })
         .alignItems(HorizontalAlign.Start).backgroundColor('#11141C')
       Scroll() {

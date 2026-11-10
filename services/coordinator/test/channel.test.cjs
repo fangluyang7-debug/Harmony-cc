@@ -165,3 +165,11 @@ test('a heartbeat publishes its new facts once and changes the automatic target 
   assert.deepEqual((await r.snapshots.build(peer.groupId)).policy.allowedTargetIds,[]);
  }finally{ws?.terminate();await r.close();}
 });
+test('a deliberate coordinator shutdown closes device channels with 4001 so devices drop the pairing',{timeout:20000},async()=>{
+  const r=await runtime({authenticate});let ws,closed=false;
+  try{
+    ws=await connect(r);ws.send(JSON.stringify(envelope(r,'hello',1)));await ws.next();
+    const done=once(ws,'close');await r.close();closed=true;const [code,reason]=await done;
+    assert.equal(code,4001);assert.equal(reason.toString(),'COORDINATOR_SHUTDOWN');
+  }finally{ws?.terminate();if(!closed)await r.close();}
+});

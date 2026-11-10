@@ -153,11 +153,11 @@ test('automatic capacity follows the hardware a paired device reports',async()=>
   assert.equal((await settingsCall(phone.invitation,phone.credential,{measured:{totalMemoryBytes:8*GiB,storageBytes:1e12}})).body.error,'MEASUREMENT_INVALID','Storage is not a RAM measurement');
   const eightGig=await settingsCall(phone.invitation,phone.credential,{measured:{cpuThreads:null,totalMemoryBytes:8*GiB}});
   assert.equal(eightGig.status,201,JSON.stringify(eightGig.body));
-  const expected={...provisional,maxMemoryBytes:6*GiB,reserveMemoryBytes:2*GiB};
-  assert.deepEqual(eightGig.body.settings,expected,'8 GiB RAM: a quarter is reserved, the rest is the ceiling; unknown CPU keeps the provisional slots');
+  const expected={...provisional,maxMemoryBytes:7*GiB,reserveMemoryBytes:GiB};
+  assert.deepEqual(eightGig.body.settings,expected,'8 GiB RAM: an eighth (1 GiB) is reserved, the rest is the ceiling; unknown CPU keeps the provisional slots');
   assert.deepEqual((await owner('/'+group)).body.devices.find(d=>d.id===phone.deviceId).settings,expected,'The dashboard shows the derived ceiling');
   const budget=JSON.parse((await r.db.device.findUnique({where:{id:JSON.stringify(['budget',phone.deviceId])}})).metadataJson);
-  assert.deepEqual(budget.capacity,[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:6*GiB}],'The physical budget follows the derived ceiling');
+  assert.deepEqual(budget.capacity,[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:7*GiB}],'The physical budget follows the derived ceiling');
   const withCpu=await settingsCall(phone.invitation,phone.credential,{measured:{cpuThreads:8,totalMemoryBytes:8*GiB}});
   assert.deepEqual(withCpu.body.settings,{...expected,maxCpuThreads:4},'Half of the hardware threads are contributed');
   assert.deepEqual((await settingsCall(phone.invitation,phone.credential,{measured:{cpuThreads:8,totalMemoryBytes:8*GiB}})).body.settings,{...expected,maxCpuThreads:4},'Re-reporting the same hardware is idempotent');

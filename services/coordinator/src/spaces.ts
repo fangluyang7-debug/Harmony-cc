@@ -42,15 +42,15 @@ export function measuredCapacity(v:any):MeasuredCapacity{
   return {cpuThreads:cpu,totalMemoryBytes:ram};
 }
 /**
- * Automatic ceiling for a device that reported its hardware. The device keeps the larger of 1 GiB or a
- * quarter of its RAM for the system and the owner's own apps; the remainder (rounded down to 64 MiB) is
+ * Automatic ceiling for a device that reported its hardware. The device keeps the larger of 1 GiB or an
+ * eighth of its RAM for the system and the owner's own apps; the remainder (rounded down to 64 MiB) is
  * the contribution ceiling. CPU contributes half of the hardware threads, at least one. Storage capacity
  * is deliberately not part of this: only RAM backs task execution. Unknown measurements keep the current value.
  */
 export function autoContribution(current:Contribution,measured:MeasuredCapacity):Contribution{
   const next:Contribution={...current,capacityMode:'auto'};
   if(measured.totalMemoryBytes!==null){
-    const reserve=Math.min(TiB,Math.max(GiB,Math.ceil(measured.totalMemoryBytes/4/MiB)*MiB));
+    const reserve=Math.min(TiB,Math.max(GiB,Math.ceil(measured.totalMemoryBytes/8/MiB)*MiB));
     next.reserveMemoryBytes=reserve;
     next.maxMemoryBytes=Math.min(TiB,Math.max(64*MiB,Math.floor((measured.totalMemoryBytes-reserve)/(64*MiB))*64*MiB));
   }

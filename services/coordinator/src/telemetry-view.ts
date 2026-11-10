@@ -25,13 +25,15 @@ export class TelemetryView {
       recentTransfers(this.db,groupId),this.db.dataEndpoint.findMany({where:{groupId}}),this.db.allotment.findMany({where:{groupId}}),this.db.batchReadyJob.findMany({where:{groupId},select:{id:true,reason:true,queuedAt:true}})
     ]);
     const attempts=await this.db.attempt.findMany({where:{groupId,id:{in:rows.map(r=>r.id)}}});
+    // A device that never redeemed its invite has no credential history: it is a pending invite, not a device.
+    const pairedHolders=new Set((await this.db.credential.findMany({where:{groupId},select:{holderInstanceId:true}})).map(c=>c.holderInstanceId));
     const active=await Promise.all(registered.map(d=>deviceMembershipActive(this.db,d.id)));
     const ids=[...new Set([...registered.filter((_,i)=>active[i]).map(d=>d.id),...profiles.map(p=>p.deviceId)])];
     const grants=grantRows.filter(r=>r.id.startsWith('["allotment",')).map(r=>parsed(r.metadataJson));
     const devices=ids.map(id=>{
       const registration=registered.find(d=>d.id===id),holders=profiles.filter(p=>p.deviceId===id);
       const reservations=grants.filter(r=>r.grant.deviceId===id&&r.grant.groupId===groupId);
-      return {id,name:registration?.name??id,holders:holders.map(profile=>({profile,controlState:this.directory.controlState?.(groupId,profile.holderInstanceId,profile.deviceInstanceId,profile.ledgerEpoch)??'UNKNOWN',
+      return {id,name:registration?.name??id,paired:holders.length>0||(!!registration&&pairedHolders.has(registration.holderId)),holders:holders.map(profile=>({profile,controlState:this.directory.controlState?.(groupId,profile.holderInstanceId,profile.deviceInstanceId,profile.ledgerEpoch)??'UNKNOWN',
         resourceForecasts:profile.executors.map(e=>{const a=availability(profile,e,'REMOTE_INTERACTIVE',profile.sequence,now);return {targetId:a.targetId,reason:a.reason,blockingReason:a.blockingReason,resourceWait:a.resourceWait};}),
         evidenceFresh:profile.ownerActivity.sampledAt<=now&&profile.ownerActivity.sampledAt+profile.ownerActivity.ttlMs>now,
         qualification:profile.executors.map(e=>({targetId:e.target.targetId,...parsed(qualifications.find(q=>q.id===JSON.stringify([groupId,profile.holderInstanceId,e.target.targetId]))?.metadataJson)}))})),

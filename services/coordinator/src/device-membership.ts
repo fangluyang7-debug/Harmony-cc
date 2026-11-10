@@ -16,9 +16,10 @@ export async function deviceMembershipActive(db:Prisma.TransactionClient,deviceI
 export async function registerDeviceMembership(db:Prisma.TransactionClient,installationId:string,deviceId:string,previousDeviceId:string|undefined,userId:string,knownDeviceIds:unknown=[]){
  if(!/^[a-f0-9-]{36}$/.test(installationId))throw Error('DEVICE_INSTALLATION_INVALID');
  const id=installationKey(installationId),binding=await db.device.findUnique({where:{id}});
- if(!binding&&previousDeviceId){
-  const previous=await db.spaceDevice.findUnique({where:{id:previousDeviceId}});
-  if(!previous||previous.userId!==userId)throw Error('DEVICE_FORBIDDEN');
+ // A previousDeviceId unknown here belongs to another coordinator; ignore it like knownDeviceIds.
+ const previous=!binding&&previousDeviceId?await db.spaceDevice.findUnique({where:{id:previousDeviceId}}):null;
+ if(previous&&previous.userId!==userId)throw Error('DEVICE_FORBIDDEN');
+ if(!binding&&previousDeviceId&&previous){
   const old=await db.device.findUnique({where:{id:deviceKey(previousDeviceId)}});
   if(old&&(JSON.parse(old.metadataJson) as Registration).installationId!==installationId)throw Error('DEVICE_INSTALLATION_CONFLICT');
   await db.device.upsert({where:{id:deviceKey(previousDeviceId)},create:{id:deviceKey(previousDeviceId),groupId:previous.spaceId,revision:1,metadataJson:JSON.stringify({installationId})},update:{}});

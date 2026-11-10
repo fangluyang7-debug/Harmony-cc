@@ -91,6 +91,10 @@ export class NativeAgent {
  private work:Promise<void>=Promise.resolve();
  private refreshing=false;
  private connecting=false;
+ private unreachableSince=0;
+ private gone=false;
+ /** Called after the coordinator went away and this pairing was dropped. */
+ onCoordinatorGone:(()=>void)|null=null;
  private calibrating=false;
  private grantBusy=false;
  private renewAt=0;
@@ -163,19 +167,31 @@ export class NativeAgent {
   else if(saved!==null){installation=JSON.parse(saved) as Installation;if(registered!==null&&(installation.appInstanceId!==registered.appInstanceId||installation.paired.peer.holderInstanceId!==registered.paired.peer.holderInstanceId))throw Error('INSTALLATION_ALREADY_PAIRED');if(bootstrap!==null&&installation.bootstrap.holderInstanceId!==bootstrap.holderInstanceId)throw Error('INSTALLATION_ALREADY_PAIRED');}
   else{
    if(bootstrap===null||bootstrap.invitation.version!==2||bootstrap.invitation.expiresAt<=Date.now()||!validContribution(bootstrap.contribution)||!['REAL','SIMULATED'].includes(bootstrap.domain))throw Error('INVITATION_REQUIRED');
-   const pendingPair=await db.get('pairing-pending:'+bootstrap.holderInstanceId);
-   if(pendingPair!==null&&pendingPair!==''||await db.get('pairing-pending')===bootstrap.holderInstanceId)throw Error('PAIRING_RECONCILIATION_REQUIRED');
+   // A non-empty marker means an earlier /v2/pair with that invite has an unknown outcome: the
+   // coordinator may have consumed the one-time invite without us receiving the credential.
+   // Re-sending the same invite cannot recover it, but a fresh invite can safely re-pair.
+   const pendingKey='pairing-pending:'+bootstrap.holderInstanceId,pendingPair=await db.get(pendingKey);
+   if(pendingPair!==null&&pendingPair!==''&&pendingPair===bootstrap.invitation.inviteId)throw Error('PAIRING_RECONCILIATION_REQUIRED');
+   if(await db.get('pairing-pending')===bootstrap.holderInstanceId)await db.put('pairing-pending','');
    const transport=new NativeTransport(bootstrap.invitation,context);await transport.initialize();
    const info=await transport.json('/v2/identity') as Identity;if(info.version!==2||info.domain!==bootstrap.domain)throw Error('PAIR_DOMAIN_INVALID');
-   await db.put('pairing-pending:'+bootstrap.holderInstanceId,bootstrap.invitation.inviteId);
+   await db.put(pendingKey,bootstrap.invitation.inviteId);
    let installationId=await db.get('device-installation-id');if(installationId===null){installationId=factory.id();await db.put('device-installation-id',installationId);}
-   const oldIdentity=await db.get('identity'),previousDeviceId=oldIdentity===null?undefined:(JSON.parse(oldIdentity) as Installation).paired.peer.deviceId;
+   // previousDeviceId only means something to the coordinator that issued it (same certificate pin).
+   const oldIdentity=await db.get('identity'),oldInstallation=oldIdentity===null?null:JSON.parse(oldIdentity) as Installation;
+   const previousDeviceId=oldInstallation!==null&&oldInstallation.bootstrap.invitation.fingerprint===bootstrap.invitation.fingerprint?oldInstallation.paired.peer.deviceId:undefined;
    const knownDeviceIds=(await db.storedIdentities()).map((value:string)=>(JSON.parse(value) as Installation).paired.peer.deviceId);
    const pairInput:PairInput={inviteId:bootstrap.invitation.inviteId,code:bootstrap.invitation.code,holderInstanceId:bootstrap.holderInstanceId,installationId,previousDeviceId,knownDeviceIds};let paired:Paired;
    try{paired=await transport.json('/v2/pair',pairInput) as Paired;}
-   catch(error){if((error as Error).message==='SPACE_SWITCH_BUSY')await db.put('pairing-pending:'+bootstrap.holderInstanceId,'');throw error as Error;}
+   catch(error){
+    // Clear the marker only when the coordinator definitely did not pair: an explicit 4xx
+    // rejection, or a request that never reached it. Timeouts and 5xx stay ambiguous.
+    const status=transport.lastStatus;
+    if((error as Error).message==='SPACE_SWITCH_BUSY'||status===-1||status>=400&&status<500)await db.put(pendingKey,'');
+    throw error as Error;
+   }
    if(!/^[A-Za-z0-9_-]{43}$/.test(paired.credential)||paired.peer.groupId!==bootstrap.invitation.groupId||paired.peer.holderInstanceId!==bootstrap.holderInstanceId)throw Error('PAIR_RESPONSE_INVALID');
-   installation={bootstrap,paired};await db.put('identity:'+paired.peer.holderInstanceId,JSON.stringify(installation));
+   installation={bootstrap,paired};await db.put('identity:'+paired.peer.holderInstanceId,JSON.stringify(installation));await db.put(pendingKey,'');
   }
   if(registered===null){await db.put('scope-ready:'+installation.paired.peer.holderInstanceId,'true');await db.put('identity',JSON.stringify(installation));}
   const transport=new NativeTransport(installation.bootstrap.invitation,context);await transport.initialize();transport.credential=installation.paired.credential;
@@ -223,10 +239,10 @@ export class NativeAgent {
   return new SchedulerSdk(port);
  }
  private showStatus():void {
-  const status=this.stopped?'已停止':!this.ready?'正在连接协调中心':!this.idle()?'已连接 · 贡献已暂停':this.energyGate!==null?'已连接 · 等待电量或温控条件':'已连接 · 前台贡献';
+  const status=this.gone?'协调中心已断开，请重新配对':this.stopped?'已停止':!this.ready?'正在连接协调中心':!this.idle()?'已连接 · 贡献已暂停':this.energyGate!==null?'已连接 · 等待电量或温控条件':'已连接 · 前台贡献';
   AppStorage.setOrCreate('agentStatus',status);
  }
- private error(e:Error):void {const code=/^[A-Z_0-9:]+$/.test(e.message)?e.message:'NATIVE_AGENT_FAILED';AppStorage.setOrCreate('agentWarning',code);this.showStatus();hilog.error(0x0001,'HarmonyAgent','%{public}s',code);}
+ private error(e:Error):void {const code=/^[A-Z_0-9:]+$/.test(e.message)?e.message:'NATIVE_AGENT_FAILED';AppStorage.setOrCreate('agentWarning',code);this.showStatus();hilog.error(0x0001,'HarmonyAgent','%{public}s %{public}s',code,code===e.message?'':String(e.message).slice(0,300));}
  private async restorePreferences():Promise<void>{
   const saved=await this.db.get('contribution:'+this.displayHolderId());if(saved!==null){const value=JSON.parse(saved) as Contribution;if(!this.withinCeiling(value))throw Error('CONTRIBUTION_INVALID');this.contribution=value;}
   this.enabled=(await this.db.get('contribution-enabled:'+this.displayHolderId()))!=='false';this.showPreferences();
@@ -245,11 +261,11 @@ export class NativeAgent {
   const atCeiling=this.contribution.maxCpuThreads===ceiling.maxCpuThreads&&this.contribution.maxMemoryBytes===ceiling.maxMemoryBytes;
   const next:Contribution={ownerMode:ceiling.ownerMode,maxCpuThreads:settings.maxCpuThreads,maxMemoryBytes:settings.maxMemoryBytes,reserveMemoryBytes:settings.reserveMemoryBytes};
   this.installation.bootstrap.contribution=next;
-  await this.db.put('identity',JSON.stringify(this.installation));
+  await this.db.put('identity',JSON.stringify(this.installation));await this.db.put('identity:'+this.displayHolderId(),JSON.stringify(this.installation));
   const current:Contribution={ownerMode:this.contribution.ownerMode,maxCpuThreads:atCeiling?next.maxCpuThreads:Math.min(this.contribution.maxCpuThreads,next.maxCpuThreads),
    maxMemoryBytes:atCeiling?next.maxMemoryBytes:Math.min(this.contribution.maxMemoryBytes,next.maxMemoryBytes),reserveMemoryBytes:next.reserveMemoryBytes};
   this.contribution=current;
-  await this.db.put('contribution',JSON.stringify(current));
+  await this.db.put('contribution:'+this.displayHolderId(),JSON.stringify(current));
   this.showPreferences();
  }
  private showPreferences():void {AppStorage.setOrCreate('cpuLimit',String(this.contribution.maxCpuThreads));AppStorage.setOrCreate('memoryLimitMB',String(this.contribution.maxMemoryBytes/1048576));AppStorage.setOrCreate('maxCpuLimit',this.installation.bootstrap.contribution.maxCpuThreads);AppStorage.setOrCreate('maxMemoryLimitMB',this.installation.bootstrap.contribution.maxMemoryBytes/1048576);AppStorage.setOrCreate('contributing',this.enabled);}
@@ -281,11 +297,18 @@ export class NativeAgent {
  private async connect():Promise<void>{
   if(this.connecting||this.socket!==null||this.stopped)return;this.connecting=true;this.renewAt=0;
   try{
-   const info=await this.transport.json('/v2/identity') as Identity;if(info.domain!==this.installation.bootstrap.domain||info.version!==2)throw Error('IDENTITY_INVALID');
+   let info:Identity;
+   try{info=await this.transport.json('/v2/identity') as Identity;this.unreachableSince=0;}
+   catch(e){
+    // Coordinator provably unreachable (refused / no route) for 20 s: treat it as stopped, like an explicit shutdown.
+    if(this.transport.lastStatus===-1){if(this.unreachableSince===0)this.unreachableSince=monotonic();else if(monotonic()-this.unreachableSince>20000)void this.coordinatorGone();}
+    throw e as Error;
+   }
+   if(info.domain!==this.installation.bootstrap.domain||info.version!==2)throw Error('IDENTITY_INVALID');
    await this.store.change(new HostChange(s=>{s.journal=bindAgentJournalV2(s.journal,info.coordinatorId,info.epoch);}));
    const socket=webSocket.createWebSocket();this.socket=socket;this.sent.clear();this.welcomed=false;
    socket.on('message',(_error,data)=>{if(this.socket!==socket)return;if(typeof data!=='string'){void socket.close();return;}this.work=this.work.then(()=>this.message(JSON.parse(data) as MessageEnvelopeV2)).catch((e:Error)=>{this.error(e as Error);void socket.close();});});
-   socket.on('close',()=>{if(this.socket!==socket)return;this.peerLinks?.invalidate();this.ready=false;this.welcomed=false;this.socket=null;this.sent.clear();});
+   socket.on('close',(_error,value)=>{if(this.socket!==socket)return;if(value?.code===4001)void this.coordinatorGone();this.peerLinks?.invalidate();this.ready=false;this.welcomed=false;this.socket=null;this.sent.clear();});
    socket.on('error',()=>{if(this.socket!==socket)return;this.peerLinks?.invalidate();this.ready=false;this.welcomed=false;this.socket=null;this.sent.clear();void socket.close().catch(()=>{});});
    try{
     await this.transport.connect(socket);
@@ -375,7 +398,10 @@ export class NativeAgent {
  }
  private async tick():Promise<void>{
   if(this.stopped||this.switching||this.refreshing)return;if(this.foreground!==this.lifecycleForeground())this.setForeground(this.lifecycleForeground());this.refreshing=true;
-  try{try{const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;this.availableRam=Number(memory.availableMem)*1024;}catch(e){this.totalRam=null;this.availableRam=null;}try{const mode=power.getPowerMode();this.powerSaving=mode===power.DevicePowerMode.MODE_NORMAL||mode===power.DevicePowerMode.MODE_PERFORMANCE?'OFF':'ON';}catch(e){this.powerSaving=null;}this.sampleEnergy();await this.connect();if(!this.ready)return;void this.peerLinks?.sample().catch((e:Error)=>{this.peerLinks?.invalidate();this.error(e);});AppStorage.setOrCreate('deviceTotalMemoryMB',this.totalRam===null?0:Math.floor(this.totalRam/1048576));const reply:Settings=this.policy===null?await this.transport.json('/v2/device-settings',this.settingsRequest()) as Settings:{settings:null};if(reply.settings!==null)await this.adoptCeiling(reply.settings);const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
+  try{try{const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;this.availableRam=Number(memory.availableMem)*1024;}catch(e){this.totalRam=null;this.availableRam=null;}try{const mode=power.getPowerMode();this.powerSaving=mode===power.DevicePowerMode.MODE_NORMAL||mode===power.DevicePowerMode.MODE_PERFORMANCE?'OFF':'ON';}catch(e){this.powerSaving=null;}this.sampleEnergy();AppStorage.setOrCreate('deviceTotalMemoryMB',this.totalRam===null?0:Math.floor(this.totalRam/1048576));
+   // The ceiling follows the coordinator's auto capacity even while the control channel is still connecting.
+   let reply:Settings={settings:null};if(this.policy===null){try{reply=await this.transport.json('/v2/device-settings',this.settingsRequest()) as Settings;if(reply.settings!==null)await this.adoptCeiling(reply.settings);}catch(e){this.error(e as Error);}}
+   await this.connect();if(!this.ready)return;void this.peerLinks?.sample().catch((e:Error)=>{this.peerLinks?.invalidate();this.error(e);});const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
    await this.pollCancellation();this.pumpQueue();try{await this.renew();}catch(e){this.error(e as Error);}if(this.links.length===0||this.links[0].fixedMs.sampledAt+10000<this.transport.now())await this.probeLinks();await this.profile();this.pumpQueue();if(this.idle())void this.calibrate().catch((e:Error)=>this.error(e as Error));
   }finally{this.refreshing=false;this.showStatus();}
  }
@@ -531,6 +557,14 @@ export class NativeAgent {
    }
    if(report!==null)await this.transport.json('/v2/evaluations/'+permit.id+'/report',report);
   }finally{this.calibrating=false;}
+ }
+ /** The coordinator stopped: forget the active pairing so the next launch shows the pairing screen. History stays for knownDeviceIds. */
+ private async coordinatorGone():Promise<void>{
+  if(this.gone||this.stopped)return;this.gone=true;
+  try{await this.db.delete('identity');}catch(e){hilog.error(0x0001,'HarmonyAgent','FORGET_PAIRING_FAILED');}
+  AppStorage.setOrCreate('agentWarning','');AppStorage.setOrCreate('agentStatus','协调中心已断开，请重新配对');
+  try{await this.close();}catch(e){}
+  AppStorage.setOrCreate('agentStatus','协调中心已断开，请重新配对');this.onCoordinatorGone?.();
  }
  async close():Promise<void>{this.stopped=true;await this.peerLinks?.close();clearInterval(this.timer);this.foreground=false;await this.yield();await this.socket?.close();await this.store.drained();NativeAgent.starting=false;}
 }
