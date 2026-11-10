@@ -29,6 +29,13 @@ export class CalibrationWorker {
     if(!validEvaluationWork(work)||work.permit.domain!==this.options.domain||work.permit.groupId!==state.groupId||
       work.permit.holderInstanceId!==state.holderInstanceId||work.executor.target.deviceId!==state.deviceId)throw Error('EVALUATION_SCOPE');
     let result=await this.executor.reconcile(work.permit);
+    // The exclusive, durable ledger preserves every admission across restarts.
+    // Only a retired generation with no admission can prove that no engine ran.
+    // Missing records in the current generation remain delivery uncertainty.
+    if(!result&&work.mode==='RECONCILE'&&work.ledgerEpoch<state.ledgerEpoch&&
+      work.deviceInstanceId!==this.options.deviceInstanceId&&!this.ledger.status(work.permit.id)){
+      result=await this.executor.decline(work.permit);
+    }
     if(!result&&work.mode==='RUN'&&!this.ledger.status(work.permit.id)){
       const abort=new AbortController();this.abort=abort;
       let timer:NodeJS.Timeout|undefined,checking:Promise<void>|undefined;
@@ -41,7 +48,7 @@ export class CalibrationWorker {
       const remaining=work.expiresAt-Date.now();
       const deadline=setTimeout(()=>abort.abort(),Math.max(1,Math.min(remaining,work.permit.timeoutMs)));
       try{
-        if(work.ledgerEpoch!==state.ledgerEpoch||work.deviceInstanceId!==this.options.deviceInstanceId)return;
+        if(work.ledgerEpoch!==state.ledgerEpoch||work.deviceInstanceId!==this.options.deviceInstanceId)throw Error('EVALUATION_STALE_INSTALLATION');
         if(this.stopped||remaining<=0)abort.abort();
         if(!abort.signal.aborted)await check();
         if(abort.signal.aborted)result=await this.executor.decline(work.permit);
@@ -62,7 +69,7 @@ export class CalibrationWorker {
       const response=await this.request('/v2/evaluations/'+work.permit.id+'/report',{...result,output:result.output.toString('base64')}) as {acknowledged:boolean};
       if(response?.acknowledged!==true)throw Error('EVALUATION_ACK_INVALID');
     }
-    // RECONCILE + no record is delivery uncertainty, never proof of settlement or permission to run.
+    // Reconciliation never grants permission to run an engine.
   }
   /** Wake only on connection recovery, new durable work, or a retry of failed delivery. No idle polling. */
   notify(){

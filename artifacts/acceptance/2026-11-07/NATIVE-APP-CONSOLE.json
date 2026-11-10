@@ -1,0 +1,74 @@
+{
+  "verifiedAt": "2026-11-07T12:15:31.914Z",
+  "domain": "REAL",
+  "client": "HarmonyOS phone native application with embedded ArkWeb",
+  "input": {
+    "text": "Hello Harmony\n让每一份算力，都有所用HarmonyAppPhoneTest。"
+  },
+  "expected": {
+    "characters": 45,
+    "words": 3,
+    "lines": 2
+  },
+  "note": "UI text insertion retained the original sample. Actual input verified against both persisted SDK input hashes.",
+  "jobs": [
+    {
+      "id": "8b47574a-b9db-4b80-95d1-b3cf8e16d311",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "state": "SUCCEEDED",
+      "output": {
+        "characters": 45,
+        "words": 3,
+        "lines": 2
+      },
+      "inputHash": "93693f78ad5b47c0bf1846d054aa8d20cb617ca02a993a325cc8898bc7bdec03",
+      "committedReceipts": 1,
+      "resourcesSettled": true
+    },
+    {
+      "id": "2442df93-f5c3-4864-aca0-6d9a96f3aaa2",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "state": "SUCCEEDED",
+      "output": {
+        "characters": 45,
+        "words": 3,
+        "lines": 2
+      },
+      "inputHash": "93693f78ad5b47c0bf1846d054aa8d20cb617ca02a993a325cc8898bc7bdec03",
+      "committedReceipts": 1,
+      "resourcesSettled": true
+    }
+  ],
+  "devices": [
+    {
+      "name": "Windows CPU",
+      "online": true,
+      "activity": "IDLE",
+      "available": [
+        "vector.normalize.v1",
+        "text.count.v1",
+        "image.crop.v1"
+      ]
+    },
+    {
+      "name": "HarmonyOS 电脑",
+      "online": true,
+      "activity": "IDLE",
+      "available": [
+        "vector.normalize.v1",
+        "text.count.v1",
+        "image.crop.v1"
+      ]
+    },
+    {
+      "name": "HarmonyOS 手机",
+      "online": true,
+      "activity": "IDLE",
+      "available": [
+        "vector.normalize.v1",
+        "text.count.v1",
+        "image.crop.v1"
+      ]
+    }
+  ]
+}

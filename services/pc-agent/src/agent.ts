@@ -112,7 +112,7 @@ export class PcAgent {
     if(this.pending.size>=8){this.ledger.rejectDispatch(message,'AGENT_BACKPRESSURE');void this.client.flush();return;}
     const done=(async()=>{
       try{
-        if((offer.target.backend!=='CPU'&&!(offer.target.backend==='CUDA'&&this.options.ports.imageEncoder?.gpu)&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.options.ports.service))||offer.task.contract.interruptibility!=='CANCEL_RESTART')throw Error('EXECUTOR_UNSUPPORTED');
+        if((offer.target.backend!=='CPU'&&!(['CUDA','VULKAN'].includes(offer.target.backend)&&this.options.ports.imageEncoder?.gpu)&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.options.ports.service))||offer.task.contract.interruptibility!=='CANCEL_RESTART')throw Error('EXECUTOR_UNSUPPORTED');
         const version=await this.options.snapshotVersion(offer);
         const trace=version===null?undefined:new ExecutionTrace(this.traces,{traceId:message.traceId,parentSpanId:null,snapshotVersion:version,deviceInstanceId:this.options.deviceInstanceId},offer);
         const endQueue=trace?.begin('QUEUE'),history=new QueueHistory();

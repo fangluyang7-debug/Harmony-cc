@@ -3,7 +3,9 @@
     "name": "scheduler",
     "type": "har",
     "deviceTypes": [
-      "phone"
+      "phone",
+      "tablet",
+      "2in1"
     ]
   }
 }

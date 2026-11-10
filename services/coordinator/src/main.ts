@@ -15,7 +15,14 @@ async function main(){
   // declaration file is installed on the coordinator and on the service host so suite digests match.
   const servicePacks=process.env.COORDINATOR_SERVICE_PACKS;
   const referencePacks=suite||servicePacks?[...(cpuHost?await builtinReferencePacks():builtinCpuPacks()),...(suite?[await loadImageEncodingPack(suite)]:[]),...(servicePacks?await loadServicePacks(servicePacks):[])]:undefined;
-  const runtime=await createCoordinator(config,async()=>{},{cpuHost,referencePacks});
+  const runtime=await createCoordinator(config,async()=>{},{cpuHost,referencePacks,onError:error=>{
+    // Preserve actionable database/transport codes without logging credentials,
+    // request bodies or Prisma query arguments into the desktop console.
+    const e=error as {code?:unknown;name?:unknown;message?:unknown};
+    const code=typeof e?.code==='string'&&/^[A-Z0-9_]{1,100}$/.test(e.code)?e.code:
+      typeof e?.message==='string'&&/^[A-Z0-9_]{1,100}$/.test(e.message)?e.message:'OPERATION_FAILED';
+    console.error('COORDINATOR_OPERATION_FAILED '+code);
+  }});
   try{await runtime.app.listen(config.port,config.host);await runtime.restore();}
   catch(error){await runtime.close();throw error;}
   const stopDiscovery=!config.proxy&&config.publicUrl?advertiseCoordinator(config.publicUrl,()=>console.error('DISCOVERY_UNAVAILABLE: use QR invitation')):()=>{};

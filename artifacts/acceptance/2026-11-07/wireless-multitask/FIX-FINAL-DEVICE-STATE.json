@@ -1,0 +1,71 @@
+{
+  "at": "2026-11-07T13:21:37.249Z",
+  "devices": [
+    {
+      "id": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "name": "Windows CPU",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "text.count.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "image.crop.v1",
+          "available": true,
+          "state": "ACTIVE"
+        }
+      ]
+    },
+    {
+      "id": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "name": "HarmonyOS 电脑",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "text.count.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "image.crop.v1",
+          "available": true,
+          "state": "ACTIVE"
+        }
+      ]
+    },
+    {
+      "id": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "name": "HarmonyOS 手机",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "text.count.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "image.crop.v1",
+          "available": true,
+          "state": "ACTIVE"
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import type {ModelManifestV2} from '@harmony/scheduler-core';
 /** Public submission data contains no identity claims. Credentials bind the App on the server. */
 export interface SdkInput {contentHash:string;bytes:number;schemaId:string;schemaVersion:number;}
-export interface SdkNode {effects?:'PURE'|'COMMIT';businessIdempotencyKey?:string;privacy?:'LOCAL_ONLY'|'OWNER_SERVICE'|'SHARED';modelManifest?:ModelManifestV2;id:string;capability:string;input?:SdkInput;inputFrom?:string;parameters:string;dependsOn:string[];targetId?:string;}
+export interface SdkNode {executionScope?:'ORIGIN_DEVICE';effects?:'PURE'|'COMMIT';businessIdempotencyKey?:string;privacy?:'LOCAL_ONLY'|'OWNER_SERVICE'|'SHARED';modelManifest?:ModelManifestV2;id:string;capability:string;input?:SdkInput;inputFrom?:string;inputFroms?:string[];parameters:string;dependsOn:string[];targetId?:string;}
 export interface SdkWorkflow {version:3;id:string;outputContract:string;qualityTarget:string;nodes:SdkNode[];}
 export interface SdkAlternatives {version:3;id:string;outputContract:string;qualityTarget:string;alternatives:SdkWorkflow[];}
 export interface SubmitOptions {priority?:'REMOTE_INTERACTIVE'|'REMOTE_BATCH';requestId:string;budgetMs:number;resultDestination:'ORIGIN';inputLocation?:'ORIGIN';}
@@ -80,7 +80,7 @@ export class SchedulerSdk {
  releaseInput(input:SdkInput):void{this.inputs.delete(input.contentHash);}
  resume(jobId:string):SdkTask{if(!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}$/.test(jobId))throw Error('SDK_JOB_ID_INVALID');return new SdkTask(jobId,this.port);}
  async plan(workflow:SdkWorkflow|SdkAlternatives,options:SubmitOptions):Promise<SdkPlan>{
-  const deadline=this.port.now()+this.capacityWaitMs,body=JSON.stringify({workflow,options});
+  const started=this.port.now(),deadline=started+this.capacityWaitMs;let body=JSON.stringify({workflow,options});
   for(;;){
    if(this.port.connected?.()===false)throw Error('SDK_COORDINATOR_OFFLINE');
    if(this.port.cancelled?.())throw Error('SDK_SUBMISSION_CANCELLED');
@@ -88,8 +88,10 @@ export class SchedulerSdk {
     if(plan.jobId!==options.requestId||!plan.inputTicket||plan.inputTicket.operation!=='WRITE')throw Error('SDK_RESPONSE_INVALID');return plan;
    }catch(error){
     // Only explicit pre-registration refusals are retried. An ambiguous delivery is never replayed.
-    const code=(error as Error).message;if(!['NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(code)||this.port.now()>=deadline)throw error as Error;
+    const code=(error as Error).message;if(!['NO_LEGAL_PLAN','PLANNING_BUDGET_BASELINE','ALLOTMENT_UNAVAILABLE','PLAN_STALE'].includes(code)||this.port.now()>=deadline)throw error as Error;
     await this.port.wait(500);
+    const remaining=options.budgetMs-Math.max(0,Math.ceil(this.port.now()-started));if(remaining<1)throw Error('SDK_BUDGET_EXHAUSTED');
+    const retry:SubmitOptions={...options,budgetMs:remaining};const submission:SdkSubmission={workflow,options:retry};body=JSON.stringify(submission);
    }
   }
  }
@@ -99,7 +101,7 @@ export class SchedulerSdk {
    try{await this.port.request('/v2/sdk/jobs/'+jobId+'/start','{}');return;}
    catch(error){
     const code=(error as Error).message;
-    if(!['ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','PLAN_STALE','START_BUSY','SDK_REQUEST_TIMEOUT'].includes(code)||this.port.now()>=deadline)throw error as Error;
+    if(!['ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','PLAN_STALE','START_BUSY','NO_LEGAL_PLAN','SDK_REQUEST_TIMEOUT'].includes(code)||this.port.now()>=deadline)throw error as Error;
     await this.port.wait(Math.min(250,Math.max(0,deadline-this.port.now())));
    }
   }
@@ -110,7 +112,7 @@ export class SchedulerSdk {
   const available=new Map<string,Uint8Array>();
   const paths:SdkWorkflow[]=isAlternatives(workflow)?(workflow as SdkAlternatives).alternatives:[workflow as SdkWorkflow];
   for(const path of paths)for(const node of path.nodes){
-   if(node.inputFrom!==undefined)continue;
+   if(node.inputFrom!==undefined||node.inputFroms!==undefined)continue;
    const input=node.input;if(input===undefined)throw Error('SDK_INPUT_REQUIRED');const bytes=this.inputs.get(input.contentHash);
    if(!bytes||bytes.byteLength!==input.bytes)throw Error('SDK_INPUT_NOT_REGISTERED');
    available.set(input.contentHash,bytes);

@@ -1,4 +1,6 @@
 export class Product {
+  public comparisonRank?: number;
+  public visualSimilarity?: number;
   sessionId?: string;
   public candidateItemId?: string;
   public productId?: string;

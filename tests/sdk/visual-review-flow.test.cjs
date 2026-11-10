@@ -1,0 +1,21 @@
+const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUUID,createHash}=require('node:crypto'),zlib=require('node:zlib');
+const {reviewPartitions,reviewRaw,reviewMerge,runVisualReview}=require('../../scripts/lib/visual-review-core.cjs');
+const {encodeGraph}=require('../../scripts/lib/visual-input.cjs');
+const enc=s=>new TextEncoder().encode(s),hash=b=>createHash('sha256').update(b).digest('hex');
+const images=()=>Array.from({length:10},(_,i)=>({id:'p'+i,width:32,height:32,rgb:Uint8Array.from({length:3072},(_,j)=>(j*31+i*17)%256)}));
+test('ArkTS image packing interoperates byte-for-byte with existing HVG1 input',()=>{
+ const input=images(),parts=reviewPartitions(input.length);assert.equal(parts.flat().length,45);assert.equal(new Set(parts.flat().map(p=>p.join(':'))).size,45);
+ for(const p of parts)assert.deepEqual(Buffer.from(reviewRaw(input,p,enc)),zlib.inflateSync(encodeGraph(input,p).subarray(8)));
+});
+function harness(failRegistration=false){
+ const uploads=[],saved=[],targets=[],inputs=new Map();let registrations=0,active=0,maxActive=0;
+ const sdk={async registerInput(b){if(failRegistration&&++registrations===1)throw Error('INJECTED_REGISTER_FAILURE');const contentHash=hash(b);inputs.set(contentHash,b);return {contentHash};},releaseInput(i){inputs.delete(i.contentHash);},async submit(w,o){assert.equal(o.budgetMs,30000);targets.push(w.nodes[0].targetId);const raw=Buffer.from(inputs.get(w.nodes[0].input.contentHash));uploads.push({id:o.requestId,hash:hash(raw)});active++;maxActive=Math.max(maxActive,active);const output={algorithm:'dense-hog-rgb-graph-v1',pairs:[]};let pos=0;const count=raw.readUInt32LE(pos);pos+=4;const pairs=raw.readUInt32LE(pos);pos+=4;const ids=[];for(let i=0;i<count;i++){const n=raw.readUInt32LE(pos);pos+=4;ids.push(raw.subarray(pos,pos+n).toString());pos+=n;const width=raw.readUInt32LE(pos),height=raw.readUInt32LE(pos+4);pos+=8+width*height*3;}for(let i=0;i<pairs;i++){output.pairs.push({a:ids[raw.readUInt32LE(pos)],b:ids[raw.readUInt32LE(pos+4)],scoreMillion:0,comparisons:1});pos+=8;}
+ return {cancel:async()=>{},result:async()=>{await new Promise(r=>setTimeout(r,15));active--;return {output:enc(JSON.stringify(output)),status:{state:'SUCCEEDED',targetId:w.nodes[0].targetId,deviceId:w.nodes[0].targetId==='phone-target'?'phone':'computer',traceId:randomUUID()}};}};}};
+ return {uploads,targets,saved,get active(){return active;},get maxActive(){return maxActive;},port:{sdk,now:Date.now,id:randomUUID,digest:async b=>hash(b),load:async()=>images(),pack:async b=>b,encode:enc,decode:b=>new TextDecoder().decode(b),cancelled:()=>false,save:async r=>saved.push(JSON.parse(JSON.stringify(r)))}};
+}
+const phone={deviceId:'phone',targetId:'phone-target',slots:2},computer={deviceId:'computer',targetId:'computer-target',slots:4};
+test('same source, partition bytes, budget and result; both devices execute in coverage mode without preloading',async()=>{
+ const a=harness(),b=harness();assert.equal(a.uploads.length+b.uploads.length,0);const single=await runVisualReview(a.port,phone,computer,'PHONE'),team=await runVisualReview(b.port,phone,computer,'TEAM');assert.equal(single.state,'SUCCEEDED');assert.equal(team.state,'SUCCEEDED');assert.equal(single.sourceHash,team.sourceHash);assert.deepEqual(single.inputHashes,team.inputHashes);assert.equal(single.resultHash,team.resultHash);assert.equal(team.pairs.length,45);assert.deepEqual(new Set(b.targets),new Set(['phone-target','computer-target']));assert.ok(b.maxActive>1);assert.equal(a.active+b.active,0);assert.equal(new Set([...a.uploads,...b.uploads].map(x=>x.id)).size,a.uploads.length+b.uploads.length);
+});
+test('input registration failure settles all workers and preserves failure instead of returning partial success',async()=>{const h=harness(true),r=await runVisualReview(h.port,phone,computer,'TEAM');assert.equal(r.state,'FAILED');assert.match(r.error,/INJECTED_REGISTER_FAILURE/);assert.equal(h.active,0);assert.equal(h.saved.at(-1).state,'FAILED');});
+test('missing or duplicate pairs and same-device team are rejected',async()=>{assert.throws(()=>reviewMerge(['a','b'],[{algorithm:'dense-hog-rgb-graph-v1',pairs:[]}]),/INCOMPLETE/);const h=harness();await assert.rejects(runVisualReview(h.port,phone,phone,'TEAM'),/DISTINCT_DEVICES/);});

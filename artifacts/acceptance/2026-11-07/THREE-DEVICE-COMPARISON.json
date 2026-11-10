@@ -1,0 +1,1748 @@
+{
+  "version": 1,
+  "startedAt": "2026-11-07T10:35:44.831Z",
+  "boundary": "SDK input registration through complete verified result, including transfer and polling",
+  "baseline": "Each pinned execution target uses the same coordinator and SDK as automatic placement",
+  "documents": [
+    {
+      "inputSha256": "21b2ce2d147d54801537a19b437a96bfba60ba969fbd00324faab8e588d362e6",
+      "expectedSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0"
+    },
+    {
+      "inputSha256": "7dd8ba4c34166c8964ca0bf97df1a05177e33b2b6ae18d0d42ec5b8035040ebb",
+      "expectedSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84"
+    },
+    {
+      "inputSha256": "4f61db66d3013cd5df09d441b0da3036e54474baf83a927ac44c5d50ec9d615e",
+      "expectedSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486"
+    },
+    {
+      "inputSha256": "f708153a562fd4619ef7b7f271e5274ce3a4546880328da78797d0cdc741cd0d",
+      "expectedSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f"
+    },
+    {
+      "inputSha256": "7c5da64a8ab066a8f4b28fe03562880851bffa339826f889115832462ba3c9d5",
+      "expectedSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4"
+    },
+    {
+      "inputSha256": "1532079f26fda1efc400f2820acb46d81669208a053a57a7cc7ada91e429b08e",
+      "expectedSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49"
+    },
+    {
+      "inputSha256": "47c538f99b4dba2d3f6197c5314c0ea7143adfcda8e4d9f27d11396551631724",
+      "expectedSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4"
+    },
+    {
+      "inputSha256": "025d9d9285504c242f6f72e91c7cef3523931d9808f553283b3e6d09bb53f46f",
+      "expectedSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d"
+    },
+    {
+      "inputSha256": "ee7aeec929567c35f59bcc8e0ed5a7a29045075c4702dcfe31978bc10f285e75",
+      "expectedSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015"
+    },
+    {
+      "inputSha256": "55728ea7d68895e69fdcf675bcb490633c0ea61f469accebfbecbe106ba80c4e",
+      "expectedSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701"
+    },
+    {
+      "inputSha256": "ac7f18d1584d12b260cbd5d7e676ac1ace6b6625dfe916bb7898f431331b9152",
+      "expectedSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab"
+    },
+    {
+      "inputSha256": "690f37840e2fbee8a5d4256110afbeb86ccd2ede523b72bfebfd744a51bdae45",
+      "expectedSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7"
+    }
+  ],
+  "capability": "text.count.v1",
+  "parameters": "{}",
+  "count": 12,
+  "concurrency": 3,
+  "rounds": 3,
+  "targets": [
+    "cpu-8d233c86e26b5fc91d755f9e109aa087",
+    "harmony-6789eb7eb4e47f9600c5703287ce8178",
+    "harmony-04e31ac2f1e578e4958f0642401a5829"
+  ],
+  "batches": [
+    {
+      "round": 0,
+      "mode": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "959b1ad9-0f9e-49a5-9b78-92eaaec4ff56",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "7f516b82-44d0-491e-990c-cb2d8e54b119",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 3769.6056000000003
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "0846b0ca-3e0b-4045-a28f-b8e507811bdf",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "df9750af-3d5f-4d85-910d-9d17445d6e54",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 3299.275
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "02bebe01-38e1-493d-af09-8b26f4809599",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "73724191-a8c1-45bb-b13a-8dd1d7ae59df",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 1873.2151
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "8a92389a-4644-4bc1-9a62-b78e2ab275d0",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "e522b5e2-9502-4100-97d3-47ed4541bc67",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 3243.1438
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "57ddb329-78e6-413d-9506-207236fc8b93",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "6994bb4c-4509-447a-b4c8-3c2650ac818f",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 5249.4095
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "999bed98-9c7e-4b94-876f-4b4117f497db",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "8a621eb7-1c7d-43f5-a0a8-1261ad4f20d2",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 3409.3497999999995
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "d6e727cb-b0df-447f-a8e9-1b81fdbdd3aa",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "d92cfbcf-0c21-4d59-9a53-d353d22773a1",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 3419.2071000000005
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "9990b3d6-abd6-4117-9a8b-fb9eed144182",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "67961c63-dec2-4f64-81f7-31ed6951d5f8",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 4460.8105
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "85ddfb0d-1e57-4a1b-9497-be9a97c26688",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "cd82725d-d80f-40e2-b598-2acd630bcf07",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 4021.562099999999
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "70502a1d-fbb1-4023-b88d-12e8d978b928",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "ca38c21e-7110-4ee6-9082-0f935d9dc559",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 1936.5818
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "89e6fb0a-69de-41b4-9b80-aff0f3202e9b",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "bcf29f40-9f0b-40e2-9121-8fc1b57fb5b4",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 3592.9387000000006
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "7f7d8d5f-8c63-480b-bc38-bfb62964bc5c",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "e1d12638-825a-439a-ae34-13e51cb6746a",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 1557.2420999999995
+        }
+      ],
+      "durationMs": 14093.3487
+    },
+    {
+      "round": 0,
+      "mode": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "e711395f-d260-4ba5-bb8d-74ca66f6590f",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "dfcdd3a9-f203-45d7-962d-c492110bb22b",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 3324.942900000002
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "f2571eab-2241-437e-a227-4b3183cf2e4d",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "b8edd444-1451-4dce-a10d-4f8cd3be18f2",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 3075.6293000000005
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "6e546d7e-860a-459d-8a31-18c0a46046ca",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "527fbabe-5a4f-4b12-a055-f3a19e5cef72",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 4088.3091999999997
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "d3c62f55-ebf5-4db7-939f-5f00f29b4754",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "076f111d-0047-498d-8a20-ba8fca46b728",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 5496.843400000002
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "82bfc3f3-f549-4a71-97c6-083f1309348c",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "f5352fa6-38f8-4a0a-9fd3-6c43527c85f1",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 5199.906500000001
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "13312fe0-7c47-4852-8db9-60b7b0c338d0",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "47f99c90-e035-4504-b400-8522ff55d295",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 4423.878000000001
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "c4a1349a-9a77-4de2-a64e-2bc2546a15c0",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "701a57ae-5e75-4da9-ab1f-61f10d54d5ab",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 3164.1736999999994
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "897ef35e-81d5-4b33-9a9f-b9efd3c3baa0",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "371b172a-a808-428a-8a30-48051c494de1",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 4035.4686999999976
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "13e7ebb7-224a-4433-ad10-8e57a4a178a6",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "65f03832-f589-4833-8c38-034dfa62ebd1",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 2618.2587999999996
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "915ead3f-61ad-4ab7-8672-9c1965795095",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "243510dc-3aca-435e-97b2-f153c252cf49",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 3339.127800000002
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "b41b30ad-4dc2-4753-8a75-6f4859ece5a9",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "8f857328-39f5-4955-a45a-616fd5ac7fe2",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 2178.2797999999966
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "7f8adf17-5548-4755-935c-94d0fa03efdf",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "aae0e949-dfb9-467f-86b0-5fe06f6c5b88",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 2837.9963000000025
+        }
+      ],
+      "durationMs": 15408.4601
+    },
+    {
+      "round": 0,
+      "mode": "harmony-04e31ac2f1e578e4958f0642401a5829",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "006b47d3-c7f0-4fce-8036-0a4cd3cea96c",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "225d8cf1-1378-4f60-b8e2-704fd6bdb125",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 5484.842000000001
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "b99dab32-e1f9-4ad8-a7a3-297f1d59df58",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "f75a350f-ee44-4905-8c7d-cacb55dad109",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 4128.8992
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "098b9dce-f4bb-4395-b446-a978078b216d",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "d77d6bef-3c71-4a81-bb1e-a2d67ed9a01b",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 5772.994500000001
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "0c099950-85bf-44b5-95a2-f307335d81b9",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "c6d00ef9-fbc7-47af-87d0-4e270de1b09f",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 16310.366999999998
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "ff77ed6c-357f-4134-b2a2-61a673f0f2bc",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "99338b11-78b4-409b-81cc-d3d189e9e80e",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 13733.6296
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "33fa0677-da67-47c7-94d7-103a9f09ad71",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "3fe27b4b-4d32-40ce-92ed-8d8f6cf526ff",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 13724.204100000003
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "82427ad2-09e1-41e9-8cec-7ea3efe00357",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "29b33f07-8eb5-4870-b135-2b3d42c0e871",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 4962.804400000001
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "359c61a8-3fcb-462d-84de-5155ce0cdc3a",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "8a6605bb-8074-4204-9701-cf2e80ff37a6",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 5115.123599999999
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "7fbd73c8-c757-45f9-b33d-29d9286143af",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "9057e3ed-c37d-4680-a0c9-2a9707adea00",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 3512.618800000004
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "6a676684-d568-4275-9e0e-58f160c9607b",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "4c28c7c7-9b94-4ff3-a15d-815a81724709",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 4179.194100000001
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "6571be4d-28fe-46f7-a9f0-b7137147572a",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "97a51318-1cd2-4dc0-8d16-6b74df5502d6",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 3842.347499999996
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "f1fce73c-5fe3-42db-a60a-9bcc677aa08a",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "60a42e93-bc5d-4504-8009-bcb47b1699a5",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 3300.1805999999997
+        }
+      ],
+      "durationMs": 28144.721400000002
+    },
+    {
+      "round": 0,
+      "mode": "TEAM",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "db77e528-ee4e-4c3d-b084-7b62e834038f",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "fd39c4a7-f38d-4bd0-844b-fa021c1e70a4",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 3654.352500000001
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "3488caf9-9c57-4659-b7b5-acaa42c9738b",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "ee2a8380-12a9-48e8-9e52-776950cd5f56",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 2810.892199999995
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "23c05415-5831-495b-b89c-65d31066568f",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "ee7fef74-8254-44a4-81d5-96ac18b1cf46",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 2801.512999999999
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "ee905d95-cf05-4e82-9f9e-b9068c44e9bd",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "6d824ec1-29ad-4fd4-b5ac-393d63ebba65",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 4191.758999999998
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "0f8f96f8-c5fe-4733-80b0-83743a2ed4e4",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "4cd9f697-0b8d-4ef7-88e0-67d1dffd03a2",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 2000.2410000000018
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "108a159f-c656-47e2-8d0e-8cb30e6ee22d",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "184be5ab-4df3-4bf5-9007-4fa48cf005f7",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 4629.255400000002
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "c31c4a67-482d-4a58-bbde-260db75d733f",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "95d3cd97-2627-4172-afab-2a70a187ba0e",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 4607.495800000004
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "67c10f42-b1c8-412d-8b5f-5f21a97bbd57",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "c0774ae9-7b5e-41b7-aa7b-cf0abc0e09bb",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 2827.905899999998
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "08efb85a-c344-4a0f-80de-5dd878450bc8",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "4ae2fbd2-409b-4e78-a861-a0a613d7d2c2",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 4249.217499999999
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "d4067dde-dbbb-4c58-b807-3e23f47ae924",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "3d9f1328-d3e2-4f19-9e75-997202aae13e",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 4867.0418999999965
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "392c2d6b-2a13-45d4-ba50-81161b8944c4",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "08f09bbb-3486-44cb-a262-1c3aa855ae74",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 4187.805800000002
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "a576ee58-4c90-472a-b3ca-ea2c707b40aa",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "32605f8d-5255-4733-9869-0fd6686d2f17",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 2486.0285000000003
+        }
+      ],
+      "durationMs": 15032.339
+    },
+    {
+      "round": 1,
+      "mode": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "fe5b9636-3550-4f0f-a100-b7d223ae2b6b",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "b89ec39d-b9b2-476f-8288-85d34cda2867",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 4815.897299999997
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "73b16472-515e-4d6f-9d25-e58be1fe6c93",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "588895e9-46e5-4dc7-8b48-8d089f1f4517",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 2171.2926000000007
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "aaf6175f-acb7-4805-8eec-3039b3351c25",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "26b839d9-255a-435a-95c3-966cfecdfd2c",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 2788.4293000000034
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "8601396b-f0e0-4eee-b113-d6ab14d4dbd6",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "c9494b5c-ca6f-4d7f-afa0-9740ac990aa0",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 2644.871299999999
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "b18b4c28-5811-48d6-950d-186ecabbcd61",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "809840dd-53e4-4758-8966-acf7a7c3f54a",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 3546.824000000008
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "bdc4ba30-062e-43d6-8466-81c1b15a5f70",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "44b3d62c-f1a1-4dcd-a7ea-4f6c75b373af",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 4530.061300000001
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "178bb5fe-81d8-4ee6-b87b-ce346b7a422a",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "55af5c17-5f43-4922-bbe3-5c4e3022628e",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 3024.8043999999936
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "011f1de1-12d4-4331-85b1-53269e3f6f59",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "2c5baf1a-8383-48e9-9c7d-ff91b79e7a23",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 4028.3269
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "3eea2e95-a6d5-49a7-a209-6cc69616de8b",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "7e8f7fee-e754-4cde-8ca6-723e4b1e56e2",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 4714.276499999993
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "f58345af-b35b-4331-a192-ae15ce71fffe",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "7116ba2e-105b-4249-a16b-bcf674487244",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 4573.662899999996
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "90bd512b-fa13-400e-9661-9275676dcb4d",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "41d5fb07-6946-451b-9daf-259cbbddaf74",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 3551.3399000000063
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "9b2d3f37-326b-47d5-8adb-93ac6c43053b",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "f39d0af0-a989-404a-8895-641e1f9adb62",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 2276.4905
+        }
+      ],
+      "durationMs": 14847.84569999999
+    },
+    {
+      "round": 1,
+      "mode": "harmony-04e31ac2f1e578e4958f0642401a5829",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "fcb91b3e-8690-470c-a703-3451608c57cf",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "10f95a1f-174b-4dc4-9b23-8f762ce0975c",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 4554.586299999995
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "f378af7c-240d-47bb-9021-631be34f608d",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "b9cbc4fb-d070-4ce6-b223-f933c11786d6",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 2568.8573000000033
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "de007fb4-2abe-429e-bee9-560f0e508169",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "36f82d36-aca8-45e0-86dd-6cc531b4bd38",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 3270.1536999999953
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "023bea14-0728-4967-9e7d-1f2b81f4366c",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "1f94061b-dc65-4915-aa23-bbd1a3bae5e5",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 3217.972800000003
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "5bffbbe0-dd5d-4601-9795-5c1407760ff8",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "73aff0c9-116a-47a6-bb89-348a6b278c8b",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 2956.3308000000106
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "43cd73a2-7b25-4fc4-97b6-5fa5c54372ce",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "800cb679-041d-4306-8d65-49c07d6b2907",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 3607.8989999999903
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "f52d1518-3bf8-4da2-9371-00e138264f09",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "94218df1-87c6-4562-99f6-e0aaf5db6886",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 4439.782800000001
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "df1826a4-460d-4bee-8214-1f58d0cabaea",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "6a41641c-76c8-4b6c-b00e-c16e47c3c36c",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 2800.6254000000044
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "47ff01ff-cc95-4269-b94a-5d6e3196cc06",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "72c9b88d-cb3b-4390-add2-2e9d0b897392",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 4909.344899999996
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "b15bd873-86fe-4e54-b23d-f9185a51084a",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "7f62d248-af3a-4fd2-ace9-0b60fb269040",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 4026.0679999999993
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "c3867e48-3618-4898-b35d-659a525f6acb",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "b50cf0e7-85d7-48d3-b385-bffa59901e92",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 2836.165000000008
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "4e88dc72-62f3-4385-92b6-9263c9b86a9b",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "af8b4393-f051-427a-938d-2edc89c7b291",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 1405.5729000000138
+        }
+      ],
+      "durationMs": 14477.440000000002
+    },
+    {
+      "round": 1,
+      "mode": "TEAM",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "76dfd38b-7ed5-47ff-9256-4558f26788f8",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "aceaaef4-7c04-4aa8-af4c-245c61593851",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 8419.524699999994
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "42643f87-f9d7-4ecd-8216-2597d9fb632d",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "098b2356-45fd-487f-8dd3-3e0d718685ec",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 4037.1523000000016
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "d311287a-5779-4fb6-a93d-7c2931b0d592",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "8a881307-e5a7-4ef9-9359-f43db9f74559",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 2455.29359999999
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "5be1db4d-a24e-4cc6-93b9-9f5e2993efc0",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "77efd0b4-ae23-47ef-b3d8-95385a3c7d75",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 4041.1659999999974
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "f1c1b7da-507f-4d38-8ef7-69a9dc3a69bd",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "55e36814-6bd6-47bc-b670-85d4db51ea65",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 4381.848899999997
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "167b1ace-677d-4f98-b1bc-d9a9ace567ca",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "9cd0fa02-4bc8-46d0-b991-d65298029114",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 3973.8801999999996
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "25eff5c5-340a-44d2-b81a-03d8848d0a0e",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "72c24262-c461-4625-b1ba-adfccc91283d",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 5034.805500000002
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "816f9370-0cb4-43c5-b7f2-ceb6d12f0faa",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "ef93e5d9-5a33-4888-b214-af6fa2f4105b",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 4745.041000000012
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "f5618bae-1aba-4966-9ccd-9394435dfca5",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "48269055-b126-4775-9544-b9f098169d43",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 4119.239799999996
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "c9c5e4fd-6c8e-4afe-9629-c93d73ae1348",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "02e855d6-29c3-46ce-a26b-90ce8f9f7f8e",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 4926.177800000005
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "e9aa59a9-d5f0-43e0-a302-a0ffbca53f19",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "6f684946-cc72-4e8e-b9a4-565cfbb1546f",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 4638.587299999999
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "41f654e0-3dd9-466b-a257-624993ee995a",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "e3a084e6-8ead-43a5-90ad-18adab5c8075",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 3495.2543000000005
+        }
+      ],
+      "durationMs": 18104.34289999999
+    },
+    {
+      "round": 1,
+      "mode": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "bad0c4d6-266a-4c5b-ba70-952601fd7aaa",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "3c13d9a0-eef3-4853-ab4e-db09219a84c9",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 4279.7323999999935
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "b3431d51-1295-4bc5-af18-5e2d21afd1df",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "6191a55b-31ef-4612-a42d-7ab1dd5d913d",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 3442.6814000000013
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "8ebba4a0-0671-4a91-9132-febd1ccc0c13",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "a775a0b5-ce9c-4b3b-b8b2-a9309cbf6acb",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 5777.0713000000105
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "34966a97-679d-490d-8da1-243b42e79fc1",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "373434a5-6c70-41b6-ab4a-dfd41ed8f69d",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 5151.150800000003
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "ca94422f-ba26-4391-a5d6-d261f7d51724",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "637ff73f-81de-41ce-a0f1-07df9adc7016",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 3425.8532000000123
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "055be8c9-e529-4cf8-894b-a304fbcd3194",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "aa72e12c-08c6-4675-b122-0ff96aa9a31d",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 3596.0222000000067
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "c778003b-572c-4f08-86e2-7288d87e8fa0",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "79f9a6f4-943b-449b-8821-77dda7d88d7b",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 8745.744499999986
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "9ca5df26-8f2b-4989-b803-ad2f56d7490e",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "111a6e8f-a9f0-4115-bf04-e291c1dbfd1e",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 2290.111200000014
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "47932e0a-e948-417e-861b-ca190e656b31",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "65294bcb-c713-43f3-a83b-2ceea94cb6ac",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 2660.0180999999866
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "3b69e03d-aa46-4bc1-8f6b-62693e5d7e55",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "c41baafc-f78b-4e4e-907d-d3c33e42cb43",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 6828.120900000009
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "9e43fbed-0ee5-40c8-b629-7ca769044bce",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "b537799e-9322-4de4-bd37-7912b3626169",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 3250.275399999984
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "4e7ecb61-13ff-4d7d-b535-1c87d91c4ac4",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "5ef61b6e-4e27-4c02-ad92-65679c7c16b0",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 2424.5017000000225
+        }
+      ],
+      "durationMs": 17730.418699999995
+    },
+    {
+      "round": 2,
+      "mode": "harmony-04e31ac2f1e578e4958f0642401a5829",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "c67a6ae7-7d7a-442d-b6f8-b3c8220ad823",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "2a90e754-5b0e-427f-b5f7-66cd4000411d",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 5169.155100000004
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "aa9e25c3-5aed-4d98-b6d7-87562d5dd73d",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "12c54b8f-2684-4b2c-8cbe-50f6c6a80546",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 3330.7333000000217
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "7fe532c6-6e4a-41eb-8b2a-5cb684d52676",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "d0099c2a-feb6-4d11-8604-54ea7d2ac4b1",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 5236.156400000007
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "c45bd527-7864-4878-ab92-a442475d295d",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "16d81626-19a9-4c0e-9001-7235740fefb3",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 4342.049200000009
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "7aa1e2bd-7c92-42d9-af91-1b3f503a01f7",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "8ba4fe19-2168-4e74-a8b8-a25b14b23889",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 5536.764200000005
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "d70b2f9b-6b88-4964-95c9-5bc6a5affaed",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "edcad1f0-e11f-44d9-9547-b1376d19990b",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 4519.149700000009
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "53dbebfd-036b-4e81-b4bf-0efd15f1a4e3",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "dedf6e44-181e-4302-b4ff-59b845b0dafe",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 3459.5896999999823
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "eefba686-0919-4a35-9ce0-6142144258f4",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "e715d8a4-c3c4-44d4-92d3-052bede8c752",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 4898.822000000015
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "5d676cd1-4784-4908-8ab4-085e65808407",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "7a7bf338-a4a0-4336-a2b7-2a595d9c69a7",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 3960.9496000000217
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "4168704c-f654-4387-b1a2-623367ab556d",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "4f62e3bf-8588-4b29-995e-b9b8019e2811",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 3536.00900000002
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "a70029ef-2490-461a-8487-a2653b9f8d37",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "f4867a05-2bf8-4967-ab93-1be615dd90f9",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 2423.955099999992
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "666ed2a8-dbd1-47cc-ae39-0196c3c1f202",
+          "state": "PASS",
+          "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "traceId": "d370ab8a-1a4d-4e7d-a043-660ff93f31cd",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 2646.9133999999904
+        }
+      ],
+      "durationMs": 17326.131400000013
+    },
+    {
+      "round": 2,
+      "mode": "TEAM",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "21581cbc-ad0b-46b7-9cbd-dbcc5cfdbdc5",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "dd080e2b-6ce6-482c-bc0b-7bb33914338f",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 3846.359700000001
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "3ffd3858-9cfe-453b-b6e3-36aea98a84ca",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "c21bf42f-4d91-403e-9c29-553063539407",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 6428.7281000000075
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "19d51968-ce2f-499f-b19c-0881563d1e8b",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "dc2d7957-5529-4208-8392-61a367ad19a4",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 3958.7030999999843
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "5b3b7f52-4e61-4fcc-8a8b-de37dff875e5",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "6b9fbf1a-3b59-4121-89d1-13809cc19f95",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 5847.439799999993
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "5e8e60b8-56b9-4dea-8aae-128e5891df08",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "a3bbca3c-3205-4abb-bba6-2545e7699c01",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 6231.974799999996
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "78e89fce-9213-4c5e-ac3d-ae274a7481a7",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "ade371fb-1463-4410-bda3-aad37ddc52e5",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 6852.767599999992
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "b3f86e28-74f5-44be-8025-262ae9183d37",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "4845a37d-d135-4e07-9ade-d08d13246513",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 4873.379000000015
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "7092e495-da20-41b0-a94d-704d03d16958",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "8d033001-bb6a-483f-883f-6f9a9d9f51ec",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 5585.459100000007
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "7bd9de5b-97f5-4585-9f94-65671d6d3f09",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "6402d79d-6e60-4f8b-9361-5d5994332d76",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 5133.804399999994
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "05411bff-fb11-4076-99da-9dbf29133b42",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "d8aa96e7-87cc-44ee-aa6b-99524ff6175b",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 7033.274200000014
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "ef3402b1-e01f-4cad-9982-d4c611654b0d",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "d7c37479-5941-439f-9a2f-350767e3c3f2",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 3989.52919999999
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "f93adc8a-161c-4cbd-b8b6-d4c0d97916c6",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "88e52380-fb2e-4f70-8dc0-4fe8084a170d",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 3835.650399999984
+        }
+      ],
+      "durationMs": 22264.36189999999
+    },
+    {
+      "round": 2,
+      "mode": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "545257ab-3cdc-4f3a-b42f-2079dbe94b94",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "c2b858e4-0353-47f3-86c3-5fd5db2d246c",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 5821.633899999986
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "9b3d2b75-982c-4c74-a0fa-70ac11843af3",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "ee68ffc0-553f-4c28-8824-9f8ae59508f2",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 6272.402100000007
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "353fd8f1-9386-4b2e-884b-782ac1acada7",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "1122ade8-7ce0-4d43-be67-19c2c6f1ab72",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 4344.4755000000005
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "e9a06cae-2448-4fb9-a78f-2c6f3d0cd0ac",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "49692ca2-c379-4609-b2ad-af1b7baa6b4e",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 4654.406699999992
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "29745f87-cfb1-4b23-b83d-fd1fa6dcdb0f",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "0f7f55c9-3e9b-4829-ac7d-3275fcfa67c7",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 4605.318900000013
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "6bff1b02-216f-49c3-ae71-11b646ef9944",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "f676fa63-9cf5-4452-836f-4f679275661f",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 6536.099300000002
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "1cd93bc5-8715-4118-bc40-8a2a08683644",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "7e236a7c-d46b-4aa6-ac49-c8be1b55b827",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 4194.878800000006
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "359af391-d713-4a5c-8bd9-4f2ac95500b3",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "8e0d33ab-7542-440a-b15c-7a7cbb7a51e4",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 5727.730299999996
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "4829f33f-b0f5-4311-bf7e-4b7fdb17b00d",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "b02f55cf-1b8c-4107-8e5f-cd0f6c6320a5",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 3657.4788999999873
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "68f72b29-84d8-45e4-9855-272aa433ff00",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "b8861f76-b92d-4d76-8cc3-847b4deeb9e1",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 7806.087599999999
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "b75d23d4-1f98-457b-a276-f5e39d8c8b4e",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "41a8a0c7-7586-4c94-8361-7f0c6cac5219",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 4944.410600000003
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "3261e683-52b7-4d06-a2dc-8db90dee54f7",
+          "state": "PASS",
+          "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "traceId": "a014b099-9a30-496b-900d-832842c35b36",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 3634.0100000000093
+        }
+      ],
+      "durationMs": 21110.600799999986
+    },
+    {
+      "round": 2,
+      "mode": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+      "samples": [
+        {
+          "index": 0,
+          "documentIndex": 0,
+          "jobId": "81c3e5a1-adf5-4402-b003-665826063a9c",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "da0bcfa2-db3c-48f2-8248-2541145a7069",
+          "outputSha256": "eb63e521d45f7d66c712af9546ff9a99eb5e68ca51273848aa11a9d6d8142ec0",
+          "durationMs": 10756.397200000007
+        },
+        {
+          "index": 1,
+          "documentIndex": 1,
+          "jobId": "896f01cb-1339-465d-af46-baec0f1b1b9e",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "a4bd7747-3666-4e91-b9fa-caf83e2c9cd0",
+          "outputSha256": "e2a85325ded59308da09220afbe7f828eadab54562e50f73daf13a55929edd84",
+          "durationMs": 3291.1450999999943
+        },
+        {
+          "index": 2,
+          "documentIndex": 2,
+          "jobId": "96cadcbb-dfb6-4997-a076-4a39f5113486",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "5aa8fa74-290f-45a0-8370-336e8d84700f",
+          "outputSha256": "29244c3134c1f47db6bb5650ca99c01a30aa219b11c17577e731db6a16631486",
+          "durationMs": 2022.632500000007
+        },
+        {
+          "index": 3,
+          "documentIndex": 3,
+          "jobId": "20ba3c36-549b-409d-bfa2-ec3b682791ed",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "dc9be5ab-1b7a-4079-b08e-2b1efd77775c",
+          "outputSha256": "327998bb08522797c41f831eaf8cd6a676e536135475e2fb4129def4f8ed614f",
+          "durationMs": 3051.1641999999993
+        },
+        {
+          "index": 4,
+          "documentIndex": 4,
+          "jobId": "b5683442-a5bb-4abb-842e-6b9c0adc72ff",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "802aec19-e9e5-41c6-bd1e-23f41dc2eef5",
+          "outputSha256": "6b22f17846789e6e3c476e7bc55812b67dacbe47d90a07d2c13b339d8afc8dd4",
+          "durationMs": 2468.5303999999887
+        },
+        {
+          "index": 5,
+          "documentIndex": 5,
+          "jobId": "4a9f6edd-63df-4bf7-8e15-4eec9364695e",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "2eca33ad-2dda-4960-8d25-0ad24cd0c8dd",
+          "outputSha256": "031585bf220c65ffba2be829d5de2eef0510a2b418fd952b3a10964ddb2c5f49",
+          "durationMs": 2502.35619999998
+        },
+        {
+          "index": 6,
+          "documentIndex": 6,
+          "jobId": "12af4497-abf7-486f-84e5-90df46bae558",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "6cb45667-9c53-4e0a-b17f-8e2664642ffc",
+          "outputSha256": "ba94ba596ce042eeb9daacd003b131ab0e5466dedde652f8561be47ec63cd6c4",
+          "durationMs": 5968.511400000018
+        },
+        {
+          "index": 7,
+          "documentIndex": 7,
+          "jobId": "cfa8c60b-8d73-41cd-a6a2-7dd45006e17d",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "12f85a23-8fb7-41cd-a129-50f845a16258",
+          "outputSha256": "cffe246e6db3bf57db382921dfcb20da5a47244c934aa75cb63e6d86d0e4335d",
+          "durationMs": 5211.8898000000045
+        },
+        {
+          "index": 8,
+          "documentIndex": 8,
+          "jobId": "8bfe260b-d187-4bdd-863a-365d45a019b9",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "1c226fe5-b495-4c7d-b3cb-9256567d848b",
+          "outputSha256": "d115a13951ff782ab554a142261d3e247e504ced670984445d2f30edd5c98015",
+          "durationMs": 4224.001799999998
+        },
+        {
+          "index": 9,
+          "documentIndex": 9,
+          "jobId": "6e8cc275-d2ea-4c0b-949c-21450552d793",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "89ebc8f5-a67f-4619-a8e1-90be0aef92f1",
+          "outputSha256": "bdfa72e57402dbc9c3fac753aba307f2b6f2a5555876681709860a3fd48b0701",
+          "durationMs": 4351.828299999994
+        },
+        {
+          "index": 10,
+          "documentIndex": 10,
+          "jobId": "80d5851f-5743-4884-9ac5-bc0106954a5a",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "b8a9a9b2-5e2c-4caa-bde0-d4b9f34572ab",
+          "outputSha256": "1c15cefa259af0f63c12cc35dbd91fd242a3792f19ca250a25d6f1243c7503ab",
+          "durationMs": 5132.931400000001
+        },
+        {
+          "index": 11,
+          "documentIndex": 11,
+          "jobId": "0c9987b6-72f5-4bec-891b-480da28cfd7b",
+          "state": "PASS",
+          "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "traceId": "614651af-818a-4928-b6ab-3189c7319cb2",
+          "outputSha256": "35dbc737e982bdb8806341d85985935763c1b57b8069c72ac2ce2e99137d91c7",
+          "durationMs": 2956.3880000000063
+        }
+      ],
+      "durationMs": 17945.338999999978
+    }
+  ],
+  "verdict": "NO_SPEEDUP",
+  "speedup": 0.8510919277826985,
+  "medianBatchMs": {
+    "cpu-8d233c86e26b5fc91d755f9e109aa087": 17730.418699999995,
+    "harmony-6789eb7eb4e47f9600c5703287ce8178": 15408.4601,
+    "harmony-04e31ac2f1e578e4958f0642401a5829": 17326.131400000013,
+    "TEAM": 18104.34289999999
+  },
+  "teamDevices": [
+    "9f0a8cc5-04ed-4de5-b350-de9935323167",
+    "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1"
+  ]
+}

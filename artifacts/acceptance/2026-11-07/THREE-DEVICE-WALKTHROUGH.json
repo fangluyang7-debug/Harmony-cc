@@ -1,0 +1,660 @@
+{
+  "date": "2026-11-07",
+  "domain": "REAL",
+  "input": "Harmony team\nDevices work together",
+  "note": "Four new sequential jobs submitted through visible Chrome and web SchedulerSdk; rejoin uses existing device identities. Not a speedup test.",
+  "jobs": [
+    {
+      "id": "cdb74e77-d512-4614-a6df-4f968d68c37c",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "createdAt": 1794050585515,
+      "reason": "INSUFFICIENT_SAVING",
+      "state": "SUCCEEDED",
+      "output": {
+        "characters": 34,
+        "words": 5,
+        "lines": 2
+      },
+      "traceId": "6e658c17-c64a-43cd-9796-7634eebcd66c",
+      "trace": {
+        "phases": [
+          "OFFER",
+          "ADMIT",
+          "PLAN",
+          "EXECUTE",
+          "QUEUE",
+          "TRANSFER_SEND",
+          "LOAD",
+          "TRANSFER_RECV",
+          "PUBLISH",
+          "LOAD",
+          "LOAD",
+          "PUBLISH",
+          "PUBLISH"
+        ],
+        "spans": [
+          {
+            "phase": "OFFER",
+            "durationMs": 873.4013000000268,
+            "clockDomainId": "ba6d467a-1e38-4689-99a7-02d43944bfa2",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "ADMIT",
+            "durationMs": 62.690899999812245,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PLAN",
+            "durationMs": 0.13819999992847443,
+            "clockDomainId": "ba6d467a-1e38-4689-99a7-02d43944bfa2",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "EXECUTE",
+            "durationMs": 216.61970000015572,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "QUEUE",
+            "durationMs": 3.2643999997526407,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "TRANSFER_SEND",
+            "durationMs": 13.259500000160187,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "FULL_TRANSFER"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 44.08059999998659,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "TRANSFER_RECV",
+            "durationMs": 40.744699999690056,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "FULL_TRANSFER"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 334.7884999997914,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 3.207799999974668,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 0.12810000032186508,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 321.40540000004694,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 0.1235999995842576,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          }
+        ],
+        "analysis": {
+          "status": "MEASUREMENT_INCOMPLETE",
+          "issues": [
+            "CROSS_CLOCK_GAP_UNKNOWN",
+            "ROOT_INCOMPLETE"
+          ],
+          "endToEndMs": null,
+          "work": {
+            "computeMs": 216.61970000015572,
+            "waitMs": 3.2643999997526407,
+            "transferMs": 54.00419999985024,
+            "otherMs": 1261.0952999996953
+          },
+          "criticalPathMs": 873.5394999999553,
+          "criticalSpanIds": [
+            "58df6e27-78e4-4529-844d-88acad2b6c3b",
+            "26425e0d-2561-493f-8fde-3757aa49b221"
+          ],
+          "measuredCriticalMs": 873.5394999999553,
+          "predictionErrors": [
+            {
+              "spanId": "6380f280-625e-4d04-875b-532eacb0d22a",
+              "phase": "EXECUTE",
+              "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+              "snapshotVersion": 9436,
+              "predictedMs": 238.0097999999998,
+              "measuredMs": 216.61970000015572,
+              "errorMs": -21.390099999844097
+            },
+            {
+              "spanId": "73e65dbf-f4cb-4bc4-9fd2-8984df938e6f",
+              "phase": "QUEUE",
+              "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+              "snapshotVersion": 9436,
+              "predictedMs": 0,
+              "measuredMs": 3.2643999997526407,
+              "errorMs": 3.2643999997526407
+            },
+            {
+              "spanId": "e9f93e01-d45f-411f-ab13-25dfefe5f7e9",
+              "phase": "PUBLISH",
+              "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+              "snapshotVersion": 9436,
+              "predictedMs": 0.5095749999745749,
+              "measuredMs": 334.7884999997914,
+              "errorMs": 334.2789249998168
+            }
+          ],
+          "unexplainedMs": null,
+          "negativeResidualMs": null
+        }
+      },
+      "receipts": {
+        "count": 1,
+        "committed": 1
+      }
+    },
+    {
+      "id": "6e19eac7-dc84-4bce-b8fe-b201259c02d0",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "createdAt": 1794050564232,
+      "reason": "INSUFFICIENT_SAVING",
+      "state": "SUCCEEDED",
+      "output": {
+        "characters": 34,
+        "words": 5,
+        "lines": 2
+      },
+      "traceId": "3d7df42e-53b4-4d1d-87a4-e05aa37dcf95",
+      "trace": {
+        "phases": [
+          "TRANSFER_SEND",
+          "PUBLISH",
+          "LOAD",
+          "OFFER",
+          "TRANSFER_RECV",
+          "PLAN",
+          "QUEUE",
+          "ADMIT",
+          "EXECUTE",
+          "PUBLISH",
+          "LOAD"
+        ],
+        "spans": [
+          {
+            "phase": "TRANSFER_SEND",
+            "durationMs": 40,
+            "clockDomainId": "146dff04-6ee0-49b9-9102-6a0f16dd6b78",
+            "measurementScope": "FULL_TRANSFER"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 167,
+            "clockDomainId": "146dff04-6ee0-49b9-9102-6a0f16dd6b78",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 67,
+            "clockDomainId": "146dff04-6ee0-49b9-9102-6a0f16dd6b78",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "OFFER",
+            "durationMs": 121.01949999993667,
+            "clockDomainId": "ba6d467a-1e38-4689-99a7-02d43944bfa2",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "TRANSFER_RECV",
+            "durationMs": 66,
+            "clockDomainId": "146dff04-6ee0-49b9-9102-6a0f16dd6b78",
+            "measurementScope": "FULL_TRANSFER"
+          },
+          {
+            "phase": "PLAN",
+            "durationMs": 0.17760000005364418,
+            "clockDomainId": "ba6d467a-1e38-4689-99a7-02d43944bfa2",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "QUEUE",
+            "durationMs": 23,
+            "clockDomainId": "146dff04-6ee0-49b9-9102-6a0f16dd6b78",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "ADMIT",
+            "durationMs": 76,
+            "clockDomainId": "146dff04-6ee0-49b9-9102-6a0f16dd6b78",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "EXECUTE",
+            "durationMs": 0,
+            "clockDomainId": "146dff04-6ee0-49b9-9102-6a0f16dd6b78",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 127,
+            "clockDomainId": "146dff04-6ee0-49b9-9102-6a0f16dd6b78",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 1,
+            "clockDomainId": "146dff04-6ee0-49b9-9102-6a0f16dd6b78",
+            "measurementScope": "LOCAL_INTERVAL"
+          }
+        ],
+        "analysis": {
+          "status": "MEASUREMENT_INCOMPLETE",
+          "issues": [
+            "CROSS_CLOCK_GAP_UNKNOWN",
+            "ROOT_INCOMPLETE"
+          ],
+          "endToEndMs": null,
+          "work": {
+            "computeMs": 0,
+            "waitMs": 23,
+            "transferMs": 106,
+            "otherMs": 325.1970999999903
+          },
+          "criticalPathMs": 333.17760000005364,
+          "criticalSpanIds": [
+            "62c5854b-9d86-41e5-ad31-f733e3e51594",
+            "717bfd52-0ebe-4a63-a267-4895c3fd365b",
+            "7909d2dd-7b89-42e8-99a4-74eae72a74a6",
+            "57556ac9-4369-4a45-bf49-65bd5e37ced2",
+            "remainder-29339420-7a64-4673-9122-43d1a596f039-1",
+            "feaf302a-02cd-42f1-a696-c39d04d7876b",
+            "remainder-2176358e-b80c-4382-aada-10ccc2826edf-0",
+            "0ba7e487-2bfe-4159-a2cb-ee48ee0ad717"
+          ],
+          "measuredCriticalMs": 333.17760000005364,
+          "predictionErrors": [
+            {
+              "spanId": "2176358e-b80c-4382-aada-10ccc2826edf",
+              "phase": "PUBLISH",
+              "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+              "snapshotVersion": 9395,
+              "predictedMs": 63.24101513240858,
+              "measuredMs": 167,
+              "errorMs": 103.75898486759142
+            },
+            {
+              "spanId": "717bfd52-0ebe-4a63-a267-4895c3fd365b",
+              "phase": "QUEUE",
+              "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+              "snapshotVersion": 9395,
+              "predictedMs": 0,
+              "measuredMs": 23,
+              "errorMs": 23
+            },
+            {
+              "spanId": "feaf302a-02cd-42f1-a696-c39d04d7876b",
+              "phase": "EXECUTE",
+              "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+              "snapshotVersion": 9395,
+              "predictedMs": 969,
+              "measuredMs": 0,
+              "errorMs": -969
+            }
+          ],
+          "unexplainedMs": null,
+          "negativeResidualMs": null
+        }
+      },
+      "receipts": {
+        "count": 1,
+        "committed": 1
+      }
+    },
+    {
+      "id": "bc30d3fe-5992-46c5-bf13-e3b505c4f2d0",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "createdAt": 1794050525777,
+      "reason": "INSUFFICIENT_SAVING",
+      "state": "SUCCEEDED",
+      "output": {
+        "characters": 34,
+        "words": 5,
+        "lines": 2
+      },
+      "traceId": "939f9ca4-c577-49e1-a71a-8149a67cbc5c",
+      "trace": {
+        "phases": [
+          "TRANSFER_RECV",
+          "OFFER",
+          "TRANSFER_SEND",
+          "QUEUE",
+          "EXECUTE",
+          "LOAD",
+          "PUBLISH",
+          "PLAN",
+          "ADMIT",
+          "LOAD",
+          "PUBLISH"
+        ],
+        "spans": [
+          {
+            "phase": "TRANSFER_RECV",
+            "durationMs": 12,
+            "clockDomainId": "54f5b240-1d53-429c-8cb4-32b6faaeafb7",
+            "measurementScope": "FULL_TRANSFER"
+          },
+          {
+            "phase": "OFFER",
+            "durationMs": 208.28000000026077,
+            "clockDomainId": "ba6d467a-1e38-4689-99a7-02d43944bfa2",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "TRANSFER_SEND",
+            "durationMs": 114,
+            "clockDomainId": "54f5b240-1d53-429c-8cb4-32b6faaeafb7",
+            "measurementScope": "FULL_TRANSFER"
+          },
+          {
+            "phase": "QUEUE",
+            "durationMs": 33,
+            "clockDomainId": "54f5b240-1d53-429c-8cb4-32b6faaeafb7",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "EXECUTE",
+            "durationMs": 0,
+            "clockDomainId": "54f5b240-1d53-429c-8cb4-32b6faaeafb7",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 13,
+            "clockDomainId": "54f5b240-1d53-429c-8cb4-32b6faaeafb7",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 313,
+            "clockDomainId": "54f5b240-1d53-429c-8cb4-32b6faaeafb7",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PLAN",
+            "durationMs": 0.22640000004321337,
+            "clockDomainId": "ba6d467a-1e38-4689-99a7-02d43944bfa2",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "ADMIT",
+            "durationMs": 40,
+            "clockDomainId": "54f5b240-1d53-429c-8cb4-32b6faaeafb7",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 1,
+            "clockDomainId": "54f5b240-1d53-429c-8cb4-32b6faaeafb7",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 199,
+            "clockDomainId": "54f5b240-1d53-429c-8cb4-32b6faaeafb7",
+            "measurementScope": "LOCAL_INTERVAL"
+          }
+        ],
+        "analysis": {
+          "status": "MEASUREMENT_INCOMPLETE",
+          "issues": [
+            "CROSS_CLOCK_GAP_UNKNOWN",
+            "ROOT_INCOMPLETE"
+          ],
+          "endToEndMs": null,
+          "work": {
+            "computeMs": 0,
+            "waitMs": 33,
+            "transferMs": 126,
+            "otherMs": 448.506400000304
+          },
+          "criticalPathMs": 399.2264000000432,
+          "criticalSpanIds": [
+            "f0f57d8c-5857-404f-99a3-2fd8462f2d89",
+            "39e59177-503c-428c-84c2-7703e75e474b",
+            "f442464e-ba89-47d3-b369-840e9bae3fc6",
+            "1526587a-2ed5-40bb-aa99-2faa877197f0",
+            "remainder-916d297d-35dd-4a28-aedd-9fbdc6d52cd3-1",
+            "903bef52-481f-4c38-99fa-a5855429dc2a",
+            "remainder-b026b719-5303-4188-9544-9b696e5e0d88-0",
+            "2bd95318-65ac-402e-bb2d-d423e2ae83b6"
+          ],
+          "measuredCriticalMs": 399.2264000000432,
+          "predictionErrors": [
+            {
+              "spanId": "39e59177-503c-428c-84c2-7703e75e474b",
+              "phase": "QUEUE",
+              "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+              "snapshotVersion": 9327,
+              "predictedMs": 0,
+              "measuredMs": 33,
+              "errorMs": 33
+            },
+            {
+              "spanId": "903bef52-481f-4c38-99fa-a5855429dc2a",
+              "phase": "EXECUTE",
+              "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+              "snapshotVersion": 9327,
+              "predictedMs": 1142,
+              "measuredMs": 0,
+              "errorMs": -1142
+            },
+            {
+              "spanId": "b026b719-5303-4188-9544-9b696e5e0d88",
+              "phase": "PUBLISH",
+              "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+              "snapshotVersion": 9327,
+              "predictedMs": 9.530264817150064,
+              "measuredMs": 313,
+              "errorMs": 303.46973518284994
+            }
+          ],
+          "unexplainedMs": null,
+          "negativeResidualMs": null
+        }
+      },
+      "receipts": {
+        "count": 1,
+        "committed": 1
+      }
+    },
+    {
+      "id": "a8f87ae8-576f-4e6d-a63c-fabf2b361a08",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "createdAt": 1794050511735,
+      "reason": "LEGAL_SUGGESTION",
+      "state": "SUCCEEDED",
+      "output": {
+        "characters": 34,
+        "words": 5,
+        "lines": 2
+      },
+      "traceId": "e40d6d1b-f5d8-49c0-af6f-758f32efcc3c",
+      "trace": {
+        "phases": [
+          "TRANSFER_SEND",
+          "PLAN",
+          "EXECUTE",
+          "ADMIT",
+          "OFFER",
+          "PUBLISH",
+          "TRANSFER_RECV",
+          "LOAD",
+          "QUEUE",
+          "PUBLISH",
+          "PUBLISH",
+          "LOAD",
+          "LOAD"
+        ],
+        "spans": [
+          {
+            "phase": "TRANSFER_SEND",
+            "durationMs": 15.035599999595433,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "FULL_TRANSFER"
+          },
+          {
+            "phase": "PLAN",
+            "durationMs": 0.23900000005960464,
+            "clockDomainId": "ba6d467a-1e38-4689-99a7-02d43944bfa2",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "EXECUTE",
+            "durationMs": 191.62779999990016,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "ADMIT",
+            "durationMs": 28.645900000352412,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "OFFER",
+            "durationMs": 85.57949999999255,
+            "clockDomainId": "ba6d467a-1e38-4689-99a7-02d43944bfa2",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 453.8178999996744,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "TRANSFER_RECV",
+            "durationMs": 33.04600000008941,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "FULL_TRANSFER"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 35.374199999962,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "QUEUE",
+            "durationMs": 2.8760000001639128,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 438.66969999996945,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "PUBLISH",
+            "durationMs": 0.11260000010952353,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 2.23119999980554,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          },
+          {
+            "phase": "LOAD",
+            "durationMs": 0.09700000006705523,
+            "clockDomainId": "f3240b0b-ed2c-4aa4-9b25-840f6d210f20",
+            "measurementScope": "LOCAL_INTERVAL"
+          }
+        ],
+        "analysis": {
+          "status": "MEASUREMENT_INCOMPLETE",
+          "issues": [
+            "CROSS_CLOCK_GAP_UNKNOWN",
+            "ROOT_INCOMPLETE"
+          ],
+          "endToEndMs": null,
+          "work": {
+            "computeMs": 191.62779999990016,
+            "waitMs": 2.8760000001639128,
+            "transferMs": 48.08159999968484,
+            "otherMs": 555.5749000003561
+          },
+          "criticalPathMs": 712.5808000001125,
+          "criticalSpanIds": [
+            "111ff292-ab2e-4452-8c83-14d1ce513254",
+            "cd851534-b2b0-48ae-941d-29e084ecfd95",
+            "27da079f-ff7a-43a3-9657-6ca6ef42d679",
+            "remainder-bfc5ff5e-d75d-452f-ae9f-de149e7ea72a-0",
+            "abe21ebd-6b70-4e27-9563-371de3a575de",
+            "remainder-bfc5ff5e-d75d-452f-ae9f-de149e7ea72a-2",
+            "1f4b2a10-9ff6-4d6b-ba67-369dda05a155",
+            "remainder-a7afdb25-8f91-4f5e-b9a5-48672bac7fff-0",
+            "0b22d6f0-6e31-45f6-9494-442b4afeeb08",
+            "remainder-a7afdb25-8f91-4f5e-b9a5-48672bac7fff-2"
+          ],
+          "measuredCriticalMs": 712.5808000001125,
+          "predictionErrors": [
+            {
+              "spanId": "1f4b2a10-9ff6-4d6b-ba67-369dda05a155",
+              "phase": "EXECUTE",
+              "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+              "snapshotVersion": 9301,
+              "predictedMs": 238.0097999999998,
+              "measuredMs": 191.62779999990016,
+              "errorMs": -46.38200000009965
+            },
+            {
+              "spanId": "a7afdb25-8f91-4f5e-b9a5-48672bac7fff",
+              "phase": "PUBLISH",
+              "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+              "snapshotVersion": 9301,
+              "predictedMs": 0.3799124999786727,
+              "measuredMs": 453.8178999996744,
+              "errorMs": 453.43798749969574
+            },
+            {
+              "spanId": "cd851534-b2b0-48ae-941d-29e084ecfd95",
+              "phase": "QUEUE",
+              "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+              "snapshotVersion": 9301,
+              "predictedMs": 0,
+              "measuredMs": 2.8760000001639128,
+              "errorMs": 2.8760000001639128
+            }
+          ],
+          "unexplainedMs": null,
+          "negativeResidualMs": null
+        }
+      },
+      "receipts": {
+        "count": 1,
+        "committed": 1
+      }
+    }
+  ]
+}

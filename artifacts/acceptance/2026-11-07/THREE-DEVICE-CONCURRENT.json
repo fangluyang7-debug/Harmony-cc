@@ -1,0 +1,68 @@
+{
+  "startedAt": "2026-11-07T10:42:03.629Z",
+  "domain": "REAL",
+  "samples": [
+    {
+      "label": "Windows CPU",
+      "jobId": "ea3b843d-baab-4112-84b7-133553ab8753",
+      "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "state": "PASS",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "actualTargetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "traceId": "ded6bbd4-5a18-42d0-a462-5dc56dbca49b",
+      "output": {
+        "characters": 26,
+        "words": 5,
+        "lines": 2
+      },
+      "durationMs": 5139.7880000000005
+    },
+    {
+      "label": "HarmonyOS 电脑",
+      "jobId": "b12826ff-5982-44f3-965e-6bb8ce21562f",
+      "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+      "state": "PASS",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "actualTargetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+      "traceId": "f7bb385e-5ca3-445d-84ac-808c4c4a7d79",
+      "output": {
+        "characters": 26,
+        "words": 5,
+        "lines": 2
+      },
+      "durationMs": 5137.0733
+    },
+    {
+      "label": "HarmonyOS 手机",
+      "jobId": "d1459678-7857-4913-b495-22cd9205572d",
+      "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+      "state": "PASS",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "actualTargetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+      "traceId": "ebf873a5-11ac-47f0-839a-323d989bb6c9",
+      "output": {
+        "characters": 26,
+        "words": 5,
+        "lines": 2
+      },
+      "durationMs": 5134.837900000002
+    },
+    {
+      "label": "TEAM automatic",
+      "jobId": "78bfd364-df8d-4d98-9a0f-2c35fa9b9019",
+      "targetId": null,
+      "state": "PASS",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "actualTargetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "traceId": "255c37d3-2567-49f8-9260-7ec66b3330b6",
+      "output": {
+        "characters": 26,
+        "words": 5,
+        "lines": 2
+      },
+      "durationMs": 1540.1152000000002
+    }
+  ],
+  "status": "PASS",
+  "mode": "three pinned devices concurrently"
+}

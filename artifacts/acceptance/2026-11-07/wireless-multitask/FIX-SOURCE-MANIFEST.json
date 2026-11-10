@@ -1,0 +1,29 @@
+{
+  "baseCommit": "f6526838e09357f2355bb9e15c580f14b0458e57",
+  "budgetMs": 30000,
+  "hapSha256": "DB8304EBB0D5DB3B014EFA648CCBAEADCFA7541902A996C3B8726A9FF5A121A5",
+  "at": "2026-11-07T21:19:10.9053058+08:00",
+  "branch": "codex/real-device-acceptance",
+  "files": [
+    {
+      "path": "packages/scheduler-core/src/cost.ts",
+      "sha256": "8AA50752FC155349CFEEA53F3220C86C72CFBCDDF755D4A44460A131CA2611E0"
+    },
+    {
+      "path": "apps/harmony/scheduler/src/main/ets/v2/host/NativeAgent.ets",
+      "sha256": "60F394CA4D0FCB4DA971E47379A37B5650E36C158CBE398467068AFECCA03F9B"
+    },
+    {
+      "path": "services/coordinator/src/cpu-jobs.ts",
+      "sha256": "BF485E81A6B54CB130E10A4860B7ED08651B11D4FD7B391FD8AC1062A088CF61"
+    },
+    {
+      "path": "services/coordinator/src/spaces.ts",
+      "sha256": "44F9F5CCF51724F313D5452F23B0FEA534BEED5F2D8C9995FF303E6300D5FA53"
+    },
+    {
+      "path": "scripts/test-wireless-multitask.cjs",
+      "sha256": "84A8539BC99C548F29ECB0B54940B1023919A83358C68DC7CD8413ACF387CD54"
+    }
+  ]
+}

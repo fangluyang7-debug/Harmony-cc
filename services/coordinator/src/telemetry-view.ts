@@ -1,9 +1,11 @@
+import {recentJobs,recentTransfers,traceRows} from './dashboard-history';
 import {raceKey,raceIntervals} from './race-timing';
 import {PrismaClient} from '../generated/client';
 import {DeviceDirectory} from './directory';
 import {TraceService} from './traces';
 import {Peer} from './channel';
 import {availability,protocolId} from '@harmony/scheduler-core';
+import {deviceMembershipActive} from './device-membership';
 
 const parsed=(value:string|null|undefined)=>value?JSON.parse(value):null;
 const finite=(value:unknown):number|null=>typeof value==='number'&&Number.isFinite(value)?value:null;
@@ -14,13 +16,15 @@ export class TelemetryView {
 
   async snapshot(groupId:string,principalId:string){
     const now=Date.now();
-    const [space,registered,profiles,qualifications,rows,attempts,graphs,network,peerNetworks,authorizations,endpoints,grantRows,batchRows]=await Promise.all([
+    const [space,registered,profiles,qualifications,rows,jobCount,graphs,network,peerNetworks,authorizations,endpoints,grantRows,batchRows]=await Promise.all([
       this.db.teamSpace.findUniqueOrThrow({where:{id:groupId}}),this.db.spaceDevice.findMany({where:{spaceId:groupId}}),
-      this.directory.profiles(groupId),this.db.capabilityState.findMany({where:{groupId}}),this.db.cpuJob.findMany({where:{groupId}}),
-      this.db.attempt.findMany({where:{groupId}}),this.db.sdkWorkflowJob.findMany({where:{groupId}}),this.networkView?.(groupId)??[],this.db.peerNetwork.findMany({where:{groupId}}),
-      this.db.transferAuthorization.findMany({where:{groupId}}),this.db.dataEndpoint.findMany({where:{groupId}}),this.db.allotment.findMany({where:{groupId}}),this.db.batchReadyJob.findMany({where:{groupId},select:{id:true,reason:true,queuedAt:true}})
+      this.directory.profiles(groupId),this.db.capabilityState.findMany({where:{groupId}}),recentJobs(this.db,groupId),
+      this.db.cpuJob.count({where:{groupId}}),this.db.sdkWorkflowJob.findMany({where:{groupId}}),this.networkView?.(groupId)??[],this.db.peerNetwork.findMany({where:{groupId}}),
+      recentTransfers(this.db,groupId),this.db.dataEndpoint.findMany({where:{groupId}}),this.db.allotment.findMany({where:{groupId}}),this.db.batchReadyJob.findMany({where:{groupId},select:{id:true,reason:true,queuedAt:true}})
     ]);
-    const ids=[...new Set([...registered.map(d=>d.id),...profiles.map(p=>p.deviceId)])];
+    const attempts=await this.db.attempt.findMany({where:{groupId,id:{in:rows.map(r=>r.id)}}});
+    const active=await Promise.all(registered.map(d=>deviceMembershipActive(this.db,d.id)));
+    const ids=[...new Set([...registered.filter((_,i)=>active[i]).map(d=>d.id),...profiles.map(p=>p.deviceId)])];
     const grants=grantRows.filter(r=>r.id.startsWith('["allotment",')).map(r=>parsed(r.metadataJson));
     const devices=ids.map(id=>{
       const registration=registered.find(d=>d.id===id),holders=profiles.filter(p=>p.deviceId===id);
@@ -67,7 +71,7 @@ export class TelemetryView {
     const installations=await this.db.registeredInstallation.findMany({where:{groupId},select:{id:true,appId:true,deviceId:true,state:true}});
     return {version:1,space:{id:space.id,name:space.name},updatedAt:now,domain:this.directory.domain,devices,network,links,transfers,
       applications:registeredApps.map(a=>({id:a.id,label:a.label,declaration:parsed(a.declarationJson),contracts:parsed(a.contractsJson),maxConcurrent:a.maxConcurrent,installations:installations.filter(i=>i.appId===a.id)})),
-      jobs:jobs.slice(0,100),jobWindow:100,jobCount:jobs.length,
+      jobs:jobs.slice(0,100),jobWindow:100,jobCount,
       workflows:graphs.map(row=>{const d=parsed(row.metadataJson);return {id:row.id,state:row.state,nodes:d.nodes.map((n:any)=>({id:n.id,jobId:n.jobId,state:n.state}))};}),
       features:{hedging:'PURE_INTERACTIVE_RELAY_INPUT',reassignment:'AVAILABLE',candidateCosts:'PERSISTED_BASELINE_AND_SELECTED_ONLY',traceAccess:'EXISTING_PRINCIPAL_READERS',readOnly:true}};
   }
@@ -75,7 +79,7 @@ export class TelemetryView {
   async trace(peer:Peer,jobId:string){
     if(!protocolId(jobId))throw Error('JOB_INPUT_INVALID');
     const row=await this.db.cpuJob.findUnique({where:{id:jobId}});if(!row||row.groupId!==peer.groupId)throw Error('TRACE_FORBIDDEN');
-    const data=parsed(row.metadataJson),rows=await this.db.traceSpan.findMany({where:{groupId:peer.groupId}});
+    const data=parsed(row.metadataJson),rows=await traceRows(this.db,peer.groupId,data.traceId);
     const coverage={sourceSdkRoot:false,reasonCode:'SOURCE_SDK_ROOT_NOT_RECORDED'};
     if(!rows.some(r=>parsed(r.metadataJson).span.traceId===data.traceId))return {traceId:data.traceId,spans:[],analysis:null,state:'WAITING_FOR_EVIDENCE',coverage};
     // Coverage comes from the authenticated SDK root, not a structurally complete PLAN span.

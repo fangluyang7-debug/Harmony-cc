@@ -1,6 +1,7 @@
 import { indexer } from '../services/V2CropSession';
 import { cooperative } from '../services/CooperativeSession';
 import { aiGateway } from '../services/AiTaskGateway';
+import { shoppingBusiness } from '../services/ShoppingBusinessCompute';
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CloudApiConfig } from '../services/CloudApiConfig';
@@ -30,11 +31,15 @@ export default class EntryAbility extends UIAbility {
   private schedulerStartup: Promise<void> | null = null;
   private destroyed: boolean = false;
   private appVisibility: AppVisibility = AppVisibility.FOREGROUND;
+  private abilityActive:boolean=false;
+  private pendingConnection:boolean=false;
 
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     indexer.initialize(this.context);
     cooperative.initialize(this.context);
     aiGateway.initialize(this.context);
+    shoppingBusiness.initialize(this.context);
+    this.connectShopping(want);
     this.destroyed = false;
     this.appVisibility = AppVisibility.FOREGROUND;
     try {
@@ -67,6 +72,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
+    void cooperative.close();
     void indexer.close();
     this.destroyed = true;
     this.monitorPublisher.stop();
@@ -95,6 +101,9 @@ export default class EntryAbility extends UIAbility {
   }
 
   onForeground(): void {
+    this.abilityActive=true;
+    cooperative.lifecycle(true);
+    this.consumeConnection();
     indexer.lifecycle(true);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onForeground');
     this.appVisibility = AppVisibility.FOREGROUND;
@@ -108,6 +117,8 @@ export default class EntryAbility extends UIAbility {
   }
 
   onBackground(): void {
+    this.abilityActive=false;
+    cooperative.lifecycle(false);
     indexer.lifecycle(false);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onBackground');
     this.appVisibility = AppVisibility.BACKGROUND;
@@ -118,6 +129,16 @@ export default class EntryAbility extends UIAbility {
     }
   }
 
+  onNewWant(want: Want): void { this.connectShopping(want); }
+  private connectShopping(want: Want): void {
+    if(want.action==='org.harmonycc.action.CONNECT_SHOPPING'){this.pendingConnection=true;this.consumeConnection();}
+  }
+  private consumeConnection():void {
+    if(this.abilityActive&&this.pendingConnection){
+      this.pendingConnection=false;
+      void cooperative.setEnabled(true).catch((error:Error)=>{hilog.warn(DOMAIN,'SoleAI','Shopping connection failed: %{public}s',error.message);});
+    }
+  }
   private async startScheduler(config: SchedulerConfig): Promise<void> {
     await CloudApiConfig.load(this.context);
     await this.schedulerService.initialize(config);

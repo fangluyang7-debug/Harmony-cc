@@ -1,0 +1,14 @@
+PASS packages/scheduler-core/test/cost.test.ts
+PASS packages/scheduler-core/test/trace-causality.test.ts
+PASS packages/scheduler-core/test/micro-queue.test.ts
+PASS packages/scheduler-core/test/planner.test.ts
+PASS packages/scheduler-core/test/network-state.test.ts
+PASS packages/scheduler-core/test/ledger.test.ts
+PASS packages/scheduler-core/test/trace-analysis.test.ts
+PASS packages/scheduler-core/test/recovery.test.ts
+
+Test Suites: 8 passed, 8 total
+Tests:       56 passed, 56 total
+Snapshots:   0 total
+Time:        8.654 s, estimated 13 s
+Ran all test suites.

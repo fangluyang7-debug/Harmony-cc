@@ -1,0 +1,362 @@
+{
+  "at": "2026-11-08T04:45:36.728Z",
+  "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+  "name": "pc-created",
+  "owner": "pc",
+  "members": [
+    {
+      "name": "鸿蒙电脑发起人",
+      "role": "OWNER",
+      "userId": "cb0b6b76-93dc-4bd3-a2d9-80d5a6498c36"
+    },
+    {
+      "name": "鸿蒙手机发起人",
+      "role": "MEMBER",
+      "userId": "cf0cdd8f-5c9b-45f3-b771-c9dc5469f11d"
+    },
+    {
+      "name": "Windows协作者",
+      "role": "MEMBER",
+      "userId": "d7528e25-2e96-4ea2-80a6-cb50d278e9f4"
+    }
+  ],
+  "devices": [
+    {
+      "id": "adf0de8f-83a9-4e60-a363-65f04daabf32",
+      "name": "我的设备",
+      "userId": "cb0b6b76-93dc-4bd3-a2d9-80d5a6498c36",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "text.count.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "image.crop.v1",
+          "available": true,
+          "state": "ACTIVE"
+        }
+      ]
+    },
+    {
+      "id": "6331696a-b990-493d-a33b-53cff5930220",
+      "name": "Scilana",
+      "userId": "d7528e25-2e96-4ea2-80a6-cb50d278e9f4",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "text.count.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "image.crop.v1",
+          "available": true,
+          "state": "ACTIVE"
+        }
+      ]
+    },
+    {
+      "id": "03c18fa0-e2e3-40f0-8e93-84c08d4e24b4",
+      "name": "鸿蒙手机",
+      "userId": "cf0cdd8f-5c9b-45f3-b771-c9dc5469f11d",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "text.count.v1",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "image.crop.v1",
+          "available": true,
+          "state": "ACTIVE"
+        }
+      ]
+    }
+  ],
+  "taskCount": 24,
+  "pass": 24,
+  "rows": [
+    {
+      "jobId": "d5d6b89d-cc59-447c-b9c6-b38d120f0bbd",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "ae9dfef0-d6db-424c-aa22-8f28b8115b0c",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "5fbc570b-d556-4594-92c3-4f521132e0cd",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "09e98921-1782-44a3-af9e-a1dc8d1e045c",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "7a46f3d6-2e42-48fb-8776-cd4472c01ef2",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "400525e2-a44b-45bb-bdcc-1c1199483ec7",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "420c11ad-db76-418c-b1a1-84c34dc5da9e",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "4a90686d-bfad-4b84-ad68-e474f4386d25",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "ffd62f69-0fef-460c-8a64-380ea001303b",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "8336de48-b3e3-4972-9838-c86d4247cc97",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "ebb30553-96da-4220-ac51-e84cebbfe9b7",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "349d184c-ae21-4377-b43d-11a6264d8b83",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "9b2bb62b-4306-4e25-97b4-f7724c851ebb",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "c965df2c-4c19-4f95-8e96-8d8537173bea",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "cb89cfff-e4be-40ad-b1d6-f9783423e860",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "ad3621b0-d1f1-46dc-94f6-de3985756589",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "2a0bdafd-dbec-424a-95ac-e74f6ce0ba6e",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "b4aca357-93e9-439d-995e-5d4cc69694eb",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "95b29cd2-41ee-45b5-934b-821a5f6a5144",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "abf2adcb-d31c-436c-aedd-8cb1dba8fcdb",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "eb5b1dda-a449-4a82-94ff-4f720757a2a1",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "01229539-c8b7-459b-bd4b-05f3ed76cccf",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "381d611f-74a5-4887-ab4d-43e5ce140651",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    },
+    {
+      "jobId": "e2e5bac5-4bac-4f3f-bc29-eb2bb010aff6",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "attemptCount": 1,
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "outputHashMatches": true,
+      "resultReceived": true,
+      "budgetMs": 30000
+    }
+  ]
+}

@@ -5,5 +5,9 @@
   "main": "Index.ets",
   "author": "SoleAI Team",
   "license": "Apache-2.0",
-  "dependencies": {}
+  "dependencies": {
+    "libharmony_render.so": "file:./src/main/cpp/types/libharmony_render",
+    "libharmony_visual.so": "file:./src/main/cpp/types/libharmony_visual",
+    "libharmony_photo.so": "file:./src/main/cpp/types/libharmony_photo"
+  }
 }

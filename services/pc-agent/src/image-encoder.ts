@@ -7,6 +7,7 @@ import {DispatchOfferV2,ModelManifestV2,sameModelV2} from '@harmony/scheduler-co
 export const imageExecutorId='pc.image.cpu.v1';
 export const cudaExecutorId='pc.image.cuda.v1';
 export interface ImageEncoder {
+  backend?:'CUDA'|'VULKAN';
   pack:ReferencePack;
   gpu?:{totalBytes:number;limit:number;freeBytes():Promise<number>};
   execute(offer:DispatchOfferV2,input:Buffer,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string;model:ModelManifestV2}>;

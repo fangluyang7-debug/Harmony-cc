@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, X509Certificate } from 'node:crypt
 import { PrismaClient } from '../generated/client';
 import { protocolId } from '@harmony/scheduler-core';
 import { Peer } from './channel';
+import {activateDeviceMembership,deviceMembershipActive,registerDeviceMembership} from './device-membership';
 export interface Invitation {version:2;inviteId:string;code:string;address:string;certificate:string;fingerprint:string;expiresAt:number;groupId:string;}
 interface InviteData {secretHash:string;expiresAt:number;used:boolean;principalId:string;deviceId:string;domain:string;}
 interface CredentialData {peer:Peer;expiresAt:number;domain:string;}
@@ -11,6 +12,7 @@ export class PairingService {
   private readonly revocations=new Set<(id:string)=>void>();
   constructor(private readonly db:PrismaClient,private readonly cert:string,private readonly domain:string,private readonly now:()=>number=Date.now){}
   onRevoked(listener:(id:string)=>void){this.revocations.add(listener);return ()=>this.revocations.delete(listener);}
+  publicFingerprint(){return certificateFingerprint(this.cert);}
   async invite(groupId:string,principalId:string,deviceId:string,address:string,ttlMs=300000):Promise<Invitation>{
     const url=new URL(address);
     if(![groupId,principalId,deviceId].every(protocolId)||url.protocol!=='https:'||url.username||url.password||url.search||url.hash||url.pathname!=='/'||!Number.isSafeInteger(ttlMs)||ttlMs<1||ttlMs>600000)throw Error('INVITE_INVALID');
@@ -19,9 +21,10 @@ export class PairingService {
     await this.db.invite.create({data:{id,groupId,revision:1,metadataJson:JSON.stringify(data)}});
     return {version:2,inviteId:id,code,address:url.origin,certificate:this.cert,fingerprint:certificateFingerprint(this.cert),expiresAt,groupId};
   }
-  async exchange(request:{inviteId:string;code:string;holderInstanceId:string}){
-    if(!request||Object.keys(request).sort().join('|')!=='code|holderInstanceId|inviteId'||![request.inviteId,request.holderInstanceId].every(protocolId)||typeof request.code!=='string'||!/^[A-Za-z0-9_-]{24}$/.test(request.code))throw Error('PAIRING_INVALID');
+  async exchange(request:{inviteId:string;code:string;holderInstanceId:string;installationId?:string;previousDeviceId?:string;knownDeviceIds?:string[]}){
+    if(!request||Object.keys(request).some(k=>!['code','holderInstanceId','inviteId','installationId','previousDeviceId','knownDeviceIds'].includes(k))||![request.inviteId,request.holderInstanceId].every(protocolId)||typeof request.code!=='string'||!/^[A-Za-z0-9_-]{24}$/.test(request.code))throw Error('PAIRING_INVALID');
     const credential=randomBytes(32).toString('base64url'),credentialId=randomUUID();
+    let revoked:string[]=[];
     const peer=await this.db.$transaction(async tx=>{
       const row=await tx.invite.findUnique({where:{id:request.inviteId}});
       if(!row)throw Error('INVITE_INVALID');
@@ -33,10 +36,13 @@ export class PairingService {
       const used=await tx.invite.updateMany({where:{id:row.id,revision:row.revision},data:{revision:{increment:1},metadataJson:JSON.stringify({...invite,used:true})}});
       if(used.count!==1)throw Error('INVITE_USED');
       const peer:Peer={groupId:row.groupId,holderInstanceId:request.holderInstanceId,deviceId:invite.deviceId,principalId:invite.principalId,credentialId};
+      if(request.installationId&&await tx.spaceDevice.findUnique({where:{id:invite.deviceId}}))await registerDeviceMembership(tx,request.installationId,invite.deviceId,request.previousDeviceId,invite.principalId,request.knownDeviceIds??[]);
+      revoked=await activateDeviceMembership(tx,peer);
       const data:CredentialData={peer,domain:this.domain,expiresAt:this.now()+30*24*3600000};
       await tx.credential.create({data:{id:credentialId,groupId:row.groupId,holderInstanceId:peer.holderInstanceId,tokenHash:hash(credential),revoked:false,revision:1,metadataJson:JSON.stringify(data)}});
       return peer;
     });
+    for(const id of revoked)for(const listener of this.revocations)listener(id);
     return {credential,peer};
   }
   async authenticate(token:string):Promise<Peer>{
@@ -48,6 +54,7 @@ export class PairingService {
     return this.context(data.peer);
   }
   private async context(peer:Peer):Promise<Peer>{
+    if(!await deviceMembershipActive(this.db,peer.deviceId))throw Error('DEVICE_LEFT_SPACE');
     if(!peer.app)return peer;
     const i=await this.db.registeredInstallation.findUnique({where:{id:peer.app.appInstanceId}}),app=i?await this.db.registeredApp.findUnique({where:{id:i.appId}}):null;
     if(!i||!app||i.state!=='ACTIVE'||i.groupId!==peer.groupId||i.principalId!==peer.principalId||i.deviceId!==peer.deviceId||i.holderInstanceId!==peer.holderInstanceId||app.id!==peer.app.appId)throw Error('APP_CREDENTIAL_REVOKED');

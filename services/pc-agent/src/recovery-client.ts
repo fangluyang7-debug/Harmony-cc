@@ -39,6 +39,7 @@ export interface LiveControl {
 export class RecoveryClient {
   private socket:WebSocket|undefined;
   private work:Promise<void>=Promise.resolve();
+  private flushing:Promise<void>|undefined;
   private closed:Promise<void>=Promise.resolve();
   private stopped=true;
   private closing=false;
@@ -63,12 +64,20 @@ export class RecoveryClient {
       if(socket.bufferedAmount+Buffer.byteLength(text)>1048576)throw Error('CHANNEL_BACKPRESSURE');
       await new Promise<void>((resolve,reject)=>socket.send(text,e=>e?reject(e):resolve()));
     };
-    const pump=async()=>{
+    let pumping:Promise<void>=Promise.resolve();
+    const pumpOnce=async()=>{
       if(!ready||socket.readyState!==WebSocket.OPEN)return;
       const pending=this.ledger.pendingMessages();
       for(const m of pending)if(!sent.has(m.messageId)){await send(m);sent.add(m.messageId);this.ledger.sentMessage(m.messageId);}
       if(this.ledger.pendingMessages().length&&!watchdog)watchdog=setTimeout(()=>socket.terminate(),10000);
       if(!this.ledger.pendingMessages().length&&watchdog){clearTimeout(watchdog);watchdog=undefined;}
+    };
+    // Dispatch acknowledgements, profiles and execution receipts can all request
+    // a flush concurrently. Preserve channel sequence across the async send.
+    const pump=()=>{
+      const next=pumping.then(pumpOnce);
+      pumping=next.catch(()=>{socket.terminate();});
+      return next;
     };
     this.pumpCurrent=pump;
     this.closed=new Promise(resolve=>socket.once('close',(code,reason)=>{
@@ -94,6 +103,9 @@ export class RecoveryClient {
           else{
             const pending=this.ledger.pendingMessages().find(p=>p.messageId===payload.messageId);
             this.ledger.acknowledgeMessage(payload.messageId);
+            // The timeout measures lack of ACK progress, not how long a busy
+            // channel has continuously had queued messages.
+            if(pending&&watchdog){clearTimeout(watchdog);watchdog=undefined;}
             if(pending)this.live?.acknowledged?.(pending);
             if(pending?.type==='RecoveryRequest'&&!liveReady){liveReady=true;this.live?.state(true,info.epoch);}
           }
@@ -125,7 +137,12 @@ export class RecoveryClient {
   }
   /** Host calls after local engine reconciliation; pending intent is already committed with settlement. */
   flush(){
-    this.work=this.work.then(()=>this.pumpCurrent()).catch(error=>{if(!this.closing)this.onError(error);this.socket?.terminate();});return this.work;
+    if(this.flushing)return this.flushing;
+    // The periodic wake-up must not enqueue an unbounded chain ahead of incoming
+    // ACKs when storage/network processing takes longer than the wake-up period.
+    const pending=this.work.then(()=>this.pumpCurrent()).catch(error=>{if(!this.closing)this.onError(error);this.socket?.terminate();});
+    this.work=pending;this.flushing=pending;
+    void pending.then(()=>{if(this.flushing===pending)this.flushing=undefined;});return pending;
   }
   async close(){this.closing=true;this.stopped=true;this.wake?.();this.socket?.terminate();await this.closed;await this.work;await this.loop;}
 }

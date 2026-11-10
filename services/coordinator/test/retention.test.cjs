@@ -1,6 +1,29 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),{randomUUID}=require('node:crypto');
 const {runtime}=require('./helpers.cjs'),{transferDigest,ArtifactChannel}=require('@harmony/resource-transport');
 const {ArtifactRetention}=require('../dist/retention');
+test('a multi-artifact sweep reads group ownership once and preserves unknown bytes and live transfer grants',async()=>{
+ const r=await runtime({artifactSchemas:new Map([['blob:1',()=>true]])});try{
+  const group=randomUUID(),bytes=Buffer.from('tile'),objects=[];
+  for(let i=0;i<8;i++){
+   const d={groupId:group,ownerPrincipalId:'owner',domain:'SIMULATED',bytes:bytes.length,expiresAt:Date.now()+60000,ref:{artifactId:'tile-'+i,contentVersion:1,contentHash:transferDigest(bytes),schemaId:'blob',schemaVersion:1}};objects.push(d);r.artifacts.register(d);await r.artifacts.writeForControl(d,bytes);
+   if(i===7)continue;
+   await r.db.cpuJob.create({data:{id:'tile-'+i,groupId:group,principalId:'owner',sourceHolderId:'source',state:'SUCCEEDED',metadataJson:JSON.stringify({output:d,resultReceivedAt:Date.now(),offer:{task:{workflowId:'done',nodeId:'render'}}})}});
+  }
+  await r.db.transferAuthorization.create({data:{id:'active-transfer',groupId:group,attemptId:'tile-6',endpointId:'endpoint',requesterCredentialId:'credential',state:'ISSUED',expiresAt:Date.now()+60000,metadataJson:JSON.stringify({authorization:{ref:objects[6].ref}})}});
+  let scans=0;const observed=r.db.$extends({query:{cpuJob:{findMany:({args,query})=>{scans++;return query(args);}}}});
+  const retention=new ArtifactRetention(observed,r.directTransfers,r.artifacts);await retention.sweepRelay();assert.equal(scans,1);
+  for(let i=0;i<6;i++)assert.equal(r.artifacts.lookup(group,objects[i].ref),null);
+  assert.equal(r.artifacts.available(objects[6]),true);assert.equal(r.artifacts.available(objects[7]),true);
+  await r.db.transferAuthorization.update({where:{id:'active-transfer'},data:{expiresAt:1}});await retention.sweepRelay();assert.equal(r.artifacts.lookup(group,objects[6].ref),null);assert.equal(r.artifacts.available(objects[7]),true);
+ }finally{await r.close();}
+});
+test('receipt cleanup hints coalesce and shutdown flushes a pending sweep',async()=>{
+ const retention=new ArtifactRetention(null,null,null);let calls=0;retention.sweepRelay=async()=>{calls++;};
+ for(let i=0;i<20;i++)retention.scheduleSweep();assert.equal(calls,0);
+ await new Promise(r=>setTimeout(r,160));assert.equal(calls,1);
+ retention.scheduleSweep();await retention.close();assert.equal(calls,2);
+ await new Promise(r=>setTimeout(r,120));assert.equal(calls,2);
+});
 test('durable DAG retention protects a remaining branch, unsettled work and unacknowledged final bytes; physical release frees capacity',async()=>{
  const r=await runtime({artifactSchemas:new Map([['blob:1',()=>true]])});
  try{

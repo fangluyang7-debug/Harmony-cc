@@ -1,7 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {workKeyV2,canonical,protocolId,sameModelV2,validModelManifestV2,PlacementRequest,SnapshotDecision} from '@harmony/scheduler-core';
 import {SdkWorkflow,SdkSubmission,SdkInputTransfer} from '@harmony/scheduler-client';
-import {ReferencePack} from '@harmony/reference-capabilities';
+import {ReferencePack,encodeBundle,photoOutputBound} from '@harmony/reference-capabilities';
 import {ArtifactChannel,ArtifactDescriptor} from '@harmony/resource-transport';
 import {Prisma,PrismaClient} from '../generated/client';
 import {Peer} from './channel';
@@ -36,18 +36,19 @@ export class WorkflowJobs {
  private pack(capability:string){const pack=this.packs.find(p=>p.manifest.contract.capability===capability);if(!pack)throw Error('CAPABILITY_UNSUPPORTED');return pack;}
  async submit(peer:Peer,body:SdkSubmission){
   const app=await this.apps.context(peer),w=body.workflow as SdkWorkflow,o=body.options;
-  if(!w||!Array.isArray(w.nodes)||w.nodes.length<2||w.nodes.length>16||w.version!==3||!protocolId(w.id)||w.qualityTarget!=='reference'||!o||!protocolId(o.requestId)||o.requestId.length>100||!Number.isSafeInteger(o.budgetMs)||o.budgetMs<=0||o.budgetMs>30000||o.resultDestination!=='ORIGIN'||o.inputLocation!==undefined&&o.inputLocation!=='ORIGIN')throw Error('SDK_GRAPH_INVALID');
+  if(!w||!Array.isArray(w.nodes)||w.nodes.length<2||w.nodes.length>32||w.version!==3||!protocolId(w.id)||w.qualityTarget!=='reference'||!o||!protocolId(o.requestId)||o.requestId.length>100||!Number.isSafeInteger(o.budgetMs)||o.budgetMs<=0||o.budgetMs>300000||o.resultDestination!=='ORIGIN'||o.inputLocation!==undefined&&o.inputLocation!=='ORIGIN')throw Error('SDK_GRAPH_INVALID');
   if(Object.keys(body).some(k=>!['workflow','options'].includes(k))||Object.keys(w).some(k=>!['version','id','outputContract','qualityTarget','nodes'].includes(k))||Object.keys(o).some(k=>!['requestId','budgetMs','resultDestination','inputLocation','priority'].includes(k))||o.priority!==undefined&&!['REMOTE_INTERACTIVE','REMOTE_BATCH'].includes(o.priority))throw Error('SDK_GRAPH_INVALID');
   const known=new Set<string>();
   for(const node of w.nodes){
-   if(!protocolId(node.id)||known.has(node.id)||!Array.isArray(node.dependsOn)||node.dependsOn.some(id=>!known.has(id))||typeof node.parameters!=='string'||Buffer.byteLength(node.parameters)>32768||node.targetId!==undefined&&!protocolId(node.targetId)||Object.keys(node).some(k=>!['id','capability','input','inputFrom','parameters','dependsOn','targetId','modelManifest','effects','businessIdempotencyKey','privacy'].includes(k))||node.privacy!==undefined&&!['LOCAL_ONLY','OWNER_SERVICE','SHARED'].includes(node.privacy))throw Error('SDK_GRAPH_NODE_INVALID');
+   if(!protocolId(node.id)||known.has(node.id)||!Array.isArray(node.dependsOn)||node.dependsOn.some(id=>!known.has(id))||typeof node.parameters!=='string'||Buffer.byteLength(node.parameters)>32768||node.targetId!==undefined&&!protocolId(node.targetId)||Object.keys(node).some(k=>!['id','capability','input','inputFrom','inputFroms','parameters','dependsOn','targetId','modelManifest','executionScope','effects','businessIdempotencyKey','privacy'].includes(k))||node.executionScope!==undefined&&node.executionScope!=='ORIGIN_DEVICE'||node.privacy!==undefined&&!['LOCAL_ONLY','OWNER_SERVICE','SHARED'].includes(node.privacy))throw Error('SDK_GRAPH_NODE_INVALID');
    JSON.parse(node.parameters);const pack=this.pack(node.capability);
    const effects=node.effects??'PURE';
    if(!['PURE','COMMIT'].includes(effects)||(effects==='PURE')!==(pack.manifest.contract.sideEffectPolicy==='PURE'))throw Error('SDK_EFFECTS_MISMATCH');
    if(effects==='COMMIT'&&!protocolId(node.businessIdempotencyKey!))throw Error('SDK_IDEMPOTENCY_REQUIRED');
    if(effects==='PURE'&&node.businessIdempotencyKey!==undefined)throw Error('SDK_EFFECTS_MISMATCH');if(!app.identity.allowedContracts.includes(pack.manifest.contract.contractId))throw Error('APP_CONTRACT_FORBIDDEN');
    if(node.modelManifest!==undefined&&(!validModelManifestV2(node.modelManifest)||!sameModelV2(node.modelManifest,pack.manifest.model)))throw Error('SDK_MODEL_MISMATCH');
-   if(node.inputFrom!==undefined){if(node.input!==undefined||!node.dependsOn.includes(node.inputFrom))throw Error('SDK_GRAPH_EDGE_INVALID');const parent=w.nodes.find(n=>n.id===node.inputFrom)!;if(!pack.manifest.contract.inputSchemas.includes(this.pack(parent.capability).manifest.contract.outputSchemas[0]))throw Error('SDK_GRAPH_SCHEMA_MISMATCH');}
+   if(node.inputFroms!==undefined){if(node.input!==undefined||node.inputFrom!==undefined||!Array.isArray(node.inputFroms)||!node.inputFroms.length||node.inputFroms.length>32||new Set(node.inputFroms).size!==node.inputFroms.length||node.inputFroms.some(id=>!node.dependsOn.includes(id))||!pack.manifest.contract.inputSchemas.includes('artifact.bundle'))throw Error('SDK_GRAPH_EDGE_INVALID');}
+   else if(node.inputFrom!==undefined){if(node.input!==undefined||!node.dependsOn.includes(node.inputFrom))throw Error('SDK_GRAPH_EDGE_INVALID');const parent=w.nodes.find(n=>n.id===node.inputFrom)!;if(!pack.manifest.contract.inputSchemas.includes(this.pack(parent.capability).manifest.contract.outputSchemas[0]))throw Error('SDK_GRAPH_SCHEMA_MISMATCH');}
    else{const input=node.input;if(!input||Object.keys(input).sort().join('|')!=='bytes|contentHash|schemaId|schemaVersion'||!/^[a-f0-9]{64}$/.test(input.contentHash)||!Number.isSafeInteger(input.bytes)||input.bytes<1||input.bytes>8388608||input.schemaVersion!==1||!pack.manifest.contract.inputSchemas.includes(input.schemaId))throw Error('SDK_INPUT_INVALID');}
    known.add(node.id);
   }
@@ -60,8 +61,8 @@ export class WorkflowJobs {
   const now=Date.now(),inputs:Record<string,ArtifactDescriptor>={};
   for(const n of w.nodes)if(n.input)inputs[n.id]={ref:{artifactId:randomUUID(),contentVersion:1,contentHash:n.input.contentHash,schemaId:n.input.schemaId,schemaVersion:1},groupId:peer.groupId,ownerPrincipalId:peer.principalId,domain:this.artifacts.domain,bytes:n.input.bytes,expiresAt:now+3600000};
   const originLocal=o.inputLocation==='ORIGIN',relay=this.jobs.relayId();
-  const bounds=new Map<string,number>();for(const n of w.nodes){const p=this.pack(n.capability),inputBytes=n.input?.bytes??bounds.get(n.inputFrom!)!;bounds.set(n.id,p.manifest.contract.outputSchemas.includes('image.raster')?p.maxOutputBytes:Math.min(p.maxOutputBytes,inputBytes*64+4096));}
-  const request:PlacementRequest={priority:o.priority??'REMOTE_INTERACTIVE',nodes:w.nodes.map(n=>{const p=this.pack(n.capability);return {id:n.id,workKey:workKeyV2(p.manifest.contract,n.parameters,n.input?.bytes??bounds.get(n.inputFrom!)!),capability:n.capability,serviceId:p.manifest.contract.serviceId,dependencies:n.dependsOn,inputs:[n.inputFrom?'graph-out-'+n.inputFrom:inputs[n.id].ref.artifactId],output:{id:'graph-out-'+n.id,bytes:bounds.get(n.id)!,retainAtExecutor:w.nodes.some(child=>child.inputFrom===n.id)},modelManifest:p.manifest.model,baselineTargetId:n.targetId??'',allowedTargetIds:n.targetId?[n.targetId]:undefined,memoryBytes:p.manifest.resourceLimit.find(r=>r.resourcePoolId==='ram')?.amount??0,minimumQuality:p.manifest.qualityThreshold,candidates:[]};}),
+  const bounds=new Map<string,number>();for(const n of w.nodes){const p=this.pack(n.capability),inputBytes=n.input?.bytes??(n.inputFroms?Math.min(8388608,n.inputFroms.reduce((sum,id)=>sum+(bounds.get(id)??0)*4/3+512,0)):bounds.get(n.inputFrom!)!);bounds.set(n.id,photoOutputBound(n.capability,n.parameters,p.manifest.contract.outputSchemas.includes('image.raster')?p.maxOutputBytes:Math.min(p.maxOutputBytes,inputBytes*64+4096)));}
+  const request:PlacementRequest={priority:o.priority??'REMOTE_INTERACTIVE',nodes:w.nodes.map(n=>{const p=this.pack(n.capability);return {id:n.id,workKey:workKeyV2(p.manifest.contract,n.parameters,n.input?.bytes??(n.inputFroms?Math.min(8388608,n.inputFroms.reduce((sum,id)=>sum+(bounds.get(id)??0)*4/3+512,0)):bounds.get(n.inputFrom!)!)),capability:n.capability,...(n.executionScope==='ORIGIN_DEVICE'?{dataScope:'LOCAL_ONLY' as const}:n.privacy&&n.privacy!=='SHARED'?{dataScope:n.privacy}:{}),serviceId:p.manifest.contract.serviceId,dependencies:n.dependsOn,inputs:n.inputFroms?n.inputFroms.map(id=>'graph-out-'+id):[n.inputFrom?'graph-out-'+n.inputFrom:inputs[n.id].ref.artifactId],output:{id:'graph-out-'+n.id,bytes:bounds.get(n.id)!,retainAtExecutor:!w.nodes.some(child=>child.inputFroms)&&w.nodes.some(child=>child.inputFrom===n.id)},modelManifest:p.manifest.model,baselineTargetId:n.targetId??'',allowedTargetIds:n.targetId?[n.targetId]:undefined,memoryBytes:p.manifest.resourceLimit.find(r=>r.resourcePoolId==='ram')?.amount??0,minimumQuality:p.manifest.qualityThreshold,candidates:[]};}),
    artifacts:Object.values(inputs).map(a=>({id:a.ref.artifactId,bytes:a.bytes,replicas:[originLocal?{deviceId:peer.deviceId,holderInstanceId:peer.holderInstanceId,readMs:0}:{deviceId:relay,readMs:0}]})),links:[],deviceResources:[],remainingBudgetMs:o.budgetMs,networkAllowed:true,privacy:'AUTHORIZED_REMOTE',localDeviceId:peer.deviceId,domain:this.artifacts.domain,now,committedNodeIds:[],committedArtifacts:[],appInstanceId:app.identity.appInstanceId,originHolderId:peer.holderInstanceId,inputRelayId:relay,localResultHolderId:peer.holderInstanceId,materializeOutputsAt:relay,finalDestination:relay};
   const plan=await this.jobs.graphPlan(peer,request);if(!plan.decision.suggestion)throw Error(plan.decision.reason);
   const data:GraphData={peer,priority:request.priority,workflow:w,fingerprint,deadlineAt:now+o.budgetMs,originLocal,inputs,nodes:w.nodes.map(n=>({id:n.id,jobId:randomUUID(),state:'PENDING'})),plan};
@@ -145,6 +146,8 @@ export class WorkflowJobs {
  }
  private async progress(id:string,data:GraphData){
   await this.apps.context(data.peer);
+  const dispatched=new Set<string>();
+  const before=JSON.stringify(data);
   if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state==='CANCEL_REQUESTED'){
    await this.drain(id,data);return;
   }
@@ -152,31 +155,41 @@ export class WorkflowJobs {
    if(node.state==='SUBMITTED'){
     const serving=await this.jobs.winnerFor(data.peer,node.jobId);
     const status=await this.jobs.status(data.peer,serving,false),output=await this.jobs.graphOutput(data.peer,serving);
+    if(['OFFERED','ACCEPTED','RUNNING','SUCCEEDED','QUEUED'].includes(status.state))dispatched.add(node.id);
     if(output){node.jobId=serving;node.state='COMMITTED';node.output=output.descriptor;node.local=output.local;}
     else if(['CANCELLED_SETTLED','YIELDED','REJECTED'].includes(status.state)&&await this.restartSettledOrUnstarted(id,data,node))continue;
     else if(['FAILED','REJECTED','CANCELLED','CANCELLED_SETTLED','YIELDED','SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING'].includes(status.state)){const needsReconciliation=['SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING'].includes(status.state);
      await this.stop(id,data,status.state,needsReconciliation?node.jobId:undefined);return;}
    }
   }
-  await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
+  if(JSON.stringify(data)!==before)await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
   for(const n of data.workflow.nodes){
    if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state!=='ACTIVE')return;
    const state=data.nodes.find(s=>s.id===n.id)!;if(state.state==='COMMITTED'||n.dependsOn.some(dep=>data.nodes.find(s=>s.id===dep)!.state!=='COMMITTED'))continue;
    if(data.deadlineAt<=Date.now()){await this.stop(id,data,'BUDGET_EXHAUSTED');return;}
-   const parent=n.inputFrom?data.nodes.find(s=>s.id===n.inputFrom)!:null,source=parent?parent.output!:data.inputs[n.id],local=parent?parent.local:data.originLocal;
+   // A dispatched node progresses by its durable receipt, not by calling start
+   // again on every UI poll. Avoid write-lock churn while its engine is running.
+   if(dispatched.has(n.id))continue;
+   const parent=n.inputFrom?data.nodes.find(s=>s.id===n.inputFrom)!:null;
    try{
+   if(n.inputFroms&&!data.inputs[n.id]){
+    const parts=[];for(const parentId of n.inputFroms){const p=data.nodes.find(s=>s.id===parentId)!;parts.push({nodeId:parentId,schemaId:p.output!.ref.schemaId,data:await this.artifacts.readForControl(p.output!)});}
+    const bytes=encodeBundle(parts),descriptor:ArtifactDescriptor={ref:{artifactId:randomUUID(),contentVersion:1,contentHash:createHash('sha256').update(bytes).digest('hex'),schemaId:'artifact.bundle',schemaVersion:1},groupId:data.peer.groupId,ownerPrincipalId:data.peer.principalId,domain:this.artifacts.domain,bytes:bytes.length,expiresAt:Date.now()+3600000};
+    this.artifacts.register(descriptor);await this.artifacts.writeForControl(descriptor,bytes);data.inputs[n.id]=descriptor;await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
+   }
+   const source=parent?parent.output!:data.inputs[n.id],local=n.inputFroms?false:parent?parent.local:data.originLocal;
     if(state.state==='PENDING'){
      if(n.modelManifest&&!sameModelV2(n.modelManifest,this.pack(n.capability).manifest.model)){
       data.failure={code:'SDK_MODEL_MISMATCH',reason:'REGISTERED_MODEL_CHANGED',nodeId:n.id};await this.stop(id,data,'FAILED');return;
      }
      const assignment=data.plan.decision.suggestion!.find(a=>a.nodeId===n.id)!;
-     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,businessIdempotencyKey:n.businessIdempotencyKey,privacy:n.privacy,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:!!assignment.outputEndpointId&&data.workflow.nodes.some(child=>child.inputFrom===n.id&&data.plan.decision.suggestion?.find(a=>a.nodeId===child.id)?.inputEndpointOperation==='WRITE'),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
+     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,businessIdempotencyKey:n.businessIdempotencyKey,privacy:n.privacy,executionScope:n.executionScope,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{forceRelay:data.workflow.nodes.some(node=>!!node.inputFroms),workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:!data.workflow.nodes.some(node=>!!node.inputFroms)&&!!assignment.outputEndpointId&&data.workflow.nodes.some(child=>child.inputFrom===n.id&&data.plan.decision.suggestion?.find(a=>a.nodeId===child.id)?.inputEndpointOperation==='WRITE'),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
      state.state='SUBMITTED';await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
     }
     if(await this.jobs.graphInput(data.peer,state.jobId,source))continue;
     if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state!=='ACTIVE')return;
     await this.jobs.start(data.peer,state.jobId);
-   }catch(error){if(error instanceof Error&&(error.message.startsWith('ARTIFACT_UNAVAILABLE:')||error.message==='ARTIFACT_CACHE_FULL')){data.failure={code:error.message==='ARTIFACT_CACHE_FULL'?'ARTIFACT_CACHE_FULL':'ARTIFACT_UNAVAILABLE',reason:error.message==='ARTIFACT_CACHE_FULL'?'NO_FEASIBLE_INPUT_PATH':error.message.slice('ARTIFACT_UNAVAILABLE:'.length),nodeId:n.id};await this.stop(id,data,'FAILED');return;}if(error instanceof Error&&['APP_QUOTA_EXCEEDED','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','PLAN_STALE','INPUT_NOT_UPLOADED','TARGET_UNAVAILABLE','JOB_RECOVERY_REQUIRED'].includes(error.message))continue;throw error;}
+   }catch(error){if(['P1008','P2028'].includes(String((error as {code?:string})?.code))){return;}if(error instanceof Error&&(error.message.startsWith('ARTIFACT_UNAVAILABLE:')||error.message==='ARTIFACT_CACHE_FULL')){data.failure={code:error.message==='ARTIFACT_CACHE_FULL'?'ARTIFACT_CACHE_FULL':'ARTIFACT_UNAVAILABLE',reason:error.message==='ARTIFACT_CACHE_FULL'?'NO_FEASIBLE_INPUT_PATH':error.message.slice('ARTIFACT_UNAVAILABLE:'.length),nodeId:n.id};await this.stop(id,data,'FAILED');return;}if(error instanceof Error&&['APP_QUOTA_EXCEEDED','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','START_BUSY','DISPATCH_ADMISSION_PENDING','PLAN_STALE','INPUT_NOT_UPLOADED','TARGET_UNAVAILABLE','JOB_RECOVERY_REQUIRED'].includes(error.message))continue;data.failure={code:'GRAPH_NODE_FAILED',reason:error instanceof Error?error.message:'UNKNOWN',nodeId:n.id};await this.stop(id,data,'FAILED');return;}
   }
   if(data.nodes.every(n=>n.state==='COMMITTED'))await this.db.sdkWorkflowJob.updateMany({where:{id,state:'ACTIVE'},data:{state:'SUCCEEDED'}});
  }
@@ -194,8 +207,11 @@ export class WorkflowJobs {
   const {row,data}=await this.owned(peer,id),output=data.nodes[data.nodes.length-1]?.output;
   if(!body||Object.keys(body).sort().join('|')!==(body.sourceInterval?'bytes|ref|sourceInterval':'bytes|ref')||row.state!=='SUCCEEDED'||!output||canonical(body.ref)!==canonical(output.ref)||body.bytes!==output.bytes)throw Error('RESULT_RECEIPT_SCOPE');
   if(body.sourceInterval){const job=await this.db.cpuJob.findUniqueOrThrow({where:{id:data.nodes[data.nodes.length-1].jobId}}),d=JSON.parse(job.metadataJson);await this.jobs.sourceRoot(peer,d,body.sourceInterval);}
-  if(!data.resultReceivedAt){const previous=JSON.stringify(data);data.resultReceivedAt=Date.now();await this.db.sdkWorkflowJob.updateMany({where:{id,metadataJson:previous},data:{metadataJson:JSON.stringify(data)}});}await this.retention?.sweepRelay();return {received:true};
+  if(!data.resultReceivedAt){const previous=JSON.stringify(data);data.resultReceivedAt=Date.now();await this.db.sdkWorkflowJob.updateMany({where:{id,metadataJson:previous},data:{metadataJson:JSON.stringify(data)}});}this.retention?.scheduleSweep();return {received:true};
  }
  async cancel(peer:Peer,id:string){await this.owned(peer,id);await this.db.sdkWorkflowJob.updateMany({where:{id,state:{in:['ACTIVE','WAITING_INPUT']}},data:{state:'CANCEL_REQUESTED'}});await this.advance(peer.groupId);return {jobId:id,state:(await this.owned(peer,id)).row.state};}
+
+ async writeInput(peer:Peer,id:string,artifactId:string,bytes:Buffer){const {row,data}=await this.owned(peer,id);const d=Object.values(data.inputs).find(a=>a.ref.artifactId===artifactId);if(row.state!=='WAITING_INPUT'||!d)throw Error('SDK_INPUT_SCOPE');await this.artifacts.writeForControl(d,bytes);}
+ async readOutput(peer:Peer,id:string){const {row,data}=await this.owned(peer,id);const d=data.nodes[data.nodes.length-1].output;if(row.state!=='SUCCEEDED'||!d)throw Error('OUTPUT_NOT_READY');return this.artifacts.readForControl(d);}
  async close(){this.stopped=true;await this.work;}
 }

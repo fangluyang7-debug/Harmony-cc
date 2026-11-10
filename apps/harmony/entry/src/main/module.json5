@@ -27,6 +27,7 @@
         "startWindowBackground": "$color:start_window_background",
         "exported": true,
         "skills": [
+          { "actions": ["org.harmonycc.action.CONNECT_SHOPPING"] },
           {
             "entities": [
               "entity.system.home"

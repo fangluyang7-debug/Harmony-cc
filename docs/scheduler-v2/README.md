@@ -10,16 +10,26 @@
 
 ## 统一开发基线（2026-11-01）
 
-所有提交者统一使用 **HarmonyOS 6.0.2 / API 22** SDK 编译 SoleAI、调度件、探针及 scheduler HAR，目标系统基线同为 HarmonyOS 6.0.2。targetSdkVersion 与 compatibleSdkVersion 均为 `6.0.2(22)`。安装路径允许不同，通过 `DEVECO_STUDIO_HOME` 和 `DEVECO_SDK_HOME` 指定；v2 构建脚本拒绝其他 SDK。历史 API 24 结果不代表 API 22 验证通过，原生构建、模拟器和真机须分别验收。
+所有提交者统一使用 **HarmonyOS 6.0.2 / API 22** SDK 编译 SoleAI、调度件、探针及 scheduler HAR，目标系统基线同为 HarmonyOS 6.0.2。targetSdkVersion 与 compatibleSdkVersion 均为 `6.0.2(22)`。安装路径允许不同，通过 `DEVECO_STUDIO_HOME` 和 `DEVECO_SDK_HOME` 指定；v2 构建脚本默认拒绝其他 SDK；API 24 验收兼容选项见下方说明。历史 API 24 结果不代表 API 22 验证通过，原生构建、模拟器和真机须分别验收。
 
 优先完成 S3 鸿蒙来源 App 宿主、本机/PC 统一选择与输入无外传，再推进断线交回原有本地调度、旧任务恢复和取消。按用户后续授权，先连续完成各切片实现、构建和可运行测试；无模拟器或真机时设备验收单独登记待验，不阻塞后续实现，也不将切片标成已验收。2026-11-04 用户进一步授权：实现中出现问题或矛盾时，先按主线提出建议方案并继续修复、推进；涉及改变部署方向、单一派发路径或切片范围的决定仍先确认。
 
 SDK 的 TS/ArkTS 源码一致性测试只验证同步，不验证 ArkTS 语法。修改共享 SDK 后必须运行 `npm run sdk:test` 和 `npm run harmony:v2:har`；涉及原生宿主时还需构建 agent/probe 并运行模拟器验收，分别记录结果。
 
+## 照片工作流本地实现（2026-11-10）
+
+见 [AI 照片处理与展示实现记录](PHOTO-WORKFLOW-LOCAL-20261110.md)。保留已有调度盘和真实设备分支，增加实际 AI 推理、多输入 DAG 与评委展示页。此轮未连接设备，不代表 GPU 或鸿蒙真机验收通过。
+
+构建默认仍是 API 22；`HARMONY_BUILD_API=24` 仅用于已有 API 24 验收工程的显式复现，输出单独目录，不代表统一 API 22 基线已经验证。
+
 ## 文档状态
 
 | 文档 | 状态 | 用途 |
 | --- | --- | --- |
+| [SoleAI 日常购物操作单](SOLEAI-MANUAL-DEMO.md) | 当前工作树 | 两个独立 App；一次授权后普通文字/照片购物自动判断本地或协作；不再跳转计算页。见 STATUS §105，旧 §104 专用入口仅诊断 |
+| [真实购物图像复核](SHOPPING-VISUAL-COOPERATION.md) | 当前工作树 | 真实商品图像相似度工具、共享原生 CPU 内核、SDK 唯一派发链路与手机/Windows 无预置输入性能对照；见 STATUS §103 |
+| [真实购物协同](SHOPPING-COOPERATION.md) | 当前工作树 | 候选商品 CPU 分片、应用入口、调度与结果追踪；双设备真机、同输入性能对照与分批优化见 STATUS §100–102 |
+| [分发包分组与联调说明](分发包分组与联调说明.md)、[本地构建与演示](分发包本地构建与演示.md) | 当前封装 | 四组职责、构建命令、API 24 本地调试包边界与独立 App 演示；进度见 STATUS §98 |
 | [S5—S8 软件覆盖与设备验收清单](S5-S8-软件覆盖与设备验收清单.md) | 当前工作树 | 路演功能入口、本机复现方式、模拟器与真机验收边界 |
 | [specification-r6.md](specification-r6.md) | 现行 | 实施规格修订 6.1；联网边界见 §00.0，失联检测与受限对冲见 §6.5 |
 | [STATUS.md](STATUS.md) | 现行 | 唯一的进度记录，每次提交后更新 |

@@ -13,6 +13,7 @@ export struct ProductDetail {
         }
       }.width('100%').aspectRatio(1).backgroundColor('#FFFFFF').borderRadius(8).clip(true)
       Text(this.product.title).fontSize(24).fontWeight(FontWeight.Bold).width('100%')
+      if(this.product.visualSimilarity!==undefined){Text('照片外观参考 '+this.product.visualSimilarity.toFixed(1)+' / 100；不是同款或正品证明，请核对型号与规格。').fontSize(13).fontColor('#52635C').width('100%')}
       Text(priceLabel(this.product)).fontSize(30).fontWeight(FontWeight.Bold).fontColor('#A14000').width('100%')
       Text(`商品编号 ${this.product.externalId}`).fontSize(11).fontColor('#747878').width('100%')
       Divider().color('#E2E2E2')

@@ -1,0 +1,1117 @@
+{
+  "startedAt": "2026-11-08T04:54:49.280Z",
+  "domain": "REAL",
+  "coordinator": "https://192.168.71.37:7443",
+  "budgetMs": 30000,
+  "strictOutputState": true,
+  "status": "PASS",
+  "samples": [
+    {
+      "jobId": "f20ee9f6-08db-4900-b3e1-d35232d37d47",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙手机",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 2033.8873999999998,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2033.8947,
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "targetId": "harmony-edf114d37483098689c42c052e2a6682",
+      "traceId": "3660ca10-eb25-4c9a-8f97-7f8929646265",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "a40e9458-d81d-4271-8e3a-4038446f431d",
+      "case": "text-1",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙手机",
+      "parameters": {},
+      "inputBytes": 11499,
+      "inputHash": "2be6bd1f2c18b71b8a68992dfc7719c6c660a0ccb2b655f1498765f271bf78a2",
+      "state": "PASS",
+      "outputReadyMs": 2933.5604999999996,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2933.5635,
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "targetId": "harmony-edf114d37483098689c42c052e2a6682",
+      "traceId": "cf8a5a05-9c72-440c-ae75-2299ceaa42e9",
+      "outputBytes": 44,
+      "outputHash": "c3777529ec3c94d2108ab33b3aa84587f7e6ffefe62af6c03afa7cb2fbf2fb36",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 7889,
+        "words": 1600,
+        "lines": 400
+      }
+    },
+    {
+      "jobId": "f278bb78-5d78-4bcb-9010-09bc104264bd",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙手机",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 1726.9281,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1726.9314999999997,
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "targetId": "harmony-62024e4537f427adceb3a09f7cc78c8d",
+      "traceId": "cc99a7f5-ca17-4d6c-a38f-4444896e033f",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "a74a8965-5715-4827-b8ce-e6c6ebdc1259",
+      "case": "vector-1",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙手机",
+      "parameters": {},
+      "inputBytes": 52392,
+      "inputHash": "e33a0fcb64e299be692ee1ff9cd623fa91c02fbb8b78ba288ca95b9d1dcec705",
+      "state": "PASS",
+      "outputReadyMs": 2009.4877999999999,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2009.4903000000004,
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "targetId": "harmony-62024e4537f427adceb3a09f7cc78c8d",
+      "traceId": "0c3ba7d1-c109-4788-9fc2-7ccb61770786",
+      "outputBytes": 394404,
+      "outputHash": "0c0e0d397fe53a964c3b5c1bf4cb52523928a18e19637a9227cf6b83a5ee9614",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 4,
+        "rows": 4096,
+        "maxAbsoluteComponentError": 4.440892098500626e-16
+      }
+    },
+    {
+      "jobId": "df95048d-0e36-4cde-88dd-c4618f781193",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙手机",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2470.704599999999,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2470.7070999999996,
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "targetId": "harmony-e7c33713c6f65b3b645fcf8337c244fa",
+      "traceId": "742444b1-cbc9-4640-b9c1-58e27fa8d6a2",
+      "outputBytes": 816,
+      "outputHash": "29f2838ef63615be4253a9330962946487bd31f8212502df2d111e8e5c2d6b0c",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "bae74b0d-dea8-4328-89fb-ac6e9106b6f8",
+      "case": "crop-1",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙手机",
+      "parameters": {
+        "box": {
+          "x": 0.5,
+          "y": 0.5,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 192,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 1539.423499999999,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1539.4254,
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "targetId": "harmony-e7c33713c6f65b3b645fcf8337c244fa",
+      "traceId": "d4cc6860-d1fc-4905-87d9-580ee6df25ca",
+      "outputBytes": 978,
+      "outputHash": "aa537ac7486a2d4255a12dd537939b0f793dd89af5d188f8db9dc7dcec2c6317",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 192,
+        "height": 192,
+        "expectedRGB": [
+          255,
+          255,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "bfb8b4e9-629e-46e9-8242-c06c06f4896f",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 2994.2299999999996,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2994.2317999999996,
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "targetId": "cpu-3cfb7eb02dc9b7adfdcfac9e1080695d",
+      "traceId": "b53b791e-b844-445e-b25c-3e80fac41aed",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "50abefc0-5981-40ca-b0b0-ad505525df57",
+      "case": "text-1",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 11499,
+      "inputHash": "2be6bd1f2c18b71b8a68992dfc7719c6c660a0ccb2b655f1498765f271bf78a2",
+      "state": "PASS",
+      "outputReadyMs": 1823.770800000002,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1823.7733000000007,
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "targetId": "cpu-3cfb7eb02dc9b7adfdcfac9e1080695d",
+      "traceId": "b686c28a-d166-4b1c-9748-c58f862dc010",
+      "outputBytes": 44,
+      "outputHash": "c3777529ec3c94d2108ab33b3aa84587f7e6ffefe62af6c03afa7cb2fbf2fb36",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 7889,
+        "words": 1600,
+        "lines": 400
+      }
+    },
+    {
+      "jobId": "70b5b8aa-1435-46b4-84b3-754f609fdf2b",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 2512.994599999998,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2512.9968999999983,
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "targetId": "cpu-222dbc9445a4374ee28c8856ba2108d5",
+      "traceId": "ba21716c-29a5-4245-8fbe-02cac448913f",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "6e8a1e74-1c1c-43ec-aa5e-8f50b5b20b2d",
+      "case": "vector-1",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 52392,
+      "inputHash": "e33a0fcb64e299be692ee1ff9cd623fa91c02fbb8b78ba288ca95b9d1dcec705",
+      "state": "PASS",
+      "outputReadyMs": 1914.7315000000017,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1914.7380999999987,
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "targetId": "cpu-222dbc9445a4374ee28c8856ba2108d5",
+      "traceId": "6654245a-8cfa-470d-b177-46a0bb0fcc64",
+      "outputBytes": 394235,
+      "outputHash": "873cdf64245e8ea7c57f0fde0280aeb8411a84527d284e1d68e89240ab8bdcb7",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 4,
+        "rows": 4096,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "b406226e-925d-4523-88cb-fbf3db0fea57",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2013.8572999999997,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2013.8582000000024,
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "targetId": "cpu-87e5f3f05d90cd67a53161182a4f743f",
+      "traceId": "fc90267f-ceae-438f-a749-8ea2f34f6abe",
+      "outputBytes": 352,
+      "outputHash": "c8006a34b66ffc0ff49d5d9552df9d0c26d0d9c1b283e62e6fb894560ee154f5",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "336c3c2a-3cb5-42d2-a1eb-53aa1286477e",
+      "case": "crop-1",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {
+        "box": {
+          "x": 0.5,
+          "y": 0.5,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 192,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2326.849399999999,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2326.850300000002,
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "targetId": "cpu-87e5f3f05d90cd67a53161182a4f743f",
+      "traceId": "8c21ef0a-bbb2-4211-a6f2-0f619af892d6",
+      "outputBytes": 434,
+      "outputHash": "feabe8623b3b837b308a8e3e4f386bbe11280d5c216d4452bea04ae183cb72e4",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 192,
+        "height": 192,
+        "expectedRGB": [
+          255,
+          255,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "c2034636-2e76-4889-9917-cc667bf0c75f",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙电脑",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 1578.012200000001,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1578.0130000000026,
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "targetId": "harmony-c5047535889ea80f763ede819596bb1c",
+      "traceId": "780211d6-5754-4f34-a906-92c12b3e1564",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "5c4ffcf5-656a-488c-b98b-29594aef73d1",
+      "case": "text-1",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙电脑",
+      "parameters": {},
+      "inputBytes": 11499,
+      "inputHash": "2be6bd1f2c18b71b8a68992dfc7719c6c660a0ccb2b655f1498765f271bf78a2",
+      "state": "PASS",
+      "outputReadyMs": 1716.4307999999983,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1716.431199999999,
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "targetId": "harmony-c5047535889ea80f763ede819596bb1c",
+      "traceId": "b02804b9-b320-469d-8231-9d5078308f16",
+      "outputBytes": 44,
+      "outputHash": "c3777529ec3c94d2108ab33b3aa84587f7e6ffefe62af6c03afa7cb2fbf2fb36",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 7889,
+        "words": 1600,
+        "lines": 400
+      }
+    },
+    {
+      "jobId": "e72a56e4-f1d7-4155-99b6-7640b8c51305",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙电脑",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 2289.4357999999993,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2289.436600000001,
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "targetId": "harmony-2412b8824903630f79ae11af0b015eaf",
+      "traceId": "4cbac2b9-01b9-462e-95cf-ded58ec339d2",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "bf8c86bc-f357-4a4c-b2f5-bbe57706cd4b",
+      "case": "vector-1",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙电脑",
+      "parameters": {},
+      "inputBytes": 52392,
+      "inputHash": "e33a0fcb64e299be692ee1ff9cd623fa91c02fbb8b78ba288ca95b9d1dcec705",
+      "state": "PASS",
+      "outputReadyMs": 1772.937399999999,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1772.938299999998,
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "targetId": "harmony-2412b8824903630f79ae11af0b015eaf",
+      "traceId": "3930feaf-2e38-485b-8196-cb0f22250344",
+      "outputBytes": 394404,
+      "outputHash": "0c0e0d397fe53a964c3b5c1bf4cb52523928a18e19637a9227cf6b83a5ee9614",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 4,
+        "rows": 4096,
+        "maxAbsoluteComponentError": 4.440892098500626e-16
+      }
+    },
+    {
+      "jobId": "8fe32abd-2e9b-4ed5-9c2b-e4043dccf08c",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙电脑",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2304.246500000001,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2304.2474,
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "targetId": "harmony-2c689307d75d8719eb8364b69a92fa70",
+      "traceId": "40317e51-0a7c-41c1-b322-2c9e0abca6fc",
+      "outputBytes": 816,
+      "outputHash": "29f2838ef63615be4253a9330962946487bd31f8212502df2d111e8e5c2d6b0c",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "a71a301b-5b50-489c-8d43-7f253f9e8e7d",
+      "case": "crop-1",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "鸿蒙电脑",
+      "parameters": {
+        "box": {
+          "x": 0.5,
+          "y": 0.5,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 192,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2143.519800000002,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2143.5208000000057,
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "targetId": "harmony-2c689307d75d8719eb8364b69a92fa70",
+      "traceId": "2af6d51b-9adb-4478-a8e5-1c732f821faa",
+      "outputBytes": 978,
+      "outputHash": "aa537ac7486a2d4255a12dd537939b0f793dd89af5d188f8db9dc7dcec2c6317",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 192,
+        "height": 192,
+        "expectedRGB": [
+          255,
+          255,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "8265dc1d-3286-4ffc-a3c4-07562d1c8064",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "AUTO",
+      "requestedDevice": "AUTO",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 1754.2687000000005,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1754.2695000000022,
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "targetId": "cpu-3cfb7eb02dc9b7adfdcfac9e1080695d",
+      "traceId": "9bbdf22b-0044-4c88-ac1d-2622d425b75e",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "26d3592a-d418-4bf2-937c-eb658795494f",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "AUTO",
+      "requestedDevice": "AUTO",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 1581.6059000000023,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1581.6066999999966,
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "targetId": "harmony-2412b8824903630f79ae11af0b015eaf",
+      "traceId": "2a5688d1-fcf5-4402-886c-26c1398917a3",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "6d587cfb-dbff-40f1-82a8-8e9ba035b613",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "AUTO",
+      "requestedDevice": "AUTO",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2849.2373000000007,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2849.2379999999976,
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "targetId": "harmony-2c689307d75d8719eb8364b69a92fa70",
+      "traceId": "0833204e-3322-4c33-95b8-d6728e5551b9",
+      "outputBytes": 816,
+      "outputHash": "29f2838ef63615be4253a9330962946487bd31f8212502df2d111e8e5c2d6b0c",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "7cf12566-9dcf-41ec-99ec-26616c61b870",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "CONCURRENT",
+      "requestedDevice": "鸿蒙手机",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 4229.080300000001,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 4229.080900000001,
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "targetId": "harmony-edf114d37483098689c42c052e2a6682",
+      "traceId": "149bb055-69be-4428-b8c1-3697e5e46bbe",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "45e65a5a-04e2-472d-a787-17afd218f1a8",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "CONCURRENT",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 4425.070699999997,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 4425.071600000003,
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "targetId": "cpu-222dbc9445a4374ee28c8856ba2108d5",
+      "traceId": "61027940-68cc-4031-a344-9284b4498790",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "2cb2701a-69da-4521-98a7-9629df896046",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "CONCURRENT",
+      "requestedDevice": "鸿蒙电脑",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 6217.399400000002,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 6217.399900000004,
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "targetId": "harmony-2c689307d75d8719eb8364b69a92fa70",
+      "traceId": "e9981354-e9a2-4e2b-9be0-e2e9650cf9f3",
+      "outputBytes": 816,
+      "outputHash": "29f2838ef63615be4253a9330962946487bd31f8212502df2d111e8e5c2d6b0c",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    }
+  ],
+  "note": "Correctness and delivery checks; not a speedup comparison. Windows local execution does not cross Wi-Fi.",
+  "devices": [
+    {
+      "id": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "name": "鸿蒙手机"
+    },
+    {
+      "id": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "name": "Scilana"
+    },
+    {
+      "id": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "name": "鸿蒙电脑"
+    }
+  ],
+  "concurrentBatchMs": 6226.531600000002,
+  "jobs": [
+    {
+      "id": "2cb2701a-69da-4521-98a7-9629df896046",
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "2373a5fd-e951-408f-8c86-507404c77b91",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "7cf12566-9dcf-41ec-99ec-26616c61b870",
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "45e65a5a-04e2-472d-a787-17afd218f1a8",
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "6d587cfb-dbff-40f1-82a8-8e9ba035b613",
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "state": "SUCCEEDED",
+      "reason": "LEGAL_SUGGESTION",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "2373a5fd-e951-408f-8c86-507404c77b91",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "26d3592a-d418-4bf2-937c-eb658795494f",
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "state": "SUCCEEDED",
+      "reason": "LEGAL_SUGGESTION",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "2373a5fd-e951-408f-8c86-507404c77b91",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "8265dc1d-3286-4ffc-a3c4-07562d1c8064",
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "state": "SUCCEEDED",
+      "reason": "LEGAL_SUGGESTION",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "a71a301b-5b50-489c-8d43-7f253f9e8e7d",
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "2373a5fd-e951-408f-8c86-507404c77b91",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "8fe32abd-2e9b-4ed5-9c2b-e4043dccf08c",
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "2373a5fd-e951-408f-8c86-507404c77b91",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "bf8c86bc-f357-4a4c-b2f5-bbe57706cd4b",
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "2373a5fd-e951-408f-8c86-507404c77b91",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "e72a56e4-f1d7-4155-99b6-7640b8c51305",
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "2373a5fd-e951-408f-8c86-507404c77b91",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "5c4ffcf5-656a-488c-b98b-29594aef73d1",
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "2373a5fd-e951-408f-8c86-507404c77b91",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "c2034636-2e76-4889-9917-cc667bf0c75f",
+      "deviceId": "2373a5fd-e951-408f-8c86-507404c77b91",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "2373a5fd-e951-408f-8c86-507404c77b91",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "336c3c2a-3cb5-42d2-a1eb-53aa1286477e",
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "b406226e-925d-4523-88cb-fbf3db0fea57",
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "6e8a1e74-1c1c-43ec-aa5e-8f50b5b20b2d",
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "70b5b8aa-1435-46b4-84b3-754f609fdf2b",
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "50abefc0-5981-40ca-b0b0-ad505525df57",
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "bfb8b4e9-629e-46e9-8242-c06c06f4896f",
+      "deviceId": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "bae74b0d-dea8-4328-89fb-ac6e9106b6f8",
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "df95048d-0e36-4cde-88dd-c4618f781193",
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "a74a8965-5715-4827-b8ce-e6c6ebdc1259",
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "f278bb78-5d78-4bcb-9010-09bc104264bd",
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "a40e9458-d81d-4271-8e3a-4038446f431d",
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "f20ee9f6-08db-4900-b3e1-d35232d37d47",
+      "deviceId": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    }
+  ],
+  "finishedAt": "2026-11-08T04:55:40.031Z"
+}

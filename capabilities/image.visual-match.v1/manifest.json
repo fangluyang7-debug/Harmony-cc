@@ -1,0 +1,34 @@
+{
+  "packId": "image.visual-match.v1",
+  "contract": {
+    "contractId": "image.visual-match.v1",
+    "version": 1,
+    "capability": "image.visual-match.v1",
+    "inputSchemas": [
+      "image.visual-bundle"
+    ],
+    "outputSchemas": [
+      "image.visual-evidence"
+    ],
+    "sideEffectPolicy": "PURE",
+    "interruptibility": "CANCEL_RESTART",
+    "maxNonPreemptibleMs": null
+  },
+  "executorIds": [
+    "node.cpu.v1",
+    "harmony.cpu.v1"
+  ],
+  "model": null,
+  "suiteId": "visual.appearance.reference",
+  "qualityThreshold": 1,
+  "resourceLimit": [
+    {
+      "resourcePoolId": "cpu",
+      "amount": 1
+    },
+    {
+      "resourcePoolId": "ram",
+      "amount": 134217728
+    }
+  ]
+}

@@ -1,0 +1,197 @@
+{
+  "phase": "phone-created-before",
+  "native": [
+    {
+      "ipv4Interfaces": [
+        {
+          "address": "127.0.0.1",
+          "name": "lo"
+        },
+        {
+          "address": "192.168.71.39",
+          "name": "wlan0"
+        }
+      ],
+      "rxBytes": "321051065",
+      "txBytes": "175847628",
+      "interface": "wlan0",
+      "route": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \nwlan0\t0047A8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0                                                                              ",
+      "address": "192.168.71.39",
+      "name": "HarmonyOS PC"
+    },
+    {
+      "ipv4Interfaces": [
+        {
+          "address": "127.0.0.1",
+          "name": "lo"
+        },
+        {
+          "address": "192.168.71.40",
+          "name": "wlan0"
+        }
+      ],
+      "rxBytes": "581212283",
+      "txBytes": "51373158",
+      "interface": "wlan0",
+      "route": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \nwlan0\t0047A8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0                                                                              ",
+      "address": "192.168.71.40",
+      "name": "HarmonyOS phone"
+    }
+  ],
+  "routes": [
+    {
+      "destination": "192.168.71.39",
+      "route": [
+        {
+          "InterfaceAlias": "WLAN",
+          "IPAddress": "192.168.71.37",
+          "DestinationPrefix": null,
+          "NextHop": null
+        },
+        {
+          "InterfaceAlias": "WLAN",
+          "IPAddress": null,
+          "DestinationPrefix": "192.168.71.0/24",
+          "NextHop": "0.0.0.0"
+        }
+      ]
+    },
+    {
+      "destination": "192.168.71.40",
+      "route": [
+        {
+          "InterfaceAlias": "WLAN",
+          "IPAddress": "192.168.71.37",
+          "DestinationPrefix": null,
+          "NextHop": null
+        },
+        {
+          "InterfaceAlias": "WLAN",
+          "IPAddress": null,
+          "DestinationPrefix": "192.168.71.0/24",
+          "NextHop": "0.0.0.0"
+        }
+      ]
+    }
+  ],
+  "hdcForwardList": "[Empty]\n",
+  "connections": [
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.39",
+      "RemotePort": 44844
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.40",
+      "RemotePort": 49260
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.37",
+      "RemotePort": 55046
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.39",
+      "RemotePort": 44842
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.40",
+      "RemotePort": 46612
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.40",
+      "RemotePort": 35872
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.39",
+      "RemotePort": 44828
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.40",
+      "RemotePort": 47098
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.40",
+      "RemotePort": 35880
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.37",
+      "RemotePort": 55113
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.37",
+      "RemotePort": 55357
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.37",
+      "RemotePort": 61125
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.39",
+      "RemotePort": 44696
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.39",
+      "RemotePort": 44824
+    }
+  ],
+  "time": "2026-11-08T12:49:37.2454546+08:00",
+  "windowsAdapters": [
+    {
+      "Name": "vEthernet (WSL (Hyper-V firewall))",
+      "InterfaceDescription": "Hyper-V Virtual Ethernet Adapter",
+      "Status": "Up"
+    },
+    {
+      "Name": "蓝牙网络连接",
+      "InterfaceDescription": "Bluetooth Device (Personal Area Network)",
+      "Status": "Disconnected"
+    },
+    {
+      "Name": "VMware Network Adapter VMnet1",
+      "InterfaceDescription": "VMware Virtual Ethernet Adapter for VMnet1",
+      "Status": "Up"
+    },
+    {
+      "Name": "以太网",
+      "InterfaceDescription": "Intel(R) Ethernet Connection (18) I219-V",
+      "Status": "Disconnected"
+    },
+    {
+      "Name": "WLAN",
+      "InterfaceDescription": "Intel(R) Wi-Fi 6E AX211 160MHz",
+      "Status": "Up"
+    },
+    {
+      "Name": "VMware Network Adapter VMnet8",
+      "InterfaceDescription": "VMware Virtual Ethernet Adapter for VMnet8",
+      "Status": "Up"
+    }
+  ]
+}

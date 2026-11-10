@@ -29,12 +29,21 @@ test('worker serializes ticks and shutdown cancels an active engine before retur
 });
 test('owner change cancels an active calibration; stale installation never starts',async()=>{
  const w=work();let owner=true,runs=0;
- const executor={reconcile:async()=>null,runInstalled:async(p,_e,signal)=>{runs++;owner=false;
+ const executor={reconcile:async()=>null,decline:async p=>({notRun:true,settled:true,permitId:p.id,domain:p.domain,output:Buffer.alloc(0),durationMs:0}),runInstalled:async(p,_e,signal)=>{runs++;owner=false;
   await new Promise(resolve=>signal.addEventListener('abort',resolve,{once:true}));
   return {settled:true,permitId:p.id,domain:p.domain,output:Buffer.alloc(0),durationMs:0};}};
  const request=async route=>route.endsWith('/claim')?{work:w}:route.endsWith('/report')?{acknowledged:true}:{cancel:false,settled:false};
  const worker=new CalibrationWorker(ledger,executor,request,{...options,authorize:async()=>owner});
  await worker.tick();assert.equal(runs,1);owner=true;w.ledgerEpoch=2;await worker.tick();assert.equal(runs,1);await worker.close();
+});
+test('retired generation without admission settles without executing; admitted or current-generation uncertainty stays unresolved',async()=>{
+ const w=work();w.mode='RECONCILE';let reports=0,declines=0,admitted=false,epoch=2;
+ const local={...ledger,snapshot:()=>({...ledger.snapshot(),ledgerEpoch:epoch}),status:()=>admitted?{resourcesSettled:false}:null};
+ const executor={reconcile:async()=>null,decline:async p=>{declines++;return {notRun:true,settled:true,permitId:p.id,domain:p.domain,output:Buffer.alloc(0),durationMs:0};},runInstalled:async()=>{throw Error('MUST_NOT_RUN');}};
+ const worker=new CalibrationWorker(local,executor,async route=>{if(route.endsWith('/claim'))return {work:w};reports++;return {acknowledged:true};},{...options,deviceInstanceId:'new-instance'});
+ await worker.tick();assert.equal(reports,1);assert.equal(declines,1);
+ admitted=true;await worker.tick();assert.equal(declines,1);
+ admitted=false;epoch=1;await worker.tick();assert.equal(declines,1);await worker.close();
 });
 test('reference output wire format enforces exact scope and canonical bounded base64',()=>{
  const w=work(),report={settled:true,permitId:w.permit.id,domain:'SIMULATED',durationMs:1,output:Buffer.alloc(65536).toString('base64')};

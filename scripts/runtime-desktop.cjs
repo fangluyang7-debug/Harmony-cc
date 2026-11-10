@@ -2,17 +2,17 @@
 const http=require('node:http'),fs=require('node:fs'),path=require('node:path'),os=require('node:os');
 const {randomBytes}=require('node:crypto'),{spawn,execFileSync}=require('node:child_process');
 const {lanEnvironment}=require('./start-coordinator-lan.cjs');
-const dgram=require('node:dgram');
+const {discoverCenters:discover}=require('../apps/windows-agent/discovery.cjs');
 const root=path.resolve(__dirname,'..');
 function addresses(){return Object.entries(os.networkInterfaces()).flatMap(([name,list])=>(list||[]).filter(i=>i.family==='IPv4'&&!i.internal).map(i=>({name,address:i.address})));}
 function deviceDirectory(directory){return path.resolve(directory||path.join(os.homedir(),'HarmonyRuntime','device'));}
-function discover(){return new Promise(resolve=>{
-  const socket=dgram.createSocket('udp4'),found=new Set();let done=false;
-  const finish=()=>{if(done)return;done=true;clearTimeout(timer);socket.close();resolve([...found]);};
-  const timer=setTimeout(finish,2000);socket.on('error',finish);
-  socket.on('message',message=>{if(message.length>1024)return;try{const hint=JSON.parse(message);if(hint.version===1&&hint.service==='harmony-coordinator'&&/^https:\/\/[0-9.]+:[0-9]+$/.test(hint.address)&&found.size<16)found.add(hint.address);}catch{}});
-  socket.bind(0,'0.0.0.0',()=>{socket.setBroadcast(true);socket.send('HARMONY_DISCOVER_V1\n',7444,'255.255.255.255',()=>{});});
-});}
+async function openDesktop(){
+  const candidates=[path.resolve(root,'../02-Device-Agent-Windows-x64/Harmony.exe'),path.join(process.env.LOCALAPPDATA||os.homedir(),'Programs/Harmony/Harmony.exe'),path.join(root,'.test/windows-app/Harmony/Harmony.exe')];
+  const executable=candidates.find(p=>fs.existsSync(p));if(!executable)throw Error('请先构建或安装 Harmony 协作空间应用');
+  const child=spawn(executable,[],{windowsHide:true,detached:true,stdio:'ignore'});
+  await new Promise((resolve,reject)=>{child.once('spawn',resolve);child.once('error',reject);});
+  child.unref();return {opened:true};
+}
 function openssl(){if(process.env.COORDINATOR_OPENSSL)return process.env.COORDINATOR_OPENSSL;
   const dirs=(process.env.PATH||'').split(path.delimiter);
   if(process.platform==='win32')try{for(const git of execFileSync('where.exe',['git'],{encoding:'utf8',windowsHide:true}).trim().split(/\r?\n/))dirs.push(path.dirname(git));}catch{}
@@ -34,7 +34,7 @@ class RuntimeControl {
     if(this.child)throw Error('服务已在运行');
     const address=input.address,port=String(input.port||7443);
     // Keep each network identity in its own directory, never replace an existing certificate.
-    const env=lanEnvironment(address,port,path.join(this.dataRoot,'desktop-'+address),{...process.env,COORDINATOR_OPENSSL:openssl()});
+    const env=lanEnvironment(address,port,process.env.HARMONY_COORDINATOR_DATA_DIR||path.join(this.dataRoot,'desktop-'+address),{...process.env,COORDINATOR_OPENSSL:openssl()});
     if(input.suite){if(!path.isAbsolute(input.suite)||!fs.existsSync(input.suite))throw Error('协调中心的评测套件路径不存在');env.COORDINATOR_IMAGE_ENCODING_SUITE=input.suite;}
     if(!fs.existsSync(path.join(root,'services/coordinator/dist/main.js')))throw Error('请先完成协调者构建');
     this.mode='center';this.url=env.COORDINATOR_PUBLIC_URL;
@@ -54,6 +54,7 @@ class RuntimeControl {
   }
   async pair(input){
     if(this.child)throw Error('请先停止当前服务');
+    if(typeof input.invitation!=='string')throw Error('请导入完整设备邀请');
     const bootstrap=JSON.parse(input.invitation),directory=deviceDirectory(input.directory);
     if(!bootstrap.invitation||!bootstrap.contribution||!bootstrap.holderInstanceId)throw Error('请导入完整设备邀请');
     if(fs.existsSync(directory))throw Error('安装目录已存在，请恢复该设备或选择新目录；不覆盖账本');
@@ -108,6 +109,7 @@ async function main(options={openBrowser:true}){
         else if(req.url==='/agent/start'&&role!=='center')control.startAgent(input);
         else if(req.url==='/agent/pair'&&role!=='center')result=await control.pair(input);
         else if(req.url==='/agent/status'&&role!=='center')result=control.deviceStatus(input);
+        else if(req.url==='/desktop/open')result=await openDesktop();
         else if(req.url==='/stop')control.stop();else throw Error('NOT_FOUND');
         res.setHeader('Content-Type','application/json');res.end(JSON.stringify(result));
       }finally{mutating=false;}

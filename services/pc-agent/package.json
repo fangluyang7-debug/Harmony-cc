@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "npm --prefix ../.. run core:build && npm --prefix ../.. run transport:build && npm --prefix ../.. run sdk:build && npm --prefix ../.. run references:build && tsc -p tsconfig.json",
+    "build": "npm --prefix ../.. run core:build && npm --prefix ../.. run transport:build && npm --prefix ../.. run sdk:build && npm --prefix ../.. run references:build && tsc -p tsconfig.json && node ../../scripts/build-visual-native.cjs",
     "test": "npm run build && node --test test/*.test.cjs",
     "recovery": "node dist/recovery-main.js",
     "pair": "node dist/pairing-main.js",

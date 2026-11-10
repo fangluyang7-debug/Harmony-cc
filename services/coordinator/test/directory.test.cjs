@@ -6,6 +6,25 @@ const {qualifySimulated}=require('./fixtures.cjs');
 const fixture=()=>JSON.parse(fs.readFileSync('../../contracts/scheduling/v2/fixtures/t2/valid/DeviceProfile.json'));
 const peer={groupId:'g1',holderInstanceId:'h1',deviceId:'device1',principalId:'p1',credentialId:'c1'};
 const policy={minimumBattery:20,maximumTemperature:3,allowMetered:false,priority:'REMOTE_INTERACTIVE',requireForeground:true};
+test('recovered epoch replaces stale occupancy only after matching persisted ack and all receipts settle',async()=>{
+ const r=await runtime();try{
+  const dir=new DeviceDirectory(r.db,'SIMULATED',()=>100),p=fixture();p.pools[0].occupied.value=1;await dir.ingest(peer,p);
+  const next=structuredClone(p);next.ledgerEpoch++;next.sequence++;next.deviceInstanceId='recovered';next.pools.forEach(p=>p.occupied.value=0);
+  await assert.rejects(dir.ingest(peer,next),/PROFILE_RECOVERY_REQUIRED/);
+  const id=JSON.stringify(['allotment','g1','h1']);
+  const grant={deviceId:'device1',ledgerEpoch:next.ledgerEpoch,coordinatorEpoch:1,version:2,allotmentId:'a1'};
+  const ack={persisted:true,holderInstanceId:'h1',allotmentId:'a1',ledgerEpoch:next.ledgerEpoch,coordinatorEpoch:1,version:1,occupied:[]};
+  const save=()=>r.db.allotment.upsert({where:{id},create:{id,groupId:'g1',revision:2,metadataJson:JSON.stringify({grant,ack})},update:{metadataJson:JSON.stringify({grant,ack})}});
+  await save();await assert.rejects(dir.ingest(peer,next),/PROFILE_RECOVERY_REQUIRED/);
+  ack.version=2;ack.occupied=[{resourcePoolId:'cpu1',amount:1}];await save();await assert.rejects(dir.ingest(peer,next),/PROFILE_RECOVERY_REQUIRED/);
+  ack.occupied=[];await save();
+  await r.db.attempt.create({data:{id:'recovery-attempt',groupId:'g1',workflowId:'w1',nodeId:'n1',executionDigest:'d1',state:'ACCEPTED',holderInstanceId:'h1',taskJson:'{}'}});
+  await assert.rejects(dir.ingest(peer,next),/PROFILE_RECOVERY_REQUIRED/);
+  await r.db.attempt.update({where:{id:'recovery-attempt'},data:{state:'CANCELLED_SETTLED',recordJson:JSON.stringify({resourcesSettled:true})}});
+  assert.equal(await dir.ingest(peer,next),true);
+  assert.equal((await dir.profiles('g1'))[0].ledgerEpoch,next.ledgerEpoch);
+ }finally{await r.close();}
+});
 test('profile evidence, identity and revision are validated; discovery cannot authorize business work',async()=>{
  const r=await runtime();let now=100;
  try{

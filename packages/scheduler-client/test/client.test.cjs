@@ -75,7 +75,7 @@ test('known disconnected host rejects new planning without transport or automati
 });
 
 test('start retries keep the same job, obey the wait bound, and preserve permanent refusals',async()=>{
- for(const code of ['ALLOTMENT_ACK_PENDING','START_BUSY','APP_CONTRACT_FORBIDDEN']){
+ for(const code of ['ALLOTMENT_ACK_PENDING','START_BUSY','NO_LEGAL_PLAN','APP_CONTRACT_FORBIDDEN']){
   let now=0,starts=0;const sdk=new SchedulerSdk({now:()=>now,wait:async ms=>{now+=ms;},request:async route=>{assert.equal(route,'/v2/sdk/jobs/same/start');starts++;throw Error(code);}});
   await assert.rejects(sdk.startJob('same',500),new RegExp(code));
   assert.equal(starts,code==='APP_CONTRACT_FORBIDDEN'?1:3);assert.ok(now<=500);
@@ -90,4 +90,12 @@ test('SDK measures only an original submission with one monotonic clock and ackn
   return JSON.stringify({jobId:'measured',state:'SUCCEEDED',outputTicket:{bytes:2,ref:{contentHash:digest(output)}}});
  }};
  const sdk=new SchedulerSdk(port),input=await sdk.registerInput(Buffer.from('x'),'input');const task=await sdk.submit({nodes:[{input}]},{requestId:'measured'});await task.result();assert.deepEqual(events[0].sourceInterval,{clockDomainId:'clock',startMono:1,endMono:2});await assert.rejects(task.result(-1),/SDK_WAIT_INVALID/);await sdk.resume('measured').result();assert.equal(events[1].sourceInterval,undefined,'resume cannot reconstruct an unknown submission origin');port.measure=()=>{throw Error('CLOCK_UNAVAILABLE');};const retry=await sdk.submit({nodes:[{input}]},{requestId:'measured'});await retry.result();assert.equal(events[2].sourceInterval,undefined,'missing measurement must not block submission or acknowledgment');
+});
+
+test('cold planner retries deduct elapsed time from the original budget',async()=>{
+ let time=0;const budgets=[];
+ const sdk=new SchedulerSdk({now:()=>time,wait:async ms=>{time+=ms;},request:async(_route,body)=>{const b=JSON.parse(body);budgets.push(b.options.budgetMs);if(budgets.length===1)throw Error('PLANNING_BUDGET_BASELINE');return JSON.stringify({jobId:'cold',inputTicket:{operation:'WRITE'}});}});
+ await sdk.plan({id:'cold'},{requestId:'cold',budgetMs:1500});assert.deepEqual(budgets,[1500,1000]);
+ const exhausted=new SchedulerSdk({now:()=>time,wait:async ms=>{time+=ms;},request:async()=>{throw Error('NO_LEGAL_PLAN');}});
+ await assert.rejects(exhausted.plan({id:'small'},{requestId:'small',budgetMs:100}),/SDK_BUDGET_EXHAUSTED/);
 });

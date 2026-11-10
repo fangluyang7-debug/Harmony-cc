@@ -1,12 +1,17 @@
+import './photo-installation';
+import {openPhotoAccelerator} from './photo-accelerator';
 import path from 'node:path';
 import {openImageEncoder} from './image-encoder';
 import fs from 'node:fs';
 import { CpuHost, CpuHostConfig } from './host';
+import {validateDataHostConfig} from './data-host';
 let stopRequested=false,shutdown:(()=>Promise<void>)|null=null;
 process.on('message',(message:any)=>{if(message==='stop'||message?.type==='shutdown'){stopRequested=true;if(shutdown)void shutdown().then(()=>process.disconnect?.());}});
 async function main(){
-  const [pairedFile,contributionFile]=process.argv.slice(2);if(!pairedFile||!contributionFile)throw Error('HOST_ARGUMENTS');
+  const [pairedFile,contributionFile,networkFile]=process.argv.slice(2);if(!pairedFile||!contributionFile)throw Error('HOST_ARGUMENTS');
   const config={...JSON.parse(fs.readFileSync(pairedFile,'utf8')),contribution:JSON.parse(fs.readFileSync(contributionFile,'utf8'))} as CpuHostConfig;
+  if(networkFile)config.dataEndpoint=JSON.parse(fs.readFileSync(networkFile,'utf8'));
+  if(config.dataEndpoint!==undefined&&config.dataEndpoint!==false)validateDataHostConfig(config.dataEndpoint);
   const suite=process.env.PC_IMAGE_ENCODING_SUITE;
   if(suite){
     const backend=process.env.PC_IMAGE_BACKEND??'CPU';
@@ -19,6 +24,7 @@ async function main(){
       console.error('IMAGE_TARGET_UNAVAILABLE '+reason);
     }
   }
+  if(process.env.HARMONY_PHOTO_VULKAN&&!config.imageEncoder&&(config.contribution.maxVramBytes??0)>0){try{config.imageEncoder=await openPhotoAccelerator();}catch{console.error('PHOTO_GPU_UNAVAILABLE: GPU probe failed; only CPU capabilities will be advertised.');}}
   const host=await CpuHost.open(config,error=>{
     const ioCode=(error as NodeJS.ErrnoException)?.code;
     // Preserve actionable codes without logging paths, task input or credentials.
@@ -30,4 +36,6 @@ async function main(){
   shutdown=close;if(stopRequested){await close();process.disconnect?.();return;}
   host.start();console.log('CPU host started: automatic profiles, calibration and execution enabled.');
 }
-void main().catch(()=>{console.error('CPU_HOST_START_FAILED: check paired configuration and contribution policy.');process.exitCode=1;if(process.connected)process.disconnect();});
+void main().catch(error=>{console.error(error instanceof Error&&error.message==='DATA_HOST_CONFIG_INVALID'?
+  'DATA_HOST_CONFIG_INVALID: check listenHost, advertisedHost and port in the network configuration.':
+  'CPU_HOST_START_FAILED: check paired configuration, contribution policy and optional network file.');process.exitCode=1;if(process.connected)process.disconnect();});

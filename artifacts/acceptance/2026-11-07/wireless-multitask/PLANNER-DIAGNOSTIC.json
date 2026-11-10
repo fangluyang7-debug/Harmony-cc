@@ -1,0 +1,585 @@
+{
+  "at": "2026-11-07T12:58:41.724Z",
+  "snapshotCapturedAt": 1794056320130,
+  "note": "Read-only replay against current persisted snapshot at capture time; not the historical failing submission snapshot.",
+  "cases": [
+    {
+      "case": "vector-1",
+      "inputBytes": 52392,
+      "estimatedOutputBytes": 3357184,
+      "decision": {
+        "status": "ready",
+        "baseline": [
+          {
+            "policyQueueMs": 0,
+            "dagResourceWaitMs": 0,
+            "targetId": "cpu-1203bb9bbf3b29f6a88a7379e227c08b",
+            "nodeId": "compute",
+            "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+            "executorId": "node.cpu.v1",
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 144.60419999994338,
+              "QUEUE": 0,
+              "PUBLISH": 23682.57259436231
+            },
+            "inputTransferMs": 540.7222780887096,
+            "executionMs": 23827.176794362254,
+            "uncertaintyMs": 0,
+            "startMs": 540.7222780887096,
+            "finishMs": 24367.899072450964
+          }
+        ],
+        "suggestion": [
+          {
+            "policyQueueMs": 0,
+            "dagResourceWaitMs": 0,
+            "targetId": "cpu-1203bb9bbf3b29f6a88a7379e227c08b",
+            "nodeId": "compute",
+            "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+            "executorId": "node.cpu.v1",
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 144.60419999994338,
+              "QUEUE": 0,
+              "PUBLISH": 23682.57259436231
+            },
+            "inputTransferMs": 540.7222780887096,
+            "executionMs": 23827.176794362254,
+            "uncertaintyMs": 0,
+            "startMs": 540.7222780887096,
+            "finishMs": 24367.899072450964
+          }
+        ],
+        "baselineMs": 24367.899072450964,
+        "suggestionMs": 24367.899072450964,
+        "rejections": [],
+        "truncated": 0,
+        "planningMs": 1.4166999999999916,
+        "reason": "INSUFFICIENT_SAVING"
+      },
+      "diagnosticOnlyRelaxedBudget": {
+        "note": "Pure planning replay with a hypothetical larger budget, NOT an accepted task, actual runtime, or change to the production 30000 ms limit.",
+        "decision": {
+          "status": "ready",
+          "baseline": [
+            {
+              "policyQueueMs": 0,
+              "dagResourceWaitMs": 0,
+              "targetId": "cpu-1203bb9bbf3b29f6a88a7379e227c08b",
+              "nodeId": "compute",
+              "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+              "executorId": "node.cpu.v1",
+              "costSource": "PRIOR",
+              "phaseCosts": {
+                "EXECUTE": 144.60419999994338,
+                "QUEUE": 0,
+                "PUBLISH": 23682.57259436231
+              },
+              "inputTransferMs": 540.7222780887096,
+              "executionMs": 23827.176794362254,
+              "uncertaintyMs": 0,
+              "startMs": 540.7222780887096,
+              "finishMs": 24367.899072450964
+            }
+          ],
+          "suggestion": [
+            {
+              "policyQueueMs": 0,
+              "dagResourceWaitMs": 0,
+              "targetId": "cpu-1203bb9bbf3b29f6a88a7379e227c08b",
+              "nodeId": "compute",
+              "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+              "executorId": "node.cpu.v1",
+              "costSource": "PRIOR",
+              "phaseCosts": {
+                "EXECUTE": 144.60419999994338,
+                "QUEUE": 0,
+                "PUBLISH": 23682.57259436231
+              },
+              "inputTransferMs": 540.7222780887096,
+              "executionMs": 23827.176794362254,
+              "uncertaintyMs": 0,
+              "startMs": 540.7222780887096,
+              "finishMs": 24367.899072450964
+            }
+          ],
+          "baselineMs": 24367.899072450964,
+          "suggestionMs": 24367.899072450964,
+          "rejections": [],
+          "truncated": 0,
+          "planningMs": 0.19920000000001892,
+          "reason": "INSUFFICIENT_SAVING"
+        }
+      },
+      "candidate": {
+        "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+        "targetId": "cpu-1203bb9bbf3b29f6a88a7379e227c08b",
+        "computeMs": null,
+        "queueMs": null,
+        "availability": {
+          "targetId": "cpu-1203bb9bbf3b29f6a88a7379e227c08b",
+          "snapshotVersion": 24926,
+          "poolIds": [
+            "cpu",
+            "ram"
+          ],
+          "reason": "AVAILABLE",
+          "resourceWait": {
+            "value": 0,
+            "source": "MEASURED",
+            "unit": "ms",
+            "sampledAt": 1794056320130,
+            "ttlMs": 13919
+          },
+          "policyWait": {
+            "value": null,
+            "source": "UNKNOWN",
+            "sampledAt": 1794056319058,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          }
+        },
+        "costEvidence": {
+          "compute": {
+            "value": 0.24729999999999563,
+            "source": "PRIOR",
+            "sampledAt": 1794054858207,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          },
+          "cold": {
+            "value": 144.35689999994338,
+            "source": "PRIOR",
+            "sampledAt": 1794054858207,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          },
+          "publish": {
+            "value": 0,
+            "source": "PRIOR",
+            "sampledAt": 1794056319058,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          }
+        }
+      },
+      "links": [
+        {
+          "from": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "to": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "bytesPerSecond": 141757.57243531832,
+          "fixedMs": 0,
+          "effective": false,
+          "source": "REAL",
+          "observedAt": 1794056319000,
+          "ttlMs": 30000
+        },
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "bytesPerSecond": 96892.6232985812,
+          "fixedMs": 0,
+          "effective": false,
+          "source": "REAL",
+          "observedAt": 1794056319000,
+          "ttlMs": 30000
+        },
+        {
+          "from": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "fromHolderInstanceId": "60834948-ed27-427c-994e-9ce4035ff9e6",
+          "toHolderInstanceId": "28172984-c3fc-48aa-bde3-1318899f976a",
+          "endpointId": "026fdd040de37725f44bf494cda639c7b9224d4d78156af01f76a580cfbc26a7",
+          "endpointEpoch": "0068878b-61c6-4395-95ea-0140c7f6b9ad",
+          "endpointOperation": "WRITE",
+          "bytesPerSecond": 18618.18181818182,
+          "fixedMs": 0,
+          "effective": false,
+          "observedAt": 1794056309988,
+          "ttlMs": 30000,
+          "source": "REAL"
+        },
+        {
+          "from": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "fromHolderInstanceId": "bd0dc3f6-a2ea-441f-a902-f91e86e53861",
+          "toHolderInstanceId": "28172984-c3fc-48aa-bde3-1318899f976a",
+          "endpointId": "026fdd040de37725f44bf494cda639c7b9224d4d78156af01f76a580cfbc26a7",
+          "endpointEpoch": "0068878b-61c6-4395-95ea-0140c7f6b9ad",
+          "endpointOperation": "WRITE",
+          "bytesPerSecond": 3196976.377952756,
+          "fixedMs": 18.679697351828498,
+          "effective": false,
+          "observedAt": 1794056317983,
+          "ttlMs": 30000,
+          "source": "REAL"
+        }
+      ]
+    },
+    {
+      "case": "crop-0",
+      "inputBytes": 17959,
+      "estimatedOutputBytes": 8388608,
+      "decision": {
+        "status": "blocked",
+        "baseline": null,
+        "suggestion": null,
+        "baselineMs": null,
+        "suggestionMs": null,
+        "rejections": [
+          {
+            "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+            "nodeId": "compute",
+            "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+            "executorId": "sharp.crop.v1",
+            "code": "DATA_UNREACHABLE_OR_BUDGET"
+          }
+        ],
+        "truncated": 0,
+        "planningMs": 0.10609999999996944,
+        "reason": "NO_LEGAL_PLAN"
+      },
+      "diagnosticOnlyRelaxedBudget": {
+        "note": "Pure planning replay with a hypothetical larger budget, NOT an accepted task, actual runtime, or change to the production 30000 ms limit.",
+        "decision": {
+          "status": "ready",
+          "baseline": [
+            {
+              "policyQueueMs": 0,
+              "dagResourceWaitMs": 0,
+              "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+              "nodeId": "compute",
+              "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+              "executorId": "sharp.crop.v1",
+              "costSource": "PRIOR",
+              "phaseCosts": {
+                "EXECUTE": 260.0330999996513,
+                "QUEUE": 0,
+                "PUBLISH": 59175.731185913086
+              },
+              "inputTransferMs": 185.34950740943532,
+              "executionMs": 59435.76428591274,
+              "uncertaintyMs": 2,
+              "startMs": 185.34950740943532,
+              "finishMs": 59623.113793322176
+            }
+          ],
+          "suggestion": [
+            {
+              "policyQueueMs": 0,
+              "dagResourceWaitMs": 0,
+              "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+              "nodeId": "compute",
+              "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+              "executorId": "sharp.crop.v1",
+              "costSource": "PRIOR",
+              "phaseCosts": {
+                "EXECUTE": 260.0330999996513,
+                "QUEUE": 0,
+                "PUBLISH": 59175.731185913086
+              },
+              "inputTransferMs": 185.34950740943532,
+              "executionMs": 59435.76428591274,
+              "uncertaintyMs": 2,
+              "startMs": 185.34950740943532,
+              "finishMs": 59623.113793322176
+            }
+          ],
+          "baselineMs": 59623.113793322176,
+          "suggestionMs": 59623.113793322176,
+          "rejections": [],
+          "truncated": 0,
+          "planningMs": 0.21059999999999945,
+          "reason": "INSUFFICIENT_SAVING"
+        }
+      },
+      "candidate": {
+        "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+        "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+        "computeMs": null,
+        "queueMs": null,
+        "availability": {
+          "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+          "snapshotVersion": 24926,
+          "poolIds": [
+            "cpu",
+            "ram"
+          ],
+          "reason": "AVAILABLE",
+          "resourceWait": {
+            "value": 0,
+            "source": "MEASURED",
+            "unit": "ms",
+            "sampledAt": 1794056320130,
+            "ttlMs": 13919
+          },
+          "policyWait": {
+            "value": null,
+            "source": "UNKNOWN",
+            "sampledAt": 1794056319058,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          }
+        },
+        "costEvidence": {
+          "compute": {
+            "value": 3.783900000000017,
+            "source": "PRIOR",
+            "sampledAt": 1794054870495,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          },
+          "cold": {
+            "value": 256.2491999996513,
+            "source": "PRIOR",
+            "sampledAt": 1794054870495,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          },
+          "publish": {
+            "value": 0,
+            "source": "PRIOR",
+            "sampledAt": 1794056319058,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          }
+        }
+      },
+      "links": [
+        {
+          "from": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "to": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "bytesPerSecond": 141757.57243531832,
+          "fixedMs": 0,
+          "effective": false,
+          "source": "REAL",
+          "observedAt": 1794056319000,
+          "ttlMs": 30000
+        },
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "bytesPerSecond": 96892.6232985812,
+          "fixedMs": 0,
+          "effective": false,
+          "source": "REAL",
+          "observedAt": 1794056319000,
+          "ttlMs": 30000
+        },
+        {
+          "from": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "fromHolderInstanceId": "60834948-ed27-427c-994e-9ce4035ff9e6",
+          "toHolderInstanceId": "28172984-c3fc-48aa-bde3-1318899f976a",
+          "endpointId": "026fdd040de37725f44bf494cda639c7b9224d4d78156af01f76a580cfbc26a7",
+          "endpointEpoch": "0068878b-61c6-4395-95ea-0140c7f6b9ad",
+          "endpointOperation": "WRITE",
+          "bytesPerSecond": 18618.18181818182,
+          "fixedMs": 0,
+          "effective": false,
+          "observedAt": 1794056309988,
+          "ttlMs": 30000,
+          "source": "REAL"
+        },
+        {
+          "from": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "fromHolderInstanceId": "bd0dc3f6-a2ea-441f-a902-f91e86e53861",
+          "toHolderInstanceId": "28172984-c3fc-48aa-bde3-1318899f976a",
+          "endpointId": "026fdd040de37725f44bf494cda639c7b9224d4d78156af01f76a580cfbc26a7",
+          "endpointEpoch": "0068878b-61c6-4395-95ea-0140c7f6b9ad",
+          "endpointOperation": "WRITE",
+          "bytesPerSecond": 3196976.377952756,
+          "fixedMs": 18.679697351828498,
+          "effective": false,
+          "observedAt": 1794056317983,
+          "ttlMs": 30000,
+          "source": "REAL"
+        }
+      ]
+    },
+    {
+      "case": "crop-1",
+      "inputBytes": 17959,
+      "estimatedOutputBytes": 8388608,
+      "decision": {
+        "status": "blocked",
+        "baseline": null,
+        "suggestion": null,
+        "baselineMs": null,
+        "suggestionMs": null,
+        "rejections": [
+          {
+            "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+            "nodeId": "compute",
+            "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+            "executorId": "sharp.crop.v1",
+            "code": "DATA_UNREACHABLE_OR_BUDGET"
+          }
+        ],
+        "truncated": 0,
+        "planningMs": 0.07949999999993906,
+        "reason": "NO_LEGAL_PLAN"
+      },
+      "diagnosticOnlyRelaxedBudget": {
+        "note": "Pure planning replay with a hypothetical larger budget, NOT an accepted task, actual runtime, or change to the production 30000 ms limit.",
+        "decision": {
+          "status": "ready",
+          "baseline": [
+            {
+              "policyQueueMs": 0,
+              "dagResourceWaitMs": 0,
+              "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+              "nodeId": "compute",
+              "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+              "executorId": "sharp.crop.v1",
+              "costSource": "PRIOR",
+              "phaseCosts": {
+                "EXECUTE": 260.0330999996513,
+                "QUEUE": 0,
+                "PUBLISH": 59175.731185913086
+              },
+              "inputTransferMs": 185.34950740943532,
+              "executionMs": 59435.76428591274,
+              "uncertaintyMs": 2,
+              "startMs": 185.34950740943532,
+              "finishMs": 59623.113793322176
+            }
+          ],
+          "suggestion": [
+            {
+              "policyQueueMs": 0,
+              "dagResourceWaitMs": 0,
+              "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+              "nodeId": "compute",
+              "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+              "executorId": "sharp.crop.v1",
+              "costSource": "PRIOR",
+              "phaseCosts": {
+                "EXECUTE": 260.0330999996513,
+                "QUEUE": 0,
+                "PUBLISH": 59175.731185913086
+              },
+              "inputTransferMs": 185.34950740943532,
+              "executionMs": 59435.76428591274,
+              "uncertaintyMs": 2,
+              "startMs": 185.34950740943532,
+              "finishMs": 59623.113793322176
+            }
+          ],
+          "baselineMs": 59623.113793322176,
+          "suggestionMs": 59623.113793322176,
+          "rejections": [],
+          "truncated": 0,
+          "planningMs": 0.31350000000009004,
+          "reason": "INSUFFICIENT_SAVING"
+        }
+      },
+      "candidate": {
+        "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+        "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+        "computeMs": null,
+        "queueMs": null,
+        "availability": {
+          "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+          "snapshotVersion": 24926,
+          "poolIds": [
+            "cpu",
+            "ram"
+          ],
+          "reason": "AVAILABLE",
+          "resourceWait": {
+            "value": 0,
+            "source": "MEASURED",
+            "unit": "ms",
+            "sampledAt": 1794056320130,
+            "ttlMs": 13919
+          },
+          "policyWait": {
+            "value": null,
+            "source": "UNKNOWN",
+            "sampledAt": 1794056319058,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          }
+        },
+        "costEvidence": {
+          "compute": {
+            "value": 3.783900000000017,
+            "source": "PRIOR",
+            "sampledAt": 1794054870495,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          },
+          "cold": {
+            "value": 256.2491999996513,
+            "source": "PRIOR",
+            "sampledAt": 1794054870495,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          },
+          "publish": {
+            "value": 0,
+            "source": "PRIOR",
+            "sampledAt": 1794056319058,
+            "ttlMs": 3600000,
+            "unit": "ms"
+          }
+        }
+      },
+      "links": [
+        {
+          "from": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "to": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "bytesPerSecond": 141757.57243531832,
+          "fixedMs": 0,
+          "effective": false,
+          "source": "REAL",
+          "observedAt": 1794056319000,
+          "ttlMs": 30000
+        },
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "bytesPerSecond": 96892.6232985812,
+          "fixedMs": 0,
+          "effective": false,
+          "source": "REAL",
+          "observedAt": 1794056319000,
+          "ttlMs": 30000
+        },
+        {
+          "from": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "fromHolderInstanceId": "60834948-ed27-427c-994e-9ce4035ff9e6",
+          "toHolderInstanceId": "28172984-c3fc-48aa-bde3-1318899f976a",
+          "endpointId": "026fdd040de37725f44bf494cda639c7b9224d4d78156af01f76a580cfbc26a7",
+          "endpointEpoch": "0068878b-61c6-4395-95ea-0140c7f6b9ad",
+          "endpointOperation": "WRITE",
+          "bytesPerSecond": 18618.18181818182,
+          "fixedMs": 0,
+          "effective": false,
+          "observedAt": 1794056309988,
+          "ttlMs": 30000,
+          "source": "REAL"
+        },
+        {
+          "from": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "fromHolderInstanceId": "bd0dc3f6-a2ea-441f-a902-f91e86e53861",
+          "toHolderInstanceId": "28172984-c3fc-48aa-bde3-1318899f976a",
+          "endpointId": "026fdd040de37725f44bf494cda639c7b9224d4d78156af01f76a580cfbc26a7",
+          "endpointEpoch": "0068878b-61c6-4395-95ea-0140c7f6b9ad",
+          "endpointOperation": "WRITE",
+          "bytesPerSecond": 3196976.377952756,
+          "fixedMs": 18.679697351828498,
+          "effective": false,
+          "observedAt": 1794056317983,
+          "ttlMs": 30000,
+          "source": "REAL"
+        }
+      ]
+    }
+  ]
+}

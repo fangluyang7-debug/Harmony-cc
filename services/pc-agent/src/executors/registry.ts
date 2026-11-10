@@ -1,3 +1,5 @@
+import path from 'node:path';
+import {existsSync} from 'node:fs';
 import type {ExecutionConfigV2} from '@harmony/scheduler-core';
 
 export type CpuExecutor=(bytes:Buffer,parameters:any,config:ExecutionConfigV2)=>Promise<{output:Buffer;schemaId:string}>;
@@ -12,3 +14,9 @@ export const cpuRegistry=new ExecutorRegistry();
 cpuRegistry.register('image.crop.v1',async()=>(await import('./crop')).execute,'sharp.crop.v1');
 cpuRegistry.register('vector.normalize.v1',async()=>(await import('./normalize')).execute);
 cpuRegistry.register('text.count.v1',async()=>(await import('./count')).execute);
+cpuRegistry.register('render.fractal.v1',async()=>(await import('./fractal')).execute);
+cpuRegistry.register('catalog.filter.v1',async()=>(await import('./catalog')).execute);
+if(existsSync(path.join(__dirname,'visual.node'))||existsSync(path.join(__dirname,'../visual.node')))cpuRegistry.register('image.visual-match.v1',async()=>(await import('./visual')).execute);
+
+for(const stage of ['analyze','prepare','assemble','deliver'] as const)cpuRegistry.register('photo.'+stage+'.v1',async()=>(await import('./photo'))[stage]);
+if(process.env.HARMONY_PHOTO_MODEL&&process.env.HARMONY_PHOTO_RUNNER)cpuRegistry.register('photo.enhance.v1',async()=>(await import('./photo')).enhance);

@@ -1,0 +1,41 @@
+{
+  "startedAt": "2026-11-07T10:41:21.617Z",
+  "method": "Stop and update own native agents, preserve application data; no Wi-Fi interruption",
+  "state": "PASS",
+  "before": [
+    {
+      "name": "Windows CPU",
+      "id": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "online": true
+    },
+    {
+      "name": "HarmonyOS 电脑",
+      "id": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "online": true
+    },
+    {
+      "name": "HarmonyOS 手机",
+      "id": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "online": true
+    }
+  ],
+  "offlineObserved": true,
+  "after": [
+    {
+      "name": "Windows CPU",
+      "id": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "online": true
+    },
+    {
+      "name": "HarmonyOS 电脑",
+      "id": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "online": true
+    },
+    {
+      "name": "HarmonyOS 手机",
+      "id": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "online": true
+    }
+  ],
+  "sameIdentities": true
+}

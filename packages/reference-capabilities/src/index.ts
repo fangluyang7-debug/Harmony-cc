@@ -1,4 +1,13 @@
+export {photoOutputBound} from './photo-size';
+export {photoPacks,photoReference,PHOTO_CAPABILITIES} from './photo';
+import {photoPacks,validPhotoEnvelope} from './photo';
+export {encodeBundle,decodeBundle} from './artifact-bundle';
+import {decodeBundle} from './artifact-bundle';
+import {visualPack,validVisualEvidence} from './visual';
 export * from './evaluation';
+export {referenceFractal,validRenderedTile} from './fractal';
+import {fractalPack,validRenderedTile} from './fractal';
+import {catalogPack,validCatalogOutput} from './catalog';
 export {validateCoverage} from './coverage';
 import {textReferences,vectorReferences} from './numeric-text-suites';
 import { cropEvaluationPack, validRaster } from './crop';
@@ -26,14 +35,23 @@ function cpuPack(capability:string,inputSchema:string,outputSchema:string,maxOut
 }
 export function builtinCpuPacks():ReferencePack[]{return [
   vectorReferences(cpuPack('vector.normalize.v1','vector.input','vector.normalized',8388608)),
-  textReferences(cpuPack('text.count.v1','text.input','text.counts',128))
+  textReferences(cpuPack('text.count.v1','text.input','text.counts',128)),
+  fractalPack(),catalogPack(),visualPack()
 ];}
 export async function builtinReferencePacks():Promise<ReferencePack[]>{
  const manifest:CapabilityPackV2={packId:'image.crop.v1',contract:{contractId:'image.crop.contract',version:1,workModel:{version:'crop-cost-v1',parameters:[{name:'targetSize'},{name:'jpegQuality',bucketWidth:10}]},capability:'image.crop.v1',inputSchemas:['image.raster'],outputSchemas:['image.raster'],sideEffectPolicy:'PURE',interruptibility:'CANCEL_RESTART',maxNonPreemptibleMs:null},
  executorIds:['harmony.cpu.v1','sharp.crop.v1'],model:null,suiteId:'crop.geometry-colour.v1',qualityThreshold:.98,resourceLimit:structuredClone(cpuResources)};
- return [...builtinCpuPacks(),await cropEvaluationPack(manifest)];
+ return [...builtinCpuPacks(),await cropEvaluationPack(manifest),...photoPacks()];
 }
 export const cpuSchemas=new Map<string,(bytes:Buffer)=>boolean|Promise<boolean>>([
+ ['photo.source:1',validPhotoEnvelope],['photo.tile:1',validPhotoEnvelope],['photo.product:1',validPhotoEnvelope],
+ ['artifact.bundle:1',bytes=>{try{decodeBundle(bytes);return true;}catch{return false;}}],
+ ['image.visual-bundle:1',bytes=>bytes.length>=4&&bytes.subarray(0,4).toString()==='HVG1'],
+  ['image.visual-evidence:1',validVisualEvidence],
+  ['catalog.items:1',bytes=>{try{const r=JSON.parse(bytes.toString());return r!==null&&typeof r==='object'&&Array.isArray(r.items);}catch{return false;}}],
+ ['catalog.ranked:1',validCatalogOutput],
+ ['render.region:1',bytes=>{try{const r=JSON.parse(bytes.toString());return typeof r==='object'&&r!==null;}catch{return false;}}],
+ ['render.rgb:1',validRenderedTile],
  ['image.embedding:1',bytes=>{
    try{
      const {model,vector}=JSON.parse(bytes.toString('utf8'));

@@ -1,0 +1,1117 @@
+{
+  "startedAt": "2026-11-07T13:18:29.407Z",
+  "domain": "REAL",
+  "coordinator": "https://192.168.71.37:7443",
+  "budgetMs": 30000,
+  "strictOutputState": true,
+  "status": "PASS",
+  "samples": [
+    {
+      "jobId": "d9ca8daa-cef3-4a6b-81bd-3f35a07a63f9",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Windows CPU",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 2490.7147,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2490.7221,
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "traceId": "036a90c7-76f5-4859-b152-3d3b042a5acf",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "52f8a817-7241-4a22-a245-4446364eeca3",
+      "case": "text-1",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Windows CPU",
+      "parameters": {},
+      "inputBytes": 11499,
+      "inputHash": "2be6bd1f2c18b71b8a68992dfc7719c6c660a0ccb2b655f1498765f271bf78a2",
+      "state": "PASS",
+      "outputReadyMs": 2081.8271,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2081.8303,
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "traceId": "4983ff7d-3948-4545-8c16-456a112739bd",
+      "outputBytes": 44,
+      "outputHash": "c3777529ec3c94d2108ab33b3aa84587f7e6ffefe62af6c03afa7cb2fbf2fb36",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 7889,
+        "words": 1600,
+        "lines": 400
+      }
+    },
+    {
+      "jobId": "dd827009-e767-45a9-879a-cfa0f38aeb83",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Windows CPU",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 2165.6919,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2165.6937,
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "targetId": "cpu-1203bb9bbf3b29f6a88a7379e227c08b",
+      "traceId": "abf23d3b-92ac-41e4-8335-a97cfa193f81",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "9fa1bc95-888e-4606-9158-3b5ecdd1bebc",
+      "case": "vector-1",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Windows CPU",
+      "parameters": {},
+      "inputBytes": 52392,
+      "inputHash": "e33a0fcb64e299be692ee1ff9cd623fa91c02fbb8b78ba288ca95b9d1dcec705",
+      "state": "PASS",
+      "outputReadyMs": 2698.6907,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2698.6951,
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "targetId": "cpu-1203bb9bbf3b29f6a88a7379e227c08b",
+      "traceId": "ab534503-6aee-4619-8a85-242bd22eee66",
+      "outputBytes": 394235,
+      "outputHash": "873cdf64245e8ea7c57f0fde0280aeb8411a84527d284e1d68e89240ab8bdcb7",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 4,
+        "rows": 4096,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "085769fa-f69a-4e2b-8f82-848819669942",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Windows CPU",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2979.5337,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2979.5365,
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+      "traceId": "ddf63761-a674-4c4b-80e6-838d6cebfbbf",
+      "outputBytes": 352,
+      "outputHash": "c8006a34b66ffc0ff49d5d9552df9d0c26d0d9c1b283e62e6fb894560ee154f5",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "bc90aca5-4692-433e-9ba5-f2e7077d2daf",
+      "case": "crop-1",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Windows CPU",
+      "parameters": {
+        "box": {
+          "x": 0.5,
+          "y": 0.5,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 192,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 3062.594000000001,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 3062.595800000001,
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+      "traceId": "b942d04e-99fa-43b8-89ef-3aca60fe3e24",
+      "outputBytes": 434,
+      "outputHash": "feabe8623b3b837b308a8e3e4f386bbe11280d5c216d4452bea04ae183cb72e4",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 192,
+        "height": 192,
+        "expectedRGB": [
+          255,
+          255,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "59625738-a09d-4f0f-80e7-9b2d2d9171b2",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 电脑",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 2009.266700000002,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2009.2690999999995,
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+      "traceId": "13f8d2fe-e146-4f5d-a75d-19630f49ef8c",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "f2d42bea-b58d-48e5-8a34-7e814a5a6fad",
+      "case": "text-1",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 电脑",
+      "parameters": {},
+      "inputBytes": 11499,
+      "inputHash": "2be6bd1f2c18b71b8a68992dfc7719c6c660a0ccb2b655f1498765f271bf78a2",
+      "state": "PASS",
+      "outputReadyMs": 2320.431099999998,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2320.4329,
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+      "traceId": "0c5d963f-e6b2-492a-b8d8-8f384f16e4b4",
+      "outputBytes": 44,
+      "outputHash": "c3777529ec3c94d2108ab33b3aa84587f7e6ffefe62af6c03afa7cb2fbf2fb36",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 7889,
+        "words": 1600,
+        "lines": 400
+      }
+    },
+    {
+      "jobId": "636f93c3-aba7-4172-8c49-5e640fa791e7",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 电脑",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 2731.3369999999995,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2731.339899999999,
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "targetId": "harmony-a17a23f9503451e44f8650a6e6fcfe97",
+      "traceId": "813f23b0-99d9-4659-8fe9-f7c939ee08ff",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "ec6c2a97-41c5-4c83-acab-2706d93d6f36",
+      "case": "vector-1",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 电脑",
+      "parameters": {},
+      "inputBytes": 52392,
+      "inputHash": "e33a0fcb64e299be692ee1ff9cd623fa91c02fbb8b78ba288ca95b9d1dcec705",
+      "state": "PASS",
+      "outputReadyMs": 2320.2726000000002,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2320.2778,
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "targetId": "harmony-a17a23f9503451e44f8650a6e6fcfe97",
+      "traceId": "e0b5ef68-0fcb-4182-b481-715a8aced32a",
+      "outputBytes": 394404,
+      "outputHash": "0c0e0d397fe53a964c3b5c1bf4cb52523928a18e19637a9227cf6b83a5ee9614",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 4,
+        "rows": 4096,
+        "maxAbsoluteComponentError": 4.440892098500626e-16
+      }
+    },
+    {
+      "jobId": "b7991340-e741-4f4e-a1dd-714f7120abad",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 电脑",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 1695.9612000000016,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1695.9619999999995,
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "targetId": "harmony-23d479af957c47f25b19eb764a206132",
+      "traceId": "b8a13eb2-c042-4d26-84be-7437936c9e0e",
+      "outputBytes": 816,
+      "outputHash": "29f2838ef63615be4253a9330962946487bd31f8212502df2d111e8e5c2d6b0c",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "4da7c3de-9b0e-498e-b378-995735d4270d",
+      "case": "crop-1",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 电脑",
+      "parameters": {
+        "box": {
+          "x": 0.5,
+          "y": 0.5,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 192,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2010.0025999999998,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2010.0038999999997,
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "targetId": "harmony-23d479af957c47f25b19eb764a206132",
+      "traceId": "db50acc3-3743-4e30-a251-6afbee89b8f5",
+      "outputBytes": 978,
+      "outputHash": "aa537ac7486a2d4255a12dd537939b0f793dd89af5d188f8db9dc7dcec2c6317",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 192,
+        "height": 192,
+        "expectedRGB": [
+          255,
+          255,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "546add92-a188-4a33-9cc2-90f206f860da",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 手机",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 2516.5456999999988,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2516.5463999999993,
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+      "traceId": "c760d0fd-8103-4ab9-a5a8-3da6106d4577",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "76fa7523-256c-416c-bd6f-694555aa9426",
+      "case": "text-1",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 手机",
+      "parameters": {},
+      "inputBytes": 11499,
+      "inputHash": "2be6bd1f2c18b71b8a68992dfc7719c6c660a0ccb2b655f1498765f271bf78a2",
+      "state": "PASS",
+      "outputReadyMs": 1910.9528999999966,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 1910.9541000000027,
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+      "traceId": "8427da51-632a-4639-9b45-99e7fb75d852",
+      "outputBytes": 44,
+      "outputHash": "c3777529ec3c94d2108ab33b3aa84587f7e6ffefe62af6c03afa7cb2fbf2fb36",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 7889,
+        "words": 1600,
+        "lines": 400
+      }
+    },
+    {
+      "jobId": "fee4e6dc-a584-4e1a-8f18-7f2096f98334",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 手机",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 2467.002800000002,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2467.0046,
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "targetId": "harmony-35468fa011e632be780226441b10dc2b",
+      "traceId": "4f488be5-c2a1-4444-8560-9cb3d69e99f0",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "97621d76-a05a-4293-8847-59c057a1d838",
+      "case": "vector-1",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 手机",
+      "parameters": {},
+      "inputBytes": 52392,
+      "inputHash": "e33a0fcb64e299be692ee1ff9cd623fa91c02fbb8b78ba288ca95b9d1dcec705",
+      "state": "PASS",
+      "outputReadyMs": 3562.9927000000025,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 3562.993699999999,
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "targetId": "harmony-35468fa011e632be780226441b10dc2b",
+      "traceId": "0dc07efb-da37-469b-b294-3aad284c4b42",
+      "outputBytes": 394404,
+      "outputHash": "0c0e0d397fe53a964c3b5c1bf4cb52523928a18e19637a9227cf6b83a5ee9614",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 4,
+        "rows": 4096,
+        "maxAbsoluteComponentError": 4.440892098500626e-16
+      }
+    },
+    {
+      "jobId": "052dd091-6f7b-4730-ab23-ac1fa2b54658",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 手机",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2519.960300000006,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2519.9608000000007,
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "targetId": "harmony-6c4b1772cfbbb34c841e8aa5926a7f99",
+      "traceId": "230266ac-64e3-4dfa-a495-9a3a95ffdf06",
+      "outputBytes": 816,
+      "outputHash": "29f2838ef63615be4253a9330962946487bd31f8212502df2d111e8e5c2d6b0c",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "e8764a04-75df-4e3a-a752-974b60d04c2a",
+      "case": "crop-1",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "HarmonyOS 手机",
+      "parameters": {
+        "box": {
+          "x": 0.5,
+          "y": 0.5,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 192,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2080.0501000000004,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2080.051299999999,
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "targetId": "harmony-6c4b1772cfbbb34c841e8aa5926a7f99",
+      "traceId": "4de9ebc0-4c3d-4fc0-a317-c127f98ad4d7",
+      "outputBytes": 978,
+      "outputHash": "aa537ac7486a2d4255a12dd537939b0f793dd89af5d188f8db9dc7dcec2c6317",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 192,
+        "height": 192,
+        "expectedRGB": [
+          255,
+          255,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "96277431-afef-46fd-b7ed-1f851daf53f0",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "AUTO",
+      "requestedDevice": "AUTO",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 2193.396099999998,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2193.3979999999938,
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "traceId": "862b02de-d8f7-4b54-af3b-d3debfc997e0",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "998b3781-cf2c-4a9e-9b59-37a7bd931322",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "AUTO",
+      "requestedDevice": "AUTO",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 2999.2573000000048,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2999.258200000004,
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "targetId": "harmony-a17a23f9503451e44f8650a6e6fcfe97",
+      "traceId": "b598c070-aa40-4036-85d2-4f90b48db8f4",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "420e94fe-314f-42ef-8d85-d0a56f0e5d94",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "AUTO",
+      "requestedDevice": "AUTO",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 2623.6633,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 2623.6644000000015,
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "targetId": "harmony-6c4b1772cfbbb34c841e8aa5926a7f99",
+      "traceId": "dd94596d-462f-4842-98c7-e44a9a17d971",
+      "outputBytes": 816,
+      "outputHash": "29f2838ef63615be4253a9330962946487bd31f8212502df2d111e8e5c2d6b0c",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    },
+    {
+      "jobId": "d815da27-59b9-4f75-9f3f-1d994dac0c8c",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "CONCURRENT",
+      "requestedDevice": "Windows CPU",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "PASS",
+      "outputReadyMs": 5320.205000000002,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 5320.205600000001,
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "traceId": "204ae654-6d47-442c-ace9-d4ae4a98b675",
+      "outputBytes": 37,
+      "outputHash": "9fdd5aa7acb7859e146c0165eeaf419c0125fd3ff47f924381b02a2fc30a12f0",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "characters": 38,
+        "words": 7,
+        "lines": 3
+      }
+    },
+    {
+      "jobId": "ca6615db-ed3a-462d-954c-9064718f8e48",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "CONCURRENT",
+      "requestedDevice": "HarmonyOS 电脑",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "PASS",
+      "outputReadyMs": 6663.617100000003,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 6663.618000000002,
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "targetId": "harmony-a17a23f9503451e44f8650a6e6fcfe97",
+      "traceId": "63e10838-d2e5-4335-ba01-86220ab6bbac",
+      "outputBytes": 163,
+      "outputHash": "4e3612f4a1f95a44c1f3fe3914171d29b0076c8bca3535522b4f3807f7ad8e96",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "dimension": 2,
+        "rows": 4,
+        "maxAbsoluteComponentError": 0
+      }
+    },
+    {
+      "jobId": "c0bd6d61-9fd0-4649-a1f9-7109ce88d1b4",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "CONCURRENT",
+      "requestedDevice": "HarmonyOS 手机",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "PASS",
+      "outputReadyMs": 5295.547500000001,
+      "outputReadyState": "SUCCEEDED",
+      "elapsedMs": 5295.547999999995,
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "targetId": "harmony-6c4b1772cfbbb34c841e8aa5926a7f99",
+      "traceId": "d47de305-8b7e-41c4-8549-7751983e407a",
+      "outputBytes": 816,
+      "outputHash": "29f2838ef63615be4253a9330962946487bd31f8212502df2d111e8e5c2d6b0c",
+      "finalState": "SUCCEEDED",
+      "verification": {
+        "format": "jpeg",
+        "width": 96,
+        "height": 96,
+        "expectedRGB": [
+          255,
+          0,
+          0
+        ],
+        "matchingPixelRatio": 1
+      }
+    }
+  ],
+  "note": "Correctness and delivery checks; not a speedup comparison. Windows local execution does not cross Wi-Fi.",
+  "devices": [
+    {
+      "id": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "name": "Windows CPU"
+    },
+    {
+      "id": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "name": "HarmonyOS 电脑"
+    },
+    {
+      "id": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "name": "HarmonyOS 手机"
+    }
+  ],
+  "concurrentBatchMs": 6666.423500000004,
+  "jobs": [
+    {
+      "id": "ca6615db-ed3a-462d-954c-9064718f8e48",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "c0bd6d61-9fd0-4649-a1f9-7109ce88d1b4",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "d815da27-59b9-4f75-9f3f-1d994dac0c8c",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "420e94fe-314f-42ef-8d85-d0a56f0e5d94",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "state": "SUCCEEDED",
+      "reason": "LEGAL_SUGGESTION",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "998b3781-cf2c-4a9e-9b59-37a7bd931322",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "state": "SUCCEEDED",
+      "reason": "LEGAL_SUGGESTION",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "96277431-afef-46fd-b7ed-1f851daf53f0",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "state": "SUCCEEDED",
+      "reason": "LEGAL_SUGGESTION",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "e8764a04-75df-4e3a-a752-974b60d04c2a",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "052dd091-6f7b-4730-ab23-ac1fa2b54658",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "97621d76-a05a-4293-8847-59c057a1d838",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "fee4e6dc-a584-4e1a-8f18-7f2096f98334",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "76fa7523-256c-416c-bd6f-694555aa9426",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "546add92-a188-4a33-9cc2-90f206f860da",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "4da7c3de-9b0e-498e-b378-995735d4270d",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "b7991340-e741-4f4e-a1dd-714f7120abad",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "ec6c2a97-41c5-4c83-acab-2706d93d6f36",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "636f93c3-aba7-4172-8c49-5e640fa791e7",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "f2d42bea-b58d-48e5-8a34-7e814a5a6fad",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "59625738-a09d-4f0f-80e7-9b2d2d9171b2",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "bc90aca5-4692-433e-9ba5-f2e7077d2daf",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "085769fa-f69a-4e2b-8f82-848819669942",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "9fa1bc95-888e-4606-9158-3b5ecdd1bebc",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "dd827009-e767-45a9-879a-cfa0f38aeb83",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "52f8a817-7241-4a22-a245-4446364eeca3",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    },
+    {
+      "id": "d9ca8daa-cef3-4a6b-81bd-3f35a07a63f9",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "state": "SUCCEEDED",
+      "reason": "INSUFFICIENT_SAVING",
+      "resourcesSettled": true,
+      "transfers": [
+        {
+          "from": "28c76b5f-0fe9-4d7d-8baf-a2be407894a3",
+          "to": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+          "via": null
+        }
+      ],
+      "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED"
+    }
+  ],
+  "finishedAt": "2026-11-07T13:19:27.887Z"
+}

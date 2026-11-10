@@ -40,7 +40,11 @@ export class RemoteEvaluationRunner implements EvaluationRunner {
     });
   }
   async reconcile(permit:EvaluationPermit):Promise<EvaluationResult|null>{
-    const row=await this.db.evaluationDispatch.findUnique({where:{id:permit.id}});if(!row)return null;
+    const {id,domain}=permit;
+    const row=await this.db.evaluationDispatch.findUnique({where:{id:permit.id}});
+    // run() rejects invalid permits before creating a mailbox row. Such a permit
+    // cannot have crossed the delivery boundary; do not strand its qualification.
+    if(!row)return !validEvaluationPermit(permit)?{notRun:true,settled:true,output:Buffer.alloc(0),durationMs:0,permitId:id,domain}:null;
     const work:EvaluationWork=JSON.parse(row.workJson);
     if(canonical(work.permit)!==canonical(permit))throw Error('EVALUATION_PERMIT_CONFLICT');
     return row.state==='SETTLED'&&row.resultJson?decodeEvaluationReport(JSON.parse(row.resultJson),permit):null;

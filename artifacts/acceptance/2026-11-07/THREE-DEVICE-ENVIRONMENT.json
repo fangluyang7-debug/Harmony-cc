@@ -1,0 +1,105 @@
+{
+  "date": "2026-11-07",
+  "branch": "codex/real-device-acceptance",
+  "gitBase": "f652683",
+  "workingTree": true,
+  "domain": "REAL",
+  "topology": "Windows LAN coordinator + Windows CPU agent + HarmonyOS 2in1 agent + HarmonyOS phone agent",
+  "sdk": "HarmonyOS 6.1.1 API 24",
+  "api22Verified": false,
+  "initialSignedHapSha256": "ed127b218dce0f956c937590dce64b053e90bbfd29a0bf2f6aa5ac882d3ab3d1",
+  "updatedSignedHapSha256": "f7761167ed77906e9cc6c1ee6dd53064eef1c656dd0740626c16c10f5b63e4ae",
+  "devices": [
+    {
+      "id": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "name": "Windows CPU",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "targetId": "cpu-1203bb9bbf3b29f6a88a7379e227c08b",
+          "backend": "CPU",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "text.count.v1",
+          "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+          "backend": "CPU",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "image.crop.v1",
+          "targetId": "cpu-c596f982a6537237492706a6ddeac18d",
+          "backend": "CPU",
+          "available": true,
+          "state": "ACTIVE"
+        }
+      ]
+    },
+    {
+      "id": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "name": "HarmonyOS 电脑",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "targetId": "harmony-a17a23f9503451e44f8650a6e6fcfe97",
+          "backend": "CPU",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "text.count.v1",
+          "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+          "backend": "CPU",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "image.crop.v1",
+          "targetId": "harmony-23d479af957c47f25b19eb764a206132",
+          "backend": "CPU",
+          "available": true,
+          "state": "ACTIVE"
+        }
+      ]
+    },
+    {
+      "id": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "name": "HarmonyOS 手机",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "targetId": "harmony-35468fa011e632be780226441b10dc2b",
+          "backend": "CPU",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "text.count.v1",
+          "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+          "backend": "CPU",
+          "available": true,
+          "state": "ACTIVE"
+        },
+        {
+          "capability": "image.crop.v1",
+          "targetId": "harmony-6c4b1772cfbbb34c841e8aa5926a7f99",
+          "backend": "CPU",
+          "available": true,
+          "state": "ACTIVE"
+        }
+      ]
+    }
+  ],
+  "rawEvidenceDirectory": ".test/real-device-20261107",
+  "limitations": [
+    "Automatic team used Windows and HarmonyOS PC; phone participation verified with explicit targets",
+    "Cross-clock trace gaps remain UNKNOWN; partial native execution spans",
+    "Foreground contribution only; physical Wi-Fi interruption and thermal endurance not tested",
+    "Performance comparison precedes status-label-only UI update"
+  ]
+}

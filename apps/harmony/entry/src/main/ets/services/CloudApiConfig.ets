@@ -6,7 +6,7 @@ interface CloudAuthEnvelope { success: boolean; data?: CloudAuthData; }
 
 // Public API origin only. COS and model credentials never belong in the App.
 export class CloudApiConfig {
-  private static readonly defaultBaseUrl: string = 'https://cixin.zeabur.app';
+  private static readonly defaultBaseUrl: string = 'https://api-server-production-0135.up.railway.app';
   private static baseUrl: string = CloudApiConfig.defaultBaseUrl;
   private static accessToken: string = '';
   private static pending: Promise<void> | undefined = undefined;
@@ -47,7 +47,7 @@ export class CloudApiConfig {
   public static async load(context: common.Context): Promise<void> {
     const store = await preferences.getPreferences(context, { name: 'cloud_api_v1' });
     const value = await store.get('baseUrl', '');
-    if (typeof value === 'string' && value.length > 0) { CloudApiConfig.set(value); }
+    if (typeof value === 'string' && value.length > 0 && value !== 'https://cixin.zeabur.app') { CloudApiConfig.set(value); }
   }
   public static async save(context: common.Context, value: string): Promise<void> {
     CloudApiConfig.set(value);

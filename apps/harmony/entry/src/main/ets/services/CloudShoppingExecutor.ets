@@ -1,5 +1,6 @@
 import { http, connection } from '@kit.NetworkKit';
 import { ShoppingImageUpload } from './ShoppingImageUpload';
+import { shoppingBusiness } from './ShoppingBusinessCompute';
 import { ArtifactRef, ClockPort, WallClock, CancellationSignal, CloudClientTiming, DeviceState, ExecutionPlan, ExecutorResult, InferenceLocation,
   RemoteRouteRegistry, HttpRouteProbe, RouteCandidate, routeStatus, ExecutionTelemetry,
   RemoteExecutionPlan, TaskContext, TaskTemplate, TaskCheckpoint, WorkloadExecutor } from 'scheduler';
@@ -172,7 +173,9 @@ export class CloudShoppingExecutor implements WorkloadExecutor<CloudShoppingInpu
       await this.request(baseUrl + '/api/v1/runtime/runs/' + envelope.data.runtimeRunId + '/client-telemetry',
         JSON.stringify({ taskId: input.taskId, timing: resultText.timing, events: events }), 3000, signal);
     } catch (_) { /* Result remains usable if the optional telemetry acknowledgement is unavailable. */ }
-    return { output: decodeShoppingResult(resultText.body, input.operation, input.taskId),
+    const output=await shoppingBusiness.complete(decodeShoppingResult(resultText.body,input.operation,input.taskId),input.photoUri,signal,
+      this.clock.now()+Math.max(0,Math.min(30000,(input.budgetMs??0)-(this.clock.now()-(input.budgetStartedAt??this.clock.now()))-2000)));
+    return { output,
       telemetry: { routeEvents: events, executionPath: 'cloud-shopping-api', cloudRunId: envelope.data.runtimeRunId,
         cloudTaskId: input.taskId, cloudTiming: resultText.timing } };
   }

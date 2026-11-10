@@ -1,0 +1,142 @@
+{
+  "at": "2026-11-08T04:56:59.985Z",
+  "status": "PASS",
+  "scope": "Camera QR scan and desktop key join on existing API 24 devices; two three-device WLAN task rounds",
+  "totalThreeDeviceTasks": 48,
+  "runs": [
+    {
+      "phase": "pc",
+      "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+      "tasks": 24,
+      "pass": 24,
+      "sameInputsAndParametersAsBaseline": true,
+      "budgetMs": 30000,
+      "concurrentBatchMs": 10012.614199999996
+    },
+    {
+      "phase": "phone",
+      "groupId": "4ffa86ed-1510-4be5-bea8-8d8afb691a24",
+      "tasks": 24,
+      "pass": 24,
+      "sameInputsAndParametersAsBaseline": true,
+      "budgetMs": 30000,
+      "concurrentBatchMs": 6226.531600000002
+    }
+  ],
+  "baseline": "2026-11-07/wireless-multitask/fixed-round3/RESULTS.json",
+  "phoneOpticalScan": {
+    "evidence": "User confirmed optical recognition; native page showed paired and coordinator recorded phone member/device",
+    "textInjectionUsed": false
+  },
+  "previousSpaceDevicesOffline": true,
+  "finalSpace": {
+    "id": "4ffa86ed-1510-4be5-bea8-8d8afb691a24",
+    "members": [
+      {
+        "name": "鸿蒙电脑发起人",
+        "role": "MEMBER"
+      },
+      {
+        "name": "鸿蒙手机发起人",
+        "role": "OWNER"
+      },
+      {
+        "name": "Windows协作者",
+        "role": "MEMBER"
+      }
+    ],
+    "devices": [
+      {
+        "name": "鸿蒙手机",
+        "id": "41e50e99-5b74-4980-8ea5-83cbb297ceda",
+        "online": true,
+        "capabilities": [
+          {
+            "name": "vector.normalize.v1",
+            "available": true,
+            "state": "ACTIVE"
+          },
+          {
+            "name": "text.count.v1",
+            "available": true,
+            "state": "ACTIVE"
+          },
+          {
+            "name": "image.crop.v1",
+            "available": true,
+            "state": "ACTIVE"
+          }
+        ]
+      },
+      {
+        "name": "Scilana",
+        "id": "93dc57e0-6ac7-4568-8405-faa237189ce3",
+        "online": true,
+        "capabilities": [
+          {
+            "name": "vector.normalize.v1",
+            "available": true,
+            "state": "ACTIVE"
+          },
+          {
+            "name": "text.count.v1",
+            "available": true,
+            "state": "ACTIVE"
+          },
+          {
+            "name": "image.crop.v1",
+            "available": true,
+            "state": "ACTIVE"
+          }
+        ]
+      },
+      {
+        "name": "鸿蒙电脑",
+        "id": "2373a5fd-e951-408f-8c86-507404c77b91",
+        "online": true,
+        "capabilities": [
+          {
+            "name": "vector.normalize.v1",
+            "available": true,
+            "state": "ACTIVE"
+          },
+          {
+            "name": "text.count.v1",
+            "available": true,
+            "state": "ACTIVE"
+          },
+          {
+            "name": "image.crop.v1",
+            "available": true,
+            "state": "ACTIVE"
+          }
+        ]
+      }
+    ]
+  },
+  "installedDesktopSourcesMatch": true,
+  "sourceHashes": {
+    "apps/windows-agent/main.cjs": "742fa56b9273a292f7ef53487fc822fe66f3a69f19bb247f62f50d50111111fa",
+    "apps/windows-agent/host-manager.cjs": "48918d6389a886308dec2de320cc52bd1f408e91232ecaaf5d9e790253336911",
+    "apps/windows-agent/preload.cjs": "d111c74bec70e589188a8d25e9671dcc5f5cb2eb6e3873276e20a5b0beb11a99",
+    "apps/windows-agent/launcher.cjs": "7edcdda36cd79a299af124dd637ac5c917547d961e98551046793b089770fe8f",
+    "apps/windows-agent/launcher.html": "748f9188f5c5e36b20ec9932b091805326583bbd3be819b46e6b9755040ae6d3",
+    "scripts/build-windows-agent.cjs": "9025b5cdfaad63691646aca5efd08b6f4d62a8e20cdccbae903b4d570a583332",
+    "apps/team-space-web/app.js": "b0ab926cdfd6f4dd4dcc34b9523a0a4918d4329171c623262cb77c5b8b706017",
+    "apps/team-space-web/join-key.mjs": "862cdfb096921337c1876c5ff40c26ba6e27fc1173a60ef7b427bdf37428c2b7",
+    "apps/harmony-agent/entry/src/main/ets/JoinInvitation.ets": "d70386beff599ea0c497dfa5c142d317d1578d8a86b6ed1fe2613f009175ee72",
+    "apps/harmony-agent/entry/src/main/ets/pages/Index.ets": "2a82c852d9e49a23b47a750d176b126490063a8e7ab0a46e0a7b33daa14cf020",
+    "apps/harmony-agent/entry/src/main/ets/ConsoleDeviceBridge.ets": "2cc92f65b7ed0f8161dc5d5dac26cf96aeacd84baffd52018bd3f5be9b15b19a",
+    "services/coordinator/src/apps.ts": "90f7e71dc1beefbb98272815d7cf9684e649f21c73137eb3ed78926dcbda30ff",
+    "services/coordinator/src/auth.ts": "6fccf916c077d8a28fde64de15693fa56081edd17b735cc1b93c954bec37e776",
+    "services/coordinator/src/spaces.ts": "bf5a243f2c138573d6ca34ee416f8622fd87db992e53abaabbc2db73be59d28d",
+    "scripts/test-wireless-multitask.cjs": "84a8539bc99c548f29ecb0b54940b1023919a83358c68dc7cd8413acf387cd54"
+  },
+  "signedHapSha256": "0a40e1a0aedbce07809320f54621813dcb7e9b2117edaf1a0788f4a1a25726c6",
+  "limitations": [
+    "USB retained for debugging; no physical unplug test",
+    "Not a speedup comparison",
+    "Cold Harmony app data reset not tested",
+    "Some data paths use the LAN coordinator relay"
+  ]
+}

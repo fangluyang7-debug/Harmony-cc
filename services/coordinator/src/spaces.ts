@@ -1,6 +1,8 @@
+import {PhotoRuns} from './photo-runs';
+import {recentJobs} from './dashboard-history';
 import {retryableJobError} from './job-errors';
 import { SpaceEvents } from './space-events';
-import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomInt, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { PrismaClient } from '../generated/client';
 import { CoordinatorConfig } from './config';
 import { PairingService } from './auth';
@@ -14,8 +16,9 @@ import {AppRegistry} from './apps';
 import {SdkJobs} from './sdk';
 import {SchedulerSdk,SdkPort} from '@harmony/scheduler-client';
 import {TelemetryView} from './telemetry-view';
-const qrCode=require('qrcode') as {toDataURL:(text:string,options:object)=>Promise<string>};
+import {deviceMembershipActive,registerDeviceMembership} from './device-membership';
 
+const qrCode=require('qrcode') as {toDataURL:(text:string,options:object)=>Promise<string>};
 const hash=(s:string|Buffer)=>createHash('sha256').update(s).digest('hex');
 const passwordHash=(password:string,salt:string)=>new Promise<Buffer>((resolve,reject)=>scrypt(password,salt,64,(e,v)=>e?reject(e):resolve(v)));
 function label(v:unknown,max=60){if(typeof v!=='string'||!v.trim()||v.trim().length>max)throw Error('INPUT_INVALID');return v.trim();}
@@ -27,6 +30,7 @@ export function contribution(v:any){
 
 /** Browser accounts and room membership are separate from device execution credentials. */
 export class TeamSpaces {
+  private photoRuns:PhotoRuns|undefined;
   private readonly streams=new Map<()=>void,string>();
   close(){for(const close of this.streams.keys())close();}
   private readonly authAttempts=new Map<string,{count:number;until:number}>();
@@ -44,28 +48,38 @@ export class TeamSpaces {
     if(!m||!roles.includes(m.role))throw Error('SPACE_FORBIDDEN');return m;
   }
   peer(userId:string,spaceId:string):Peer{return {groupId:spaceId,principalId:userId,deviceId:'web-'+userId,holderInstanceId:'web-'+userId,credentialId:'web-'+userId};}
-  private appPeer(userId:string,spaceId:string){return this.apps.console(this.peer(userId,spaceId),this.sdk.contractIds(),[{resourcePoolId:'cpu',amount:4},{resourcePoolId:'ram',amount:1073741824}]);}
+  private appPeer(userId:string,spaceId:string,confirmCapabilities=false){return this.apps.console(this.peer(userId,spaceId),this.sdk.contractIds(),[{resourcePoolId:'cpu',amount:4},{resourcePoolId:'ram',amount:1073741824},{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:8589934592}],confirmCapabilities);}
+  private async sourceAppPeer(userId:string,spaceId:string,source:string,confirm=false){
+    if(!source)return this.appPeer(userId,spaceId,confirm);
+    const device=await this.db.spaceDevice.findUnique({where:{id:source}});
+    if(!device||device.spaceId!==spaceId||device.userId!==userId||!await deviceMembershipActive(this.db,source))throw Error('PHOTO_SOURCE_SCOPE');
+    const peer={...this.peer(userId,spaceId),deviceId:source,holderInstanceId:'photo-source-'+source};
+    return this.apps.console(peer,this.sdk.contractIds(),[{resourcePoolId:'cpu',amount:4},{resourcePoolId:'ram',amount:1073741824},{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:8589934592}],confirm);
+  }
   async deviceSettings(peer:Peer){const d=await this.db.spaceDevice.findUnique({where:{id:peer.deviceId}});return d&&d.spaceId===peer.groupId&&d.holderId===peer.holderInstanceId?JSON.parse(d.settingsJson):null;}
   async dashboard(userId:string,spaceId:string){
     const me=await this.member(userId,spaceId),space=await this.db.teamSpace.findUniqueOrThrow({where:{id:spaceId}}),now=Date.now();
-    const [members,users,registered,profiles,states,rows,attempts]=await Promise.all([
+    const [members,users,registered,profiles,states,rows]=await Promise.all([
       this.db.spaceMember.findMany({where:{spaceId}}),this.db.spaceUser.findMany({where:{id:{in:(await this.db.spaceMember.findMany({where:{spaceId}})).map(m=>m.userId)}},select:{id:true,name:true}}),
       this.db.spaceDevice.findMany({where:{spaceId}}),this.directory.profiles(spaceId),this.db.capabilityState.findMany({where:{groupId:spaceId}}),
-      this.db.cpuJob.findMany({where:{groupId:spaceId},take:100}),this.db.attempt.findMany({where:{groupId:spaceId}})]);
+      recentJobs(this.db,spaceId)]);
+    const attempts=await this.db.attempt.findMany({where:{groupId:spaceId,id:{in:rows.map(r=>r.id)}}});
     let available:string[]=[];try{const s=await this.snapshots.build(spaceId);available=s.policy.revoked?[]:s.snapshot.candidates.filter(c=>(!c.availability||c.availability.reason==='AVAILABLE')&&s.policy.allowedTargetIds.includes(c.targetId)&&c.observedAt+c.ttlMs>now).map(c=>c.targetId);}catch{}
-    const devices=registered.map(d=>{const p=profiles.find(p=>p.deviceId===d.id),sample=p?.ownerActivity;
+    const active=await Promise.all(registered.map(d=>deviceMembershipActive(this.db,d.id)));
+    const devices=registered.filter((_,i)=>active[i]).map(d=>{const p=profiles.find(p=>p.deviceId===d.id),sample=p?.ownerActivity;
       const online=!!sample&&sample.sampledAt+sample.ttlMs>now;
       return {id:d.id,name:d.name,userId:d.userId,online,lastSeen:sample?.sampledAt??null,settings:JSON.parse(d.settingsJson),profile:p??null,
         capabilities:(p?.executors??[]).map(e=>{const state=JSON.parse(states.find(s=>s.id===JSON.stringify([spaceId,p!.holderInstanceId,e.target.targetId]))?.metadataJson??'{"state":"DISCOVERED"}').state;
           return {capability:e.contract.capability,targetId:e.target.targetId,backend:e.target.backend,available:online&&available.includes(e.target.targetId)&&['ACTIVE','CANARY'].includes(state),state};})};});
     return {space,me,members:members.map(m=>({...m,name:users.find(u=>u.id===m.userId)?.name??'成员'})),devices,network:await this.networkView?.(spaceId)??[],
-      jobs:rows.map(r=>{const d=JSON.parse(r.metadataJson);return {id:r.id,userId:r.principalId,state:attempts.find(a=>a.id===r.id)?.state??r.state,deviceId:d.offer.target.deviceId,capability:d.offer.task.contract.capability,reason:d.offer.reasonCode,rejection:attempts.find(a=>a.id===r.id)?.rejectionJson?JSON.parse(attempts.find(a=>a.id===r.id)!.rejectionJson!):null};}),
+      jobs:rows.map(r=>{const d=JSON.parse(r.metadataJson);return {id:r.id,createdAt:Number.isFinite(d.request?.now)?d.request.now:null,userId:r.principalId,state:attempts.find(a=>a.id===r.id)?.state??r.state,deviceId:d.offer.target.deviceId,capability:d.offer.task.contract.capability,reason:d.offer.reasonCode,rejection:attempts.find(a=>a.id===r.id)?.rejectionJson?JSON.parse(attempts.find(a=>a.id===r.id)!.rejectionJson!):null};}).sort((a,b)=>(b.createdAt??0)-(a.createdAt??0)||a.id.localeCompare(b.id)).slice(0,100),
       coordinator:{...this.status(),location:this.config.proxy&&this.config.publicUrl&&!['localhost','127.0.0.1','[::1]'].includes(new URL(this.config.publicUrl).hostname)?'CLOUD':'LOCAL_DEVELOPMENT',domain:this.config.domain,address:this.config.publicUrl??null},updatedAt:now};
   }
   private stream(req:any,res:any,spaceId:string,sessionId:string){
     res.status(200).set({'Content-Type':'text/event-stream','Cache-Control':'no-store','X-Accel-Buffering':'no'});
-    res.flushHeaders();let closed=false,busy=false,dirty=true;
-    const stop=()=>{if(closed)return;closed=true;clearInterval(timer);unsubscribe();this.streams.delete(stop);res.end();};
+    res.flushHeaders();let closed=false,busy=false,dirty=true,hintTimer:NodeJS.Timeout|undefined;
+    const schedule=()=>{if(!hintTimer&&!closed){hintTimer=setTimeout(()=>{hintTimer=undefined;void send();},250);hintTimer.unref();}};
+    const stop=()=>{if(closed)return;closed=true;clearInterval(timer);if(hintTimer)clearTimeout(hintTimer);unsubscribe();this.streams.delete(stop);res.end();};
     const send=async()=>{
       if(closed||busy)return;busy=true;
       try{
@@ -73,9 +87,9 @@ export class TeamSpaces {
         if(closed)return;
         const text=dirty?'event: changed\ndata: {}\n\n':': heartbeat\n\n';dirty=false;
         if(!res.write(text))stop();
-      }catch{stop();}finally{busy=false;if(dirty&&!closed)void send();}
+      }catch{stop();}finally{busy=false;if(dirty&&!closed)schedule();}
     };
-    const unsubscribe=this.events.subscribe(spaceId,()=>{dirty=true;void send();});
+    const unsubscribe=this.events.subscribe(spaceId,()=>{dirty=true;schedule();});
     const timer=setInterval(()=>{void send();},15000);timer.unref();
     this.streams.set(stop,sessionId);res.on('close',stop);void send();
   }
@@ -112,7 +126,7 @@ export class TeamSpaces {
         const id=randomUUID();await this.db.$transaction([this.db.teamSpace.create({data:{id,name:label(body.name),createdAt:Date.now()}}),this.db.spaceMember.create({data:{id:randomUUID(),spaceId:id,userId:user.id,role:'OWNER',joinedAt:Date.now()}})]);res.json({id});return;
       }
       if(route==='/join'&&method==='POST'){
-        const code=label(body.code,80),invite=await this.db.spaceInvite.findUnique({where:{id:hash(code)}});
+        const raw=label(body.code,80),digits=raw.replace(/[\s-]/g,''),code=/^\d{8}$/.test(digits)?digits:raw,invite=await this.db.spaceInvite.findUnique({where:{id:hash(code)}});
         if(!invite||invite.revoked||invite.expiresAt<=Date.now())throw Error('INVITE_EXPIRED');
         await this.db.spaceMember.upsert({where:{spaceId_userId:{spaceId:invite.spaceId,userId:user.id}},create:{id:randomUUID(),spaceId:invite.spaceId,userId:user.id,role:invite.role,joinedAt:Date.now()},update:{}});this.events.changed(invite.spaceId);res.json({id:invite.spaceId});return;
       }
@@ -127,7 +141,14 @@ export class TeamSpaces {
       if(action==='invites'&&method==='POST'){
         await this.member(user.id,spaceId,['OWNER']);if(!['MEMBER','VIEWER'].includes(body.role))throw Error('ROLE_INVALID');
         const code=randomBytes(18).toString('base64url'),expiresAt=Date.now()+86400000;
-        await this.db.spaceInvite.create({data:{id:hash(code),spaceId,role:body.role,expiresAt}});res.json({code,expiresAt});return;
+        // Keep QR/full-link tokens compatible; the numeric alias is scoped to this coordinator.
+        for(let attempt=0;attempt<8;attempt++){
+          const shortCode=String(randomInt(10000000,100000000));
+          try{
+            await this.db.$transaction([this.db.spaceInvite.create({data:{id:hash(code),spaceId,role:body.role,expiresAt}}),this.db.spaceInvite.create({data:{id:hash(shortCode),spaceId,role:body.role,expiresAt}})]);
+            res.json({code,shortCode,expiresAt,fingerprint:this.config.proxy?'':this.auth.publicFingerprint()});return;
+          }catch(error){if((error as {code?:string}).code!=='P2002'||attempt===7)throw error;}
+        }
       }
       if(action==='members'&&method==='POST'){
         await this.member(user.id,spaceId,['OWNER']);if(!['MEMBER','VIEWER'].includes(body.role))throw Error('ROLE_INVALID');
@@ -143,19 +164,30 @@ export class TeamSpaces {
         const deviceId=randomUUID(),holderId=randomUUID();
         await this.allotments.confirmDevice(deviceId,[{resourcePoolId:'cpu',amount:settings.maxCpuThreads},{resourcePoolId:'ram',amount:settings.maxMemoryBytes},...(settings.maxVramBytes?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:settings.maxVramBytes}]:[])],[{groupId:spaceId,holderInstanceId:holderId,appInstanceId:null}]);
         const invitation=await this.auth.invite(spaceId,user.id,deviceId,address,600000);
-        await this.db.spaceDevice.create({data:{id:deviceId,spaceId,userId:user.id,holderId,name:label(body.name),settingsJson:JSON.stringify(settings),createdAt:Date.now()}});
-        const bootstrap={invitation:{...invitation,tlsMode:this.config.proxy?'public':'pinned'},holderInstanceId:holderId,domain:this.config.domain,contribution:settings};
-        // Full pinned bootstrap stays in this member-authorized, no-store response. No external QR service.
-        const qr=await qrCode.toDataURL(JSON.stringify(bootstrap),{errorCorrectionLevel:'L',margin:4,width:640});
-        res.json({...bootstrap,qr});return;
+        await this.db.$transaction(async tx=>{
+          await tx.spaceDevice.create({data:{id:deviceId,spaceId,userId:user.id,holderId,name:label(body.name),settingsJson:JSON.stringify(settings),createdAt:Date.now()}});
+          if(body.installationId)await registerDeviceMembership(tx,body.installationId,deviceId,body.previousDeviceId,user.id,body.knownDeviceIds??[]);
+        });
+        const bootstrap={invitation:{...invitation,tlsMode:this.config.proxy?'public':'pinned'},holderInstanceId:holderId,domain:this.config.domain,contribution:settings};const qr=await qrCode.toDataURL(JSON.stringify(bootstrap),{errorCorrectionLevel:'L',margin:4,width:640});res.json({...bootstrap,qr});return;
+      }
+      if(action==='photo-runs'){
+        if(id==='directory'&&method==='GET'){
+          const [space,devices]=await Promise.all([this.db.teamSpace.findUnique({where:{id:spaceId},select:{id:true,name:true}}),this.db.spaceDevice.findMany({where:{spaceId},select:{id:true,name:true}})]);
+          res.json({space,devices});return;
+        }
+        const photo=this.photoRuns??(this.photoRuns=new PhotoRuns(this.config.dataDir,this.db,this.config.domain));
+        if(method==='GET'){if(id&&parts[3]==='input'){res.type('image/png').send(await photo.input(spaceId,id,Number(req.query.image??0)));return;}if(id&&parts[3]==='result'){res.type('application/json').send(await photo.result(spaceId,id,Number(req.query.image??0)));return;}res.json(id?await photo.view(spaceId,id):await photo.list(spaceId));return;}
+        await this.member(user.id,spaceId,['OWNER','MEMBER']);
+        if(method==='POST'){res.json(id?await photo.update(spaceId,id,user.id,body):await photo.create(spaceId,user.id,body));return;}
       }
       if(action==='sdk'&&parts[2]==='jobs'){
-        await this.member(user.id,spaceId,['OWNER','MEMBER']);const peer=await this.appPeer(user.id,spaceId),jobId=parts[3],operation=parts[4];
+        await this.member(user.id,spaceId,['OWNER','MEMBER']);const jobId=parts[3],operation=parts[4],peer=await this.sourceAppPeer(user.id,spaceId,String(req.query.source??''),!jobId&&method==='POST');
         if(!jobId&&method==='POST'){res.json(await this.sdk.submit(peer,body));return;}
-        if(jobId&&method==='PUT'&&operation==='input'){if(!Buffer.isBuffer(body))throw Error('BINARY_INPUT_REQUIRED');await this.jobs.writeInput(peer,jobId,body);res.json({uploaded:true});return;}
-        if(jobId&&method==='GET'&&operation==='output'){res.type('application/octet-stream').send(await this.jobs.readOutput(peer,jobId));return;}
+        if(jobId&&method==='PUT'&&operation==='input'){if(!Buffer.isBuffer(body))throw Error('BINARY_INPUT_REQUIRED');await this.sdk.writeInput(peer,jobId,String(req.query.artifact??''),body);await this.photoRuns?.retainInput(spaceId,user.id,body);res.json({uploaded:true});return;}
+        if(jobId&&method==='GET'&&operation==='output'){const output=await this.sdk.readOutput(peer,jobId);await this.photoRuns?.retainResult(spaceId,user.id,jobId,output);res.type('application/octet-stream').send(output);return;}
         if(jobId&&method==='POST'&&operation==='start'){res.json(await this.sdk.start(peer,jobId));return;}
         if(jobId&&method==='POST'&&operation==='cancel'){res.json(await this.sdk.cancel(peer,jobId));return;}
+        if(jobId&&method==='POST'&&operation==='received'){res.json(await this.sdk.received(peer,jobId,body));return;}
         if(jobId&&method==='GET'&&!operation){res.json(await this.sdk.status(peer,jobId));return;}
       }
       if(action==='jobs'&&method==='POST'){
@@ -173,6 +205,12 @@ export class TeamSpaces {
         res.json({...result,outputTicket:undefined,output});return;
       }
       res.status(404).json({error:'NOT_FOUND'});
-    }catch(e){const code=e instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(e.message)?e.message:'REQUEST_FAILED',retryable=retryableJobError(code);res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:retryable?409:400).json({error:code,message:code,retryable});}
+    }catch(e){const code=e instanceof Error&&/^[A-Z][A-Z0-9_]{0,99}$/.test(e.message)?e.message:'REQUEST_FAILED',retryable=retryableJobError(code);
+      // Preserve a database failure code for diagnostics without logging query
+      // arguments, credentials or task payloads. The public error stays bounded.
+      const databaseCode=(e as {code?:unknown})?.code;
+      if(code==='REQUEST_FAILED'&&typeof databaseCode==='string'&&/^P[0-9]{4}$/.test(databaseCode))console.warn('SPACE_STORAGE_ERROR '+databaseCode);
+      if(code==='REQUEST_FAILED'&&e instanceof Error)console.warn('SPACE_REQUEST_ERROR '+e.name+' '+(e.stack?.split('\n').slice(1,4).join(' ')??''));
+      res.status(code==='LOGIN_REQUIRED'?401:code.endsWith('FORBIDDEN')?403:retryable?409:400).json({error:code,message:code,retryable});}
   }
 }

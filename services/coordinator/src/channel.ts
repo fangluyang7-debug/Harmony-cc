@@ -7,6 +7,7 @@ import { Prisma,PrismaClient } from '../generated/client';
 import { canonical, MessageEnvelopeV2, validMessageEnvelopeV2, validVersionHelloV2, negotiateVersionV2,
   validAdmissionReplyV2, validExecutionReportV2, validAttemptStatusReplyV2, protocolId,validYieldNoticeV2,validProtocolErrorV2, AppIdentityV2 } from '@harmony/scheduler-core';
 import { CoordinatorStore } from './store';
+import { outboxByWireId } from './outbox-lookup';
 
 export interface Peer { groupId:string; holderInstanceId:string; deviceId:string; principalId:string; credentialId:string; app?:AppIdentityV2; }
 export interface ChannelHandler { validate:(payload:any)=>boolean; handle:(peer:Peer,payload:any,message:MessageEnvelopeV2)=>Promise<void>; }
@@ -22,6 +23,7 @@ export class ControlChannel {
   // A disconnected session can still be committing a handler. Drain it before closing the database.
   private readonly pending=new Set<Promise<void>>();
   private closing=false;
+  private flushing:Promise<void>|undefined;
   private readonly handlers=new Map<string,ChannelHandler>();
   private readonly upgrade:(request:any,socket:any,head:Buffer)=>void;
   onSettlement?:(peer:Peer)=>void;
@@ -31,7 +33,7 @@ export class ControlChannel {
     this.register('Hello',{validate:p=>validVersionHelloV2(p)&&negotiateVersionV2({versions:[2],extensions:[]},p)===2,handle:async()=>{}});
     this.register('RecoveryRequest',{validate:p=>exact(p,[]),handle:async peer=>store.requestStatus(peer.groupId,peer.holderInstanceId,epoch())});
     this.register('ProtocolError',{validate:validProtocolErrorV2,handle:async(peer,p)=>{
-      const rows=await db.outbox.findMany({where:{groupId:peer.groupId,kind:'DispatchOffer'}}),row=rows.find(r=>JSON.parse(r.messageJson).messageId===p.messageId);
+      const row=await outboxByWireId(db,peer.groupId,p.messageId,'DispatchOffer');
       const attempt=row?await db.attempt.findUnique({where:{id:row.attemptId}}):null;
       if(!attempt||attempt.holderInstanceId!==peer.holderInstanceId)throw Error('ERROR_SCOPE');
       console.warn('AGENT_PROTOCOL_ERROR '+p.code);
@@ -46,8 +48,7 @@ export class ControlChannel {
       await store.reconcileStatus(peer.groupId,peer.holderInstanceId,peer.deviceId,message.ackOf,p,epoch());
     }});
     this.register('Ack',{validate:p=>exact(p,['messageId'])&&protocolId(p.messageId),handle:async(peer,p)=>{
-      const rows=await db.outbox.findMany({where:{groupId:peer.groupId}});
-      const row=rows.find(r=>(JSON.parse(r.messageJson) as MessageEnvelopeV2).messageId===p.messageId);
+      const row=await outboxByWireId(db,peer.groupId,p.messageId);
       const attempt=row?await db.attempt.findUnique({where:{id:row.attemptId}}):null;
       if(!attempt||attempt.holderInstanceId!==peer.holderInstanceId)throw Error('ACK_UNAUTHORIZED');
       await store.acknowledge(peer.groupId,p.messageId);
@@ -208,7 +209,12 @@ export class ControlChannel {
       await this.db.outbox.update({where:{id:row.id},data:{deliveryCount:{increment:1}}});
     }
   }
-  async flush(){if(this.closing)return;await Promise.all([...this.sessions].map(s=>s.work=this.track(s.work.then(()=>this.pump(s)).catch(error=>this.reject(s,error)))));}
+  async flush(){
+    if(this.closing)return;if(this.flushing)return this.flushing;
+    const pending=Promise.all([...this.sessions].map(s=>s.work=this.track(s.work.then(()=>this.pump(s)).catch(error=>this.reject(s,error))))).then(()=>{});
+    this.flushing=pending;
+    try{await pending;}finally{if(this.flushing===pending)this.flushing=undefined;}
+  }
   /** A wake-up hint, not an execution command. Durable evaluation records are reconciled on reconnect. */
   evaluationChanged(groupId:string,holderInstanceId:string){
     if(this.closing)return Promise.resolve();return this.track(this.notifyEvaluation(groupId,holderInstanceId));

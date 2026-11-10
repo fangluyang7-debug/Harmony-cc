@@ -1,3 +1,4 @@
+import {photoOutputBound} from '@harmony/reference-capabilities';
 import {stamp} from './race-timing';
 import {BatchReadyQueue,chargeBatch,readyWait} from './batch-ready';
 import {dispatchDiagnostics} from './dispatch-diagnostics';
@@ -27,6 +28,10 @@ class ResourceRetry extends Error {
   constructor(readonly delayMs:number){super('NO_LEGAL_PLAN');}
 }
 export class CpuJobs {
+  /** The offer is durable before this wake-up. HTTP admission must not wait
+   * behind unrelated inbound messages on every device's serialized channel.
+   * The channel owns delivery/retry and logs transport errors independently. */
+  private wakeDispatch(){void this.flush().catch(()=>{});}
   readonly batch:BatchReadyQueue;
   private readonly starts=new Map<string,Promise<unknown>>();
   private closingBackups=false;
@@ -66,13 +71,13 @@ export class CpuJobs {
     private readonly snapshots:SnapshotBuilder,private readonly allotments:AllotmentIssuer,private readonly artifacts:ArtifactChannel,
     private readonly store:CoordinatorStore,private readonly epoch:()=>number,private readonly flush:()=>Promise<void>,
     private readonly planning:PlanningService,private readonly traces:TraceService,private readonly apps:AppRegistry,private readonly packs:ReferencePack[]=builtinCpuPacks(),private readonly directTransfers?:DirectTransfers){this.batch=new BatchReadyQueue(db,(peer,id)=>this.dispatchReady(peer,id));}
-  async submit(peer:Peer,input:any,variants?:{parameters:string;targetId?:string}[],fingerprint?:string,graph?:{excludedDeviceId?:string;workflowId:string;nodeId:string;deadlineAt:number;dependencies:string[];retain?:boolean;source?:{descriptor:ArtifactDescriptor;attemptId:string;nodeId:string}}){
+  async submit(peer:Peer,input:any,variants?:{parameters:string;targetId?:string}[],fingerprint?:string,graph?:{forceRelay?:boolean;excludedDeviceId?:string;workflowId:string;nodeId:string;deadlineAt:number;dependencies:string[];retain?:boolean;source?:{descriptor:ArtifactDescriptor;attemptId:string;nodeId:string}}){
     const app=await this.apps.context(peer);
     if(!input||!protocolId(input.requestId)||input.requestId.length>100||typeof input.capability!=='string'||typeof input.contentHash!=='string'||!/^[a-f0-9]{64}$/.test(input.contentHash)||
       !Number.isSafeInteger(input.bytes)||input.bytes<1||input.bytes>8388608||input.targetId!==undefined&&!protocolId(input.targetId)||
-      input.budgetMs!==undefined&&(!Number.isSafeInteger(input.budgetMs)||input.budgetMs<0||input.budgetMs>30000)||
+      input.budgetMs!==undefined&&(!Number.isSafeInteger(input.budgetMs)||input.budgetMs<0||input.budgetMs>(graph?300000:30000))||
       input.parameters!==undefined&&(typeof input.parameters!=='string'||Buffer.byteLength(input.parameters)>32768)||
-      input.inputLocation!==undefined&&input.inputLocation!=='ORIGIN'||Object.keys(input).some(k=>!['requestId','capability','contentHash','bytes','targetId','budgetMs','parameters','inputLocation','priority','businessIdempotencyKey','privacy'].includes(k))||input.priority!==undefined&&!['REMOTE_INTERACTIVE','REMOTE_BATCH'].includes(input.priority)||input.privacy!==undefined&&!['LOCAL_ONLY','OWNER_SERVICE','SHARED'].includes(input.privacy))throw Error('JOB_INPUT_INVALID');
+      input.inputLocation!==undefined&&input.inputLocation!=='ORIGIN'||Object.keys(input).some(k=>!['requestId','capability','contentHash','bytes','targetId','budgetMs','parameters','inputLocation','priority','businessIdempotencyKey','privacy','executionScope'].includes(k))||input.priority!==undefined&&!['REMOTE_INTERACTIVE','REMOTE_BATCH'].includes(input.priority)||input.executionScope!==undefined&&input.executionScope!=='ORIGIN_DEVICE'||input.privacy!==undefined&&!['LOCAL_ONLY','OWNER_SERVICE','SHARED'].includes(input.privacy))throw Error('JOB_INPUT_INVALID');
     if(input.businessIdempotencyKey!==undefined&&!protocolId(input.businessIdempotencyKey))throw Error('JOB_INPUT_INVALID');
     const parameters=input.parameters??'{}';try{JSON.parse(parameters);}catch{throw Error('JOB_INPUT_INVALID');}
     const id=input.requestId,existing=await this.db.cpuJob.findUnique({where:{id}});
@@ -91,16 +96,16 @@ export class CpuJobs {
     if(!graph?.source&&registered&&registered.ownerPrincipalId===artifact.ownerPrincipalId&&registered.bytes===artifact.bytes&&registered.expiresAt<artifact.expiresAt)artifact.expiresAt=registered.expiresAt;
     // S1 has one fixed relay path. The planner prices input -> worker -> relay;
     // subsequent source polling/download is not claimed as an end-to-end estimate.
-    const request:PlacementRequest={recoveryFromDeviceId:graph?.excludedDeviceId,priority:input.priority??'REMOTE_INTERACTIVE',nodes:[{id:'compute',workKey:workKeyV2(pack.manifest.contract,parameters,artifact.bytes),capability:input.capability,...(pack.manifest.contract.serviceId?{serviceId:pack.manifest.contract.serviceId}:{}),...(input.privacy&&input.privacy!=='SHARED'?{dataScope:input.privacy}:{}),dependencies:[],inputs:[artifact.ref.artifactId],
+    const request:PlacementRequest={recoveryFromDeviceId:graph?.excludedDeviceId,priority:input.priority??'REMOTE_INTERACTIVE',nodes:[{id:'compute',workKey:workKeyV2(pack.manifest.contract,parameters,artifact.bytes),capability:input.capability,...(pack.manifest.contract.serviceId?{serviceId:pack.manifest.contract.serviceId}:{}),...(input.executionScope==='ORIGIN_DEVICE'?{dataScope:'LOCAL_ONLY' as const}:input.privacy&&input.privacy!=='SHARED'?{dataScope:input.privacy}:{}),dependencies:[],inputs:[artifact.ref.artifactId],
       // Reference numeric/text transforms: bound expansion conservatively rather
       // than pricing every tiny vector result as the global 8 MiB limit.
       // Raster expansion depends on crop/resize parameters; retain its declared maximum.
-      output:{id:'out-'+id,bytes:pack.manifest.contract.outputSchemas.includes('image.raster')?pack.maxOutputBytes:Math.min(pack.maxOutputBytes,input.bytes*64+4096)},
+      output:{id:'out-'+id,bytes:photoOutputBound(input.capability,parameters,pack.manifest.contract.outputSchemas.some(s=>['image.raster','render.rgb'].includes(s))?pack.maxOutputBytes:Math.min(pack.maxOutputBytes,input.bytes*64+4096))},
       modelManifest:pack.manifest.model,baselineTargetId:input.targetId??'',...(input.targetId?{allowedTargetIds:[input.targetId]}:{}),
       memoryBytes:pack.manifest.resourceLimit.find(r=>r.resourcePoolId==='ram')?.amount??0,minimumQuality:pack.manifest.qualityThreshold,candidates:[]}],
       artifacts:[{id:artifact.ref.artifactId,bytes:artifact.bytes,replicas:[input.inputLocation==='ORIGIN'?{deviceId:peer.deviceId,holderInstanceId:peer.holderInstanceId,readMs:0}:{deviceId:this.store.senderInstanceId,readMs:0}]}],links:[],deviceResources:[],
-      ...(input.inputLocation==='ORIGIN'?{inputRelayId:this.store.senderInstanceId,localResultHolderId:peer.holderInstanceId}:{}),
-      ...(graph?{localResultHolderId:peer.holderInstanceId}:{}),originHolderId:peer.holderInstanceId,appInstanceId:app.identity.appInstanceId,domain:this.directory.domain,remainingBudgetMs:input.budgetMs??30000,networkAllowed:true,privacy:input.privacy==='LOCAL_ONLY'?'LOCAL_ONLY':'AUTHORIZED_REMOTE',localDeviceId:peer.deviceId,
+      ...(input.inputLocation==='ORIGIN'?{inputRelayId:this.store.senderInstanceId,...(graph?.forceRelay?{}:{localResultHolderId:peer.holderInstanceId})}:{}),
+      ...(graph&&!graph.forceRelay?{localResultHolderId:peer.holderInstanceId}:{}),originHolderId:peer.holderInstanceId,appInstanceId:app.identity.appInstanceId,domain:this.directory.domain,remainingBudgetMs:input.budgetMs??30000,networkAllowed:true,privacy:input.privacy==='LOCAL_ONLY'?'LOCAL_ONLY':'AUTHORIZED_REMOTE',localDeviceId:peer.deviceId,
       now,committedNodeIds:[],committedArtifacts:[],materializeOutputsAt:this.store.senderInstanceId,finalDestination:this.store.senderInstanceId};
     const parent=graph?.source?await this.owned(peer,graph.source.attemptId):null;
     if(graph?.source&&artifact.expiresAt<=Date.now())throw Error('ARTIFACT_UNAVAILABLE:ARTIFACT_EXPIRED');
@@ -414,8 +419,8 @@ export class CpuJobs {
     if(arranged){
       if(arranged.groupId!==peer.groupId||arranged.holderInstanceId!==data.holderId||!arranged.offerJson||canonical(JSON.parse(arranged.offerJson))!==canonical(data.offer))throw Error('JOB_RECOVERY_REQUIRED');
       if(data.offer.task.coordinatorEpoch!==this.epoch())await this.store.requestStatus(peer.groupId,data.holderId,this.epoch());
-      await this.db.cpuJob.updateMany({where:{id,state:{in:['WAITING_INPUT','DISPATCHING']}},data:{state:'DISPATCHED'}});
-      await this.flush();return this.status(peer,id);
+      if(row.state!=='DISPATCHED')await this.db.cpuJob.updateMany({where:{id,state:{in:['WAITING_INPUT','DISPATCHING']}},data:{state:'DISPATCHED'}});
+      if(arranged.state==='OFFERED')this.wakeDispatch();return this.status(peer,id);
     }
     if(!await this.inputReady(peer,data))throw Error('INPUT_NOT_UPLOADED');
     if(row.state==='WAITING_INPUT'){
@@ -556,21 +561,34 @@ export class CpuJobs {
           }throw error;
         }
       await this.db.cpuJob.updateMany({where:{id,state:'DISPATCHING'},data:{state:'DISPATCHED'}});
-      await this.flush();
+      this.wakeDispatch();
       try{if(data.planTiming.clockDomainId===this.traces.clockDomainId)await this.traces.control(data.offer,data.traceId,data.plan.snapshotVersion,'PLAN',data.planTiming.start,data.planTiming.end);
-        await this.traces.control(data.offer,data.traceId,data.plan.snapshotVersion,'OFFER',offerStart,performance.now());}catch{} // Telemetry never changes settlement.
+        await this.traces.control(data.offer,data.traceId,data.plan.snapshotVersion,'OFFER',offerStart,performance.now(),null,null,'DURABLE_OFFER_QUEUED');}catch{} // Telemetry never changes settlement.
     }
-    await this.flush();return this.status(peer,id);
+    this.wakeDispatch();return this.status(peer,id);
   }
   async status(peer:Peer,id:string,withOutputTicket=true){
-    const d=await this.owned(peer,id),attempt=await this.db.attempt.findUnique({where:{id}}),receipt=await this.db.receipt.findUnique({where:{id}});
-    const result=receipt?JSON.parse(receipt.recordJson):null;
-    const committed=receipt?.committed===true&&result?.state==='SUCCEEDED'&&d.output&&result.outputs.some((r:any)=>canonical(r)===canonical(d.output!.ref));
-    const row=await this.db.cpuJob.findUniqueOrThrow({where:{id}});
-    const queued=!attempt&&row.state!=='CANCELLED'?await this.db.batchReadyJob.findUnique({where:{id}}):null;
-    return {jobId:id,state:attempt?.state??(queued?'QUEUED':row.state),...(queued?{queueReason:queued.reason,queuedAt:queued.queuedAt}:{}),targetId:d.offer.target.targetId,deviceId:d.offer.target.deviceId,traceId:d.traceId,
+    await this.apps.context(peer);
+    // Receipt commit updates the attempt atomically. Read the entire response
+    // from one snapshot as well, otherwise a new output ticket can accompany an
+    // old ACCEPTED/RUNNING state (and reject the SDK's result acknowledgement).
+    // A single SELECT supplies SQLite's statement snapshot without holding an
+    // interactive transaction/connection across several JS round trips per poll.
+    const [row]=await this.db.$queryRaw<Array<{groupId:string;principalId:string;sourceHolderId:string;metadataJson:string;state:string;readyWaitJson:string|null;
+      attemptState:string|null;rejectionJson:string|null;receiptJson:string|null;receiptCommitted:boolean|number|null;queueReason:string|null;queuedAt:number|null}>>`
+      SELECT j.groupId,j.principalId,j.sourceHolderId,j.metadataJson,j.state,j.readyWaitJson,
+        a.state AS attemptState,a.rejectionJson,r.recordJson AS receiptJson,r.committed AS receiptCommitted,
+        q.reason AS queueReason,q.queuedAt
+      FROM CpuJob j LEFT JOIN Attempt a ON a.id=j.id LEFT JOIN Receipt r ON r.id=j.id
+        LEFT JOIN BatchReadyJob q ON q.id=j.id WHERE j.id=${id}`;
+    if(!row||row.groupId!==peer.groupId||row.principalId!==peer.principalId||row.sourceHolderId!==peer.holderInstanceId)throw Error('JOB_SCOPE');
+    const d=JSON.parse(row.metadataJson) as JobData;
+    const result=row.receiptJson?JSON.parse(row.receiptJson):null;
+    const committed=(row.receiptCommitted===true||row.receiptCommitted===1)&&result?.state==='SUCCEEDED'&&d.output&&result.outputs.some((r:any)=>canonical(r)===canonical(d.output!.ref));
+    const queued=!row.attemptState&&row.state!=='CANCELLED'&&row.queuedAt!==null;
+    return {jobId:id,state:row.attemptState??(queued?'QUEUED':row.state),...(queued?{queueReason:row.queueReason,queuedAt:row.queuedAt}:{}),targetId:d.offer.target.targetId,deviceId:d.offer.target.deviceId,traceId:d.traceId,
       readyWait:row.readyWaitJson?JSON.parse(row.readyWaitJson):null,decisionEvidence:d.decisionEvidence??null,
-      rejection:attempt?.rejectionJson?JSON.parse(attempt.rejectionJson):null,
+      rejection:row.rejectionJson?JSON.parse(row.rejectionJson):null,
       dispatch:{coordinatorEpoch:d.offer.task.coordinatorEpoch,planRevision:d.offer.task.planRevision,allotmentId:d.offer.allotmentId,allotmentVersion:d.offer.allotmentVersion},
       outputTicket:withOutputTicket&&committed&&!d.resultReceivedAt&&d.output&&this.artifacts.lookup(peer.groupId,d.output.ref)&&(this.artifacts.available(d.output)||this.localOutput(peer,d))?this.artifacts.issueStatusRead(d.output,peer):null};
   }
@@ -613,7 +631,13 @@ export class CpuJobs {
     if(action==='authorize'&&row.state==='CANCEL_REQUESTED')throw Error('CANCEL_REQUESTED');
     if(offer.target.deviceId!==peer.deviceId||offer.task.coordinatorEpoch!==this.epoch()||!['OFFERED','ACCEPTED','RUNNING'].includes(attempt.state))throw Error('EXECUTION_EXPIRED');
     const evidence=await this.directory.qualification(peer,offer.target.targetId);
-    if(!['CANARY','ACTIVE'].includes(evidence.admission.state)||!sampleUsableV2(evidence.admission.quality,Date.now(),this.directory.domain))throw Error('CAPABILITY_NOT_QUALIFIED');
+    // A transient calibration window is not revocation of an admitted execution.
+    // Let its validated result settle; authorization of NEW work still requires
+    // CANARY/ACTIVE. Identity/model/epoch mismatches and suspended evidence remain denied.
+    const finishing=['output','retained'].includes(action)&&['ACCEPTED','RUNNING'].includes(attempt.state)&&
+      ['WAITING_WINDOW','WAITING_RESOURCE'].includes(evidence.admission.state)&&
+      ['OWNER_OR_HOST_NOT_AVAILABLE','EVALUATION_RESOURCE_REQUIRED','EVALUATION_WINDOW_REQUIRED','CALIBRATION_PAUSED'].includes(evidence.admission.reasonCode);
+    if((!['CANARY','ACTIVE'].includes(evidence.admission.state)&&!finishing)||!sampleUsableV2(evidence.admission.quality,Date.now(),this.directory.domain))throw Error('CAPABILITY_NOT_QUALIFIED');
     if(action==='retained'&&this.directTransfers)return this.directTransfers.publishOutput(peer,id,body);
     if(action==='authorize')return {offer,snapshotVersion:d.plan?.snapshotVersion??null,inputTicket:this.artifacts.issue(d.input,peer,'READ')};
     if(action==='input')return {ticket:this.artifacts.issue(d.input,peer,'READ')};

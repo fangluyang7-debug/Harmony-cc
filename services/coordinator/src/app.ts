@@ -1,3 +1,4 @@
+import {serializeSqliteTransactions} from './sqlite-transactions';
 import {DisplaySessions} from './display-sessions';
 import {retryableJobError} from './job-errors';
 import {WorkflowJobs} from './workflow-jobs';
@@ -36,10 +37,15 @@ import { canonical,validDeviceProfileV2, validResourceVectorV2, validAllotmentAc
 
 export async function createCoordinator(config:CoordinatorConfig, recover:(db:PrismaClient,epoch:number)=>Promise<void>=async()=>{},options:{onError?:(error:unknown)=>void;authenticate?:(token:string)=>Promise<Peer>;artifactSchemas?:ReadonlyMap<string,ArtifactSchema>;cpuHost?:boolean;referencePacks?:ReferencePack[]}={}){
   const unlock=await acquireProcessLock(config.dataDir);
-  const db=new PrismaClient({datasources:{db:{url:databaseUrl(config)}}});
+  const db=serializeSqliteTransactions(new PrismaClient({datasources:{db:{url:databaseUrl(config)}}}));
   let ready=false;
   try{
     await db.$connect();
+    // The local coordinator writes profiles, outbox and receipts concurrently.
+    // WAL avoids rollback-journal churn while FULL retains durable commits.
+    const journal=await db.$queryRawUnsafe<{journal_mode:string}[]>('PRAGMA journal_mode=WAL');
+    if(journal[0]?.journal_mode!=='wal')throw Error('COORDINATOR_WAL_UNAVAILABLE');
+    await db.$executeRawUnsafe('PRAGMA synchronous=FULL');
     if(!fs.existsSync(path.join(config.dataDir,'identity.json'))&&await db.coordinatorState.count()>0)throw new Error('COORDINATOR_IDENTITY_LOST');
     const identity=loadIdentity(config);
     const referencePacks=options.referencePacks??(options.cpuHost?await builtinReferencePacks():builtinCpuPacks());
@@ -154,7 +160,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       @Get('traces/:traceId')async trace(@Headers('authorization') header:string,@Param('traceId') traceId:string){
         if(!ready)throw new ServiceUnavailableException();try{return await traces.read(await auth.authenticate(bearer(header)),traceId);}catch{throw new UnauthorizedException('TRACE_REJECTED');}
       }
-      @Post('pair')async pair(@Body() body:any){if(!ready)throw new ServiceUnavailableException();try{return {...await auth.exchange(body),epoch};}catch{throw new UnauthorizedException('PAIRING_REJECTED');}}
+      @Post('pair')async pair(@Body() body:any){if(!ready)throw new ServiceUnavailableException();try{return {...await auth.exchange(body),epoch};}catch(error){if((error as Error).message==='SPACE_SWITCH_BUSY')throw new ConflictException('SPACE_SWITCH_BUSY');throw new UnauthorizedException('PAIRING_REJECTED');}}
       @Post('apps/registrations')async registerApp(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>apps.register(await auth.authenticate(bearer(header)),body,config.publicUrl??'https://'+config.certificateHost+':'+app.getHttpServer().address().port));}
       @Post('apps/exchange')async exchangeApp(@Body() body:any){return this.jobResponse(async()=>apps.exchange(body));}
       @Get('apps/me')async appIdentity(@Headers('authorization') header:string){return this.jobResponse(async()=>apps.context(await auth.authenticate(bearer(header))));}

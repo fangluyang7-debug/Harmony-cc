@@ -30,7 +30,13 @@ export function fitLink(rows: readonly LinkObservation[], ttlMs: number) {
   const n=rows.length,mx=rows.reduce((s,r)=>s+r.bytes,0)/n,my=rows.reduce((s,r)=>s+r.durationMs,0)/n;
   const variance=rows.reduce((s,r)=>s+(r.bytes-mx)**2,0);
   let slope=variance>0?rows.reduce((s,r)=>s+(r.bytes-mx)*(r.durationMs-my),0)/variance:0;
-  if(!Number.isFinite(slope)||slope<=0)slope=Math.max(...rows.map(r=>Math.max(1,r.durationMs)/r.bytes));
+  if(!Number.isFinite(slope)||slope<=0){
+    // With startup/jitter dominating, a small probe's full request latency is
+    // not a per-byte cost. Use the largest observed payload's effective rate;
+    // the intercept below still envelopes every sample, including slow starts.
+    const largest=Math.max(...rows.map(r=>r.bytes));
+    slope=Math.max(...rows.filter(r=>r.bytes===largest).map(r=>Math.max(1,r.durationMs)/r.bytes));
+  }
   const fixedMs=Math.max(0,...rows.map(r=>r.durationMs-slope*r.bytes));
   return {bytesPerSecond:1000/slope,fixedMs,observedAt:Math.max(...rows.map(r=>r.observedAt)),ttlMs};
 }

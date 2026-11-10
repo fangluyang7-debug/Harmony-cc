@@ -1,10 +1,10 @@
-const {test}=require('node:test'),assert=require('node:assert/strict'),os=require('node:os');
+const {test}=require('node:test'),assert=require('node:assert/strict'),os=require('node:os'),path=require('node:path');
 const {loadConfig}=require('../dist/config');
 const {lanEnvironment}=require('../../../scripts/start-coordinator-lan.cjs');
 test('LAN startup binds all interfaces but advertises a real interface matching its TLS certificate',()=>{
  assert.throws(()=>lanEnvironment('localhost'),/LAN_ADDRESS_REQUIRED/);
  const address=Object.values(os.networkInterfaces()).flat().find(i=>i&&!i.internal&&i.family==='IPv4')?.address;
- if(address){const env=lanEnvironment(address,'7443',undefined,{}),config=loadConfig(env);assert.equal(config.host,'0.0.0.0');assert.equal(config.certificateHost,address);assert.equal(config.publicUrl,`https://${address}:7443`);assert.equal(config.proxy,false);}
+ if(address){const env=lanEnvironment(address,'7443',undefined,{}),config=loadConfig(env);assert.equal(config.host,'0.0.0.0');assert.equal(config.certificateHost,address);assert.equal(config.publicUrl,`https://${address}:7443`);assert.equal(config.proxy,false);assert.equal(config.webDir,path.resolve(__dirname,'../../../apps/team-space-web'));assert.equal(config.dataDir,path.resolve(__dirname,'../data/lan'));}
  assert.throws(()=>loadConfig({COORDINATOR_PUBLIC_URL:'https://192.168.1.2:7443'}),/PUBLIC_URL_CERTIFICATE_MISMATCH/);
  assert.equal(loadConfig({COORDINATOR_TLS_MODE:'proxy',COORDINATOR_PUBLIC_URL:'https://public.example'}).proxy,true);
 });

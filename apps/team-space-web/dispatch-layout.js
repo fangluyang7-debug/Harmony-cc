@@ -29,12 +29,15 @@ export function navigate(view) {
 // Keep disclosures, table scroll and keyboard focus stable during live refreshes.
 export function replaceContent(id, html) {
   const root = document.getElementById(id);
+  if (root.renderedContent === html && root.renderedNodes?.length === root.childNodes.length && root.renderedNodes.every((node,i)=>node===root.childNodes[i])) return;
   const opened = new Set([...root.querySelectorAll('details[open][data-detail]')].map(el=>el.dataset.detail));
   const active = root.contains(document.activeElement) ? document.activeElement : null;
   const job = active?.dataset.job, detail = active?.closest('details')?.dataset.detail;
   const device = active?.dataset.device, card = active?.dataset.deviceCard;
   const scrolls = [...root.querySelectorAll('.table-wrap,.topology-scroll,.network-list')].map(el=>[el.scrollLeft,el.scrollTop]);
   root.innerHTML = html;
+  root.renderedContent = html;
+  root.renderedNodes = [...root.childNodes];
   for (const el of root.querySelectorAll('details[data-detail]')) if (opened.has(el.dataset.detail)) el.open = true;
   [...root.querySelectorAll('.table-wrap,.topology-scroll,.network-list')].forEach((el,i)=>{if(scrolls[i]){el.scrollLeft=scrolls[i][0];el.scrollTop=scrolls[i][1];}});
   const target = job ? [...root.querySelectorAll('button[data-job]')].find(el=>el.dataset.job===job)
@@ -103,3 +106,5 @@ document.addEventListener('fullscreenchange',()=>{
   fullscreen.title = document.fullscreenElement ? '退出全屏（Esc）' : '全屏展示；Esc 退出';
 });
 showView(location.hash.slice(1));
+
+{const link=document.getElementById('photo-studio-link');if(link)link.href='photo.html?space='+encodeURIComponent(new URL(location.href).searchParams.get('space')||'');}

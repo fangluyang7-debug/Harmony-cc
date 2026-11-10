@@ -1,3 +1,4 @@
+import {photoVulkanExecutorId} from './photo-accelerator';
 import {ArtifactDescriptor,directTransfer,SignedTransfer,transfer} from '@harmony/resource-transport';
 import {ImageEncoder,imageExecutorId,cudaExecutorId} from './image-encoder';
 import fs from 'node:fs';
@@ -76,7 +77,7 @@ export class CpuHost {
       fs.renameSync(temporary,target);
   }
   private constructor(readonly ledger:DurableLedger,private readonly config:CpuHostConfig,private readonly onError:(e:unknown)=>void,builtins:ReferencePack[]){
-    this.packs=[...builtins,...(config.imageEncoder?[config.imageEncoder.pack]:[]),...(config.services??[]).map(s=>s.pack)];
+    this.packs=[...builtins.filter(p=>p.manifest.contract.capability!==config.imageEncoder?.pack.manifest.contract.capability&&(!p.manifest.contract.capability.startsWith('photo.')||cpuRegistry.has(p.manifest.contract.capability))),...(config.imageEncoder?[config.imageEncoder.pack]:[]),...(config.services??[]).map(s=>s.pack)];
     if(new Set(this.packs.map(p=>p.manifest.contract.capability)).size!==this.packs.length)throw Error('SERVICE_CAPABILITY_CONFLICT');
     const request=allotmentTransport(config.connection),packs=this.packs,byDigest=new Map(packs.map(p=>[packDigest(p),p])),installed=new Map([...byDigest].flatMap(([hash,p])=>p.cases.map(c=>[hash+':'+c.id,c] as const)));
     this.relayLinks=new RelayLinks(config.identity.deviceId,config.connection.domain,request);
@@ -194,9 +195,9 @@ export class CpuHost {
     const prior=(value:number|null,sampledAt=now):NumericSampleV2=>({value,source:value===null?'UNKNOWN':'PRIOR',sampledAt,ttlMs:3600000,unit:'ms'});
     const gpu=pack===this.config.imageEncoder?.pack&&!!this.config.imageEncoder.gpu;
     const resources=pack.manifest.resourceLimit.filter(r=>gpu||!['gpu','vram'].includes(r.resourcePoolId));
-    const executorId=pack===this.config.imageEncoder?.pack?(gpu?cudaExecutorId:imageExecutorId):pack.manifest.contract.serviceId?pack.manifest.executorIds[0]:(cpuRegistry.executorId(capability)??'node.cpu.v1');
+    const executorId=pack===this.config.imageEncoder?.pack?(gpu?(this.config.imageEncoder?.backend==='VULKAN'?photoVulkanExecutorId:cudaExecutorId):imageExecutorId):pack.manifest.contract.serviceId?pack.manifest.executorIds[0]:(cpuRegistry.executorId(capability)??'node.cpu.v1');
     return {startup:pack.manifest.contract.serviceId?"UNKNOWN":"COLD",target:{targetId:(gpu?'cuda-':'cpu-')+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
-      executorId,executorVersion:'1',backend:gpu?'CUDA':pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
+      executorId,executorVersion:'1',backend:gpu?(this.config.imageEncoder?.backend??'CUDA'):pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
       resources:structuredClone(resources),configurations:[{...pack.cases[0].config}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(null),cold:prior(cost?.overhead??0,cost?cost.at+this.clockOffset:now),publish:prior(0),uncertainty:prior(null)};
   }
   private async sample(syncSettings=true){
@@ -237,7 +238,11 @@ export class CpuHost {
         executors,links,credits:this.agent.scheduler.capacityCredits(executors.map(e=>e.resources),occupied)};
       const facts=this.ledger.inFlight(state,now,profile.domain);if(facts)profile.inFlight=facts;
       const queued=this.agent.scheduler.queuedFacts(now,profile.domain);if(queued)profile.queued=queued;
-      await this.agent.publishProfile(profile);
+      // Reporting failure is not a failed local resource/owner measurement.
+      // Keep already admitted work under its existing lease; stale coordinator
+      // telemetry still blocks new remote admissions. Cancelling here restarts
+      // real inference whenever a profile ACK is delayed by the control channel.
+      try{await this.agent.publishProfile(profile);}catch(error){this.onError(error);}
     }catch(error){this.onError(error);this.owner='UNKNOWN';this.limits=[];await this.agent.updateResources([],'UNKNOWN');}
   }
   private async network(){

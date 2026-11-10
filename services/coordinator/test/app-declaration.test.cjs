@@ -2,6 +2,13 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const {runtime}=require('./helpers.cjs');
 const {validDeclaration}=require('../dist/app-declaration');
 const declaration={version:1,revision:'shopping.1',workflows:[{id:'photo',capabilities:['image.crop.v1']}]};
+test('workflow capability may use a distinct explicitly authorized contract ID',()=>{
+ const d={version:1,revision:'shopping.2',workflows:[{id:'photo',capabilities:['image.crop.v1'],inputSchema:'image.raster',outputContract:'image.raster',nodes:[{id:'prepare',capability:'image.crop.v1',contractId:'image.crop.contract',dependsOn:[]}]}]};
+ assert.equal(validDeclaration(d,['image.crop.contract']),true);
+ assert.equal(validDeclaration(d,['image.crop.v1']),false);
+ assert.equal(validDeclaration(d,['text.count.v1']),false);
+ assert.equal(validDeclaration({...d,workflows:[{...d.workflows[0],capabilities:['text.count.v1']}]},['image.crop.contract']),false);
+});
 test('declarations reject undeclared capabilities, duplicate workflows and unknown metadata',()=>{
  assert.equal(validDeclaration(declaration,['image.crop.v1']),true);
  assert.equal(validDeclaration(declaration,['text.count.v1']),false);

@@ -29,10 +29,13 @@ export function discoverDataHost(connection:RecoveryConnection):Promise<DataHost
     socket.once('connect',()=>{const host=socket.localAddress?.replace(/^::ffff:/,'');socket.destroy();if(!host||!isIP(host)){reject(Error('DATA_ROUTE_UNKNOWN'));return;}resolve({listenHost:host,advertisedHost:host});});
   });
 }
+export function validateDataHostConfig(options:DataHostConfig):void {
+  if(!options||typeof options.listenHost!=='string'||!isIP(options.listenHost)||typeof options.advertisedHost!=='string'||!/^([A-Za-z0-9.-]+|[A-Fa-f0-9:]+)$/.test(options.advertisedHost)||
+    options.port!==undefined&&(!Number.isSafeInteger(options.port)||options.port<0||options.port>65535))throw Error('DATA_HOST_CONFIG_INVALID');
+}
 /** Each installation owns its key. Registration creates a fresh endpoint epoch on every process start. */
 export async function openDataHost(directory:string,connection:RecoveryConnection,options:DataHostConfig,schemas:ReadonlyMap<string,ArtifactSchema>){
-  if(!options||!isIP(options.listenHost)||!/^([A-Za-z0-9.-]+|[A-Fa-f0-9:]+)$/.test(options.advertisedHost)||
-    options.port!==undefined&&(!Number.isSafeInteger(options.port)||options.port<0||options.port>65535))throw Error('DATA_HOST_CONFIG_INVALID');
+  validateDataHostConfig(options);
   const storage=path.join(directory,'data-endpoint',transferDigest(options.advertisedHost));fs.mkdirSync(storage,{recursive:true});
   const identityFile=path.join(storage,'identity.json');let identity:{host:string;key:string;certificate:string};
   if(fs.existsSync(identityFile))identity=JSON.parse(fs.readFileSync(identityFile,'utf8'));

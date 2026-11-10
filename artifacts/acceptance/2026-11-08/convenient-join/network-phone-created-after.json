@@ -1,0 +1,179 @@
+{
+  "connections": [
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.39",
+      "RemotePort": 44850
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.39",
+      "RemotePort": 44896
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.37",
+      "RemotePort": 61125
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.37",
+      "RemotePort": 55113
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.37",
+      "RemotePort": 55046
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.40",
+      "RemotePort": 49260
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.40",
+      "RemotePort": 47098
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.39",
+      "RemotePort": 44842
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.39",
+      "RemotePort": 44696
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.40",
+      "RemotePort": 35880
+    },
+    {
+      "LocalAddress": "192.168.71.37",
+      "LocalPort": 7443,
+      "RemoteAddress": "192.168.71.40",
+      "RemotePort": 35872
+    }
+  ],
+  "phase": "phone-created-after",
+  "windowsAdapters": [
+    {
+      "Name": "vEthernet (WSL (Hyper-V firewall))",
+      "InterfaceDescription": "Hyper-V Virtual Ethernet Adapter",
+      "Status": "Up"
+    },
+    {
+      "Name": "蓝牙网络连接",
+      "InterfaceDescription": "Bluetooth Device (Personal Area Network)",
+      "Status": "Disconnected"
+    },
+    {
+      "Name": "VMware Network Adapter VMnet1",
+      "InterfaceDescription": "VMware Virtual Ethernet Adapter for VMnet1",
+      "Status": "Up"
+    },
+    {
+      "Name": "以太网",
+      "InterfaceDescription": "Intel(R) Ethernet Connection (18) I219-V",
+      "Status": "Disconnected"
+    },
+    {
+      "Name": "WLAN",
+      "InterfaceDescription": "Intel(R) Wi-Fi 6E AX211 160MHz",
+      "Status": "Up"
+    },
+    {
+      "Name": "VMware Network Adapter VMnet8",
+      "InterfaceDescription": "VMware Virtual Ethernet Adapter for VMnet8",
+      "Status": "Up"
+    }
+  ],
+  "hdcForwardList": "[Empty]\n",
+  "routes": [
+    {
+      "route": [
+        {
+          "InterfaceAlias": "WLAN",
+          "IPAddress": "192.168.71.37",
+          "DestinationPrefix": null,
+          "NextHop": null
+        },
+        {
+          "InterfaceAlias": "WLAN",
+          "IPAddress": null,
+          "DestinationPrefix": "192.168.71.0/24",
+          "NextHop": "0.0.0.0"
+        }
+      ],
+      "destination": "192.168.71.39"
+    },
+    {
+      "route": [
+        {
+          "InterfaceAlias": "WLAN",
+          "IPAddress": "192.168.71.37",
+          "DestinationPrefix": null,
+          "NextHop": null
+        },
+        {
+          "InterfaceAlias": "WLAN",
+          "IPAddress": null,
+          "DestinationPrefix": "192.168.71.0/24",
+          "NextHop": "0.0.0.0"
+        }
+      ],
+      "destination": "192.168.71.40"
+    }
+  ],
+  "native": [
+    {
+      "rxBytes": "346821501",
+      "route": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \nwlan0\t0047A8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0                                                                              ",
+      "interface": "wlan0",
+      "name": "HarmonyOS PC",
+      "txBytes": "181204468",
+      "address": "192.168.71.39",
+      "ipv4Interfaces": [
+        {
+          "name": "lo",
+          "address": "127.0.0.1"
+        },
+        {
+          "name": "wlan0",
+          "address": "192.168.71.39"
+        }
+      ]
+    },
+    {
+      "rxBytes": "606573436",
+      "route": "Iface\tDestination\tGateway \tFlags\tRefCnt\tUse\tMetric\tMask\t\tMTU\tWindow\tIRTT                                                       \nwlan0\t0047A8C0\t00000000\t0001\t0\t0\t0\t00FFFFFF\t0\t0\t0                                                                              ",
+      "interface": "wlan0",
+      "name": "HarmonyOS phone",
+      "txBytes": "56707706",
+      "address": "192.168.71.40",
+      "ipv4Interfaces": [
+        {
+          "name": "lo",
+          "address": "127.0.0.1"
+        },
+        {
+          "name": "wlan0",
+          "address": "192.168.71.40"
+        }
+      ]
+    }
+  ],
+  "time": "2026-11-08T12:55:42.9690151+08:00"
+}

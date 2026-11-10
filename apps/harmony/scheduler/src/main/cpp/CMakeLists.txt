@@ -1,0 +1,22 @@
+cmake_minimum_required(VERSION 3.5.0)
+project(harmony_render)
+add_library(harmony_render SHARED fractal.cpp)
+target_compile_features(harmony_render PRIVATE cxx_std_17)
+# Match JS double arithmetic: never contract multiply/add or enable fast-math.
+target_compile_options(harmony_render PRIVATE -O3 -ffp-contract=off -fno-fast-math)
+target_link_libraries(harmony_render PUBLIC libace_napi.z.so)
+add_library(harmony_visual SHARED visual.cpp)
+target_compile_features(harmony_visual PRIVATE cxx_std_17)
+target_compile_options(harmony_visual PRIVATE -O3 -ffp-contract=off -fno-fast-math)
+target_link_libraries(harmony_visual PUBLIC libace_napi.z.so libz.so)
+
+add_library(harmony_photo SHARED photo.cpp)
+target_compile_features(harmony_photo PRIVATE cxx_std_17)
+target_link_libraries(harmony_photo PUBLIC libace_napi.z.so)
+# Optional installation resource, never synthesized or downloaded while a task runs.
+if(DEFINED ENV{HARMONY_NCNN_DIR})
+  set(ncnn_DIR "$ENV{HARMONY_NCNN_DIR}/${OHOS_ARCH}/lib/cmake/ncnn")
+  find_package(ncnn REQUIRED)
+  target_compile_definitions(harmony_photo PRIVATE HARMONY_PHOTO_NCNN=1)
+  target_link_libraries(harmony_photo PRIVATE ncnn)
+endif()

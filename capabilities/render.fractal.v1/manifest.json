@@ -1,0 +1,52 @@
+{
+  "packId": "render.fractal.v1",
+  "contract": {
+    "contractId": "render.fractal.v1",
+    "version": 1,
+    "capability": "render.fractal.v1",
+    "inputSchemas": [
+      "render.region"
+    ],
+    "outputSchemas": [
+      "render.rgb"
+    ],
+    "sideEffectPolicy": "PURE",
+    "interruptibility": "CANCEL_RESTART",
+    "maxNonPreemptibleMs": null,
+    "workModel": {
+      "version": "fractal-cost-v2",
+      "parameters": [
+        {
+          "name": "regionKey"
+        },
+        {
+          "name": "width"
+        },
+        {
+          "name": "height"
+        },
+        {
+          "name": "iterations",
+          "bucketWidth": 256
+        }
+      ]
+    }
+  },
+  "executorIds": [
+    "node.cpu.v1",
+    "harmony.cpu.v1"
+  ],
+  "model": null,
+  "suiteId": "render.fractal.reference",
+  "qualityThreshold": 1,
+  "resourceLimit": [
+    {
+      "resourcePoolId": "cpu",
+      "amount": 1
+    },
+    {
+      "resourcePoolId": "ram",
+      "amount": 67108864
+    }
+  ]
+}

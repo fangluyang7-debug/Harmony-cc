@@ -52,7 +52,7 @@ export struct SearchResults {
         Column({ space: 16 }) {
           Image($r('sys.media.ohos_ic_public_search_filled')).width(36).height(36).fillColor('#747878')
           Text('暂无候选商品').fontSize(16).fontColor('#747878')
-          if (this.query !== '') {
+          if (this.query !== '' || this.photoUri !== '') {
             Button('重新搜索').fontSize(13).backgroundColor('#111111').onClick(this.onRetry)
           }
         }.width('100%').padding({ top: 36, bottom: 36 })

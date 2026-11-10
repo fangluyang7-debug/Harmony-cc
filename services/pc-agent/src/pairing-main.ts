@@ -29,7 +29,7 @@ async function main(){
   // A one-shot directory and marker prevent silently retrying an uncertain exchange or replacing an old ledger.
   fs.mkdirSync(directory,{mode:0o700});
   fs.writeFileSync(path.join(directory,'pairing.pending'),'Reconcile this registration if no agent.json exists.\n',{flag:'wx',mode:0o600});
-  const paired=await request('/v2/pair',{inviteId:invite.inviteId,code:invite.code,holderInstanceId:input.holderInstanceId});
+  const paired=await request('/v2/pair',{inviteId:invite.inviteId,code:invite.code,holderInstanceId:input.holderInstanceId,...(input.localDevice?{installationId:input.localDevice.installationId,previousDeviceId:input.localDevice.deviceId||undefined,knownDeviceIds:input.localDevice.knownDeviceIds??[]}:{})});
   if(typeof paired.credential!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(paired.credential)||paired.peer?.groupId!==invite.groupId||paired.peer?.holderInstanceId!==input.holderInstanceId||
     !protocolId(paired.peer.deviceId)||!protocolId(paired.peer.principalId)||!protocolId(paired.peer.credentialId))throw Error('PAIR_RESPONSE_INVALID');
   const binding={groupId:paired.peer.groupId,deviceId:paired.peer.deviceId,holderInstanceId:input.holderInstanceId,appInstanceId:null};

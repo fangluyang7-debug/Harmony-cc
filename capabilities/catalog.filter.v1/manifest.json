@@ -1,0 +1,34 @@
+{
+  "packId": "catalog.filter.v1",
+  "contract": {
+    "contractId": "catalog.filter.v1",
+    "version": 1,
+    "capability": "catalog.filter.v1",
+    "inputSchemas": [
+      "catalog.items"
+    ],
+    "outputSchemas": [
+      "catalog.ranked"
+    ],
+    "sideEffectPolicy": "PURE",
+    "interruptibility": "CANCEL_RESTART",
+    "maxNonPreemptibleMs": null
+  },
+  "executorIds": [
+    "node.cpu.v1",
+    "harmony.cpu.v1"
+  ],
+  "model": null,
+  "suiteId": "catalog.filter.reference",
+  "qualityThreshold": 1,
+  "resourceLimit": [
+    {
+      "resourcePoolId": "cpu",
+      "amount": 1
+    },
+    {
+      "resourcePoolId": "ram",
+      "amount": 67108864
+    }
+  ]
+}

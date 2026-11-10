@@ -1,0 +1,67 @@
+{
+  "startedAt": "2026-11-07T10:35:27.786Z",
+  "domain": "REAL",
+  "samples": [
+    {
+      "label": "Windows CPU",
+      "jobId": "0a1625dc-63da-46be-95b7-87bedc7b1ff1",
+      "targetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "state": "PASS",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "actualTargetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "traceId": "1ab39043-e2d3-4df8-b03a-02f92ab510b9",
+      "output": {
+        "characters": 26,
+        "words": 5,
+        "lines": 2
+      },
+      "durationMs": 985.3897
+    },
+    {
+      "label": "HarmonyOS 电脑",
+      "jobId": "635ddbbd-bf5c-4142-8a47-b2db3309f146",
+      "targetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+      "state": "PASS",
+      "deviceId": "49eb1e46-cef9-409f-ad32-f5e2c3d8f3e1",
+      "actualTargetId": "harmony-6789eb7eb4e47f9600c5703287ce8178",
+      "traceId": "38dbb60b-8807-46fd-8855-5815db1c13c7",
+      "output": {
+        "characters": 26,
+        "words": 5,
+        "lines": 2
+      },
+      "durationMs": 2038.6120999999998
+    },
+    {
+      "label": "HarmonyOS 手机",
+      "jobId": "ac06f577-38d4-47d5-9095-96d7b844f3c9",
+      "targetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+      "state": "PASS",
+      "deviceId": "5ab581a6-b8ac-4a2a-9da0-a11aee6df41b",
+      "actualTargetId": "harmony-04e31ac2f1e578e4958f0642401a5829",
+      "traceId": "86e9ad80-f43d-4349-92f6-cb14d202df7b",
+      "output": {
+        "characters": 26,
+        "words": 5,
+        "lines": 2
+      },
+      "durationMs": 1765.4398999999999
+    },
+    {
+      "label": "TEAM automatic",
+      "jobId": "7e552467-a17a-47f3-be0e-587936fb05e9",
+      "targetId": null,
+      "state": "PASS",
+      "deviceId": "9f0a8cc5-04ed-4de5-b350-de9935323167",
+      "actualTargetId": "cpu-8d233c86e26b5fc91d755f9e109aa087",
+      "traceId": "1e7256e3-1652-4a08-973d-f2a95ceb929c",
+      "output": {
+        "characters": 26,
+        "words": 5,
+        "lines": 2
+      },
+      "durationMs": 1284.0249000000003
+    }
+  ],
+  "status": "PASS"
+}

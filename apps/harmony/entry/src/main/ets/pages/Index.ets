@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { cooperative } from '../services/CooperativeSession';
 import { aiGateway } from '../services/AiTaskGateway';
+import { shoppingBusiness } from '../services/ShoppingBusinessCompute';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { http } from '@kit.NetworkKit';
 import { FeedbackOption, FeedbackRequest, SchedulerService, TaskSignalType, TaskStatus, WorkflowHandle } from 'scheduler';
@@ -34,11 +35,13 @@ struct Index {
   @StorageLink('cooperativeChanging') cooperativeChanging:boolean=false;
   @StorageLink('cooperativeStatus') cooperativeStatus:string='尚未启用协同调度';
   @StorageLink('aiExecutionReport') aiExecutionReport:string='';
+  @StorageLink('cooperativePreview') cooperativePreview:string='';
+  @StorageLink('cooperativeDemoBusy') cooperativeDemoBusy:boolean=false;
   private readonly scheduler: SchedulerService = SchedulerService.getInstance();
   private readonly tasks: ShoppingTaskService = ShoppingTaskService.getInstance();
   private readonly monitor: SchedulerMonitorPublisher = SchedulerMonitorPublisher.getInstance();
   private activeSearch: WorkflowHandle<ShoppingResult> | null = null;
-  private latestShoppingResult: ShoppingResult | null = null;
+  @State latestShoppingResult: ShoppingResult | null = null;
   private generation: number = 0;
   private expiryTimer: number = -1;
   private readyTimer: number = -1;
@@ -55,7 +58,7 @@ struct Index {
   @State boxWidth: number = 100;
   @State boxHeight: number = 100;
   @State cloudEndpoint: string = '';
-  @State cloudStatus: string = '请配置 Zeabur HTTPS API 地址';
+  @State cloudStatus: string = '请配置购物服务 HTTPS API 地址';
   private contentScroller: Scroller = new Scroller();
   @State feedbackStatus: string = '等待本次任务完成';
   @State tab: CommerceTab = CommerceTab.HOME;
@@ -119,7 +122,7 @@ struct Index {
   }
   private async loadCatalog(): Promise<void> {
     this.catalog = [];
-    this.initialStatus = '商品由 Zeabur 云端检索';
+    this.initialStatus = '商品由云端购物服务检索';
     try { this.cloudEndpoint = CloudApiConfig.getBaseUrl(); this.cloudStatus = '云端 API 已配置'; } catch (_) {}
   }
 
@@ -273,7 +276,7 @@ struct Index {
       if (generation !== this.generation) { await handle.signal({ type: TaskSignalType.RESULT_IGNORED }); return; }
       if (result.nodes.length > 0) {
         const audit = result.nodes[result.nodes.length - 1].executionPlan.policyAudit;
-        this.plan = audit === undefined ? 'Zeabur 云端执行' : `${audit.mode} · ${audit.actualProfileId}`;
+        this.plan = audit === undefined ? '云端购物服务检索' : `${audit.mode} · ${audit.actualProfileId}`;
       }
       if (result.status !== TaskStatus.SUCCEEDED || result.output === null) {
         this.summary = result.status === TaskStatus.CANCELLED ? '搜索已取消或过期' : cloudFailureText(result.reasonCode);
@@ -288,6 +291,7 @@ struct Index {
       this.auditRun(result.output.taskId).catch(() => {});
       this.tasks.remember(result.output);
       this.products = result.output.products ?? [];
+      shoppingBusiness.presented(result.output.taskId);
       this.catalog = this.products.slice();
       this.summary = `找到 ${this.products.length} 件云端商品 · ${Date.now() - started} ms`;
       this.histories = [query].concat(this.histories.filter((item: string) => item !== query)).slice(0, 20);
@@ -369,9 +373,9 @@ struct Index {
   }
   private savedKeys(): string[] { return this.saved.map(productKey); }
   private visibleResults(): Product[] {
-    return this.priceSorted ? this.products.slice().sort((a: Product, b: Product) => numericPrice(a) - numericPrice(b)) : this.products;
+    return this.priceSorted ? this.products.slice().sort((a: Product, b: Product) => numericPrice(a) - numericPrice(b) || (a.comparisonRank ?? 0) - (b.comparisonRank ?? 0)) : this.products;
   }
-  private async choosePhoto(): Promise<void> {
+  private async choosePhoto(reuseSelected:boolean=false): Promise<void> {
     try { CloudApiConfig.getBaseUrl(); }
     catch (error) {
       this.notify(cloudFailureText(error instanceof Error ? error.message : undefined));
@@ -380,15 +384,16 @@ struct Index {
     this.invalidate(TaskSignalType.PAGE_LEFT);
     const generation = ++this.photoGeneration;
     try {
-      const picker = new photoAccessHelper.PhotoViewPicker();
-      const result = await picker.select({ MIMEType: photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE, maxSelectNumber: 1 });
-      if (generation !== this.photoGeneration || result.photoUris.length === 0) { return; }
-      this.photoUri = result.photoUris[0]; this.tab = CommerceTab.RADAR; this.selected = null;
+      if(!reuseSelected||this.photoUri===''){
+        const picker = new photoAccessHelper.PhotoViewPicker();
+        const result = await picker.select({ MIMEType: photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE, maxSelectNumber: 1 });
+        if (generation !== this.photoGeneration || result.photoUris.length === 0) { return; }
+        this.photoUri = result.photoUris[0];
+      }
+      this.tab = CommerceTab.RADAR; this.selected = null;
       this.products = []; this.lastQuery = ''; this.plan = ''; this.receiptText = '';
       this.summary = '正在上传图片并执行云端检索'; this.loading = true;
-      const outcome = await aiGateway.searchImage(this.photoUri);
-      if (generation !== this.photoGeneration) { return; }
-      const handle = outcome.handle; this.activeSearch = handle;
+      const handle = this.tasks.searchImageResult(this.photoUri); this.activeSearch = handle;
       this.currentTaskId = this.tasks.lastSubmittedTaskId;
       this.runAudit = this.currentTaskId + ' · 等待云端运行';
       const searchResult = await handle.result;
@@ -400,6 +405,7 @@ struct Index {
         this.auditRun(searchResult.output.taskId).catch(() => {});
         this.tasks.remember(searchResult.output);
         this.products = searchResult.output.products ?? []; this.catalog = this.products.slice();
+        shoppingBusiness.presented(searchResult.output.taskId);
         this.summary = '图片检索完成，共 ' + this.products.length + ' 件商品';
       } else {
         this.summary = searchResult.status === TaskStatus.CANCELLED ? '搜索已取消或过期' : cloudFailureText(searchResult.reasonCode);
@@ -500,15 +506,9 @@ struct Index {
   @Builder
   private Profile() {
     Column({ space: 20 }) {
-      Row(){
-        Text('使用协同调度').fontSize(18).layoutWeight(1)
-        Toggle({type:ToggleType.Switch,isOn:this.cooperativeEnabled}).enabled(!this.cooperativeChanging&&!this.loading).onChange((value:boolean)=>{void cooperative.setEnabled(value).catch((e:Error)=>this.notify(e.message));})
-      }.width('100%')
+      Text('协作连接').fontSize(18).width('100%')
       Text(this.cooperativeStatus).fontSize(14).width('100%')
-      if (this.aiExecutionReport.length > 0) { Text(this.aiExecutionReport).fontSize(12).fontColor('#666666').width('100%') }
-      Text('首次开启会打开设备调度件确认授权，并自动注册图片工作流。文字购物与账户操作沿用业务服务。').fontSize(13).fontColor('#747878')
-      Button('v2 裁剪验收').onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/V2CropPage' }).catch(() => this.notify('验收入口打开失败')); })
-      Button('v2 图像候选检索').onClick(() => { this.getUIContext().getRouter().pushUrl({ url: 'pages/V2ImageSearchPage' }).catch(() => this.notify('检索入口打开失败')); })
+      Text('在 Harmony 中加入空间并完成首次接入授权后，日常购物自动判断协作。轻量任务仍在手机完成。').fontSize(13).fontColor('#747878')
       Text('本机偏好').fontSize(24).fontWeight(FontWeight.Bold).width('100%')
       Row() {
         Text('参与本地体验反馈').fontSize(16).layoutWeight(1)
@@ -518,7 +518,7 @@ struct Index {
       Text('仅记录结构化答案和调度指标，不记录搜索原文或图片，不自动上传。可随时关闭。')
         .fontSize(13).fontColor('#747878').width('100%')
       Divider().color('#E2E2E2')
-      Text('Zeabur 云端 API').fontSize(18).width('100%')
+      Text('购物业务 API').fontSize(18).width('100%')
       TextInput({ text: this.cloudEndpoint, placeholder: 'https://你的服务域名' })
         .onChange((value: string) => { this.cloudEndpoint = value; })
       Button('保存云端地址').onClick(() => this.saveCloudEndpoint())
@@ -592,6 +592,7 @@ struct Index {
       if (generation !== this.generation) { return; }
       if (result.status !== TaskStatus.SUCCEEDED || result.output === null) { this.summary = cloudFailureText(result.reasonCode); return; }
       const output = result.output;
+      shoppingBusiness.presented(output.taskId);
       if (output.stateVersion !== null && this.latestShoppingResult?.stateVersion !== null &&
         output.stateVersion < (this.latestShoppingResult?.stateVersion ?? 0)) { return; }
       this.tasks.remember(output);
@@ -678,7 +679,7 @@ struct Index {
           if (this.lastQuery !== '') { this.search(this.lastQuery); }
         },
         onOpen: (item: Product) => this.openProduct(item), onSave: (item: Product) => this.toggleSaved(item),
-        onRetry: () => this.search(this.lastQuery), onCancel: () => this.invalidate(TaskSignalType.CANCEL), onPhoto: () => this.choosePhoto() })
+        onRetry: () => {if(this.photoUri!==''){void this.choosePhoto(true);}else{void this.search(this.lastQuery);}}, onCancel: () => this.invalidate(TaskSignalType.CANCEL), onPhoto: () => this.choosePhoto() })
     } else if (this.tab === CommerceTab.CATALOG) { this.Collection(this.catalog, '最近搜索商品') }
     else if (this.tab === CommerceTab.SAVED) { this.Collection(this.saved, `本次清单 · ${this.saved.length}`) }
     else { this.Profile() }

@@ -89,14 +89,34 @@ export class AppRegistry {
  }
  async list(owner:Peer){return this.db.registeredInstallation.findMany({where:{groupId:owner.groupId,principalId:owner.principalId},select:{id:true,appId:true,deviceId:true,holderInstanceId:true,state:true,offlineJson:true,onlineJson:true}});}
  /** A browser's authenticated submit action confirms its zero-local-quota installation. */
- async console(owner:Peer,contracts:string[],resources:ResourceAmountV2[]):Promise<Peer>{
+ async console(owner:Peer,contracts:string[],resources:ResourceAmountV2[],confirmCapabilities=false):Promise<Peer>{
+  // Status/transfer reads do not need an interactive SQLite transaction. Keep
+  // creation and explicit policy renewal atomic below, without locking writers
+  // for every browser polling request.
+  if(!confirmCapabilities){
+   const mapping=await this.db.consoleApp.findUnique({where:{groupId_principalId_holderInstanceId:{groupId:owner.groupId,principalId:owner.principalId,holderInstanceId:owner.holderInstanceId}}});
+   const installation=mapping?await this.db.registeredInstallation.findUnique({where:{id:mapping.appInstanceId}}):null;
+   if(installation){
+    if(installation.state!=='ACTIVE')throw Error('APP_CREDENTIAL_REVOKED');
+    const [app,credential]=await Promise.all([this.db.registeredApp.findUniqueOrThrow({where:{id:installation.appId}}),this.db.credential.findFirst({where:{groupId:owner.groupId,holderInstanceId:installation.holderInstanceId,revoked:false}})]);
+    if(!credential)throw Error('APP_CREDENTIAL_REVOKED');
+    return {...owner,deviceId:installation.deviceId,holderInstanceId:installation.holderInstanceId,credentialId:credential.id,app:this.identity(app,installation.id)};
+   }
+  }
   return this.db.$transaction(async tx=>{
    const key={groupId:owner.groupId,principalId:owner.principalId,holderInstanceId:owner.holderInstanceId};
    let mapping=await tx.consoleApp.findUnique({where:{groupId_principalId_holderInstanceId:key}});
    if(!mapping)mapping=await tx.consoleApp.create({data:{id:randomUUID(),...key,appId:randomUUID(),appInstanceId:randomUUID()}});
    const existing=await tx.registeredInstallation.findUnique({where:{id:mapping.appInstanceId}});
-   if(existing){if(existing.state!=='ACTIVE')throw Error('APP_CREDENTIAL_REVOKED');const app=await tx.registeredApp.findUniqueOrThrow({where:{id:existing.appId}}),credential=await tx.credential.findFirst({where:{groupId:owner.groupId,holderInstanceId:existing.holderInstanceId,revoked:false}});if(!credential)throw Error('APP_CREDENTIAL_REVOKED');return {...owner,credentialId:credential.id,app:this.identity(app,existing.id)};}
-   await this.create(tx,owner,{label:'浏览器控制台',allowedContracts:contracts,maxConcurrent:4,resources,offlineBase:[],onlineExtra:[]},{appId:mapping.appId,appInstanceId:mapping.appInstanceId,holderInstanceId:owner.holderInstanceId});
+   if(existing){if(existing.state!=='ACTIVE')throw Error('APP_CREDENTIAL_REVOKED');let app=await tx.registeredApp.findUniqueOrThrow({where:{id:existing.appId}});const credential=await tx.credential.findFirst({where:{groupId:owner.groupId,holderInstanceId:existing.holderInstanceId,revoked:false}});if(!credential)throw Error('APP_CREDENTIAL_REVOKED');
+    // Only an authenticated submit renews the console's installed-capability grant.
+    // This does not change independently enrolled native App grants or identities.
+    if(confirmCapabilities&&(canonical(JSON.parse(app.contractsJson))!==canonical(contracts)||canonical(JSON.parse(app.resourcesJson))!==canonical(resources)))app=await tx.registeredApp.update({where:{id:app.id},data:{contractsJson:JSON.stringify(contracts),resourcesJson:JSON.stringify(resources)}});
+    return {...owner,deviceId:existing.deviceId,holderInstanceId:existing.holderInstanceId,credentialId:credential.id,app:this.identity(app,existing.id)};}
+   // Installation holders are globally unique; the logical browser holder is reused
+   // across spaces. Keep existing mappings intact and scope only new installations.
+   const holderInstanceId='console-'+hash(JSON.stringify([owner.groupId,owner.principalId,owner.holderInstanceId]));
+   await this.create(tx,owner,{label:'浏览器控制台',allowedContracts:contracts,maxConcurrent:4,resources,offlineBase:[],onlineExtra:[]},{appId:mapping.appId,appInstanceId:mapping.appInstanceId,holderInstanceId});
    return (await this.activate(tx,mapping.appInstanceId)).peer;
   });
  }

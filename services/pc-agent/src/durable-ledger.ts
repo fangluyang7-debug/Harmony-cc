@@ -35,6 +35,7 @@ export class DurableLedger {
   private timings=new RunTimings();
   inFlight(state:LedgerStateV2,sampledAt:number,domain:string){return this.timings.sample(state.entries,this.clock(),sampledAt,domain);}
   private poisoned=false;private closed=false;
+  private serializedState:{reference:LedgerStateV2;json:string;canonical:string}|undefined;
   private constructor(private readonly directory:string,private state:LedgerStateV2,private readonly certificate:string,
     private readonly unlock:()=>Promise<void>,private readonly clock:()=>number,private channel:ChannelJournal){}
   static async open(directory:string,identity:Identity,certificate:string,clock:()=>number=()=>performance.now()):Promise<DurableLedger>{
@@ -65,8 +66,14 @@ export class DurableLedger {
     let phase='OPEN';
     try{
       const fd=fs.openSync(temporary,'wx',0o600);
-      const body={format:2,state:next,channel};
-      try{phase='WRITE';fs.writeFileSync(fd,JSON.stringify({...body,sha256:hash(body)}));phase='SYNC';fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+      // ACK/profile-only commits do not change the immutable attempt state.
+      // Reuse its serialization, while still hashing, syncing and atomically
+      // replacing the complete format-2 snapshot. No history or fences expire.
+      const serialized=this.serializedState?.reference===next?this.serializedState:
+        {reference:next,json:JSON.stringify(next),canonical:canonical(next)};
+      const checksum=createHash('sha256').update('{"channel":').update(canonical(channel))
+        .update(',"format":2,"state":').update(serialized.canonical).update('}').digest('hex');
+      try{phase='WRITE';fs.writeFileSync(fd,'{"format":2,"state":'+serialized.json+',"channel":'+JSON.stringify(channel)+',"sha256":'+JSON.stringify(checksum)+'}');phase='SYNC';fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
       phase='RENAME';
       for(let retry=0;;retry++){
         try{fs.renameSync(temporary,path.join(this.directory,'ledger.json'));break;}
@@ -79,7 +86,8 @@ export class DurableLedger {
       }
       phase='DIRECTORY_SYNC';
       if(process.platform!=='win32'){const directoryFd=fs.openSync(this.directory,'r');try{fs.fsyncSync(directoryFd);}finally{fs.closeSync(directoryFd);}}
-      this.state=clone(next);this.channel=clone(channel);
+      if(next!==this.state)this.state=clone(next);this.channel=clone(channel);
+      this.serializedState={...serialized,reference:this.state};
     }catch(error){
       this.poisoned=true;
       const code=(error as NodeJS.ErrnoException)?.code;

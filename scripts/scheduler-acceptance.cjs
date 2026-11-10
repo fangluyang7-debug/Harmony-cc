@@ -10,25 +10,26 @@ const suites={
  architecture:{cwd:'.',args:['scripts/check-architecture.mjs']},
  violations:tests('.','scripts/check-architecture.test.mjs'),
  boundary:{cwd:'.',args:['scripts/check-s4-core-baseline.cjs']},
- sdk:tests(coord,'test/sdk-host.test.cjs'),planning:tests(coord,'test/planning.test.cjs'),
+ sdk:tests(coord,'test/sdk-host.test.cjs','test/job-status-snapshot.test.cjs'),planning:tests(coord,'test/planning.test.cjs'),
  directory:tests(coord,'test/directory.test.cjs'),display:tests(coord,'test/display-sessions.test.cjs'),
  gpu:tests(coord,'test/image-encoder-host.test.cjs'),store:tests(coord,'test/store.test.cjs'),
  qualification:tests(coord,'test/qualification.test.cjs','test/reference-suites.test.cjs'),links:tests(coord,'test/direct-transfers.test.cjs'),
  teamSearch:{...tests('.','services/api-server/test/image-search-v2.test.cjs'),env:{HARMONY_IMAGE_TEAM_TEST:'1'}},
  nativeImage:tests('.','tests/sdk/native-image-encoder.test.cjs','tests/sdk/indexer-storage.test.cjs'),
+ nativeReconnect:tests('.','tests/sdk/native-reconnect.test.cjs','tests/sdk/native-link-cost.test.cjs','tests/sdk/native-space-switch.test.cjs','tests/sdk/native-console.test.cjs','tests/sdk/native-console-bridge.test.cjs','tests/sdk/native-join-key.test.cjs','tests/sdk/join-key.test.cjs','tests/sdk/windows-host-manager.test.cjs'),
  fairness:tests(coord,'test/batch-ready.test.cjs','test/two-app-hosts.test.cjs'),
  relay:{...tests(coord,'test/workflow.test.cjs'),env:{HARMONY_TEST_BLOCK_BC:'1'}},
- apps:tests(coord,'test/apps.test.cjs'),auth:tests(coord,'test/auth.test.cjs'),
+ apps:tests(coord,'test/apps.test.cjs','test/space-short-code.test.cjs','test/device-membership.test.cjs'),auth:tests(coord,'test/auth.test.cjs'),
  allotments:tests(coord,'test/allotments.test.cjs'),queue:tests(pc,'test/scheduler.test.cjs'),
  ledger:tests(pc,'test/ledger.test.cjs'),conformance:{cwd:'.',args:['tests/agent-conformance/run.cjs','--agent','pc']}
 };
 const criteria=[
  ['App 解耦',['architecture','violations','boundary','sdk','qualification','nativeImage','teamSearch'],'参考包按契约检查成功输出和预期拒绝；S4 保存接入前后的核心摘要，三条图像路径使用替身编码器。','两个独立 App 同机切换、共享 HAR、真实输入输出。'],
- ['终端解耦',['architecture','violations','conformance','planning'],'本次覆盖 PC 一致性与设备改名对照；模拟器运行单独登记。','PC 与鸿蒙手机在同一协议及局域网下运行。'],
+ ['终端解耦',['architecture','violations','conformance','planning','nativeReconnect'],'本次覆盖 PC 一致性与设备改名对照、鸿蒙连接方法的平台替身故障注入；模拟器运行单独登记。','PC 与鸿蒙手机在同一协议及局域网下运行。'],
  ['宏微联合与执行语义',['gpu','store','ledger','queue','relay'],'CUDA 后端与显存读数来自测试替身。','实际 CUDA 权重、显存、共享内存争用及断线重启。'],
  ['资源完整',['directory','links','display','planning','relay'],'展示确认覆盖 HTTPS 协议；模拟器页面呈现单独登记。','真实温度、电量、链路变化和接收端屏幕确认。'],
  ['单一派发与有界规划',['architecture','violations','planning','sdk'],'虚拟时钟覆盖预算回退、在途与排队预约及成本证据过期。SDK 用例以注入占用验证设备确认额度可用后才派发，本机线性 DAG 耗时见 AC5.json。','决赛拓扑下的控制时延与规划耗时。'],
- ['自动接入与反馈',['qualification','sdk','links'],'性能漂移和时钟变化使用受控输入。','真实模型测量、热降频及断路恢复。'],
+ ['自动接入与反馈',['qualification','sdk','links','nativeReconnect'],'性能漂移和时钟变化使用受控输入；鸿蒙重连使用平台套接字替身。','真实模型测量、热降频及断路恢复。'],
  ['安全与隔离',['apps','auth','links','display','store'],'本次覆盖软件身份、会话、制品和回执作用域。','ODID、沙箱身份与权限撤销的真机交叉验证。'],
  ['设备内调度与额度',['allotments','queue','ledger','conformance','fairness'],'双 App 在已确认双槽容量内竞争；设备等待界限须结合前提判读。','所有者活动切换、后台暂停与未结算资源保护。']
 ];

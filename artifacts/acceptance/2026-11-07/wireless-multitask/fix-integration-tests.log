@@ -1,0 +1,28 @@
+TAP version 13
+# Subtest: registered App host qualifies and executes SDK work through the shared planner and durable ledger
+ok 1 - registered App host qualifies and executes SDK work through the shared planner and durable ledger
+  ---
+  duration_ms: 69632.7582
+  type: 'test'
+  ...
+# Subtest: registered SDK, alternatives, shared quota, queued cancellation, callback and registration CLI use the formal planner/receipt path
+ok 2 - registered SDK, alternatives, shared quota, queued cancellation, callback and registration CLI use the formal planner/receipt path
+  ---
+  duration_ms: 35861.7461
+  type: 'test'
+  ...
+# Subtest: browser spaces persist, isolate roles and operate a paired CPU host with a fast device clock
+ok 3 - browser spaces persist, isolate roles and operate a paired CPU host with a fast device clock
+  ---
+  duration_ms: 38590.9236
+  type: 'test'
+  ...
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 72602.675

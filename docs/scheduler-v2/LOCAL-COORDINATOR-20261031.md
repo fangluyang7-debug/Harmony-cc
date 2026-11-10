@@ -6,6 +6,10 @@
 
 ## 启动
 
+2026-11-08 合并接入封装：根目录 `启动调度系统.cmd` 或 `npm run runtime:desktop` 可打开本机协调中心管理面板，负责启动、停止服务及查看日志。设备接入使用面板中的“打开协作空间应用”，沿用 Windows 应用的短码、共享确认与单空间代理管理；面板不再提供另一套手动配对/启动代理入口。鸿蒙应用保留空间页面、调度盘和扫码，同时提供高级设备邀请扫描与独立的跨 App 授权页。
+
+管理面板默认使用 `services/coordinator/data/desktop-<IP>`，不会自动接管命令行启动的中心，也不会迁移已有数据库、身份和证书。本轮真机中心继续使用 `.test/real-device-20261107/coordinator`，地址与证书保持原值；已经运行时不要再占用同一端口启动第二个中心。发现协议使用 UDP 7444，只提供地址提示；完整邀请仍用于建立证书信任。
+
 S1 已将现有控制台/CLI 的文本与向量入口接入正式规划器。示例地址（含 `examples/cpu-host/device.json`）必须替换为实际本机 IPv4；启动脚本会校验该地址属于本机网卡。新控制库自动迁移 ConsoleApp 表，不要用不同设备或实例的账本目录互换配置。
 
 在仓库根目录使用 Node.js 22、npm 和 OpenSSL。先安装并构建：
@@ -34,22 +38,52 @@ npm run coordinator:lan -- 192.168.1.20 7443
 
 ## 页面状态与诊断
 
-### 图形入口、扫码与购物 App（2026-11-08）
+### 三设备网络配置（2026-11-07）
 
-完成上述依赖安装和构建后，双击仓库根目录的 `启动调度系统.cmd`，或运行 `npm run runtime:desktop`。这是依赖 Node.js 的本机启动页面，尚未打包成独立安装程序。
+本轮拓扑为 Windows 协调中心及 PC 代理、鸿蒙电脑代理、鸿蒙手机代理。三台设备使用同一可互通的局域网。USB 用于安装及调试，业务地址填写 Windows 的局域网 IPv4。网卡选择应对应实际 Wi-Fi/以太网，不选 VMware、WSL 或 169.254 开头的地址。运行下列命令列出候选网卡；多网卡时按实际连接选择。
 
-1. 笔记本选择当前局域网 IPv4，点击“启动协调中心”。出现“服务运行中”后打开“设备邀请与配对”，登录并创建空间。协调中心需在联调期间持续运行；关闭网页不会停止服务，使用“停止当前服务”退出。
-2. 在空间中生成设备邀请，手机设备调度件扫描二维码，核对中心地址与证书指纹后确认加入。二维码携带有期限、一次性的配对邀请，由中心本地生成。PC 执行设备从同一页面下载邀请 JSON，在本机启动页面导入并配对，再点击“开启设备调度件”。
-3. 手机先安装并配对独立设备调度件，再打开购物 App 的“使用协同调度”开关。首次开启会进入设备调度件的授权页面，确认后自动登记内置工作流声明，并向购物 App 返回独立的应用身份。再次开启使用保存的应用凭据。设备凭据保留在设备调度件内。
-4. 打开“调度盘”，先确认设备在线和能力评测就绪，再查看应用声明与安装状态。在购物 App 选择图片，核对产生的任务、实际目标与完成回执。关闭 App 开关停止新提交，已有任务仍按原流程结算。
+```powershell
+node scripts/check-lan-connection.cjs
+npm run coordinator:lan -- <Windows局域网IPv4> 7443
+```
 
-图形入口按 IPv4 使用 `services/coordinator/data/desktop-<IP>` 独立数据目录，与命令行默认的 `data/lan` 分开。首次使用该入口需新建账号、空间并重新配对；旧目录保留。建议固定演示网络地址，避免换网后建立另一套中心身份。
+Windows 开放协调中心入站 TCP 7443。若启用 Windows 代理的数据直连，另为它设置固定端口 7444；两者都限制在现场可信网络与本地子网。Windows 防火墙规则可在管理员 PowerShell 中配置，使用前核对当前网络确实是受信任的 Private 网络。
 
-自动发现使用 UDP 7444，连接使用页面选择的 HTTPS 端口（默认 TCP 7443）。发现结果只是地址提示，信任通过配对邀请建立；发现失败仍可导入邀请。二维码不能绕过酒店或热点的客户端隔离。先确认两台设备之间的 TCP 端口可达。
+```powershell
+New-NetFirewallRule -DisplayName 'Harmony LAN coordinator' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 7443 -Profile Private -RemoteAddress LocalSubnet
+New-NetFirewallRule -DisplayName 'Harmony LAN agent data' -Direction Inbound -Action Allow -Protocol TCP -LocalPort 7444 -Profile Private -RemoteAddress LocalSubnet
+```
 
-购物主流程当前接入图片预处理，独立图像搜索入口接入图像编码；文字购物、账号及其他业务请求仍使用原业务服务。编码需为中心和执行设备配置一致的可信评测套件，以及执行设备所需模型、Python 和 CPU/CUDA 环境。任务声明自动登记，执行目标由规划器选择。
+创建 network.json，两个地址均替换为 Windows 实际局域网地址。文件包含网络设置，可与私有 agent.json 分开管理。固定端口只供一个代理进程使用；同机多个安装需分别指定不同端口。省略第三个参数时沿用现有配置，自动选取到协调中心的路由接口与动态数据端口。
 
-API 22 的购物 App 与设备调度件已完成未签名 HAP 构建。安装前需在 DevEco Studio 配置设备签名。扫码、跨 App 授权、真实 GPU 和跨物理设备网络仍需现场验收；当前设备调度件的贡献受前台生命周期限制，切到购物 App 后不能据此承诺手机持续在后台提供算力。
+```json
+{"listenHost":"192.168.1.20","advertisedHost":"192.168.1.20","port":7444}
+```
+
+```powershell
+node services/pc-agent/dist/host-main.js <agent.json> <contribution.json> network.json
+```
+
+控制台为三台设备分别生成邀请，Windows 按配对命令生成 agent.json；两台鸿蒙设备将包含 contribution 的完整邀请 JSON 粘贴到代理。保持鸿蒙代理前台。协调中心地址、证书和域来自邀请，两台鸿蒙设备无需手填本机 IP，也无需开放一个入站数据服务端口。
+
+当前鸿蒙数据实现主动请求可用端点。Windows 数据端点可达时可提供直连读写；没有入站端点的鸿蒙目标或不可达的设备方向，使用协调中心中继。数据和控制流量仍在现场局域网内。调度盘上的 L0–L3、每方向探测结果和实际传输回执用于核对路径，禁止将在线状态当作设备间直连证据。
+
+连接检查可以先使用邀请，配对后使用 agent.json。检查只读取健康状态、身份和端点目录，并探测公开的有限大小数据端点；不会消费邀请或创建任务。
+
+```powershell
+node scripts/check-lan-connection.cjs <invitation.json>
+node scripts/check-lan-connection.cjs <agent.json>
+```
+
+输出 ready 表示协调中心 TLS、健康和域核对成功；使用已配对配置时还要求凭据可以读取端点目录。NOT_PAIRED 表示尚未检查设备凭据。READ_PROBE_PASS 仅证明运行诊断的这台电脑到该数据端点的 1 KiB 读取成功，双向写入、其他物理设备的网络和 WSS 控制恢复须由实际代理及任务继续确认。证书或主机名错误时检查邀请地址、证书及当前 DHCP 地址；HTTP_401 表示检查凭据与配对；超时/拒绝连接时依次检查进程、绑定地址、入站端口和 AP 客户端隔离。诊断结果不包含邀请码、认证令牌或证书私钥。
+
+本机完整网络回归从 services/coordinator 目录运行，明确选定本机网卡。它创建独立临时 SIMULATED 空间与三个代理进程，使用真实局域网地址、TLS、公开配对入口和 SDK；其中两个关闭入站数据端点以复现鸿蒙当前拓扑。每个目标执行实际 CPU 任务、检查输出和提交回执，再验证数据端点读取及错误指纹拒绝。本机运行不能替代跨物理设备 Wi-Fi 验收。
+
+```powershell
+$env:HARMONY_TEST_LAN_ADDRESS = '<本机实际局域网IPv4>'
+node --test --test-concurrency=1 test/lan-config.test.cjs test/lan-three-hosts.test.cjs
+Remove-Item Env:HARMONY_TEST_LAN_ADDRESS
+```
 
 页面通过同源 HTTPS SSE 接收空间变化提示，再读取带权限检查的快照。任务派发与设备回执仍使用 WSS。断线后浏览器自动重连并重新获取快照；30 秒低频校对用于过期状态和通知遗漏，不作为任务派发机制。
 
@@ -82,3 +116,9 @@ API 22 的购物 App 与设备调度件已完成未签名 HAP 构建。安装前
 6. 相同 A/B 设备连接云端独立空间，保持资源上限、工作负载、预热、观测方式一致，比较完整结果延迟及失败。
 
 本机软件测试与双设备无线网络验收分别记录。现有时延实验仍是同一 PC 的回环对照，不能据此填写本验收的结果。
+
+## 协作者的可选 App 接入
+
+协作者的购物示例通过独立 EnrollmentAbility 请求设备所有者授权，再登记工作流声明并由 SDK 提交任务，仍经规划器选择执行目标。该示例不替代团队协作主入口；涉及图像编码时另需匹配的评测套件、模型及执行环境。
+
+协作者原始 API 22 未签名构建记录见 COLLABORATOR-ENROLLMENT-20261108.md。本轮 API 24 调度件签名构建与空间切换真机记录见 STATUS 最新节。跨 App 真机授权尚未验收；切到其他 App 后也不能据此前台代理实现承诺手机持续后台贡献。

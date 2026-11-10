@@ -1,0 +1,315 @@
+{
+  "startedAt": "2026-11-08T04:35:13.056Z",
+  "domain": "REAL",
+  "coordinator": "https://192.168.71.37:7443",
+  "budgetMs": 30000,
+  "strictOutputState": true,
+  "status": "FAILED",
+  "samples": [
+    {
+      "jobId": "4dacba6e-c0ff-43a0-93dc-c0c59740a4e5",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "我的设备",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 23.141800000000046
+    },
+    {
+      "jobId": "e2df15db-22cb-4791-9b3a-b13ddae92f06",
+      "case": "text-1",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "我的设备",
+      "parameters": {},
+      "inputBytes": 11499,
+      "inputHash": "2be6bd1f2c18b71b8a68992dfc7719c6c660a0ccb2b655f1498765f271bf78a2",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 18.954799999999977
+    },
+    {
+      "jobId": "42644349-f1b3-4cd1-acdc-1e15b1d70de8",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "我的设备",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 17.998199999999997
+    },
+    {
+      "jobId": "e8f59da3-0344-4ddf-8e5f-f8379cdb76b1",
+      "case": "vector-1",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "我的设备",
+      "parameters": {},
+      "inputBytes": 52392,
+      "inputHash": "e33a0fcb64e299be692ee1ff9cd623fa91c02fbb8b78ba288ca95b9d1dcec705",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 25.96780000000001
+    },
+    {
+      "jobId": "09b052ab-b6d0-4f1a-ac4c-1744f246aa46",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "我的设备",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 17.52940000000001
+    },
+    {
+      "jobId": "60c6ff07-93da-46ff-b998-d8b9cc0de774",
+      "case": "crop-1",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "我的设备",
+      "parameters": {
+        "box": {
+          "x": 0.5,
+          "y": 0.5,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 192,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 16.96539999999993
+    },
+    {
+      "jobId": "ee243896-2c71-4157-bf67-45f69daa87cf",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "FAILED",
+      "error": "DEVICE_CAPABILITY_UNAVAILABLE",
+      "elapsedMs": 0.10630000000003292
+    },
+    {
+      "jobId": "8edcec36-75ac-4fad-bcd1-d061ef7c310c",
+      "case": "text-1",
+      "capability": "text.count.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 11499,
+      "inputHash": "2be6bd1f2c18b71b8a68992dfc7719c6c660a0ccb2b655f1498765f271bf78a2",
+      "state": "FAILED",
+      "error": "DEVICE_CAPABILITY_UNAVAILABLE",
+      "elapsedMs": 0.08630000000005111
+    },
+    {
+      "jobId": "ac029495-823e-4d6d-9072-5fca25380a4c",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "FAILED",
+      "error": "DEVICE_CAPABILITY_UNAVAILABLE",
+      "elapsedMs": 0.054300000000012005
+    },
+    {
+      "jobId": "7bb1e426-ac8d-4367-babe-69e11455b166",
+      "case": "vector-1",
+      "capability": "vector.normalize.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 52392,
+      "inputHash": "e33a0fcb64e299be692ee1ff9cd623fa91c02fbb8b78ba288ca95b9d1dcec705",
+      "state": "FAILED",
+      "error": "DEVICE_CAPABILITY_UNAVAILABLE",
+      "elapsedMs": 0.1209999999999809
+    },
+    {
+      "jobId": "f0432515-8a80-4385-8cbc-946d1af1f1c1",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "FAILED",
+      "error": "DEVICE_CAPABILITY_UNAVAILABLE",
+      "elapsedMs": 0.07490000000007058
+    },
+    {
+      "jobId": "c7d946eb-860e-4f53-a9ea-28b4b094f5af",
+      "case": "crop-1",
+      "capability": "image.crop.v1",
+      "mode": "PINNED",
+      "requestedDevice": "Scilana",
+      "parameters": {
+        "box": {
+          "x": 0.5,
+          "y": 0.5,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 192,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "FAILED",
+      "error": "DEVICE_CAPABILITY_UNAVAILABLE",
+      "elapsedMs": 0.06769999999994525
+    },
+    {
+      "jobId": "cf1f0bc4-635e-4dfc-b09e-9c461132677a",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "AUTO",
+      "requestedDevice": "AUTO",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 15.352599999999939
+    },
+    {
+      "jobId": "1f9097e9-32f5-49ca-bc3f-473cb88b8df8",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "AUTO",
+      "requestedDevice": "AUTO",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 13.705500000000029
+    },
+    {
+      "jobId": "1e5d2f8e-d2dd-47c6-a498-04a4924f086a",
+      "case": "crop-0",
+      "capability": "image.crop.v1",
+      "mode": "AUTO",
+      "requestedDevice": "AUTO",
+      "parameters": {
+        "box": {
+          "x": 0,
+          "y": 0,
+          "width": 0.5,
+          "height": 0.5
+        },
+        "paddingRatio": 0,
+        "targetSize": 96,
+        "jpegQuality": 90
+      },
+      "inputBytes": 17959,
+      "inputHash": "f2fa1e7c9c2125572b40b4832b0ca0d0c49447f487dfd3959f02a778897945df",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 12.079700000000003
+    },
+    {
+      "jobId": "aa9dad79-5e2b-44dd-b751-405fa4c46213",
+      "case": "text-0",
+      "capability": "text.count.v1",
+      "mode": "CONCURRENT",
+      "requestedDevice": "我的设备",
+      "parameters": {},
+      "inputBytes": 59,
+      "inputHash": "f1eb7aafd11e92e6eb394c0153cc4eea61ab8a0a903b77c8d3a648f2cb09891b",
+      "state": "FAILED",
+      "error": "REQUEST_FAILED",
+      "requestRoute": "/sdk/jobs",
+      "httpStatus": 400,
+      "elapsedMs": 15.129599999999982
+    },
+    {
+      "jobId": "6e946c96-ccb4-45dd-a057-fad04a5eaf80",
+      "case": "vector-0",
+      "capability": "vector.normalize.v1",
+      "mode": "CONCURRENT",
+      "requestedDevice": "Scilana",
+      "parameters": {},
+      "inputBytes": 61,
+      "inputHash": "e9f7160975e2619085701fb983eb718785f174b3716a318975c2d9f716423a0f",
+      "state": "FAILED",
+      "error": "DEVICE_CAPABILITY_UNAVAILABLE",
+      "elapsedMs": 0.35150000000010095
+    }
+  ],
+  "note": "Correctness and delivery checks; not a speedup comparison. Windows local execution does not cross Wi-Fi.",
+  "devices": [
+    {
+      "id": "adf0de8f-83a9-4e60-a363-65f04daabf32",
+      "name": "我的设备"
+    },
+    {
+      "id": "6331696a-b990-493d-a33b-53cff5930220",
+      "name": "Scilana"
+    }
+  ],
+  "concurrentBatchMs": 17.226800000000026,
+  "jobs": [],
+  "finishedAt": "2026-11-08T04:35:13.496Z"
+}

@@ -18,8 +18,7 @@
     "packages/scheduler-client"
   ],
   "scripts": {
-    "runtime:desktop": "node scripts/runtime-desktop.cjs",
-    "sdk:build": "npm --workspace @harmony/scheduler-client run build && esbuild packages/scheduler-client/src/index.ts --bundle --format=esm --platform=browser --outfile=apps/team-space-web/scheduler-sdk.js",
+    "sdk:build": "npm --workspace @harmony/scheduler-client run build && esbuild packages/scheduler-client/src/index.ts --bundle --format=esm --platform=browser --outfile=apps/team-space-web/scheduler-sdk.js && esbuild node_modules/qrcode/lib/browser.js --bundle --format=esm --platform=browser --outfile=apps/team-space-web/qrcode.js",
     "sdk:test": "npm --workspace @harmony/scheduler-client test",
     "sdk:native:test": "node tests/sdk/native.cjs",
     "data:prepare": "node scripts/upload-harmony-products.mjs --prepare",
@@ -81,10 +80,19 @@
     "harmony:v2:indexer": "npm run references:build && node scripts/harmony-v2-app-build.cjs harmony-indexer --har",
     "s4:core-check": "node scripts/check-s4-core-baseline.cjs",
     "harmony:v2:soleai": "npm run references:build && node scripts/harmony-v2-app-build.cjs harmony --har",
-    "dist:prepare": "node scripts/prepare-harmony-distribution.cjs"
+    "dist:prepare": "node scripts/prepare-harmony-distribution.cjs",
+    "desktop:build": "node scripts/build-windows-agent.cjs",
+    "distribution:build": "node scripts/build-distribution.cjs",
+    "photo:prepare": "node scripts/prepare-photo-runtime.cjs",
+    "photo:rehearse": "node scripts/photo-local-rehearsal.cjs",
+    "photo:test": "node --test services/pc-agent/test/photo.test.cjs && npm --workspace @harmony/coordinator exec -- node --test test/photo-workflow.test.cjs"
   },
   "devDependencies": {
     "ajv": "8.20.0",
+    "electron": "44.7.2",
     "esbuild": "0.25.12"
+  },
+  "dependencies": {
+    "qrcode": "1.5.4"
   }
 }

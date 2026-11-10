@@ -8,6 +8,7 @@ import { Product } from '../models/Product';
 import { ShoppingResult } from '../models/ShoppingResult';
 import { SearchPreference } from './SearchPreferences';
 import { CloudShoppingExecutor, CloudShoppingInput } from './CloudShoppingExecutor';
+import { shoppingBusiness } from './ShoppingBusinessCompute';
 
 interface SessionMutationEnvelope { success: boolean; data?: SessionRevision; }
 interface SessionRevision { stateVersion?: number; requestRevision?: number; }
@@ -25,7 +26,7 @@ export class ShoppingTaskService {
     inferenceLocation: InferenceLocation.ADAPTIVE, privacyPolicy: PrivacyPolicy.REMOTE_ALLOWED,
     interruptibility: Interruptibility.CANCEL_RESTART, duplicatePolicy: DuplicatePolicy.KEEP_LATEST,
     timeoutMs: 150000, remoteOptions: { provider: 'cloud-shopping-api', maxRetries: 1, maxConcurrency: 2, allowLocalFallback: true },
-    resourceHints: { modelVersion: 'zeabur-shopping-workflow-v1' },
+    resourceHints: { modelVersion: 'cloud-shopping-workflow-v1' },
     qualityLevels: [{ id: 'cloud', modelTier: ModelTier.HIGH_ACCURACY, estimatedLatencyMs: 10000,
       estimatedMemoryMb: 48, relativeEnergyCost: 1, supportedBackends: [Backend.CPU], supportedThreadCounts: [1] }]
   };
@@ -92,7 +93,10 @@ export class ShoppingTaskService {
       operation: operation, query: query, photoUri: photoUri, sessionId: sessionId,
       deviceProfile: state, context: context, template: this.template };
     this.lastSubmittedTaskId = input.taskId;
-    return this.requireClient().submit<CloudShoppingInput, ShoppingResult>('product_search', input, context);
+    shoppingBusiness.begin(input.taskId);
+    const handle=this.requireClient().submit<CloudShoppingInput, ShoppingResult>('product_search', input, context);
+    void handle.result.then(result=>{if(result.output===null)shoppingBusiness.failed(input.taskId,operation,String(result.status),result.reasonCode??'NO_SHOPPING_RESULT',result.nodes.flatMap(node=>node.executionPlan.reasonCodes));}).catch((error:Error)=>{shoppingBusiness.failed(input.taskId,operation,'FAILED',error.message);});
+    return handle;
   }
   // Legacy Product[] API is an explicit projection; new consumers retain the full result.
   public search(query: string, highQuality: boolean = false,

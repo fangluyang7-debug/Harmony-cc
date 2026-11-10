@@ -7,6 +7,10 @@ test('desktop process controls require a session token and same-origin POST',asy
   assert.equal((await fetch(base+'/state',{headers:{'X-Runtime-Token':token,Origin:'https://unrelated.example'}})).status,403);
   assert.equal((await fetch(base+'/stop',{method:'POST',headers:{'X-Runtime-Token':token,'Content-Type':'application/json'},body:'{}'})).status,400);
   const state=await fetch(base+'/state',{headers:{'X-Runtime-Token':token}});assert.equal(state.status,200);assert.equal((await state.json()).state,'STOPPED');
+  for(const route of ['/agent/start','/agent/pair']){
+   const response=await fetch(base+route,{method:'POST',headers:{'X-Runtime-Token':token,Origin:base,'Content-Type':'application/json'},body:'{}'});
+   assert.equal(response.status,400);assert.match(await response.text(),/配对|邀请|安装目录/);
+  }
   assert.equal((await fetch(base+'/stop',{method:'POST',headers:{'X-Runtime-Token':token,Origin:base,'Content-Type':'application/json'},body:'{}'})).status,200);
  }finally{await new Promise(resolve=>runtime.server.close(resolve));}
 });

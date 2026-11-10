@@ -27,13 +27,24 @@ test('registered App host qualifies and executes SDK work through the shared pla
   const sdk=host.sdk(),request=sdk.port.request.bind(sdk.port);
   sdk.port.request=async(route,body)=>{try{return await request(route,body);}catch(error){error.requestRoute=route;error.hostErrors=[...errors];throw error;}};
   const input=await sdk.registerInput(Buffer.from('{"text":"App host"}'),'text.input'),id=randomUUID();
-  const task=await sdk.submit({version:3,id,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
+  // A slow/unrelated control session must not hold the SDK's HTTP start open
+  // after atomic offer persistence, nor make a repeated start duplicate work.
+  const flush=r.jobs.flush;let releasePump,timer,task;const blockedPump=new Promise(resolve=>releasePump=resolve);r.jobs.flush=()=>blockedPump;
+  try{
+   task=await Promise.race([sdk.submit({version:3,id,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:id,budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('START_WAITED_FOR_UNRELATED_CHANNEL')),5000);})]);
+   await r.sdk.start(peer,id);assert.equal(await r.db.attempt.count({where:{id}}),1);
+  }finally{clearTimeout(timer);releasePump();r.jobs.flush=flush;await flush();}
   const result=await task.result();assert.deepEqual(JSON.parse(Buffer.from(result.output)),{characters:8,words:2,lines:1});
   const job=await r.db.cpuJob.findUnique({where:{id}}),data=JSON.parse(job.metadataJson);
   assert.equal(data.holderId,peer.holderInstanceId);assert.equal(data.offer.task.app.appInstanceId,identity.appInstanceId);
   assert.deepEqual(data.offer.transferPlan,[]);assert.equal(r.artifacts.available(data.input),false);assert.equal(r.artifacts.available(data.output),false);
   assert.equal((await r.db.receipt.findUnique({where:{id}})).committed,true);
   assert.equal(host.ledger.snapshot().grant.appInstanceId,identity.appInstanceId);
+  const {compare}=require('../../../scripts/compare-team-execution.cjs');
+  const comparison=await compare(sdk,{targets:[result.status.targetId],capability:'text.count.v1',inputSchema:'text.input',outputSchema:'text.counts',bytes:Buffer.from('{"text":"App host"}'),expected:Buffer.from(JSON.stringify({characters:8,words:2,lines:1})),count:2,concurrency:1,rounds:1});
+  assert.equal(comparison.verdict,'SINGLE_DEVICE_SELECTED');
+  assert.equal(comparison.batches.length,2);
+  assert.ok(comparison.batches.every(batch=>batch.samples.length===2&&batch.samples.every(sample=>sample.state==='PASS'&&sample.traceId)));
   for(const state of ['DISPATCHING','WAITING_INPUT']){
     await r.db.cpuJob.update({where:{id},data:{state}});
     await r.sdk.start(peer,id);
@@ -103,7 +114,9 @@ test('registered App host qualifies and executes SDK work through the shared pla
       const copy=remoteHost.dataHost?.channel.lookup(group,metadata.input.ref);if(copy)assert.equal(copy.ref.contentHash,metadata.input.ref.contentHash);
       assert.deepEqual(metadata.offer.transferPlan,[],'a completed upload is executor-local at dispatch');
     }
-    assert.equal(r.artifacts.available(metadata.output),false,'verified result acknowledgment releases relay bytes');assert.ok(metadata.resultReceivedAt);
+    // Cleanup is deliberately coalesced after the durable source acknowledgment.
+    for(const end=Date.now()+5000;r.artifacts.available(metadata.output)&&Date.now()<end;)await new Promise(resolve=>setTimeout(resolve,25));
+    assert.equal(r.artifacts.available(metadata.output),false,'verified result acknowledgment eventually releases relay bytes');assert.ok(metadata.resultReceivedAt);
     const observationId='execute:'+JSON.stringify([group,metadata.holderId,chosenResult.status.targetId]);
     let feedback;
     for(const end=Date.now()+8000;Date.now()<end;){

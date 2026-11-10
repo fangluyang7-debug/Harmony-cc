@@ -8,6 +8,22 @@ const {RecoveryClient}=require('../../pc-agent/dist/recovery-client');
 const {occupiedV2}=require('@harmony/scheduler-core');
 const who={groupId:'g1',deviceId:'device1',holderInstanceId:'h1',appInstanceId:null};
 async function until(check){const deadline=Date.now()+15000;while(Date.now()<deadline){if(await check())return;await new Promise(r=>setTimeout(r,25));}throw Error('RECOVERY_TIMEOUT');}
+test('continuous acknowledged traffic and concurrent flushes preserve one channel beyond the watchdog interval',async()=>{
+ const r=await runtime();let ledger,client;const errors=[];let completed=0,ready=false;
+ try{
+  const f=await prepare(r);ledger=f.ledger;
+  const send=r.channel.send.bind(r.channel);
+  r.channel.send=async(session,message)=>{if(message.type==='Ack'&&ledger.pendingMessages().some(m=>m.messageId===message.ackOf&&m.type==='RecoveryRequest'))await new Promise(resolve=>setTimeout(resolve,160));return send(session,message);};
+  client=new RecoveryClient(ledger,f.connection,e=>errors.push(e.message),{dispatch:()=>{},state:value=>{ready=value;},acknowledged:message=>{
+   if(message.type!=='RecoveryRequest')return;
+   completed++;
+   if(completed<70){ledger.requestRecovery(true);void Promise.all([client.flush(),client.flush(),client.flush()]).catch(e=>errors.push(e.message));}
+  }});
+  await client.connect();await until(()=>completed>=70);
+  assert.ok(ready);assert.deepEqual(errors,[]);assert.equal(r.channel.sessions.size,1);
+  await until(()=>ledger.pendingMessages().length===0);
+ }finally{await client?.close();await ledger?.close();await r.close();}
+});
 async function prepare(r){
  const invite=await r.auth.invite('g1','p1','device1',r.url),pair=await pinnedRequest(invite,'/v2/pair',{inviteId:invite.inviteId,code:invite.code,holderInstanceId:'h1'});
  const capacity=[{resourcePoolId:'memory1',amount:200}];await r.allotments.confirmDevice('device1',capacity,[{groupId:'g1',holderInstanceId:'h1',appInstanceId:null}]);

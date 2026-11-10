@@ -24,3 +24,16 @@ test('canary evidence uses injected time and cohort, failing closed on stale or 
   expect(admissionEvidence(config,evidence,NaN,false,true,100,50).killSwitch).toBe(true);
   expect(admissionEvidence(config,evidence,.01,false,true,200,50).sampleCount).toBe(0);
 });
+
+test('startup-dominated link probes keep jitter as fixed overhead instead of multiplying it by payload size',()=>{
+  const rows=[{bytes:1024,durationMs:30,observedAt:100},{bytes:8192,durationMs:18,observedAt:100},{bytes:32768,durationMs:20,observedAt:100}];
+  const fit=fitLink(rows,30000)!;
+  for(const row of rows)expect(fit.fixedMs+row.bytes/fit.bytesPerSecond*1000).toBeGreaterThanOrEqual(row.durationMs-1e-9);
+  // 8 MiB no longer inherits 8192 copies of the 1 KiB cold-request overhead.
+  expect(fit.fixedMs+8388608/fit.bytesPerSecond*1000).toBeLessThan(6000);
+  expect(fit.fixedMs).toBeGreaterThan(20);
+  const repeated=fitLink([...rows,{bytes:32768,durationMs:25,observedAt:101}],30000)!;
+  expect(repeated.bytesPerSecond).toBeLessThanOrEqual(32768/25*1000);
+  const slow=fitLink([1024,8192,32768].map(bytes=>({bytes,durationMs:10+bytes/10,observedAt:100})),30000)!;
+  expect(slow.fixedMs+8388608/slow.bytesPerSecond*1000).toBeGreaterThan(30000);
+});

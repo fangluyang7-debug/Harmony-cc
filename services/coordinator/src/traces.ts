@@ -1,3 +1,4 @@
+import {traceRows,traceJobs} from './dashboard-history';
 import { PrismaClient } from '../generated/client';
 import { TraceSpanV2, validTraceSpanV2, analyzeTrace, canonical, protocolId,projectTraceCausality,TraceJobEvidence,TraceTransferEvidence } from '@harmony/scheduler-core';
 import type { Peer } from './channel';
@@ -66,10 +67,10 @@ export class TraceService {
   }
   async read(peer:Peer,traceId:string){
     if(!protocolId(traceId))throw Error('TRACE_INVALID');
-    const rows=(await this.db.traceSpan.findMany({where:{groupId:peer.groupId}})).map(r=>JSON.parse(r.metadataJson)).filter(r=>r.span.traceId===traceId);
+    const rows=(await traceRows(this.db,peer.groupId,traceId)).map(r=>JSON.parse(r.metadataJson)).filter(r=>r.span.traceId===traceId);
     if(!rows.length||rows.some(r=>!r.readers.includes(peer.principalId)))throw Error('TRACE_UNAUTHORIZED');
     const recorded:TraceSpanV2[]=rows.map(r=>r.span).sort((a,b)=>a.spanId.localeCompare(b.spanId)),root=rows.find(r=>r.sourceSdkRoot===true);
-    const jobs=(await this.db.cpuJob.findMany({where:{groupId:peer.groupId}})).map(row=>({id:row.id,sourceHolderId:row.sourceHolderId,d:JSON.parse(row.metadataJson)})).filter(j=>j.d.traceId===traceId);
+    const jobs=(await traceJobs(this.db,peer.groupId,traceId)).map(row=>({id:row.id,sourceHolderId:row.sourceHolderId,d:JSON.parse(row.metadataJson)})).filter(j=>j.d.traceId===traceId);
     const attempts=await this.db.attempt.findMany({where:{groupId:peer.groupId,id:{in:jobs.map(j=>j.id)}}});
     const nodes=await this.db.node.findMany({where:{workflowId:{in:[...new Set(jobs.map(j=>j.d.offer.task.workflowId))]}}});
     const receipts=await this.db.receipt.findMany({where:{committed:true,id:{in:nodes.map(n=>n.currentAttemptId).filter((id):id is string=>!!id)}}});
@@ -81,7 +82,7 @@ export class TraceService {
       return {attemptId:id,dispatched:attempts.some(a=>a.id===id),parents,missingParent,unsplitTransfer:!!d.delivery?.relay||!!d.outputFallback||!!d.offer.transferPlan?.length&&(!d.delivery||!d.retainOutput&&!originFinal)};
     });
     const transfers:TraceTransferEvidence[]=[];
-    for(const row of await this.db.transferAuthorization.findMany({where:{groupId:peer.groupId,state:'COMPLETED'}})){
+    for(const row of await this.db.transferAuthorization.findMany({where:{groupId:peer.groupId,state:'COMPLETED',attemptId:{in:jobs.map(j=>j.id)}}})){
       const a=JSON.parse(row.metadataJson).authorization,job=jobs.find(j=>j.id===a?.attemptId),parent=jobs.find(j=>j.id===a?.producerAttemptId);
       if(a?.version===2&&a.operation==='WRITE'&&job&&parent&&job.d.sourceAttemptId===a.producerAttemptId&&canonical(job.d.input.ref)===canonical(a.ref))
         transfers.push({id:a.id,attemptId:a.attemptId,producerAttemptId:a.producerAttemptId,producerHolderId:parent.d.holderId,senderHolderId:a.senderHolderId,receiverHolderId:a.receiverHolderId,refKey:canonical([a.appInstanceId,a.ref])});

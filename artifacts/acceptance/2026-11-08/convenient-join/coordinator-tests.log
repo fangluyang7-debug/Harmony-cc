@@ -1,0 +1,34 @@
+TAP version 13
+# Subtest: one browser account can submit in multiple spaces while legacy installations remain readable
+ok 1 - one browser account can submit in multiple spaces while legacy installations remain readable
+  ---
+  duration_ms: 8240.6014
+  type: 'test'
+  ...
+# Subtest: owner-confirmed one-use registration derives App identity, reserves offline capacity before delivery and rejects self-grants
+ok 2 - owner-confirmed one-use registration derives App identity, reserves offline capacity before delivery and rejects self-grants
+  ---
+  duration_ms: 6965.3034
+  type: 'test'
+  ...
+# Subtest: logical App concurrency/resource quota is shared across installations and queued reservations are bounded
+ok 3 - logical App concurrency/resource quota is shared across installations and queued reservations are bounded
+  ---
+  duration_ms: 6948.88
+  type: 'test'
+  ...
+# Subtest: browser spaces persist, isolate roles and operate a paired CPU host with a fast device clock
+ok 4 - browser spaces persist, isolate roles and operate a paired CPU host with a fast device clock
+  ---
+  duration_ms: 36792.082
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 39508.4819

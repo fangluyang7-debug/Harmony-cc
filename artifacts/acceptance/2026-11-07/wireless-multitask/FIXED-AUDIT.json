@@ -1,0 +1,1614 @@
+{
+  "at": "2026-11-07T13:21:05.323Z",
+  "budgetMs": 30000,
+  "baseline": "retest/RESULTS.json",
+  "strictOutputState": true,
+  "runs": [
+    {
+      "name": "fixed-round1",
+      "startedAt": "2026-11-07T13:10:14.623Z",
+      "finishedAt": "2026-11-07T13:12:40.069Z",
+      "pass": 23,
+      "total": 24,
+      "concurrentBatchMs": 15770.107000000018,
+      "rows": [
+        {
+          "jobId": "6905c9eb-f140-4330-bd87-0f6c51576255",
+          "case": "text-0",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "d222bf59-2253-471e-8b0b-c600eb66c96b",
+          "case": "text-1",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "dea3395e-a66e-4a82-a3b5-d86b90bfd770",
+          "case": "vector-0",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "128ac85b-4166-4970-a8b7-8995b026df75",
+          "case": "vector-1",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "fb2e9332-94b4-4ed0-9fa5-fbd994538286",
+          "case": "crop-0",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "69795ca1-9ef5-49f2-a521-7fd3824400bd",
+          "case": "crop-1",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "e9168865-ae17-408a-b4ab-130c97439d7c",
+          "case": "text-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "5a48892f-5c25-4ad2-b42b-46b1e0f529dc",
+          "case": "text-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "89e4ba66-0eff-4f23-bcf0-3be285295481",
+          "case": "vector-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "181ed133-09cc-44fa-8c91-45b1fe74f459",
+          "case": "vector-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "05144ce1-96dc-40e0-85f8-f23c49318c4c",
+          "case": "crop-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "b39ead70-a6be-435c-b19c-ffc343d691c4",
+          "case": "crop-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "a1599191-8818-482a-b1a0-c997166be4ae",
+          "case": "text-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "a9d303b7-4f2f-4e18-8eda-3ed28045df9c",
+          "case": "text-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "c62d5abf-2c0f-462e-aabf-85669baf757a",
+          "case": "vector-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "315175c1-437a-4a62-b288-eecff9eefbbc",
+          "case": "vector-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "eba0a8db-e6a8-41a0-a799-80ef073dee9d",
+          "case": "crop-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "18345ef6-732a-4fe2-b02d-1c55905ec188",
+          "case": "crop-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "7f5386fd-584e-4957-85a6-748cef433fd4",
+          "case": "text-0",
+          "mode": "AUTO",
+          "requestedDevice": "AUTO",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "46dbbe7f-16ff-4568-ab4b-4b0335dbff7d",
+          "case": "vector-0",
+          "mode": "AUTO",
+          "requestedDevice": "AUTO",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "23d92eed-94b2-4c45-b4be-ea3d88c7615c",
+          "case": "crop-0",
+          "mode": "AUTO",
+          "requestedDevice": "AUTO",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "b84521b3-2ee3-45a9-bdd4-637ae503ea7a",
+          "case": "text-0",
+          "mode": "CONCURRENT",
+          "requestedDevice": "Windows CPU",
+          "testState": "FAILED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": null,
+          "receiptCount": 0,
+          "committedReceiptCount": 0,
+          "resultReceived": false,
+          "receipts": []
+        },
+        {
+          "jobId": "fd04d3cf-b44c-4312-bf45-fd5946b7c76f",
+          "case": "vector-0",
+          "mode": "CONCURRENT",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "feb24c0d-824c-48ef-8b22-50b2346951b2",
+          "case": "crop-0",
+          "mode": "CONCURRENT",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": false,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "fixed-round2",
+      "startedAt": "2026-11-07T13:18:29.407Z",
+      "finishedAt": "2026-11-07T13:19:27.887Z",
+      "pass": 24,
+      "total": 24,
+      "concurrentBatchMs": 6666.423500000004,
+      "rows": [
+        {
+          "jobId": "d9ca8daa-cef3-4a6b-81bd-3f35a07a63f9",
+          "case": "text-0",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "52f8a817-7241-4a22-a245-4446364eeca3",
+          "case": "text-1",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "dd827009-e767-45a9-879a-cfa0f38aeb83",
+          "case": "vector-0",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "9fa1bc95-888e-4606-9158-3b5ecdd1bebc",
+          "case": "vector-1",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "085769fa-f69a-4e2b-8f82-848819669942",
+          "case": "crop-0",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "bc90aca5-4692-433e-9ba5-f2e7077d2daf",
+          "case": "crop-1",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "59625738-a09d-4f0f-80e7-9b2d2d9171b2",
+          "case": "text-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "f2d42bea-b58d-48e5-8a34-7e814a5a6fad",
+          "case": "text-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "636f93c3-aba7-4172-8c49-5e640fa791e7",
+          "case": "vector-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "ec6c2a97-41c5-4c83-acab-2706d93d6f36",
+          "case": "vector-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "b7991340-e741-4f4e-a1dd-714f7120abad",
+          "case": "crop-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "4da7c3de-9b0e-498e-b378-995735d4270d",
+          "case": "crop-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "546add92-a188-4a33-9cc2-90f206f860da",
+          "case": "text-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "76fa7523-256c-416c-bd6f-694555aa9426",
+          "case": "text-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "fee4e6dc-a584-4e1a-8f18-7f2096f98334",
+          "case": "vector-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "97621d76-a05a-4293-8847-59c057a1d838",
+          "case": "vector-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "052dd091-6f7b-4730-ab23-ac1fa2b54658",
+          "case": "crop-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "e8764a04-75df-4e3a-a752-974b60d04c2a",
+          "case": "crop-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "96277431-afef-46fd-b7ed-1f851daf53f0",
+          "case": "text-0",
+          "mode": "AUTO",
+          "requestedDevice": "AUTO",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "998b3781-cf2c-4a9e-9b59-37a7bd931322",
+          "case": "vector-0",
+          "mode": "AUTO",
+          "requestedDevice": "AUTO",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "420e94fe-314f-42ef-8d85-d0a56f0e5d94",
+          "case": "crop-0",
+          "mode": "AUTO",
+          "requestedDevice": "AUTO",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "d815da27-59b9-4f75-9f3f-1d994dac0c8c",
+          "case": "text-0",
+          "mode": "CONCURRENT",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "ca6615db-ed3a-462d-954c-9064718f8e48",
+          "case": "vector-0",
+          "mode": "CONCURRENT",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "c0bd6d61-9fd0-4649-a1f9-7109ce88d1b4",
+          "case": "crop-0",
+          "mode": "CONCURRENT",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "fixed-round3",
+      "startedAt": "2026-11-07T13:19:47.260Z",
+      "finishedAt": "2026-11-07T13:20:43.700Z",
+      "pass": 24,
+      "total": 24,
+      "concurrentBatchMs": 6864.392199999995,
+      "rows": [
+        {
+          "jobId": "eafb4130-c550-433a-94d0-3cad4542d5bb",
+          "case": "text-0",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "df9e966b-86c6-4b55-98f8-59e6cad13e41",
+          "case": "text-1",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "e42de789-d2ce-46ba-9529-7e549c79fcd0",
+          "case": "vector-0",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "275fb926-4d76-4b06-b289-da5bd6ac89bf",
+          "case": "vector-1",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "1e1c3089-ffa8-43d3-a637-6a6ab9da3e54",
+          "case": "crop-0",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "4704a6cd-071c-4a41-b48c-dab2d8318e77",
+          "case": "crop-1",
+          "mode": "PINNED",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "d693e190-8852-4099-9204-f634f7fb0fbb",
+          "case": "text-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "195ec5b2-41d8-4119-b833-13ba2912ab91",
+          "case": "text-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "12dad117-f638-401c-90f4-807216022f14",
+          "case": "vector-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "ed6aadaf-3d52-4129-a3d0-92b114487681",
+          "case": "vector-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "fb0a974b-c3c2-4c53-8860-b9657015d032",
+          "case": "crop-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "d6f1c2c6-991f-4190-9352-f8bb5147bece",
+          "case": "crop-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "24d0a186-f224-489e-b34d-a86054f0b76a",
+          "case": "text-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "27c29d77-dd4a-45b4-82de-717386bb391a",
+          "case": "text-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "b554eb93-536e-476b-8b54-50b8067d70ba",
+          "case": "vector-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "0bdbd52a-3995-4cef-8dda-cbc1626eec28",
+          "case": "vector-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "ae997791-7672-4ede-b6fa-42f29326af36",
+          "case": "crop-0",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "ade41659-756c-4907-acb2-816d202a9f86",
+          "case": "crop-1",
+          "mode": "PINNED",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "27718e7f-f4d7-4ed1-8759-c635a432af64",
+          "case": "text-0",
+          "mode": "AUTO",
+          "requestedDevice": "AUTO",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "e5aad118-87b9-4fa0-8a68-af22613bea86",
+          "case": "vector-0",
+          "mode": "AUTO",
+          "requestedDevice": "AUTO",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "2ed1af06-dc98-4085-9b30-b58bd70807f4",
+          "case": "crop-0",
+          "mode": "AUTO",
+          "requestedDevice": "AUTO",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "19f05325-0478-406b-8ead-8617d75fef45",
+          "case": "text-0",
+          "mode": "CONCURRENT",
+          "requestedDevice": "Windows CPU",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "41aff6d5-a99c-4759-92c4-15ec1821ca5a",
+          "case": "vector-0",
+          "mode": "CONCURRENT",
+          "requestedDevice": "HarmonyOS 电脑",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        },
+        {
+          "jobId": "07727cdf-cd55-4d96-ad79-56b2d3382dff",
+          "case": "crop-0",
+          "mode": "CONCURRENT",
+          "requestedDevice": "HarmonyOS 手机",
+          "testState": "PASS",
+          "outputReadyState": "SUCCEEDED",
+          "sameInputAndParameters": true,
+          "actualBudgetMs": 30000,
+          "attemptState": "SUCCEEDED",
+          "receiptCount": 1,
+          "committedReceiptCount": 1,
+          "resultReceived": true,
+          "receipts": [
+            {
+              "committed": true,
+              "state": "SUCCEEDED",
+              "resourcesSettled": true,
+              "matchingOutput": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

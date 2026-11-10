@@ -1,0 +1,205 @@
+{
+  "at": "2026-11-08T04:38:46.166Z",
+  "scope": "TWO_DEVICE_ONLY_PENDING_PHONE_CAMERA_SCAN",
+  "groupId": "84d15873-48a2-468a-b1e3-5c0dce7a38c6",
+  "members": [
+    {
+      "name": "鸿蒙电脑发起人",
+      "role": "OWNER"
+    },
+    {
+      "name": "Windows协作者",
+      "role": "MEMBER"
+    }
+  ],
+  "devices": [
+    {
+      "name": "我的设备",
+      "id": "adf0de8f-83a9-4e60-a363-65f04daabf32",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "available": true
+        },
+        {
+          "capability": "text.count.v1",
+          "available": true
+        },
+        {
+          "capability": "image.crop.v1",
+          "available": true
+        }
+      ]
+    },
+    {
+      "name": "Scilana",
+      "id": "6331696a-b990-493d-a33b-53cff5930220",
+      "online": true,
+      "capabilities": [
+        {
+          "capability": "vector.normalize.v1",
+          "available": true
+        },
+        {
+          "capability": "text.count.v1",
+          "available": true
+        },
+        {
+          "capability": "image.crop.v1",
+          "available": true
+        }
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "jobId": "9008d9f2-df98-453a-b3bd-7b5e897a4a7f",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "4ad90a50-25ff-489b-8ba7-674fe53cfae3",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "4557da7e-437f-4f44-b1e2-909b0a48bb85",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "7439a2ed-3da2-47c8-aaaa-9d454e146621",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "ebe37388-0072-4863-8f6b-cc99571b274b",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "a3c804c6-0ebf-4739-8ba4-5c9feb2ea48a",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "7c2648a6-df4d-4805-9471-f669c4561bab",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "7bf79205-6d7c-4e16-8043-5ec7d0f9f735",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "0853337f-e8bc-4a44-aecf-063bf66507f0",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "6875e2de-ad8b-4d3e-94f1-041692646b93",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "060df553-6d84-44b1-b933-17430f12b615",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "dfc9d345-39c5-42da-8295-f6b099d7169b",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "fe42b592-e60b-4be2-8318-64b0af6cf953",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "e5982a78-6976-48b0-b6b5-1b942e5e6092",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "8aea66dd-63cd-4f41-8de5-efd58b277b59",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "d90e6cd6-6ea0-4735-83da-057a50092179",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    },
+    {
+      "jobId": "2fa70767-41b2-4ead-af82-f93b1660bad5",
+      "state": "SUCCEEDED",
+      "committedReceipts": 1,
+      "resourcesSettled": true,
+      "resultReceived": true,
+      "outputHashMatches": true
+    }
+  ],
+  "sourceHashes": {
+    "apps/windows-agent/main.cjs": "6c4329db3ccec0f315c43c0dce21a2fea83b954875e8003f9ac9b4da85a9e7b0",
+    "apps/windows-agent/host-manager.cjs": "48918d6389a886308dec2de320cc52bd1f408e91232ecaaf5d9e790253336911",
+    "apps/windows-agent/preload.cjs": "d111c74bec70e589188a8d25e9671dcc5f5cb2eb6e3873276e20a5b0beb11a99",
+    "apps/harmony-agent/entry/src/main/ets/JoinInvitation.ets": "d70386beff599ea0c497dfa5c142d317d1578d8a86b6ed1fe2613f009175ee72",
+    "apps/harmony-agent/entry/src/main/ets/pages/Index.ets": "2a82c852d9e49a23b47a750d176b126490063a8e7ab0a46e0a7b33daa14cf020",
+    "apps/harmony-agent/entry/src/main/ets/ConsoleDeviceBridge.ets": "2cc92f65b7ed0f8161dc5d5dac26cf96aeacd84baffd52018bd3f5be9b15b19a",
+    "apps/team-space-web/app.js": "b0ab926cdfd6f4dd4dcc34b9523a0a4918d4329171c623262cb77c5b8b706017",
+    "apps/team-space-web/join-key.mjs": "862cdfb096921337c1876c5ff40c26ba6e27fc1173a60ef7b427bdf37428c2b7",
+    "services/coordinator/src/apps.ts": "90f7e71dc1beefbb98272815d7cf9684e649f21c73137eb3ed78926dcbda30ff"
+  },
+  "signedHapSha256": "0a40e1a0aedbce07809320f54621813dcb7e9b2117edaf1a0788f4a1a25726c6"
+}

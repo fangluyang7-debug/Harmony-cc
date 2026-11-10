@@ -8,7 +8,7 @@ let serverAnchor=0,clockAnchor=0;
 const now=()=>serverAnchor?serverAnchor+performance.now()-clockAnchor:Date.now();
 const labels={SUCCEEDED:'执行成功',COMMITTED:'结果已提交',ACTIVE:'已激活',RUNNING:'执行中',ACCEPTED:'已接收',DISPATCHED:'已派发',DISPATCHING:'派发中',FAILED:'执行失败',REJECTED:'已拒绝',WAITING_INPUT:'等待输入',SUBMITTED:'已提交',CANCELLED_SETTLED:'取消已结算',REACHABLE:'可达',SIDE_EFFECT_UNKNOWN:'副作用未知',HOLDER_RECORD_MISSING:'宿主记录缺失'};
 const tag=(text,kind='neutral')=>`<span class="tag ${kind}" title="${esc(text)}">${esc(Object.hasOwn(labels,text)?labels[text]:text)}</span>`;
-const capabilities={'text.count.v1':'文本统计','vector.normalize.v1':'向量归一化'};
+const capabilities={'image.visual-match.v1':'商品图像相似度复核','catalog.filter.v1':'商品预算筛选与排序','text.count.v1':'文本统计','vector.normalize.v1':'向量归一化','image.crop.v1':'图像裁剪','render.fractal.v1':'CPU 分块渲染','photo.analyze.v1':'照片分析与校正','photo.prepare.v1':'照片图块准备','photo.enhance.v1':'AI 照片高清增强','photo.assemble.v1':'照片合成与校验','photo.deliver.v1':'照片成品与预览'};
 const capabilityLabel=value=>Object.hasOwn(capabilities,value)?capabilities[value]:value;
 const phases={PLAN:'规划',OFFER:'派发',QUEUE:'排队',ADMIT:'准入',LOAD:'加载',EXECUTE:'执行',PUBLISH:'发布'};
 const icon=kind=>`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">${kind==='coordinator'?'<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h6v6H9zM8 2v3m8-3v3M8 19v3m8-3v3M2 8h3m-3 8h3M19 8h3m-3 8h3"/>':'<rect x="3" y="3" width="18" height="13" rx="2"/><path d="M8 21h8m-4-5v5M7 8h4m-4 3h9"/>'}</svg>`;
@@ -153,7 +153,9 @@ async function refresh(){
 }
 function schedule(){clearTimeout(timer);timer=setTimeout(()=>void refresh(),150);}
 function selectSpace(id){
+  $('shopping-link').href='shopping.html?space='+encodeURIComponent(id);
   stream?.close();group=id;snapshot=null;trace=null;traceError='';selected='';traceSerial++;serverAnchor=0;$('domain').className='tag neutral';$('domain').textContent='UNKNOWN';$('updated').textContent='尚未取得快照';render();
+  const requestedUrl=new URL(location.href);if(requestedUrl.searchParams.get('space')===id)selected=requestedUrl.searchParams.get('job')||'';
   const url=new URL(location.href);if(id)url.searchParams.set('space',id);else url.searchParams.delete('space');history.replaceState(null,'',url);
   if(!id){connection('未选择空间');notice('请选择一个已加入的空间；接入设备与提交任务请使用控制台。');return;}
   connection('正在连接');notice('正在读取协调者快照…');void refresh();

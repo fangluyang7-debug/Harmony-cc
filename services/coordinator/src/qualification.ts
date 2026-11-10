@@ -57,6 +57,13 @@ export class QualificationService {
       const admission:CapabilityAdmissionV2={groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,targetId,identity:job.identity,domain:this.directory.domain,
         revision:row.revision+1,state,reasonCode,quality:{value:job.quality,source:job.quality===null?'UNKNOWN':this.directory.domain==='REAL'?'MEASURED':'SIMULATED',
           sampledAt:job.expiresAt>0?job.expiresAt-this.policy.evidenceTtlMs:this.now(),ttlMs:this.policy.evidenceTtlMs,unit:'score'}};
+      const previous=JSON.parse(row.metadataJson) as CapabilityAdmissionV2;
+      const saved=await tx.calibrationJob.findUnique({where:{id}});
+      const comparable={...admission,revision:previous.revision,quality:{...admission.quality,...(admission.quality.value===null?{sampledAt:previous.quality.sampledAt}:{})}};
+      // Polling an unchanged unsupported/paused capability is not new evidence.
+      // Do not force an expensive group projection on every calibration tick.
+      // Job progress still persists even when its public state is unchanged.
+      if(canonical(previous)===canonical(comparable)&&saved?.metadataJson===JSON.stringify(job))return;
       await tx.capabilityState.update({where:{id},data:{revision:admission.revision,metadataJson:JSON.stringify(admission)}});
       const data={groupId:peer.groupId,revision:admission.revision,metadataJson:JSON.stringify(job)};
       await tx.calibrationJob.upsert({where:{id},create:{id,...data},update:data});
@@ -89,7 +96,10 @@ export class QualificationService {
       const pack=installed.pack;
       if(job.paused)return this.publish(peer,targetId,job,'WAITING_WINDOW','CALIBRATION_PAUSED');
       const gate=await this.gate(peer,executor);
-      if(gate)return this.publish(peer,targetId,job,'WAITING_'+gate,'EVALUATION_'+gate+'_REQUIRED');
+      const qualified=job.quality!==null&&job.expiresAt>this.now()&&job.next>=Math.max(pack.cases.length,this.policy.canarySamples);
+      // Busy resources delay further calibration, not the validity of completed
+      // correctness evidence. Actual execution still passes quota/admission gates.
+      if(gate&&!(gate==='RESOURCE'&&qualified))return this.publish(peer,targetId,job,'WAITING_'+gate,'EVALUATION_'+gate+'_REQUIRED');
       if(!sampleUsableV2(profile.ownerActivity,this.now(),this.directory.domain)||profile.ownerActivity.value!=='IDLE'||
         !sampleUsableV2(profile.foreground,this.now(),this.directory.domain)||profile.foreground.value!=='FOREGROUND')
         return this.publish(peer,targetId,job,'WAITING_WINDOW','OWNER_OR_HOST_NOT_AVAILABLE');
@@ -107,6 +117,7 @@ export class QualificationService {
       // Further bounded evaluation advances CANARY -> ACTIVE. Fresh existing evidence
       // is not withdrawn merely because the next reference case is in flight.
       const retainCanary=job.quality!==null&&job.expiresAt>this.now()&&job.next>=Math.max(pack.cases.length,this.policy.canarySamples);
+      if(gate==='RESOURCE'&&retainCanary)return this.publish(peer,targetId,job,'CANARY','EVALUATION_RESOURCE_DEFERRED');
       if(!retainCanary)await this.publish(peer,targetId,job,'VALIDATING','CHECKING_TRUSTED_SUITE');
       const test=pack.cases[job.next%pack.cases.length];
       if(!executor.configurations.some(c=>canonical(c)===canonical(test.config))||!vectorFitsV2(executor.resources,pack.manifest.resourceLimit))return this.publish(peer,targetId,job,'SUSPENDED','PACK_EXECUTOR_INCOMPATIBLE');

@@ -6,6 +6,12 @@ const {RemoteEvaluationRunner}=require('../dist/remote-evaluation');
 const {allotmentTransport}=require('../../pc-agent/dist/allotment-client');
 const {canonical}=require('@harmony/scheduler-core');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
+test('invalid permit rejected before mailbox insertion is not mistaken for unknown engine settlement',async()=>{
+ const runner=new RemoteEvaluationRunner({evaluationDispatch:{findUnique:async()=>null}},null,()=>1);
+ const invalid={id:crypto.randomUUID(),groupId:'g',holderInstanceId:'h',targetId:'t',identity:'a'.repeat(64),packDigest:'b'.repeat(64),caseId:'case',inputHash:'c'.repeat(64),config:{id:'standard',threads:1,batchSize:1,quality:'standard'},maxOutputBytes:786444,timeoutMs:15000,domain:'SIMULATED'};
+ assert.equal((await runner.reconcile(invalid)).notRun,true);
+ assert.equal(await runner.reconcile({...invalid,maxOutputBytes:65536}),null,'valid delivery uncertainty must still remain unresolved');
+});
 async function until(fn){const end=Date.now()+15000;while(Date.now()<end){if(await fn())return;await new Promise(r=>setTimeout(r,20));}throw Error('REMOTE_TEST_TIMEOUT');}
 async function setup(){
  const r=await runtime();

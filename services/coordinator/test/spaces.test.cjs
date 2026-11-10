@@ -47,6 +47,13 @@ test('browser spaces persist, isolate roles and operate a paired CPU host with a
   const sdkPlan=await sdk.plan(workflow,sdkOptions),descriptor=r.artifacts.lookup(group,sdkPlan.inputTicket.ref);assert.equal(r.artifacts.available(descriptor),false);assert.equal(await r.db.attempt.count({where:{id:sdkId}}),0);
   assert.equal((await guest.binary('/'+group+'/sdk/jobs/'+sdkId+'/input',Buffer.from('{"text":"SDK browser"}'),'https://unrelated.example')).body.error,'ORIGIN_REJECTED');
   const sdkTask=await sdk.submit(workflow,sdkOptions),sdkResult=await sdkTask.result();assert.deepEqual(JSON.parse(Buffer.from(sdkResult.output)),{characters:11,words:2,lines:1});
+  assert.equal(sdkResult.status.state,'SUCCEEDED');
+  const delivered=JSON.parse((await r.db.cpuJob.findUnique({where:{id:sdkId}})).metadataJson);
+  assert.ok(delivered.resultReceivedAt,'space SDK result acknowledgement must reach the formal received endpoint');
+  const ack={ref:delivered.output.ref,bytes:delivered.output.bytes};
+  assert.equal((await guest('/'+group+'/sdk/jobs/'+sdkId+'/received',ack)).status,200,'acknowledgement is idempotent');
+  assert.equal((await owner('/'+group+'/sdk/jobs/'+sdkId+'/received',ack)).body.error,'JOB_SCOPE');
+  assert.equal((await sdkTask.status()).outputTicket,null);
   const appInstallation=await r.db.registeredInstallation.findFirst({where:{principalId:guestId}});assert.equal(appInstallation.state,'ACTIVE');assert.deepEqual(JSON.parse(appInstallation.offlineJson),[]);
   const deviceId=(await owner('/'+group)).body.devices[0].id;
   assert.equal((await guest('/'+group+'/devices/'+deviceId,{settings:{...settings,ownerMode:'paused'}})).status,403);

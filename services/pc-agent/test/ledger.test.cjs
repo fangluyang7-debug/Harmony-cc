@@ -18,6 +18,20 @@ function signed(ledger,extra=capacity,version=1,request='request1',base=[]){cons
 function receipt(entry,state='SUCCEEDED'){return {attemptId:entry.record.attemptId,coordinatorEpoch:1,planRevision:entry.record.planRevision,fence:entry.record.fence,state,resourcesSettled:true,outputs:[],actualTarget:entry.offer.target,actualConfiguration:entry.offer.allowedConfigs[0].id,errorCode:null};}
 async function setup(dir=directory(),who=identity){let now=0;const ledger=await DurableLedger.open(dir,who,cert,()=>now);ledger.requestGrant('request1');ledger.installGrant(signed(ledger));return {ledger,dir,setNow:n=>now=n};}
 
+test('channel-only commits reuse serialization without losing checksum validity, settlement or restart fences',async()=>{
+ const {ledger:l,dir}=await setup();
+ const verify=()=>{const e=JSON.parse(fs.readFileSync(path.join(dir,'ledger.json'),'utf8'));const {canonical}=require('@harmony/scheduler-core');assert.equal(e.sha256,crypto.createHash('sha256').update(canonical({format:2,state:e.state,channel:e.channel})).digest('hex'));return e;};
+ try{
+  l.bindChannel('coordinator1',1);const entry=l.admit(offer(),context);l.begin('a1');
+  for(let i=0;i<5;i++){l.requestRecovery(true);for(const m of l.pendingMessages())l.acknowledgeMessage(m.messageId);verify();}
+  assert.equal(l.status('a1').resourcesSettled,false);l.settle(receipt(entry));
+  const before=verify().state;
+  for(let i=0;i<5;i++){l.requestRecovery(true);for(const m of l.pendingMessages())l.acknowledgeMessage(m.messageId);assert.deepEqual(verify().state,before);}
+  const external=l.snapshot();external.entries.length=0;assert.equal(l.snapshot().entries.length,1);
+ }finally{await l.close();}
+ const reopened=await DurableLedger.open(dir,identity,cert,()=>0);try{assert.equal(reopened.status('a1').state,'SUCCEEDED');assert.throws(()=>reopened.begin('a1'),/NOT_STARTABLE/);}finally{await reopened.close();}
+});
+
 test('reference settlement persists and frees only settled capacity without initiating business recovery',async()=>{
  for(const delivery of ['BUSINESS','EVALUATION']){
   const {ledger}=await setup();try{ledger.bindChannel('coordinator1',1);const entry=ledger.admit(offer(),context);ledger.begin(entry.record.attemptId);ledger.settle(receipt(entry),delivery);

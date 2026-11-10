@@ -13,6 +13,20 @@ function packFor(p){const e=p.executors[0],input=Buffer.from('{"dimension":2,"ro
  return {simulationFixture:true,manifest:{packId:'normalize.v1',contract:e.contract,executorIds:[e.target.executorId],model:e.model,suiteId:'normalize-suite.v1',qualityThreshold:1,resourceLimit:e.resources},
  cases:[{id:'normal',input,parameters:'{}',config:e.configurations[0],maxOutputBytes:4096}],evaluate:async(_test,bytes)=>JSON.parse(bytes).rows[0][0]===.6?1:0};}
 const contribution={minimumBattery:20,maximumTemperature:3,allowMetered:false,priority:'REMOTE_INTERACTIVE',requireForeground:true};
+test('resource pressure defers calibration without withdrawing fresh qualified evidence; auth and expiry still block',async()=>{
+ const r=await runtime();try{
+  let now=100,gate=null,runs=0;const dir=new DeviceDirectory(r.db,'SIMULATED',()=>now),p=profile();await dir.ingest(peer,p);
+  const runner={run:async permit=>{runs++;return {settled:true,permitId:permit.id,domain:'SIMULATED',durationMs:1,output:Buffer.from('{"rows":[[0.6,0.8]]}')};},reconcile:async()=>null};
+  const service=new QualificationService(r.db,dir,[packFor(p)],runner,policy,async()=>gate,()=>now);
+  gate='RESOURCE';assert.equal(await service.advance(peer,'target1'),'WAITING_RESOURCE');assert.equal(runs,0);
+  gate=null;assert.equal(await service.advance(peer,'target1'),'CANARY');
+  gate='RESOURCE';assert.equal(await service.advance(peer,'target1'),'CANARY');assert.equal(runs,1);
+  gate=null;assert.equal(await service.advance(peer,'target1'),'ACTIVE');
+  gate='RESOURCE';assert.equal(await service.advance(peer,'target1'),'ACTIVE');assert.equal(runs,2);
+  gate='AUTH';assert.equal(await service.advance(peer,'target1'),'WAITING_AUTH');
+  gate='RESOURCE';now+=policy.evidenceTtlMs+1;assert.equal(await service.advance(peer,'target1'),'SUSPENDED');assert.equal(runs,2);
+ }finally{await r.close();}
+});
 
 test('committed same-bucket execution drift opens circuit and a new reference generation restores it',async()=>{
  const r=await runtime();let now=100,runs=0;

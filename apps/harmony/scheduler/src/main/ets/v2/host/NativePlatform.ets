@@ -16,6 +16,7 @@ export interface Installation {bootstrap:Bootstrap;paired:Paired;appInstanceId?:
 export class NativeDatabase {
  private db:relationalStore.RdbStore;
  private static active:NativeDatabase|null=null;
+ private operations:Promise<void>=Promise.resolve();
  private constructor(db:relationalStore.RdbStore){this.db=db;}
  static async open(context:common.UIAbilityContext):Promise<NativeDatabase>{
   if(NativeDatabase.active!==null)return NativeDatabase.active;
@@ -24,14 +25,29 @@ export class NativeDatabase {
   await db.executeSql('CREATE TABLE IF NOT EXISTS installation (id TEXT PRIMARY KEY, value TEXT NOT NULL)');
   NativeDatabase.active=new NativeDatabase(db);return NativeDatabase.active;
  }
- async get(key:string):Promise<string|null>{const rows=await this.db.querySql('SELECT value FROM installation WHERE id=?',[key]);try{return rows.goToFirstRow()?rows.getString(0):null;}finally{rows.close();}}
- async put(key:string,value:string):Promise<void>{await this.db.executeSql('INSERT OR REPLACE INTO installation (id,value) VALUES (?,?)',[key,value]);}
- ledger():AgentPersistenceV2 {return new NativeLedgerPersistence(this);}
+ get(key:string):Promise<string|null>{const run=this.operations.then(()=>this.readValue(key));this.operations=run.then(()=>{},()=>{});return run;}
+ private async readValue(key:string):Promise<string|null>{
+  // querySql uses a bounded shared-memory row window. A history > 2 MiB must
+  // never look like a missing ledger and overwrite its execution fences.
+  const sizes=await this.db.querySql('SELECT length(value) FROM installation WHERE id=?',[key]);let size=0;
+  try{if(!sizes.goToFirstRow()){if(sizes.rowCount!==0)throw Error('DATABASE_CURSOR_UNAVAILABLE');return null;}size=sizes.getLong(0);}finally{sizes.close();}
+  if(!Number.isSafeInteger(size)||size<0)throw Error('DATABASE_VALUE_LENGTH');
+  const parts:string[]=[];
+  for(let offset=1;offset<=size;offset+=131072){
+   const rows=await this.db.querySql('SELECT substr(value,?,131072) FROM installation WHERE id=?',[offset,key]);
+   try{if(!rows.goToFirstRow())throw Error('DATABASE_VALUE_UNAVAILABLE');parts.push(rows.getString(0));}finally{rows.close();}
+  }
+  return parts.join('');
+ }
+ put(key:string,value:string):Promise<void>{const run=this.operations.then(()=>this.db.executeSql('INSERT OR REPLACE INTO installation (id,value) VALUES (?,?)',[key,value]));this.operations=run.catch(()=>{});return run;}
+ async storedIdentities():Promise<string[]>{const rows=await this.db.querySql("SELECT value FROM installation WHERE id='identity' OR id LIKE 'identity:%'");const values:string[]=[];try{while(rows.goToNextRow())values.push(rows.getString(0));return values;}finally{rows.close();}}
+ ledger(key:string='ledger'):AgentPersistenceV2 {return new NativeLedgerPersistence(this,key);}
 }
 
 class NativeLedgerPersistence implements AgentPersistenceV2 {
  private db:NativeDatabase;
- constructor(db:NativeDatabase){this.db=db;}
- load():Promise<string|null>{return this.db.get('ledger');}
- commit(value:string):Promise<void>{return this.db.put('ledger',value);}
+ private key:string;
+ constructor(db:NativeDatabase,key:string){this.db=db;this.key=key;}
+ load():Promise<string|null>{return this.db.get(this.key);}
+ commit(value:string):Promise<void>{return this.db.put(this.key,value);}
 }

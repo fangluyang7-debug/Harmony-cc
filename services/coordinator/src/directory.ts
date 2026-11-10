@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { Prisma, PrismaClient } from '../generated/client';
 import { CostEstimatePolicy,availability, canonical, DeviceProfileV2, DispatchOfferV2, ExecutorV2, validDeviceProfileV2, sampleUsableV2, PlanningSnapshot, PlacementCandidate, DeviceResources, CapabilityAdmissionV2, validCapabilityAdmissionV2 } from '@harmony/scheduler-core';
 import { Peer } from './channel';
+import {deviceMembershipActive} from './device-membership';
 import type {PlacementLink} from '@harmony/scheduler-core';
 
 export interface ContributionPolicy {minimumBattery:number|null;maximumTemperature:number|null;allowMetered:boolean;priority:'ORIGIN_INTERACTIVE'|'REMOTE_INTERACTIVE'|'REMOTE_BATCH';requireForeground:boolean;}
@@ -19,21 +20,38 @@ export class DeviceDirectory {
     if(samples.some(s=>s.sampledAt>this.now()||this.domain==='REAL'&&s.source==='SIMULATED'||this.domain==='SIMULATED'&&s.source==='MEASURED'))throw Error('PROFILE_EVIDENCE_DOMAIN');
     const id=JSON.stringify(['profile',peer.groupId,peer.holderInstanceId]);
     const write=async(tx:Prisma.TransactionClient)=>{
+      if(!await deviceMembershipActive(tx,peer.deviceId))throw Error('DEVICE_LEFT_SPACE');
       const row=await tx.deviceInstance.findUnique({where:{id}});
       if(row){
         const old=JSON.parse(row.metadataJson) as DeviceProfileV2;
         if(old.deviceId!==profile.deviceId)throw Error('PROFILE_BINDING_CHANGED');
         if(canonical(old)===canonical(profile))return false;
         if(profile.ledgerEpoch<old.ledgerEpoch||profile.ledgerEpoch===old.ledgerEpoch&&(profile.sequence<=old.sequence||profile.deviceInstanceId!==old.deviceInstanceId))throw Error('PROFILE_REPLAY');
-        if(profile.ledgerEpoch!==old.ledgerEpoch&&old.pools.some(p=>p.occupied.value===null||p.occupied.value>0))throw Error('PROFILE_RECOVERY_REQUIRED');
+        if(profile.ledgerEpoch!==old.ledgerEpoch&&old.pools.some(p=>p.occupied.value===null||p.occupied.value>0)){
+          // A settled recovery must be able to replace the pre-crash occupied profile.
+          // Use the authenticated persisted lease acknowledgement, not a zero claimed
+          // by the new profile alone; unresolved attempts still block admission.
+          const lease=await tx.allotment.findUnique({where:{id:JSON.stringify(['allotment',peer.groupId,peer.holderInstanceId])}});
+          const reservation=lease?JSON.parse(lease.metadataJson):null,g=reservation?.grant,a=reservation?.ack;
+          const reconciled=g&&a&&g.deviceId===peer.deviceId&&g.ledgerEpoch===profile.ledgerEpoch&&
+            a.persisted===true&&a.holderInstanceId===peer.holderInstanceId&&a.allotmentId===g.allotmentId&&
+            a.ledgerEpoch===g.ledgerEpoch&&a.coordinatorEpoch===g.coordinatorEpoch&&a.version===g.version&&
+            Array.isArray(a.occupied)&&a.occupied.every((v:{amount:number})=>v.amount===0)&&
+            profile.pools.every(p=>sampleUsableV2(p.occupied,this.now(),this.domain)&&p.occupied.value===0);
+          if(!reconciled)throw Error('PROFILE_RECOVERY_REQUIRED');
+          const attempts=await tx.attempt.findMany({where:{groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,state:{not:'REJECTED'}},select:{recordJson:true}});
+          if(attempts.some(a=>!a.recordJson||JSON.parse(a.recordJson).resourcesSettled!==true))throw Error('PROFILE_RECOVERY_REQUIRED');
+        }
         if(old.pools.some(p=>!profile.pools.some(next=>next.resourcePoolId===p.resourcePoolId)&&(p.occupied.value===null||p.occupied.value>0)))throw Error('PROFILE_POOL_UNSETTLED');
       }
       const others=(await tx.deviceInstance.findMany({where:{groupId:peer.groupId}})).filter(r=>r.id!==id&&r.id.startsWith('["profile",')).map(r=>JSON.parse(r.metadataJson) as DeviceProfileV2);
       if(others.some(p=>p.deviceInstanceId===profile.deviceInstanceId||p.executors.some(e=>profile.executors.some(x=>x.target.targetId===e.target.targetId))))throw Error('PROFILE_INSTANCE_COLLISION');
       await tx.deviceInstance.upsert({where:{id},create:{id,groupId:peer.groupId,revision:profile.sequence,metadataJson:JSON.stringify(profile)},update:{revision:profile.sequence,metadataJson:JSON.stringify(profile)}});
+      const evidenceRows=await tx.capabilityState.findMany({where:{id:{in:profile.executors.map(e=>JSON.stringify([peer.groupId,peer.holderInstanceId,e.target.targetId]))}}});
+      const evidenceById=new Map(evidenceRows.map(e=>[e.id,e]));
       for(const executor of profile.executors){
         const key=JSON.stringify([peer.groupId,peer.holderInstanceId,executor.target.targetId]);
-        const existing=await tx.capabilityState.findUnique({where:{id:key}}),identity=executorIdentity(executor);
+        const existing=evidenceById.get(key),identity=executorIdentity(executor);
         const old=existing?JSON.parse(existing.metadataJson):null;
         if(!old||!validCapabilityAdmissionV2(old)||old.identity!==identity||row&&JSON.parse(row.metadataJson).ledgerEpoch!==profile.ledgerEpoch){
           const admission:CapabilityAdmissionV2={groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,targetId:executor.target.targetId,
@@ -55,7 +73,9 @@ export class DeviceDirectory {
   }
   async profiles(groupId:string,db:Prisma.TransactionClient=this.db):Promise<DeviceProfileV2[]>{
     const rows=await db.deviceInstance.findMany({where:{groupId}});
-    return rows.filter(r=>r.id.startsWith('["profile",')).map(r=>JSON.parse(r.metadataJson)).filter(p=>validDeviceProfileV2(p)&&p.domain===this.domain);
+    const profiles=rows.filter(r=>r.id.startsWith('["profile",')).map(r=>JSON.parse(r.metadataJson)).filter(p=>validDeviceProfileV2(p)&&p.domain===this.domain);
+    const active=await Promise.all(profiles.map(p=>deviceMembershipActive(db,p.deviceId)));
+    return profiles.filter((_,index)=>active[index]);
   }
   /** Credential-scoped evidence read; a device cannot read or approve another holder's execution targets. */
   async qualification(peer:Peer,targetId:string){
@@ -81,6 +101,7 @@ export class DeviceDirectory {
   }
   /** Runs in the same transaction as first dispatch. An offer can precede the next device profile. */
   async hasDispatchCredit(tx:Prisma.TransactionClient,offer:DispatchOfferV2,holderId:string){
+    if(!await deviceMembershipActive(tx,offer.target.deviceId))return false;
     const row=await tx.deviceInstance.findUnique({where:{id:JSON.stringify(['profile',offer.task.groupId,holderId])}});
     if(!row)return false;
     const profile=JSON.parse(row.metadataJson) as DeviceProfileV2,now=this.now();

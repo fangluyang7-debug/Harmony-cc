@@ -34,7 +34,14 @@ export class NativeInputStore {
   this.work=operation.catch(()=>{});await operation;
  }
  async read(contentHash:string):Promise<Uint8Array|null>{
-  this.valid(contentHash);const rows=await this.db.querySql('SELECT data FROM inputs WHERE hash=?',[contentHash]);
-  try{if(!rows.goToFirstRow())return null;const data=rows.getBlob(0);if(hash(data)!==contentHash)throw Error('INPUT_HASH');return data;}finally{rows.close();}
+  this.valid(contentHash);const sizes=await this.db.querySql('SELECT length(data) FROM inputs WHERE hash=?',[contentHash]);let length=0;
+  try{if(!sizes.goToFirstRow()){if(sizes.rowCount!==0)throw Error('INPUT_CURSOR_UNAVAILABLE');return null;}length=sizes.getLong(0);}finally{sizes.close();}
+  if(!Number.isSafeInteger(length)||length<1||length>8388608)throw Error('INPUT_SIZE');
+  // RDB result windows cannot hold an entire multi-megabyte photo bundle.
+  const data=new Uint8Array(length);
+  for(let offset=0;offset<length;offset+=131072){const rows=await this.db.querySql('SELECT substr(data,?,131072) FROM inputs WHERE hash=?',[offset+1,contentHash]);
+   try{if(!rows.goToFirstRow())throw Error('INPUT_CURSOR_UNAVAILABLE');const part=rows.getBlob(0);if(part.length!==Math.min(131072,length-offset))throw Error('INPUT_SIZE');data.set(part,offset);}finally{rows.close();}
+  }
+  if(hash(data)!==contentHash)throw Error('INPUT_HASH');return data;
  }
 }

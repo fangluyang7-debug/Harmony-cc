@@ -45,6 +45,7 @@ export struct ProductTile {
       }.width('100%')
       Text(this.product.shopName || '店铺未提供').fontSize(11).fontColor('#747878').width('100%')
         .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
+      if(this.product.visualSimilarity!==undefined){Text('与所选照片外观参考 '+this.product.visualSimilarity.toFixed(1)+' / 100').fontSize(11).fontColor('#00513F').width('100%')}
     }.width('100%').padding(8).borderRadius(8).backgroundColor('#FFFFFF')
   }
 }

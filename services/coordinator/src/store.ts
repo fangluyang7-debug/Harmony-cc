@@ -1,4 +1,5 @@
 import {openRaceTiming,noteRace} from './race-timing';
+import {outboxByWireId} from './outbox-lookup';
 import {settleBatchCharge} from './batch-ready';
 import { createHash, randomUUID } from 'node:crypto';
 import { PrismaClient, Prisma } from '../generated/client';
@@ -128,9 +129,7 @@ export class CoordinatorStore {
     return count;
   }
   async acknowledge(groupId:string,messageId:string):Promise<void>{
-    // Wire IDs can differ from recovery outbox idempotency keys.
-    const rows=await this.db.outbox.findMany({where:{groupId}});
-    const row=rows.find(r=>(JSON.parse(r.messageJson) as MessageEnvelopeV2).messageId===messageId);
+    const row=await outboxByWireId(this.db,groupId,messageId);
     if(!row)throw new Error('ACK_UNKNOWN');
     await this.db.outbox.update({where:{id:row.id},data:{acked:true}});
   }
