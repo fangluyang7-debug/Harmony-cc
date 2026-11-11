@@ -225,12 +225,15 @@ class RuntimeControl {
   startCenter(input){
     if(this.child)throw Error('服务已在运行');
     const address=input.address,port=String(input.port||7443);
-    // Keep each network identity in its own directory, never replace an existing certificate.
-    const env=lanEnvironment(address,port,process.env.HARMONY_COORDINATOR_DATA_DIR||path.join(this.dataRoot,'desktop-'+address),{...process.env,COORDINATOR_OPENSSL:openssl()});
+    // Each desktop start creates a new center, including a fresh identity and empty database.
+    const sessions=path.join(process.env.HARMONY_COORDINATOR_DATA_DIR||this.dataRoot,'sessions');
+    const env=lanEnvironment(address,port,sessions,{...process.env,COORDINATOR_OPENSSL:openssl()});
     const bundledSchemaEngine=path.join(root,'node_modules/@prisma/engines/schema-engine-windows.exe');
     if(process.platform==='win32'&&!env.PRISMA_SCHEMA_ENGINE_BINARY&&fs.existsSync(bundledSchemaEngine))env.PRISMA_SCHEMA_ENGINE_BINARY=bundledSchemaEngine;
     if(input.suite){if(!path.isAbsolute(input.suite)||!fs.existsSync(input.suite))throw Error('协调中心的评测套件路径不存在');env.COORDINATOR_IMAGE_ENCODING_SUITE=input.suite;}
     if(!fs.existsSync(path.join(root,'services/coordinator/dist/main.js')))throw Error('请先完成协调者构建');
+    fs.mkdirSync(sessions,{recursive:true});
+    env.COORDINATOR_DATA_DIR=fs.mkdtempSync(path.join(sessions,'desktop-'+address+'-'));
     this.mode='center';this.url=env.COORDINATOR_PUBLIC_URL;
     this.coordinatorDirectory=env.COORDINATOR_DATA_DIR;
     this.localSpace=null;

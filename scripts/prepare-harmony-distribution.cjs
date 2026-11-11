@@ -29,7 +29,7 @@ const README_CENTER = `# Windows x64 协调中心
 
 完整解压后双击 ZhiDiaoCenter.exe。选择可供其他设备访问的局域网 IPv4，点击中央电源按钮启动。就绪后点击“设备配对”进入空间并生成设备邀请，点击“打开调度盘”查看运行状态。
 
-包内已带 Node.js 运行时和 OpenSSL。首次启动会在 services/coordinator/data/desktop-<IP> 下生成证书和数据库，请保留该目录用于备份与迁移。默认 HTTPS TCP 7443，发现使用 UDP 7444，设备之间须能互访。端口冲突可在高级设置中更改。停止服务时再次点击中央电源按钮。
+包内已带 Node.js 运行时和 OpenSSL。每次启动都会在 services/coordinator/data/sessions 下建立新的会话、证书和数据库；上次的空间和配对不会自动恢复，设备需重新配对。旧目录仅保留作备份。默认 HTTPS TCP 7443，发现使用 UDP 7444，设备之间须能互访。端口冲突可在高级设置中更改。停止服务时再次点击中央电源按钮。
 `;
 
 const README_AGENT = `# Windows x64 设备调度件

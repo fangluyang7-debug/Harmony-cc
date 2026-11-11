@@ -1,6 +1,20 @@
 process.env.HARMONY_PAIRING_TIMEOUT_MS=process.env.HARMONY_PAIRING_TIMEOUT_MS||'1500';const PAIRING_TEST_TIMEOUT_MS=Number(process.env.HARMONY_PAIRING_TIMEOUT_MS);
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {RuntimeControl,main}=require('./runtime-desktop.cjs');
+test('each desktop center start uses a new empty session, even with an old database missing its identity',t=>{
+ const directory=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-center-sessions-'));
+ t.mock.method(os,'networkInterfaces',()=>({test:[{address:'192.168.10.2',family:'IPv4',internal:false}]}));
+ const previous=process.env.HARMONY_COORDINATOR_DATA_DIR;process.env.HARMONY_COORDINATOR_DATA_DIR=directory;
+ try{
+  const old=path.join(directory,'desktop-192.168.10.2');fs.mkdirSync(old);fs.writeFileSync(path.join(old,'coordinator.sqlite'),'old session');
+  const launch=(control)=>{let used;control.launch=(_script,args,env)=>{assert.equal(args[2],env.COORDINATOR_DATA_DIR);used=env.COORDINATOR_DATA_DIR;};control.startCenter({address:'192.168.10.2'});return used;};
+  const control=new RuntimeControl(),first=launch(control);fs.writeFileSync(path.join(first,'coordinator.sqlite'),'first session');
+  const second=launch(control),third=launch(new RuntimeControl());
+  assert.equal(new Set([first,second,third]).size,3);
+  assert.deepEqual(fs.readdirSync(second),[]);assert.deepEqual(fs.readdirSync(third),[]);
+  assert.equal(fs.readFileSync(path.join(old,'coordinator.sqlite'),'utf8'),'old session');
+ }finally{if(previous===undefined)delete process.env.HARMONY_COORDINATOR_DATA_DIR;else process.env.HARMONY_COORDINATOR_DATA_DIR=previous;fs.rmSync(directory,{recursive:true,force:true});}
+});
 test('desktop process controls require a session token and same-origin POST',async()=>{
  const isolated=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-desktop-auth-'));
  const runtime=await main({openBrowser:false,role:'agent',bindingFile:path.join(isolated,'binding.json')}),url=new URL(runtime.url),base=url.origin,token=url.hash.slice(1);
