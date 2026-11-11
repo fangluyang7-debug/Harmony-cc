@@ -12,6 +12,23 @@
 
 ---
 
+## 2026-11-11 · 通用 App 接入组件 SchedulerAppSession（第 2 次提交）
+
+### 1. 新增 `SchedulerAppSession`（scheduler HAR）
+- 新文件 `apps/harmony/scheduler/src/main/ets/v2/app/SchedulerAppSession.ets`，从 `v2/Index.ets` 导出。
+- 把 SoleAI `CooperativeSession` 和图片 App `PhotoSession`（`imageprocessing` 分支）里重复的逻辑抽成通用组件：经调度连接 App 授权 → 凭据持久化 → 恢复 → 在本 App 进程启动 `NativeAgent` → 跟随前后台。
+- 与原实现的差别：首次进入前台**自动**申请授权（拒绝会被记住，不重复弹窗）；只有确定的撤销才清除身份；新增 `pause()/resume()`、状态回调、`NEEDS_AGENT` 状态。
+- 开发者文档：`docs/scheduler-v2/APP-INTEGRATION-SchedulerAppSession.md`。
+
+### 2. SoleAI 改用该组件
+- `apps/harmony/entry/src/main/ets/services/CooperativeSession.ets`：删除自带的授权、持久化、宿主管理代码，改为委托 `SchedulerAppSession`；对外接口（`setEnabled`、`client`、`capacity`、`preparePhoto` 等）和 AppStorage 键保持不变。preferences 文件名沿用 `cooperative-shopping-3`，已授权的用户无需重新授权。
+- `setEnabled(false/true)` 语义改为暂停 / 恢复；`V2ImageSearchPage.ets` 开关文案改为「协同调度（自动接入，可暂停）」。
+
+### 合并注意
+- 图片 App 的 `PhotoSession.ets` 在 `imageprocessing` 分支，本次未改动；合并后建议改用 `SchedulerAppSession`（注意其 preferences 名为 `photo-app-v1`，迁移时沿用即可保留授权）。
+
+---
+
 ## 2026-11-11 · 调度盘与设备连接（第 1 次提交）
 
 ### 1. 配对失败 `PAIRING_RECONCILIATION_REQUIRED` 永久卡死

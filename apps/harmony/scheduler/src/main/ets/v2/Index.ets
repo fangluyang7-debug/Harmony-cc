@@ -17,3 +17,4 @@ export { NativeTrace } from './host/NativeTrace';
 export { cropImage } from './host/ImageCrop';
 export * from './client/VisualReviewFlow';
 export { packVisualRaw, matchVisualLocal } from './client/VisualReviewNative';
+export { SchedulerAppSession, SchedulerAppDeclaration, SchedulerAppOptions, SchedulerAppState, SchedulerAppStatus } from './app/SchedulerAppSession';
