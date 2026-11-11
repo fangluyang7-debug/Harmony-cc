@@ -98,7 +98,7 @@ test('explicit target is a planner constraint; qualified alternatives cannot byp
   assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0].targetId,'target1');
   f.request.remainingBudgetMs=0;assert.equal(service.plan(f.snapshot,f.request,f.policy,f.clock).decision.reason,'BUDGET_EXHAUSTED');
 });
-test('database projection is consistent and preflight rejects changed versions and revocation',async()=>{
+test('preflight revalidates newer observations without livelock but rejects changed policy, eligibility and paths',async()=>{
   fs.mkdirSync(path.resolve('../../.test'),{recursive:true});const data=fs.mkdtempSync(path.resolve('../../.test/planning-'));
   execFileSync(process.execPath,['scripts/migrate.cjs'],{env:{...process.env,COORDINATOR_DATA_DIR:data},stdio:'pipe'});
   const db=new PrismaClient({datasources:{db:{url:'file:'+path.join(data,'coordinator.sqlite').replaceAll('\\','/')}}});
@@ -107,6 +107,20 @@ test('database projection is consistent and preflight rejects changed versions a
     await views.replace(f.snapshot,f.policy);const built=await views.build('g1');
     const decision=service.plan(built.snapshot,f.request,built.policy,f.clock);
     assert.equal(await service.preflight('g1',decision,f.request,f.clock),true);
+    // Every concurrent frontier/heartbeat used to invalidate every other plan.
+    // Reproduce multiple intervening publications with the same legal placement.
+    for(let i=0;i<12;i++)await views.replace(f.snapshot,f.policy);
+    let validated;
+    assert.equal(await service.preflight('g1',decision,f.request,f.clock,undefined,p=>validated=p),true);
+    assert.ok(validated.snapshotVersion>decision.snapshotVersion);
+    const unavailable=structuredClone(f.snapshot);unavailable.candidates[0].quality=0;
+    await views.replace(unavailable,f.policy);
+    assert.equal(await service.preflight('g1',decision,f.request,f.clock),false);
+    const rerouted=structuredClone(f.snapshot);rerouted.candidates[0].executorId='replacement';
+    await views.replace(rerouted,f.policy);
+    assert.equal(await service.preflight('g1',decision,f.request,f.clock),false);
+    await views.replace({...f.snapshot,policyVersion:'p2'},{...f.policy,version:'p2'});
+    assert.equal(await service.preflight('g1',decision,f.request,f.clock),false);
     const timed=structuredClone(f.snapshot),candidate=timed.candidates[0],amount={resourcePoolId:'memory',amount:10};
     candidate.resourceDemand=[amount];timed.resources[0].available=10;
     const sample={value:300,source:'PRIOR',unit:'ms',sampledAt:100,ttlMs:1000};

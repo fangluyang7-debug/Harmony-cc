@@ -153,3 +153,8 @@ r5 是按新的瓶颈证据重做每图独立推进，不是恢复第 5 节已�
 ## M28：GPU 与 CPU/鸿蒙照片处理一致性
 
 保留共享 photo-core.h 的原生 Vulkan RGB/float32/分块裁切逻辑、harmony-raw-v1 ABI 与引擎配置。保持原权重、参考样例和 0.99 标准；不能改低分数或绕过评测使 GPU 上线。GPU/CPU 均调用 enhancementInput 验证 pixels 与融合输入。原生 GPU Net 必须在全局 Vulkan 退出前释放（包括异常），不能用接收非零退出码掩盖崩溃。CPU 模型复用不变。打包必须携带新引擎、ABI、静态依赖检查及许可证，不能只替换 EXE。使用 runtime-vulkan.json；旧 GPU CLI 仅留兼容/复现路径，不作为当前推荐包。见 DEVICE-B-GPU-QUALITY-20261112.md。
+
+
+## M29：GPU 常驻模型与最新快照语义复核
+
+保留 PHOTO-GPU-PERFORMANCE-R3-20261112.md 中的修改：快照变化时仍通过 PlanningService 重算并校验相同目标/路径，不能恢复版本递增即拒绝的并发活锁，也不能删除政策/执行器 identity/原子额度校验。最新快照与成本证据在 offer 事务内持久化，节点等待原因持久保存。GPU 通过 photo-workers 常驻并按 GPU 编号/模型身份隔离，只缓存模型，不缓存业务图片或结果；必须在 Vulkan 实例销毁前清理模型，取消必须等 worker 退出。executorVersion=2 触发新校准，不能复用逐片冷启动成本。旧手机/鸿蒙契约兼容，模型、质量和预算不变。B 应用 20261112-r3 包；尚无新六图真机提速结论。

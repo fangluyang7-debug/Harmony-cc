@@ -73,12 +73,18 @@ export class PlanningService {
     if(cost===null)throw Error('PUBLICATION_PATH_UNAVAILABLE');if(cost>request.remainingBudgetMs)throw Error('BUDGET_EXHAUSTED');return cost;
   }
   /** Last check before an offer; the executing holder must still perform atomic admission. */
-  async preflight(groupId:string,expected:SnapshotDecision,request:PlacementRequest,clock:PlanningClock,jobId?:string):Promise<boolean>{
+  async preflight(groupId:string,expected:SnapshotDecision,request:PlacementRequest,clock:PlanningClock,jobId?:string,validated?:(current:SnapshotDecision)=>void):Promise<boolean>{
     const {snapshot,policy}=await this.snapshots.build(groupId);
     dispatchDiagnostics.record({at:Date.now(),kind:"PREFLIGHT",groupId,jobId,version:expected.snapshotVersion,snapshotVersion:snapshot.version});
-    if(expected.groupId!==groupId||expected.domain!==snapshot.domain||snapshot.version!==expected.snapshotVersion||policy.version!==expected.policyVersion||policy.revoked||!expected.decision.suggestion)return false;
+    // Concurrent ready nodes and heartbeats publish newer observations. A new
+    // revision alone does not invalidate a placement: replan against it instead.
+    // Policy changes still require a new offer; physical credit is checked again
+    // atomically by persistOffer and by the device's admission ledger.
+    if(expected.groupId!==groupId||expected.domain!==snapshot.domain||policy.version!==expected.policyVersion||policy.revoked||!expected.decision.suggestion)return false;
     const current=this.plan(snapshot,request,policy,clock);
     const placement=(a:NonNullable<typeof current.decision.suggestion>[number])=>[a.nodeId,a.targetId,a.deviceId,a.executorId,a.inputSourceHolderId,a.inputSourceEndpointId,a.inputSourceEndpointEpoch,a.inputRelayId,a.inputEndpointId,a.inputEndpointEpoch,a.inputEndpointOperation,a.outputEndpointId,a.outputEndpointEpoch];
-    return !!current.decision.suggestion&&JSON.stringify(current.decision.suggestion.map(placement))===JSON.stringify(expected.decision.suggestion.map(placement));
+    const valid=!!current.decision.suggestion&&JSON.stringify(current.decision.suggestion.map(placement))===JSON.stringify(expected.decision.suggestion.map(placement));
+    if(valid)validated?.(current);
+    return valid;
   }
 }

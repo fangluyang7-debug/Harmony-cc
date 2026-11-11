@@ -8,7 +8,7 @@ import {Peer} from './channel';
 import {ArtifactRetention} from './retention';
 import {CpuJobs} from './cpu-jobs';
 import {AppRegistry} from './apps';
-interface NodeState {reassignedAttempts?:string[];excludedDeviceId?:string;yieldedAttempts?:string[];id:string;jobId:string;state:'PENDING'|'SUBMITTED'|'COMMITTED';output?:ArtifactDescriptor;local?:boolean;}
+interface NodeState {scheduling?:{readyAt:number;lastAttemptAt:number;blocks:Record<string,number>};reassignedAttempts?:string[];excludedDeviceId?:string;yieldedAttempts?:string[];id:string;jobId:string;state:'PENDING'|'SUBMITTED'|'COMMITTED';output?:ArtifactDescriptor;local?:boolean;}
 interface GraphData {priority?:'REMOTE_INTERACTIVE'|'REMOTE_BATCH';stop?:{state:string;reconciliationJobId?:string};peer:Peer;workflow:SdkWorkflow;fingerprint:string;deadlineAt:number;originLocal:boolean;inputs:Record<string,ArtifactDescriptor>;nodes:NodeState[];plan:SnapshotDecision;failure?:{code:string;reason:string;nodeId:string};resultReceivedAt?:number;}
 // Fan-in currently materializes a bundle at the relay. Only its immediate inputs
 // need materialization; unrelated linear edges may stay at their executor.
@@ -192,8 +192,8 @@ export class WorkflowJobs {
    }
   });
   if(JSON.stringify(data)!==before)await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
-  let writes=Promise.resolve();
-  const save=()=>{const next=writes.then(async()=>{await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});});writes=next.catch(()=>{});return next;};
+  let writes=Promise.resolve(),lastSaved=JSON.stringify(data);
+  const save=()=>{const next=writes.then(async()=>{const nextData=JSON.stringify(data);if(nextData===lastSaved)return;await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:nextData}});lastSaved=nextData;});writes=next.catch(()=>{});return next;};
   await parallelReady(data.workflow.nodes,async n=>{
    const state=data.nodes.find(s=>s.id===n.id)!;if(state.state==='COMMITTED'||n.dependsOn.some(dep=>data.nodes.find(s=>s.id===dep)!.state!=='COMMITTED'))return;
    if(data.deadlineAt<=Date.now()){await this.stop(id,data,'BUDGET_EXHAUSTED');return;}
@@ -201,6 +201,7 @@ export class WorkflowJobs {
    // again on every UI poll. Avoid write-lock churn while its engine is running.
    if(dispatched.has(n.id))return;
    if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state!=='ACTIVE')return;
+   state.scheduling??={readyAt:Date.now(),lastAttemptAt:Date.now(),blocks:{}};state.scheduling.lastAttemptAt=Date.now();
    const parent=n.inputFrom?data.nodes.find(s=>s.id===n.inputFrom)!:null;
    try{
    if(n.inputFroms&&!data.inputs[n.id]){
@@ -219,8 +220,9 @@ export class WorkflowJobs {
     if(await this.jobs.graphInput(data.peer,state.jobId,source))return;
     if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state!=='ACTIVE')return;
     await this.jobs.start(data.peer,state.jobId);
-   }catch(error){if(['P1008','P2028'].includes(String((error as {code?:string})?.code))){return;}if(error instanceof Error&&(error.message.startsWith('ARTIFACT_UNAVAILABLE:')||error.message==='ARTIFACT_CACHE_FULL')){data.failure={code:error.message==='ARTIFACT_CACHE_FULL'?'ARTIFACT_CACHE_FULL':'ARTIFACT_UNAVAILABLE',reason:error.message==='ARTIFACT_CACHE_FULL'?'NO_FEASIBLE_INPUT_PATH':error.message.slice('ARTIFACT_UNAVAILABLE:'.length),nodeId:n.id};await this.stop(id,data,'FAILED');return;}if(error instanceof Error&&['APP_QUOTA_EXCEEDED','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','START_BUSY','DISPATCH_ADMISSION_PENDING','PLAN_STALE','INPUT_NOT_UPLOADED','TARGET_UNAVAILABLE','JOB_RECOVERY_REQUIRED'].includes(error.message))return;data.failure={code:'GRAPH_NODE_FAILED',reason:error instanceof Error?error.message:'UNKNOWN',nodeId:n.id};await this.stop(id,data,'FAILED');return;}
+   }catch(error){const reason=String((error as {code?:string})?.code??(error instanceof Error?error.message:'UNKNOWN'));const code=/^[A-Z][A-Z0-9_]+$/.test(reason)?reason:'UNKNOWN';state.scheduling!.blocks[code]=(state.scheduling!.blocks[code]??0)+1;if(['P1008','P2028'].includes(String((error as {code?:string})?.code))){return;}if(error instanceof Error&&(error.message.startsWith('ARTIFACT_UNAVAILABLE:')||error.message==='ARTIFACT_CACHE_FULL')){data.failure={code:error.message==='ARTIFACT_CACHE_FULL'?'ARTIFACT_CACHE_FULL':'ARTIFACT_UNAVAILABLE',reason:error.message==='ARTIFACT_CACHE_FULL'?'NO_FEASIBLE_INPUT_PATH':error.message.slice('ARTIFACT_UNAVAILABLE:'.length),nodeId:n.id};await this.stop(id,data,'FAILED');return;}if(error instanceof Error&&['APP_QUOTA_EXCEEDED','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','START_BUSY','DISPATCH_ADMISSION_PENDING','PLAN_STALE','INPUT_NOT_UPLOADED','TARGET_UNAVAILABLE','JOB_RECOVERY_REQUIRED'].includes(error.message))return;data.failure={code:'GRAPH_NODE_FAILED',reason:error instanceof Error?error.message:'UNKNOWN',nodeId:n.id};await this.stop(id,data,'FAILED');return;}
   });
+  await save();
   if(data.nodes.every(n=>n.state==='COMMITTED'))await this.db.sdkWorkflowJob.updateMany({where:{id,state:'ACTIVE'},data:{state:'SUCCEEDED'}});
  }
  async status(peer:Peer,id:string){const {row,data}=await this.owned(peer,id);

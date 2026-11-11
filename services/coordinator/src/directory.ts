@@ -100,11 +100,12 @@ export class DeviceDirectory {
     return null;
   }
   /** Runs in the same transaction as first dispatch. An offer can precede the next device profile. */
-  async hasDispatchCredit(tx:Prisma.TransactionClient,offer:DispatchOfferV2,holderId:string){
+  async hasDispatchCredit(tx:Prisma.TransactionClient,offer:DispatchOfferV2,holderId:string,identity?:string){
     if(!await deviceMembershipActive(tx,offer.target.deviceId))return false;
     const row=await tx.deviceInstance.findUnique({where:{id:JSON.stringify(['profile',offer.task.groupId,holderId])}});
     if(!row)return false;
     const profile=JSON.parse(row.metadataJson) as DeviceProfileV2,now=this.now();
+    if(identity){const executor=profile.executors.find(e=>e.target.targetId===offer.target.targetId);if(!executor||executorIdentity(executor)!==identity)return false;}
     if(this.controlState&&this.controlState(offer.task.groupId,holderId,profile.deviceInstanceId,profile.ledgerEpoch)!=='ONLINE')return false;
     if(profile.deviceId!==offer.target.deviceId||profile.energyGate||!sampleUsableV2(profile.ownerActivity,now,this.domain))return false;
     const slots=profile.credits.find(c=>c.priority===offer.task.priority)?.slots??0;

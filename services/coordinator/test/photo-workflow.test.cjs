@@ -28,6 +28,7 @@ for(const refusal of ['ALLOTMENT_ACK_PENDING','P1008'])test('graph preserves the
  const jobs={submit:async()=>{submitted++;},graphInput:async()=>null,start:async()=>{if(++started===1){const e=Error(refusal);if(refusal==='P1008')e.code=refusal;throw e;}},winnerFor:async()=> 'ja',status:async()=>({state:started>=2?'ACCEPTED':'WAITING_INPUT'}),graphOutput:async()=>null};
  const graph=new WorkflowJobs(db,frontierMock(jobs),{context:async()=>({})},null,[]);
  await graph.progress('g',data);assert.equal(state,'ACTIVE');assert.equal(data.failure,undefined);assert.equal(data.nodes[0].state,'SUBMITTED');
+ assert.ok(data.nodes[0].scheduling.readyAt>0);assert.equal(data.nodes[0].scheduling.blocks[refusal],1);
  await graph.progress('g',data);assert.equal(submitted,1);assert.equal(started,2);assert.equal(state,'ACTIVE');await graph.progress('g',data);assert.equal(started,2,'an admitted task is never restarted by polling');
 });
 test('actual CPU neural photo graph plans, fans out, fans in and returns a verified product through SDK',{skip:!fs.existsSync(settings),timeout:300000},async()=>{

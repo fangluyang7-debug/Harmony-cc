@@ -1,0 +1,375 @@
+{
+  "batchId": "a83ca1ee-5be8-4d0b-8f97-5bc0026eca50",
+  "sourceDurationMs": 50074,
+  "inputDimensions": [
+    [
+      192,
+      128
+    ],
+    [
+      192,
+      128
+    ],
+    [
+      192,
+      128
+    ],
+    [
+      192,
+      128
+    ],
+    [
+      192,
+      128
+    ],
+    [
+      192,
+      128
+    ]
+  ],
+  "nodeCount": 36,
+  "delivered": 6,
+  "clockRule": "Only compare absolute monotonic timestamps within the same clockDomainId. Phase sums overlap and are not a wall-time decomposition.",
+  "devices": [
+    {
+      "device": "B NVIDIA Vulkan",
+      "enhanceNodes": 9,
+      "otherNodes": 0,
+      "executeSumMs": 9381.118,
+      "executionUnionMs": 9381.118,
+      "firstToLastExecuteMs": 39476.611,
+      "betweenExecutionGapMs": 30095.493,
+      "gapMs": [
+        6192.052,
+        3319.796,
+        4903.312,
+        4502.591,
+        2132.189,
+        4544.347,
+        1426.384,
+        3074.822
+      ],
+      "hardwareUtilization": null
+    },
+    {
+      "device": "Harmony computer CPU",
+      "enhanceNodes": 9,
+      "otherNodes": 0,
+      "executeSumMs": 10353,
+      "executionUnionMs": 7188,
+      "firstToLastExecuteMs": 42545,
+      "betweenExecutionGapMs": 35357,
+      "gapMs": [
+        28457,
+        5658,
+        1110,
+        132
+      ],
+      "hardwareUtilization": null
+    },
+    {
+      "device": "Windows CPU",
+      "enhanceNodes": 3,
+      "otherNodes": 0,
+      "executeSumMs": 4191.896,
+      "executionUnionMs": 2709.18,
+      "firstToLastExecuteMs": 11461.77,
+      "betweenExecutionGapMs": 8752.589,
+      "gapMs": [
+        8752.589
+      ],
+      "hardwareUtilization": null
+    },
+    {
+      "device": "Harmony phone CPU",
+      "enhanceNodes": 3,
+      "otherNodes": 12,
+      "executeSumMs": 9198,
+      "executionUnionMs": 6264,
+      "firstToLastExecuteMs": 47325,
+      "betweenExecutionGapMs": 41061,
+      "gapMs": [
+        68,
+        203,
+        66,
+        29094,
+        433,
+        1680,
+        2288,
+        3990,
+        3239
+      ],
+      "hardwareUtilization": null
+    }
+  ],
+  "phases": {
+    "PLAN": {
+      "count": 36,
+      "sumMs": 7.916,
+      "maxMs": 0.314
+    },
+    "OFFER": {
+      "count": 36,
+      "sumMs": 6406.563,
+      "maxMs": 351.28
+    },
+    "QUEUE": {
+      "count": 37,
+      "sumMs": 1984.399,
+      "maxMs": 358
+    },
+    "ADMIT": {
+      "count": 36,
+      "sumMs": 6208.439,
+      "maxMs": 361
+    },
+    "LOAD": {
+      "count": 36,
+      "sumMs": 1508.499,
+      "maxMs": 163
+    },
+    "EXECUTE": {
+      "count": 36,
+      "sumMs": 33124.014,
+      "maxMs": 2452
+    },
+    "PUBLISH": {
+      "count": 36,
+      "sumMs": 9640.019,
+      "maxMs": 808.27
+    },
+    "TRANSFER_RECV": {
+      "count": 27,
+      "sumMs": 1347.166,
+      "maxMs": 158
+    },
+    "TRANSFER_SEND": {
+      "count": 30,
+      "sumMs": 2900.04,
+      "maxMs": 355
+    },
+    "DELIVER": {
+      "count": 6,
+      "sumMs": 175747,
+      "maxMs": 42075
+    }
+  },
+  "planTimeline": [
+    {
+      "image": 3,
+      "node": "analyze",
+      "relativeMs": 0.0,
+      "snapshotVersion": 49120
+    },
+    {
+      "image": 1,
+      "node": "analyze",
+      "relativeMs": 112.184,
+      "snapshotVersion": 49121
+    },
+    {
+      "image": 2,
+      "node": "analyze",
+      "relativeMs": 117.131,
+      "snapshotVersion": 49121
+    },
+    {
+      "image": 4,
+      "node": "analyze",
+      "relativeMs": 240.256,
+      "snapshotVersion": 49122
+    },
+    {
+      "image": 3,
+      "node": "enhance-0",
+      "relativeMs": 1431.45,
+      "snapshotVersion": 49129
+    },
+    {
+      "image": 3,
+      "node": "enhance-2",
+      "relativeMs": 1436.857,
+      "snapshotVersion": 49129
+    },
+    {
+      "image": 4,
+      "node": "enhance-1",
+      "relativeMs": 6332.032,
+      "snapshotVersion": 49164
+    },
+    {
+      "image": 1,
+      "node": "enhance-0",
+      "relativeMs": 13525.44,
+      "snapshotVersion": 49217
+    },
+    {
+      "image": 3,
+      "node": "enhance-3",
+      "relativeMs": 18042.105,
+      "snapshotVersion": 49246
+    },
+    {
+      "image": 3,
+      "node": "enhance-1",
+      "relativeMs": 23989.878,
+      "snapshotVersion": 49290
+    },
+    {
+      "image": 2,
+      "node": "enhance-2",
+      "relativeMs": 23994.58,
+      "snapshotVersion": 49290
+    },
+    {
+      "image": 2,
+      "node": "enhance-3",
+      "relativeMs": 24008.014,
+      "snapshotVersion": 49290
+    },
+    {
+      "image": 1,
+      "node": "enhance-3",
+      "relativeMs": 29326.234,
+      "snapshotVersion": 49323
+    },
+    {
+      "image": 1,
+      "node": "enhance-2",
+      "relativeMs": 29331.129,
+      "snapshotVersion": 49323
+    },
+    {
+      "image": 1,
+      "node": "enhance-1",
+      "relativeMs": 29338.091,
+      "snapshotVersion": 49323
+    },
+    {
+      "image": 3,
+      "node": "deliver",
+      "relativeMs": 29343.869,
+      "snapshotVersion": 49323
+    },
+    {
+      "image": 4,
+      "node": "enhance-0",
+      "relativeMs": 31365.036,
+      "snapshotVersion": 49338
+    },
+    {
+      "image": 2,
+      "node": "enhance-0",
+      "relativeMs": 31376.254,
+      "snapshotVersion": 49338
+    },
+    {
+      "image": 4,
+      "node": "enhance-3",
+      "relativeMs": 31889.21,
+      "snapshotVersion": 49340
+    },
+    {
+      "image": 2,
+      "node": "enhance-1",
+      "relativeMs": 32854.365,
+      "snapshotVersion": 49348
+    },
+    {
+      "image": 1,
+      "node": "deliver",
+      "relativeMs": 33979.468,
+      "snapshotVersion": 49356
+    },
+    {
+      "image": 5,
+      "node": "analyze",
+      "relativeMs": 34155.111,
+      "snapshotVersion": 49357
+    },
+    {
+      "image": 4,
+      "node": "enhance-2",
+      "relativeMs": 34703.892,
+      "snapshotVersion": 49361
+    },
+    {
+      "image": 2,
+      "node": "deliver",
+      "relativeMs": 35915.952,
+      "snapshotVersion": 49366
+    },
+    {
+      "image": 5,
+      "node": "enhance-0",
+      "relativeMs": 38307.867,
+      "snapshotVersion": 49382
+    },
+    {
+      "image": 4,
+      "node": "deliver",
+      "relativeMs": 38315.408,
+      "snapshotVersion": 49382
+    },
+    {
+      "image": 6,
+      "node": "analyze",
+      "relativeMs": 38839.536,
+      "snapshotVersion": 49385
+    },
+    {
+      "image": 5,
+      "node": "enhance-3",
+      "relativeMs": 39512.883,
+      "snapshotVersion": 49389
+    },
+    {
+      "image": 5,
+      "node": "enhance-2",
+      "relativeMs": 39770.938,
+      "snapshotVersion": 49391
+    },
+    {
+      "image": 5,
+      "node": "enhance-1",
+      "relativeMs": 40710.198,
+      "snapshotVersion": 49398
+    },
+    {
+      "image": 6,
+      "node": "enhance-2",
+      "relativeMs": 41376.033,
+      "snapshotVersion": 49401
+    },
+    {
+      "image": 6,
+      "node": "enhance-1",
+      "relativeMs": 41921.106,
+      "snapshotVersion": 49403
+    },
+    {
+      "image": 5,
+      "node": "deliver",
+      "relativeMs": 43239.188,
+      "snapshotVersion": 49414
+    },
+    {
+      "image": 6,
+      "node": "enhance-0",
+      "relativeMs": 43372.108,
+      "snapshotVersion": 49415
+    },
+    {
+      "image": 6,
+      "node": "enhance-3",
+      "relativeMs": 43376.831,
+      "snapshotVersion": 49415
+    },
+    {
+      "image": 6,
+      "node": "deliver",
+      "relativeMs": 46955.956,
+      "snapshotVersion": 49432
+    }
+  ]
+}

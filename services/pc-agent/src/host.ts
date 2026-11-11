@@ -205,7 +205,7 @@ export class CpuHost {
     const resources=pack.manifest.resourceLimit.filter(r=>gpu||!['gpu','vram'].includes(r.resourcePoolId)).map(r=>({...r,amount:capability==='photo.enhance.v1'&&r.resourcePoolId==='cpu'?threads:r.amount}));
     const executorId=pack===this.config.imageEncoder?.pack?(gpu?(this.config.imageEncoder?.backend==='VULKAN'?photoVulkanExecutorId:cudaExecutorId):imageExecutorId):pack.manifest.contract.serviceId?pack.manifest.executorIds[0]:(cpuRegistry.executorId(capability)??'node.cpu.v1');
     return {startup:pack.manifest.contract.serviceId||capability.startsWith('photo.')?"UNKNOWN":"COLD",target:{targetId:(gpu?'cuda-':'cpu-')+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
-      executorId,executorVersion:'1',backend:gpu?(this.config.imageEncoder?.backend??'CUDA'):pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
+      executorId,executorVersion:gpu&&this.config.imageEncoder?.backend==='VULKAN'?'2':'1',backend:gpu?(this.config.imageEncoder?.backend??'CUDA'):pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
       resources:structuredClone(resources),configurations:[{...configuration}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(null),cold:prior(cost?.overhead??0,cost?cost.at+this.clockOffset:now),publish:prior(0),uncertainty:prior(null)};
   }
   private async sample(syncSettings=true){
