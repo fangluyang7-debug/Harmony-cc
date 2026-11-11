@@ -2,7 +2,10 @@
 const fs=require('node:fs'),path=require('node:path'),{execFileSync}=require('node:child_process');
 const root=path.resolve(__dirname,'..'),tools=path.join(root,'.test/photo-tools');
 const source=path.join(tools,'photo-vulkan-project'),build=path.join(tools,'photo-vulkan-build');
-const env={...process.env,PATH:'C:/msys64/mingw64/bin'+path.delimiter+process.env.PATH};
+const cxx=process.env.CXX||'C:/msys64/mingw64/bin/g++.exe',cc=process.env.CC||'C:/msys64/mingw64/bin/gcc.exe';
+const env={...process.env,PATH:path.dirname(cxx)+path.delimiter+process.env.PATH};
+const openmp=execFileSync(cxx,['-print-file-name=libgomp.a'],{env,encoding:'utf8',windowsHide:true}).trim();
+if(!fs.existsSync(openmp))throw Error('PHOTO_OPENMP_LIBRARY_MISSING');
 function run(cmd,args){execFileSync(cmd,args,{cwd:root,env,windowsHide:true,stdio:'inherit'});}
 const revision=execFileSync('git',['-C',path.join(tools,'ncnn'),'rev-parse','HEAD'],{encoding:'utf8'}).trim();
 if(revision!=='7e36d25cb153092ba87a60530455c7376fedf452')throw Error('PHOTO_NCNN_REVISION');
@@ -19,8 +22,8 @@ target_link_options(photo-runner-vulkan PRIVATE -static -fopenmp)
 target_link_libraries(photo-runner-vulkan PRIVATE ncnn)
 `);
 run('cmake',['-S',source,'-B',build,'-G','Ninja','-DCMAKE_MAKE_PROGRAM='+path.join(tools,'python/bin/ninja.exe'),
- '-DCMAKE_C_COMPILER=C:/msys64/mingw64/bin/gcc.exe','-DCMAKE_CXX_COMPILER=C:/msys64/mingw64/bin/g++.exe',
- '-DCMAKE_BUILD_TYPE=Release','-DOpenMP_gomp_LIBRARY=C:/msys64/mingw64/lib/libgomp.a','-DNCNN_VULKAN=ON','-DNCNN_SIMPLEVK=ON','-DNCNN_OPENMP=ON','-DNCNN_SHARED_LIB=OFF',
+ '-DCMAKE_C_COMPILER='+cc,'-DCMAKE_CXX_COMPILER='+cxx,
+ '-DCMAKE_BUILD_TYPE=Release','-DOpenMP_gomp_LIBRARY='+openmp,'-DNCNN_VULKAN=ON','-DNCNN_SIMPLEVK=ON','-DNCNN_OPENMP=ON','-DNCNN_SHARED_LIB=OFF',
  '-DNCNN_BUILD_TOOLS=OFF','-DNCNN_BUILD_EXAMPLES=OFF','-DNCNN_BUILD_BENCHMARK=OFF','-DNCNN_BUILD_TESTS=OFF',
  '-DNCNN_AVX512=OFF','-DNCNN_XOP=OFF','-DNCNN_FMA4=OFF','-DNCNN_AVXVNNI=OFF','-DNCNN_AVXNECONVERT=OFF']);
 run('cmake',['--build',build,'--target','photo-runner-vulkan','-j','6']);
