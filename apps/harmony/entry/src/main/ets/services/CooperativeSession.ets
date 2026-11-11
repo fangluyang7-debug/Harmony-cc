@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
-import { HarmonySdkPort, SchedulerSdk, SdkTask, NativeAgent, DeviceProfileV2, SchedulerAppSession, SchedulerAppStatus, monotonic } from 'scheduler';
+import { HarmonySdkPort, SchedulerSdk, SdkTask, NativeAgent, DeviceProfileV2, SchedulerAppSession, SchedulerAppOptions, SchedulerAppStatus, monotonic } from 'scheduler';
 export interface ShoppingCapacity {sdk:SchedulerSdk|null;originDevice:string;originTarget:string|null;roundTripMs:number;remoteAvailable:boolean;}
 interface Profiles {profiles:DeviceProfileV2[];}
 interface Resource {resourcePoolId:string;amount:number;}
@@ -18,13 +18,15 @@ const manifest:RegistrationRequest={label:'SoleAI 日常购物工作流 3',allow
   {id:'shopping.photo.match',capabilities:['image.visual-match.v1'],inputSchema:'image.visual-bundle',outputContract:'image.visual-evidence',nodes:[{id:'match',capability:'image.visual-match.v1',dependsOn:[]}]}]}};
 export interface CapabilityAvailability {capability:string;targets:number;services:number;}
 interface CapabilityReply {capabilities?:CapabilityAvailability[];}
+// ArkTS requires object literals to carry a declared type (arkts-no-untyped-obj-literals).
+const sessionOptions:SchedulerAppOptions={storeName:'cooperative-shopping-3',declaration:manifest,revision:manifest.declaration.revision};
 class CooperativeSession {
  declaration():RegistrationRequest{return manifest;}
  async capabilities():Promise<CapabilityAvailability[]>{if(!this.port)return [];const reply=JSON.parse(await this.port.request('/v2/apps/me/capabilities',null)) as CapabilityReply;return reply.capabilities??[];}
 
  // Authorization, credential persistence and the in-process NativeAgent live in the shared
  // SchedulerAppSession (scheduler HAR). This class only adds the shopping business logic.
- private session=new SchedulerAppSession({storeName:'cooperative-shopping-3',declaration:manifest,revision:manifest.declaration.revision});
+ private session=new SchedulerAppSession(sessionOptions);
  private context:common.UIAbilityContext|null=null;
  private preparing=false;
  private active:SdkTask|null=null;

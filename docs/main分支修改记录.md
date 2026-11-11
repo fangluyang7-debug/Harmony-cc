@@ -13,6 +13,52 @@
 
 ---
 
+## 2026-11-11 · 独显设备接入画像、照片包完整性、SoleAI 协同链（第 5 次提交）
+
+对应队友报告 [WINDOWS-GPU-PHOTO-PACKAGE-DIAGNOSIS-20261111.md](scheduler-v2/WINDOWS-GPU-PHOTO-PACKAGE-DIAGNOSIS-20261111.md) 的 P1～P4 与风险 1，以及本分支核对出的 SoleAI 网关缺陷。`imageprocessing` 已是 `main` 的祖先（`715c3d5` 合并），以下文件在两分支完全一致，可整体 cherry-pick。
+
+### 1. P2：显存额度随设备画像自动分配（协调中心 + Windows 调度件）
+- **现象**：`host-main.ts` 只有在 `contribution.maxVramBytes > 0` 时才探测 GPU，而默认邀请是 `capacityMode: 'auto'` 且不带显存额度；`autoContribution` 只算 CPU/RAM。结果独显机即使装齐引擎也永远只报 CPU 执行器。
+- **修改**：
+  - `services/coordinator/src/spaces.ts`：`MeasuredCapacity` 新增可选 `vramBytes`（旧调度件不带该字段仍合法）；`autoContribution` 按上报显存减 256 MiB 得 `maxVramBytes`（不足 512 MiB 不分配；上报 0 则撤销原份额）；`deviceSettings` 的"未变化"判断加入显存。`capacityVector` 已有的 gpu/vram 池随之进入设备额度。
+  - `services/pc-agent/src/host.ts`：`/v2/device-settings` 的 measured 带 `vramBytes`（= 已打开的 GPU 后端显存总量，没有 GPU 后端则 0）；旧协调中心返回 `MEASUREMENT_INVALID` 时自动退回 CPU/RAM 字段并记住（两端兼容）。采纳自动上限时同步 `maxVramBytes` 并写回 `contribution.json`。
+  - `services/pc-agent/src/host-main.ts`：只要装有 Vulkan 引擎且（自动额度 或 固定额度已给显存）就探测 GPU；固定额度为 0 时输出 `PHOTO_GPU_NOT_CONTRIBUTED`。探测成功输出 `PHOTO_GPU_READY: VULKAN device N, <MiB>`。
+- **语义**：设备先探测 GPU → 上报显存 → 中心确定份额 → 设备采纳；"有显卡"不等于"有份额"，份额只在 GPU 引擎真正打开后出现，调度盘不会出现无执行器的 GPU 额度。固定额度模式下用户"不共享显卡"的设置照旧生效。
+
+### 2. P4 / 风险 1：双显卡选择与可区分的失败原因
+- `services/pc-agent/src/photo-accelerator.ts`：新增 `parseVulkanDevices()`、`selectVulkanDevice()`。先跑一次参考推理拿到 Vulkan 设备列表，选出名称与 `nvidia-smi` 匹配的索引（不再假设 0 是独显）；若与当前索引不同则在选中的设备上重跑参考推理，再做质量阈值判断。显式 `HARMONY_PHOTO_GPU_ID` 必须本身就是 NVIDIA 设备。
+- 失败原因拆分：`PHOTO_GPU_RUNTIME_MISSING`（无引擎文件）、`PHOTO_GPU_DRIVER_MISSING`（nvidia-smi 不可用）、`PHOTO_GPU_DEVICE_UNMATCHED`、`PHOTO_GPU_MEMORY_TOO_SMALL`、`PHOTO_GPU_PROBE_FAILED`、`PHOTO_GPU_QUALITY_FAILED`；`host-main.ts` 对每种给出中文可读处理建议。
+- **测试**：`services/pc-agent/test/photo-accelerator.test.cjs`（集显为 0、独显为 1 的日志选 1；显式 0 拒绝）。
+
+### 3. P1 / P3：照片运行库打包不再静默漏包
+- 新增 `scripts/lib/photo-runtime-package.cjs` `stagePhotoRuntime()`：校验模型三件（param/bin/manifest）、CPU runner、Vulkan EXE 均存在；Vulkan EXE 放到 `dist/photo/vulkan/` 并携带同目录全部 DLL（必须含 `vcomp140.dll`，不带驱动提供的 `vulkan-1.dll`）；缺任何一项抛 `PHOTO_RUNTIME_INCOMPLETE`。
+- `scripts/prepare-harmony-distribution.cjs`：未设置 `HARMONY_PHOTO_RUNTIME` 时**默认失败**（`PHOTO_RUNTIME_REQUIRED`）；显式 `HARMONY_PHOTO_RUNTIME_OPTIONAL=1` 才允许生成不含照片运行库的 02 包，并在包根写 `PHOTO-RUNTIME-NOT-INCLUDED.txt`、在 `00-使用说明.md` 标明。02 包 README 增加照片/GPU 说明。
+- **测试**：`scripts/photo-runtime-package.test.cjs`。
+
+### 4. Windows 调度件界面
+- `scripts/runtime-desktop.cjs` `deviceStatus()` 返回 `vram`、`capacityMode`；`apps/runtime-desktop/agent.html` 贡献上限新增"显存"；`desktop.js` 未探测前显示"启动后探测"、运行中无 GPU 引擎显示"无 GPU 引擎"。`capabilities/capability-hints.json` 的 `photo.enhance.v1` 安装提示同步更新。
+
+### 5. SoleAI 协同链实际不会触发（本分支核对发现）
+- **现象**：`AiTaskGateway.ets` 调 `plan('shopping.image')` / `plan('shopping.text')`，而 `CooperativeSession.ets` 声明的工作流 id 是 `shopping.photo.prepare` / `shopping.compare` / `shopping.photo.match`，一个都不匹配，`nodes` 永远为空；前缀列表里的 `image.quality.v1` 也没有能力包。于是图片链永远走本机，报告只显示"部分协同"。
+- **修改**：`searchImage` 改用声明中的 `shopping.photo.prepare`，可调度前缀为 `['image.crop.v1']`；`plan()` 对未声明的工作流直接返回 `LOCAL`（不再出现零节点的 PARTIAL）；`searchText` / 会话操作本来就没有声明工作流，现在如实显示本机模式。
+- 两个分支的该文件完全一致；`CooperativeSession.ets` 在 `main` 上已改用 `SchedulerAppSession`，manifest 部分未动。
+
+### 6. 鸿蒙侧
+- 鸿蒙调度件本轮无代码改动（设备只贡献 CPU/RAM，没有 GPU/NPU 执行器，这是现状不是本轮回退）。`NativeAgent.ets` 的 `MeasuredCapacity` 不带 `vramBytes`，协调中心按"未知"处理，不影响手机额度。
+- SoleAI HAP（04）因网关修改需重新构建；设备调度件 HAP（03）沿用 r5（与 `.test/s2-harmony-agent` 产物 SHA-256 一致）。
+
+### 7. 验证
+- 新增 `services/coordinator/test/auto-contribution.test.cjs` 3/3、`services/pc-agent/test/photo-accelerator.test.cjs` 3/3、`scripts/photo-runtime-package.test.cjs` 2/2；`scripts/runtime-desktop(.integration).test.cjs` 6/6；pc-agent `system-resources` / `profile-publisher` / `photo-profile` 通过；coordinator、pc-agent `tsc` 通过。
+- `services/coordinator/test/spaces.test.cjs` 的"paired CPU host"用例在本机 180 秒超时，**改动前基线同样超时**（本机没有照片/视觉原生运行库，宿主能力无法全部 ACTIVE），与本次修改无关；其余两例通过。
+- 本机没有 `nvidia-smi` 和 `.test/photo-tools`，GPU 路径只做了单元级验证；独显真机验收待队友在装有运行库和 NVIDIA 驱动的机器上完成，验收口径见 §5 与诊断报告第 6 节。
+
+### 8. 分发产物
+- 按用户要求直接替换 `dist/调度系统分发-20261110-r2/` 内容（`SHA256SUMS.txt` 已重算）：01 协调中心、02 Windows 调度件、03 鸿蒙调度件（HAR 与 HAP 均重编，包含 `715c3d5` 合并进来的队友改动；此前 r5 的 03 HAP 构建于合并之前）、04 SoleAI（含签名包）。鸿蒙构建顺序：`harmony-v2-build.cjs` → `harmony-v2-app-build.cjs <app> --har`；SoleAI 不带 `--har` 会因跨模块相对导入失败。本机无照片运行库，02 以 `HARMONY_PHOTO_RUNTIME_OPTIONAL=1` 构建，包根带 `PHOTO-RUNTIME-NOT-INCLUDED.txt`。
+- **需要队友在有 `.test/photo-tools/runtime.json` 的机器上重打 02 包**：`HARMONY_PHOTO_RUNTIME=.test/photo-tools/runtime.json HARMONY_ELECTRON_DIST=<electron dist> node scripts/prepare-harmony-distribution.cjs 调度系统分发-20261110-r3`（或任意新目录）。脚本会校验模型、runner、Vulkan EXE 与 `vcomp140.dll`，缺一失败。
+- Electron 运行时本机以 r2 协调中心包还原为 `dist/electron-44.7.2-win-x64/`（不入库）。
+
+---
+
 ## 2026-11-11 · Windows 设备调度件：残留旧配对时可直接重新配对（第 4 次提交）
 
 - **现象**：设备目录残留旧配对（或未完成的配对）时，输入新协调中心的配对码报"安装目录已存在，请恢复该设备或选择新目录；不覆盖账本"，无法配对。
