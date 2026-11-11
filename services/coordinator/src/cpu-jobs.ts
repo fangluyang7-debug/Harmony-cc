@@ -535,7 +535,7 @@ export class CpuJobs {
       }
       if(data.deadlineAt<=Date.now())throw Error('BUDGET_EXHAUSTED');
       if(wait)wait.stage="PREFLIGHT";
-      if(!data.plan||!await this.planning.preflight(peer.groupId,data.plan,data.request,{now:Date.now(),monotonic:()=>performance.now()},id,current=>{
+      if(!data.plan||!await this.planning.preflight(peer.groupId,data.plan,data.request,()=>({now:Date.now(),monotonic:()=>performance.now()}),id,current=>{
         data.plan=current;
         const selected=current.decision.suggestion![0];
         if(data.decisionEvidence)data.decisionEvidence={...data.decisionEvidence,snapshotVersion:current.snapshotVersion,plannedStartMs:selected.startMs,plannedResourceWaitMs:selected.dagResourceWaitMs,costSource:selected.costSource,costConfidence:selected.costConfidence,phaseCosts:selected.phaseCosts};

@@ -1,5 +1,7 @@
 # 调度 v2 文档入口
 
+**四设备六图失败修复：[派发复核时钟竞争与重新接入](PHOTO-PREFLIGHT-CLOCK-FAILURE-20261112.md)**。修正异步读快照之前固定 now 导致的 `SNAPSHOT_OR_POLICY_INVALID`；22 项回归通过，已更新本机协调中心，等待用户重新配对后同序六图复测。旧 r4 中心 ZIP 不含此热修复。
+
 **本地 main 整合与安装：[main + GPU r3 更新记录](LOCAL-MAIN-INTEGRATION-20261112.md)**。本地分支 `codex/main-gpu-integration-20261112` 以 `e442b06` 加入 `c65def3`（移植为 `97c2595`），保留双方能力并更新 Windows、手机和鸿蒙电脑；远端未推送，用户负责照片复测。注意 main 每次启动协调中心都会建立新会话，设备须重新配对。
 
 **最新 GPU 性能修复：[50.074 秒审计与 r3 更新](PHOTO-GPU-PERFORMANCE-R3-20261112.md)**。已修复快照版本变化引起的无效重规划，GPU 改为常驻模型并重新校准；本机已更新、B 新包已准备，待用户恢复原局域网后同序六图复测。

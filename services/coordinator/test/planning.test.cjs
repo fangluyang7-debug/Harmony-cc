@@ -137,6 +137,24 @@ test('preflight revalidates newer observations without livelock but rejects chan
   }finally{await db.$disconnect();}
 });
 
+test('preflight samples current time after an asynchronous snapshot read, without accepting future snapshots',async()=>{
+ const f=fixture();let now=100,readDone=false,future=false,clockReads=0;
+ const service=new PlanningService({build:async()=>{
+  await Promise.resolve();now=105;readDone=true;
+  return {snapshot:{...f.snapshot,version:2,capturedAt:future?106:104},policy:f.policy};
+ }});
+ const expected=service.plan(f.snapshot,f.request,f.policy,f.clock);
+ // Reproduce the old production call: its timestamp was captured before I/O.
+ await assert.rejects(service.preflight('g1',expected,f.request,f.clock),/SNAPSHOT_OR_POLICY_INVALID/);
+ now=100;readDone=false;
+ const currentClock=()=>{assert.equal(readDone,true);clockReads++;return {now,monotonic:()=>0};};
+ let validated;
+ assert.equal(await service.preflight('g1',expected,f.request,currentClock,undefined,p=>validated=p),true);
+ assert.equal(clockReads,1);assert.equal(validated.snapshotVersion,2);
+ future=true;
+ await assert.rejects(service.preflight('g1',expected,f.request,currentClock),/SNAPSHOT_OR_POLICY_INVALID/);
+});
+
 test('local result publication stays private only for the authenticated App holder',()=>{
  const service=new PlanningService(null),f=fixture();
  f.request.appInstanceId='app';f.request.localResultHolderId='source';f.request.materializeOutputsAt='relay';f.request.finalDestination='relay';
