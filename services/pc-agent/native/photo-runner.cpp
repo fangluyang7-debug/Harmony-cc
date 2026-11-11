@@ -7,10 +7,12 @@
 #endif
 int main(int argc,char** argv){
 #if NCNN_VULKAN
- if((argc==2&&std::string(argv[1])=="--gpu-list")||(argc==7&&std::string(argv[6])=="VULKAN")){
+ // Explicit lifetime: cached GPU pipelines must die before the Vulkan device.
+ struct GpuLifetime {~GpuLifetime(){resetPhotoModelCache();ncnn::destroy_gpu_instance();}} lifetime;
+ if((argc==2&&(std::string(argv[1])=="--gpu-list"||std::string(argv[1])=="--server"))||(argc==7&&std::string(argv[6])=="VULKAN")){
   ncnn::create_gpu_instance();
   for(int i=0;i<ncnn::get_gpu_count();i++)std::cerr<<"["<<i<<" "<<ncnn::get_gpu_info(i).device_name()<<"] native photo RGB/float32\n";
-  if(argc==2)return ncnn::get_gpu_count()>0?0:1;
+  if(std::string(argv[1])=="--gpu-list")return ncnn::get_gpu_count()>0?0:1;
  }
 #endif
  if(argc==3&&std::string(argv[1])=="--runtime-info"){

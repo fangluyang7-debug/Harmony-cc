@@ -44,7 +44,10 @@ export async function infer(input:Buffer,threads:number,backend='CPU',signal?:Ab
  const dir=await fs.mkdtemp(path.join(os.tmpdir(),'harmony-photo-')),source=path.join(dir,legacyVulkan?'input.png':'input.rgb'),destination=path.join(dir,legacyVulkan?'output.png':'output.rgb');
  try{
   const header=Buffer.alloc(8);header.writeUInt32LE(info.width,0);header.writeUInt32LE(info.height,4);await fs.writeFile(source,legacyVulkan?input:Buffer.concat([header,data]));
-  if(backend==='CPU')await runPhotoWorker(runner,[path.join(model,'realesrgan-x4plus.param'),path.join(model,'realesrgan-x4plus.bin'),source,destination,String(threads),backend],signal,modelVersion);
+  if(backend==='CPU'||backend==='VULKAN'&&!legacyVulkan){
+   const executable=backend==='CPU'?runner:process.env.HARMONY_PHOTO_VULKAN;if(!executable)throw Error('PHOTO_GPU_UNAVAILABLE');
+   await runPhotoWorker(executable,[path.join(model,'realesrgan-x4plus.param'),path.join(model,'realesrgan-x4plus.bin'),source,destination,String(threads),backend],signal,modelVersion,onDiagnostic);
+  }
   else await new Promise<void>((resolve,reject)=>{
    if(signal?.aborted){reject(Error('CANCELLED_SETTLED'));return;}
    const executable=backend==='VULKAN'?process.env.HARMONY_PHOTO_VULKAN:runner;if(!executable){reject(Error('PHOTO_GPU_UNAVAILABLE'));return;}

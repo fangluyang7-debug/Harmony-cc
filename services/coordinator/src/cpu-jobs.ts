@@ -18,11 +18,11 @@ import { TraceService } from './traces';
 import { AppRegistry } from './apps';
 import {DirectTransfers} from './direct-transfers';
 
-interface StartContext {until:number;jobId:string;stage?:string;retries?:number;}
+interface StartContext {until:number;jobId:string;startedAt:number;stage?:string;retries?:number;}
 interface JobData {privacy?:string;sourcePeer?:Peer;backupOf?:string;duplicateBudgetMs?:number;resultReceivedAt?:number;delivery?:{id:string;senderHolderId:string;senderEndpointId:string;senderEpoch:string;relay?:boolean;preparation?:{at:number;remainingMs:number;uploadMs?:number;downloadMs?:number;estimatedMs:number|null;reservedTailMs:number;relaySlots:number;reason:string};failure?:{authorizationId:string;endpointId:string;at:number;reason:string}};retainOutput?:{id:string;epoch:string};sourceAttemptId?:string;sourceNodeId?:string;offer:DispatchOfferV2;holderId:string;input:ArtifactDescriptor;output:ArtifactDescriptor|null;traceId:string;
   budgetMs:number;deadlineAt:number;fingerprint?:string;choices?:{request:PlacementRequest;parameters:string}[];
   request:PlacementRequest;plan:SnapshotDecision;planTiming:{start:number;end:number;clockDomainId?:string};
-  decisionEvidence?:{candidateCount?:number;executionIdentity?:string;calibrationGeneration?:number;snapshotVersion:number;policyVersion:string;profileSequence:number;profileSampledAt:number;resultDelivery:string;inFlightP90?:{attemptId:string;p90RemainingMs:number|null}[];plannedStartMs?:number;plannedResourceWaitMs?:number;costSource?:string;costConfidence?:string;phaseCosts?:{EXECUTE:number|null;QUEUE:number|null;PUBLISH:number|null}};}
+  decisionEvidence?:{dispatchPreparationMs?:number;dispatchReplans?:number;candidateCount?:number;executionIdentity?:string;calibrationGeneration?:number;snapshotVersion:number;policyVersion:string;profileSequence:number;profileSampledAt:number;resultDelivery:string;inFlightP90?:{attemptId:string;p90RemainingMs:number|null}[];plannedStartMs?:number;plannedResourceWaitMs?:number;costSource?:string;costConfidence?:string;phaseCosts?:{EXECUTE:number|null;QUEUE:number|null;PUBLISH:number|null}};}
 /** First usable single-node submission path. Uses qualified available targets, with an optional explicit target. */
 class ResourceRetry extends Error {
   constructor(readonly delayMs:number){super('NO_LEGAL_PLAN');}
@@ -433,7 +433,7 @@ export class CpuJobs {
     return this.dispatchReady(peer,id);
   }
   private async dispatchReady(peer:Peer,id:string):Promise<unknown>{
-    const startedAt=Date.now(),deadline=startedAt+2500,previous=this.starts.get(id),context:StartContext={until:deadline,jobId:id,stage:"QUEUE",retries:0};
+    const startedAt=Date.now(),deadline=startedAt+2500,previous=this.starts.get(id),context:StartContext={until:deadline,jobId:id,startedAt,stage:"QUEUE",retries:0};
     let release!:()=>void;
     const slot=new Promise<void>(resolve=>{release=resolve;});
     const tail=(previous??Promise.resolve()).catch(()=>{}).then(()=>slot);
@@ -535,7 +535,11 @@ export class CpuJobs {
       }
       if(data.deadlineAt<=Date.now())throw Error('BUDGET_EXHAUSTED');
       if(wait)wait.stage="PREFLIGHT";
-      if(!data.plan||!await this.planning.preflight(peer.groupId,data.plan,data.request,{now:Date.now(),monotonic:()=>performance.now()},id)){
+      if(!data.plan||!await this.planning.preflight(peer.groupId,data.plan,data.request,{now:Date.now(),monotonic:()=>performance.now()},id,current=>{
+        data.plan=current;
+        const selected=current.decision.suggestion![0];
+        if(data.decisionEvidence)data.decisionEvidence={...data.decisionEvidence,snapshotVersion:current.snapshotVersion,plannedStartMs:selected.startMs,plannedResourceWaitMs:selected.dagResourceWaitMs,costSource:selected.costSource,costConfidence:selected.costConfidence,phaseCosts:selected.phaseCosts};
+      })){
         if(!await this.resetUndispatched(id))throw Error('JOB_RECOVERY_REQUIRED');
         if(replans<8)return this.startAttempt(peer,id,replans+1,wait);throw Error('PLAN_STALE');
       }
@@ -567,7 +571,7 @@ export class CpuJobs {
             const parent=await tx.node.findUnique({where:{id:JSON.stringify([data.offer.task.workflowId,dependency.nodeId])}}),receipt=parent?.currentAttemptId?await tx.receipt.findUnique({where:{id:parent.currentAttemptId}}):null;
             if(parent?.state!=='COMMITTED'||!receipt?.committed)throw Error('GRAPH_DEPENDENCY_UNCOMMITTED');
           }
-          if(!await this.directory.hasDispatchCredit(tx,data.offer,data.holderId))throw Error('ALLOTMENT_UNAVAILABLE');
+          if(!await this.directory.hasDispatchCredit(tx,data.offer,data.holderId,data.decisionEvidence?.executionIdentity))throw Error('ALLOTMENT_UNAVAILABLE');
           const queued=await tx.batchReadyJob.findUnique({where:{id}});
           if(queued)await tx.cpuJob.update({where:{id},data:{readyWaitJson:readyWait(queued,Date.now(),'OFFERED')}});
           const app=await this.apps.context(peer,tx);if(!app.identity.allowedContracts.includes(data.offer.task.contract.contractId))throw Error('APP_CONTRACT_FORBIDDEN');
@@ -579,6 +583,8 @@ export class CpuJobs {
             await chargeBatch(tx,id,app.identity.appId,data.offer.target.deviceId,data.offer.resources,
               Math.max(0,assignment.executionMs-(assignment.policyQueueMs??0)));
           }
+          if(wait&&data.decisionEvidence){data.decisionEvidence.dispatchPreparationMs=Date.now()-wait.startedAt;data.decisionEvidence.dispatchReplans=replans;}
+          await tx.cpuJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
         },data.backupOf);}catch(error){
           if(error instanceof Error&&error.message==='ALLOTMENT_UNAVAILABLE'){
             const placement=data.plan?.decision.suggestion?.[0];
