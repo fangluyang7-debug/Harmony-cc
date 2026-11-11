@@ -1,18 +1,42 @@
 import {common} from '@kit.AbilityKit';
-interface ReviewResultView {galleryId:string;summary:string;resultHash:string;}
+import {ReviewRun,ReviewJob,ReviewPair,ReviewTarget} from 'scheduler';
+import {VisualReviewSession,ReviewGallery} from '../services/VisualReviewSession';
 @Entry
 @Component
 struct VisualReviewPage{
- @State query:string='500元以内的运动鞋';
+ @StorageLink('visualReviewQuery') query:string='500元以内的运动鞋';
  @State busy:boolean=false;
- @State result:string='';
- private async open():Promise<void>{this.busy=true;try{const context=this.getUIContext().getHostContext() as common.UIAbilityContext,result=await context.startAbilityForResult({bundleName:'org.harmonycc.agent',abilityName:'VisualReviewAbility',parameters:{query:this.query}});const raw=result.want?.parameters?.['reviewResult'];if(result.resultCode===0&&typeof raw==='string'){const view=JSON.parse(raw) as ReviewResultView;this.result=view.summary+'\n结果校验：'+view.resultHash;}else this.result='尚未返回完成结果；再次进入可恢复查看原记录。';}catch(e){this.result='无法打开图像计算页，请先安装新版 Harmony 协作空间并加入群组。\n'+(e as Error).message;}finally{this.busy=false;}}
- build(){Scroll(){Column({space:20}){
-  Text('购物图像复核').fontSize(28).fontWeight(FontWeight.Bold)
-  Text('真实商品检索 → 图像分片复核 → 相似商品线索。比较手机单机与手机＋电脑并行。').fontSize(16)
-  TextInput({text:this.query,placeholder:'输入购物需求'}).enabled(!this.busy).onChange((v:string)=>{this.query=v;})
-  Button('开始图像复核／查看上次记录').enabled(!this.busy).onClick(()=>{void this.open();})
-  Text('将打开 Harmony 调度件的计算页，让手机保持前台参与计算。按页面的 1—4 步操作；完成后结果返回这里。请勿锁屏或切换应用，电脑可同时打开调度盘。').fontSize(14).fontColor('#52617A')
-  if(this.result){Text(this.result).fontSize(16).width('100%')}
- }.padding(24).width('100%')}.height('100%')}
+ @State connected:boolean=false;
+ @State status:string='由 SoleAI 自己的前台宿主参与计算，请保持本页前台。';
+ @State gallery:ReviewGallery|null=null;
+ @State jobs:ReviewJob[]=[];
+ @State pairs:ReviewPair[]=[];
+ @State choices:ReviewTarget[]=[];
+ @State computerId:string='';
+ @State summary:string='';
+ private session:VisualReviewSession|null=null;
+ private context():common.UIAbilityContext{return this.getUIContext().getHostContext() as common.UIAbilityContext;}
+ private async connect():Promise<void>{this.busy=true;try{if(!this.session)this.session=new VisualReviewSession(this.context());await this.session.connect();this.connected=true;this.gallery=this.session.gallery;this.choices=this.session.targets;this.computerId=this.choices[0]?.deviceId??'';this.status=this.session.status;if(this.session.runs.length)this.summary=this.session.resultView().summary;}catch(e){this.status=(e as Error).message;}finally{this.busy=false;}}
+ private async acquire():Promise<void>{if(!this.session)return;this.busy=true;try{await this.session.acquire(this.query,(s:string)=>{this.status=s;});this.gallery=this.session.gallery;this.jobs=[];this.pairs=[];this.summary='';this.status='原图已保存到本手机；尚未向计算设备传输。请依次运行两种模式，不重新获取商品。';}catch(e){this.status=(e as Error).message;}finally{this.busy=false;}}
+ private async run(mode:string):Promise<void>{if(!this.session)return;this.busy=true;this.pairs=[];this.summary='';try{const result=await this.session.run(mode,this.computerId,(r:ReviewRun)=>{this.jobs=r.jobs.slice();this.status=(mode==='PHONE'?'手机单机':'双机分片')+' · '+r.state+' · '+r.jobs.filter(j=>j.state==='SUCCEEDED').length+'/'+r.jobs.length;});this.pairs=result.pairs.slice().sort((a:ReviewPair,b:ReviewPair)=>b.scoreMillion-a.scoreMillion).slice(0,6);this.summary=this.session.resultView().summary;this.status=result.state==='SUCCEEDED'?'全部分片完成、结果已校验':result.error;}catch(e){this.status=(e as Error).message;}finally{this.busy=false;}}
+ private async back():Promise<void>{if(!this.session||!this.summary)return;this.getUIContext().getRouter().back();}
+ build(){Scroll(){Column({space:16}){
+  Text('SoleAI · 商品图像复核').fontSize(26).fontWeight(FontWeight.Bold).width('100%')
+  Text('手机与电脑同时计算真实分片。计算由 SoleAI 前台承接，无需切回调度连接 App。').fontSize(14).fontColor('#52617A')
+  Button(this.connected?'刷新设备与恢复记录':'连接并授权图像计算').enabled(!this.busy).onClick(()=>{void this.connect();})
+  TextInput({text:this.query,placeholder:'购物需求'}).enabled(!this.busy).onChange((v:string)=>{this.query=v;})
+  Button('1. 获取真实商品图片').enabled(this.connected&&!this.busy).onClick(()=>{void this.acquire();})
+  if(this.gallery){Text(this.gallery.products.length+' 张不同图片 · '+this.gallery.sourceRunId).fontSize(13).width('100%');Text('同一批商品可反复对照；重新获取将开启新的输入集。').fontSize(13).fontColor('#52617A')}
+  Text('选择协同电脑（设备 ID 与调度盘对应）').fontSize(14).width('100%')
+  ForEach(this.choices,(t:ReviewTarget)=>{Button((t.deviceId===this.computerId?'已选 · ':'选择 · ')+t.deviceId.slice(0,12)).enabled(!this.busy).onClick(()=>{this.computerId=t.deviceId;});},(t:ReviewTarget)=>t.deviceId)
+  Button('2. 手机单机运行').enabled(this.connected&&this.gallery!==null&&!this.busy).onClick(()=>{void this.run('PHONE');})
+  Button('3. 手机＋电脑并行运行').enabled(this.connected&&this.gallery!==null&&this.computerId.length>0&&!this.busy).onClick(()=>{void this.run('TEAM');})
+  Text('双机验收模式：首分片约束到手机，其余到所选电脑；统一规划器仍负责准入、传输和派发。不是自动最优分配。每任务 30 秒，两种模式算法与输入相同。').fontSize(12).fontColor('#52617A')
+  Text(this.status).fontSize(15).width('100%')
+  if(this.busy){Button('停止后续分片').onClick(()=>{this.session?.cancel();this.status='停止后续提交，等待已提交任务结算；请保持本页前台';})}
+  ForEach(this.jobs,(j:ReviewJob)=>{Column({space:4}){Text('分片 '+(j.index+1)+' · '+j.pairs+' 对 · '+j.state).fontWeight(FontWeight.Medium);Text((j.deviceId||'规划中')+'\n'+j.id+'\n'+j.error).fontSize(11)}.width('100%').alignItems(HorizontalAlign.Start).padding(12).backgroundColor('#EEF3FC');},(j:ReviewJob)=>j.id)
+  if(this.summary){Text(this.summary).fontSize(15).width('100%');Text('外观指数仅是复核线索，不代表同款或概率。').fontSize(12).fontColor('#52617A')}
+  ForEach(this.pairs,(p:ReviewPair)=>{Row({space:8}){Image('file://'+(this.gallery?.products.find(x=>x.id===p.a)?.file??'')).width(120).height(100).objectFit(ImageFit.Contain);Image('file://'+(this.gallery?.products.find(x=>x.id===p.b)?.file??'')).width(120).height(100).objectFit(ImageFit.Contain);Text((p.scoreMillion/10000).toFixed(1)).fontSize(16)}},(p:ReviewPair)=>p.a+':'+p.b)
+  Button('4. 返回购物页面').enabled(!this.busy&&this.summary.length>0).onClick(()=>{void this.back();})
+ }.padding(24).width('100%')}.width('100%').height('100%').backgroundColor('#F7F9FC')}
 }

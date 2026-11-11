@@ -31,6 +31,7 @@ enum CommerceTab { HOME, CATALOG, RADAR, SAVED, PROFILE }
 @Entry
 @Component
 struct Index {
+  @StorageLink('cooperativeJoined') cooperativeJoined:boolean=false;
   @StorageLink('cooperativeEnabled') cooperativeEnabled:boolean=false;
   @StorageLink('cooperativeChanging') cooperativeChanging:boolean=false;
   @StorageLink('cooperativeStatus') cooperativeStatus:string='尚未启用协同调度';
@@ -46,6 +47,7 @@ struct Index {
   private expiryTimer: number = -1;
   private readyTimer: number = -1;
   private photoGeneration: number = 0;
+  private selectingPhoto: boolean = false;
   private feedbackWorkflowId: string = '';
   private pendingWorkflowId: string = '';
   @State saving: boolean = false;
@@ -94,7 +96,7 @@ struct Index {
 
   aboutToAppear(): void { this.loadCatalog(); this.loadMonitorSettings(); this.watchReady(); }
   onPageShow(): void { this.watchReady(); }
-  onPageHide(): void { this.invalidate(TaskSignalType.PAGE_LEFT); clearInterval(this.readyTimer); }
+  onPageHide(): void { if (!this.selectingPhoto) { this.invalidate(TaskSignalType.PAGE_LEFT); } clearInterval(this.readyTimer); }
   aboutToDisappear(): void { this.invalidate(TaskSignalType.PAGE_LEFT); clearInterval(this.readyTimer); this.photoGeneration++; }
   onBackPress(): boolean {
     if (this.selected !== null) { this.selected = null; return true; }
@@ -263,12 +265,13 @@ struct Index {
     this.invalidate();
     const generation = this.generation;
     this.tab = CommerceTab.RADAR; this.selected = null; this.showHistory = false;
-    this.query = ''; this.lastQuery = query; this.products = []; this.plan = ''; this.receiptText = '';
+    this.query = query; this.photoUri = ''; this.latestShoppingResult = null; this.lastQuery = query; this.products = []; this.plan = ''; this.receiptText = '';
     this.summary = '正在请求云端商品检索'; this.loading = true;
     this.contentScroller.scrollTo({ xOffset: 0, yOffset: 0 });
     const started = Date.now();
     try {
       const handle = (await aiGateway.searchText(query, this.highQuality)).handle;
+      if (generation !== this.generation) { await handle.signal({ type: TaskSignalType.INPUT_REPLACED }); return; }
       this.currentTaskId = this.tasks.lastSubmittedTaskId;
       this.runAudit = this.currentTaskId + ' · 等待云端运行';
       this.activeSearch = handle;
@@ -376,6 +379,8 @@ struct Index {
     return this.priceSorted ? this.products.slice().sort((a: Product, b: Product) => numericPrice(a) - numericPrice(b) || (a.comparisonRank ?? 0) - (b.comparisonRank ?? 0)) : this.products;
   }
   private async choosePhoto(reuseSelected:boolean=false): Promise<void> {
+    if (this.selectingPhoto) { return; }
+    if (!this.ready) { this.notify('调度器仍在初始化，请稍后识别'); return; }
     try { CloudApiConfig.getBaseUrl(); }
     catch (error) {
       this.notify(cloudFailureText(error instanceof Error ? error.message : undefined));
@@ -386,11 +391,16 @@ struct Index {
     try {
       if(!reuseSelected||this.photoUri===''){
         const picker = new photoAccessHelper.PhotoViewPicker();
-        const result = await picker.select({ MIMEType: photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE, maxSelectNumber: 1 });
+        this.selectingPhoto = true;
+        let result: photoAccessHelper.PhotoSelectResult;
+        try {
+          result = await picker.select({ MIMEType: photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE, maxSelectNumber: 1 });
+        } finally { this.selectingPhoto = false; }
         if (generation !== this.photoGeneration || result.photoUris.length === 0) { return; }
         this.photoUri = result.photoUris[0];
       }
-      this.tab = CommerceTab.RADAR; this.selected = null;
+      this.tab = CommerceTab.RADAR; this.selected = null; this.showHistory = false;
+      this.latestShoppingResult = null; this.query = '';
       this.products = []; this.lastQuery = ''; this.plan = ''; this.receiptText = '';
       this.summary = '正在上传图片并执行云端检索'; this.loading = true;
       const handle = this.tasks.searchImageResult(this.photoUri); this.activeSearch = handle;
@@ -412,6 +422,8 @@ struct Index {
         this.auditRun(this.currentTaskId).catch(() => {});
       }
     } catch (_) {
+      if (generation !== this.photoGeneration) { return; }
+      this.tab = CommerceTab.RADAR; this.showHistory = false;
       this.loading = false; this.summary = '图片选择或云端检索失败，请检查配置与网络';
       if (this.currentTaskId !== '') { this.auditRun(this.currentTaskId).catch(() => {}); }
     }
@@ -455,7 +467,7 @@ struct Index {
     Row({ space: 8 }) {
       CommerceIconButton({ icon: $r('sys.media.ohos_ic_public_camera'), label: '选择商品图片', action: () => this.choosePhoto() })
       TextInput({ text: this.query, placeholder: '商品、品牌或预算...' }).layoutWeight(1).height(44).fontSize(14)
-        .backgroundColor('#FFFFFF').enterKeyType(EnterKeyType.Search)
+        .backgroundColor('#FFFFFF').fontColor('#1A1C1C').placeholderColor('#747878').caretColor('#00513F').enterKeyType(EnterKeyType.Search)
         .onChange((value: string) => {
           // ArkUI also reports changes caused by clearing the submitted draft.
           if (value === this.query) { return; }
@@ -506,55 +518,11 @@ struct Index {
   @Builder
   private Profile() {
     Column({ space: 20 }) {
-      Text('协作连接').fontSize(18).width('100%')
+      Text('协作调度').fontSize(18).width('100%')
       Text(this.cooperativeStatus).fontSize(14).width('100%')
-      Text('在 Harmony 中加入空间并完成首次接入授权后，日常购物自动判断协作。轻量任务仍在手机完成。').fontSize(13).fontColor('#747878')
-      Text('本机偏好').fontSize(24).fontWeight(FontWeight.Bold).width('100%')
-      Row() {
-        Text('参与本地体验反馈').fontSize(16).layoutWeight(1)
-        Toggle({ type: ToggleType.Switch, isOn: this.feedbackEnabled }).selectedColor('#009576')
-          .enabled(this.ready).onChange((value: boolean) => this.setConsent(value))
-      }.width('100%')
-      Text('仅记录结构化答案和调度指标，不记录搜索原文或图片，不自动上传。可随时关闭。')
-        .fontSize(13).fontColor('#747878').width('100%')
-      Divider().color('#E2E2E2')
-      Text('购物业务 API').fontSize(18).width('100%')
-      TextInput({ text: this.cloudEndpoint, placeholder: 'https://你的服务域名' })
-        .onChange((value: string) => { this.cloudEndpoint = value; })
-      Button('保存云端地址').onClick(() => this.saveCloudEndpoint())
-      Text(this.cloudStatus).fontSize(12)
-      Text('最近一次云端运行').fontSize(16).fontWeight(FontWeight.Medium).width('100%')
-      Text(this.runAudit).fontSize(12).fontColor('#444748').width('100%')
-      Button('刷新云端运行状态').fontSize(12).enabled(this.currentTaskId !== '')
-        .onClick(() => { this.auditRun(this.currentTaskId).catch(() => {}); })
-      Text('电脑实时监控').fontSize(18).fontWeight(FontWeight.Medium).width('100%')
-      Text('电脑和手机连接同一可信 Wi-Fi 后，运行电脑端监控服务，再填写电脑局域网地址与配对码。只推送调度状态、资源指标和任务事件，不包含搜索内容、图片或商品列表。')
-        .fontSize(12).fontColor('#747878').width('100%')
-      TextInput({ text: this.monitorEndpoint, placeholder: 'http://192.168.1.10:8765' }).width('100%').height(44)
-        .fontSize(13).backgroundColor('#FFFFFF').onChange((value: string) => { this.monitorEndpoint = value; })
-      TextInput({ text: this.monitorPairingCode, placeholder: '电脑终端显示的配对码' }).width('100%').height(44)
-        .fontSize(13).backgroundColor('#FFFFFF').type(InputType.Password)
-        .onChange((value: string) => { this.monitorPairingCode = value; })
-      Row() {
-        Text('向电脑推送实时遥测').fontSize(14).layoutWeight(1)
-        Toggle({ type: ToggleType.Switch, isOn: this.monitorEnabled }).selectedColor('#009576')
-          .enabled(this.ready && this.monitorSettingsLoaded).onChange((value: boolean) => this.saveMonitorSettings(value))
-      }.width('100%')
-      Text(this.monitorStatus).fontSize(12).fontColor('#00513F').width('100%')
-      Button('保存电脑连接信息').width('100%').backgroundColor('#E6F1EE').fontColor('#134E42')
-        .onClick(() => this.saveMonitorSettings(this.monitorEnabled))
-      Button('策略与实验控制台').width('100%').backgroundColor('#111111').fontColor('#FFFFFF')
-        .onClick(() => this.openSchedulerSettings())
-      Button('双机派发联调').width('100%').backgroundColor('#E6F1EE').fontColor('#134E42')
-        .onClick(() => this.getUIContext().getRouter().pushUrl({ url: 'pages/DualPhoneLabPage' })
-          .catch(() => this.notify('联调页面打开失败')))
-      Button('云端双机派发验收').width('100%').backgroundColor('#E6F1EE').fontColor('#134E42')
-        .onClick(() => this.getUIContext().getRouter().pushUrl({ url: 'pages/CloudPhoneDispatchPage' })
-          .catch(() => this.notify('云端验收页面打开失败')))
-      Text(this.receiptText || '暂无反馈回执').fontSize(13).fontColor('#444748').width('100%')
-      Text('清单与对话历史仅保留在本次运行中').fontSize(12).fontColor('#747878').width('100%')
-      Button('清空本次清单与历史').fontSize(13).backgroundColor('#EEEEEE').fontColor('#1A1C1C')
-        .onClick(() => { this.saved = []; this.histories = []; })
+      Button(this.cooperativeChanging?'正在处理…':this.cooperativeJoined?'退出协作中心':'连接协作中心')
+        .enabled(!this.cooperativeChanging)
+        .onClick(()=>{void cooperative.setEnabled(!this.cooperativeJoined).catch(()=>{});})
     }.width('100%').alignItems(HorizontalAlign.Start)
   }
   @Builder

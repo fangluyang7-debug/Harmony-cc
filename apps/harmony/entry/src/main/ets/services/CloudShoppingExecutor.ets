@@ -1,3 +1,4 @@
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { http, connection } from '@kit.NetworkKit';
 import { ShoppingImageUpload } from './ShoppingImageUpload';
 import { shoppingBusiness } from './ShoppingBusinessCompute';
@@ -121,6 +122,7 @@ export class CloudShoppingExecutor implements WorkloadExecutor<CloudShoppingInpu
         new HttpRouteProbe(endpoint, 'cloud-shopping-api', CloudApiConfig.requestHeaders(), signal, deadlineAt,
           'shopping.' + (input.operation === 'image_upload' ? 'image' : input.operation)), 25000);
       context.routeCandidate.networkKey = key;
+      hilog.info(0x0000, 'SoleAITrace', 'task=%{public}s origin=%{public}s route=%{public}s', input.taskId, endpoint, JSON.stringify(context.routeCandidate));
       if (key === this.routeKey(input)) { return; }
       this.routes.invalidate(key, 'NETWORK_CHANGED_DURING_PROBE');
     }
@@ -160,6 +162,7 @@ export class CloudShoppingExecutor implements WorkloadExecutor<CloudShoppingInpu
       throw new Error((error as Error).message);
     }
     const envelope = JSON.parse(resultText.body) as CloudEnvelope;
+    hilog.info(0x0000, 'SoleAITrace', 'task=%{public}s run=%{public}s candidates=%{public}d', input.taskId, envelope.data.runtimeRunId, envelope.data.candidates?.items.length ?? -1);
     if (!envelope.success || !envelope.data.runtimeRunId) { throw new Error('CLOUD_INVALID_RESULT'); }
     this.routes.observe(selected.networkKey, selected, resultText.timing.requestMs, resultText.timing.uploadMs,
       resultText.timing.downloadMs, resultText.timing.inputBytes, resultText.timing.outputBytes, envelope.data.serverTiming?.computeMs);
@@ -205,6 +208,7 @@ export class CloudShoppingExecutor implements WorkloadExecutor<CloudShoppingInpu
       const response = await request.request(url, { method: body.length === 0 ? http.RequestMethod.GET : http.RequestMethod.POST,
         header: CloudApiConfig.requestHeaders(), extraData: body,
         connectTimeout: Math.min(timeoutMs, 10000), readTimeout: timeoutMs });
+      hilog.info(0x0000, 'SoleAITrace', 'task=%{public}s endpoint=%{public}s http=%{public}d elapsedMs=%{public}d', taskId, url, response.responseCode, this.clock.now() - began);
       if (signal.isCancellationRequested) { throw new Error('CLOUD_CANCELLED'); }
       if (response.responseCode < 200 || response.responseCode >= 300) {
         if (response.responseCode === 401) { CloudApiConfig.logout(); }

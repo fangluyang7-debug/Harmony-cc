@@ -62,6 +62,7 @@ export class SchedulerAppSession {
  private sdkPort:HarmonySdkPort|null=null;
  private installation:Installation|null=null;
  private foreground=false;
+ private statusTimer:number=-1;
  private paused=false;
  private busy:Promise<void>|null=null;
  private current:SchedulerAppStatus={state:'IDLE',message:'未接入协同调度'};
@@ -71,10 +72,10 @@ export class SchedulerAppSession {
  initialize(context:common.UIAbilityContext):void{this.context=context;}
  /** Call from onForeground(true) / onBackground(false). Foreground restores or (first time) requests authorization. */
  lifecycle(foreground:boolean):void{
-  this.foreground=foreground;this.agent?.setForeground(foreground);
+  this.foreground=foreground;this.agent?.setForeground(foreground&&!this.paused);
   if(foreground&&!this.paused&&this.agent===null)void this.connect(false).catch(()=>{});
  }
- async close():Promise<void>{this.foreground=false;const agent=this.agent;this.agent=null;this.client=null;this.sdkPort=null;await agent?.close();}
+ async close():Promise<void>{if(this.statusTimer>=0)clearInterval(this.statusTimer);this.statusTimer=-1;this.foreground=false;const agent=this.agent;this.agent=null;this.client=null;this.sdkPort=null;await agent?.close();}
 
  status():SchedulerAppStatus{return this.current;}
  onStatus(listener:(status:SchedulerAppStatus)=>void):void{this.listeners.push(listener);listener(this.current);}
@@ -89,8 +90,9 @@ export class SchedulerAppSession {
  holderId():string{return this.installation?.paired.peer.holderInstanceId??'';}
 
  /** Stop new cooperative work without dropping the identity; started work still settles. */
- pause():void{this.paused=true;this.set('PAUSED','已暂停协同调度 · 新任务使用本机原有路径');}
- async resume():Promise<void>{this.paused=false;await this.connect(true);}
+ pause():void{this.paused=true;this.agent?.setForeground(false);this.set('PAUSED','已暂停协同调度 · 新任务使用本机原有路径');}
+ async resume():Promise<void>{this.paused=false;this.agent?.setForeground(this.foreground);await this.connect(true);}
+ async reauthorize():Promise<void>{if(this.busy)return this.busy;this.paused=false;this.busy=this.run(true,true).finally(()=>{this.busy=null;});return this.busy;}
 
  /**
   * Restore the saved identity, or ask the device agent for one.
@@ -102,18 +104,30 @@ export class SchedulerAppSession {
   return this.busy;
  }
 
- private async run(userInitiated:boolean):Promise<void>{
+ async disconnect():Promise<void>{
+  if(this.busy)await this.busy;
+  this.set('CONNECTING','正在退出协作中心…');
+  try{await this.agent?.closeForSwitch();this.agent=null;this.client=null;this.sdkPort=null;this.paused=true;
+   if(this.statusTimer>=0)clearInterval(this.statusTimer);this.statusTimer=-1;
+   if(this.context){const store=await preferences.getPreferences(this.context,{name:this.options.storeName});await store.put('enabled',false);await store.flush();}
+   this.set('PAUSED','未接入协作中心');
+  }catch(e){this.set('UNAVAILABLE','退出未完成：'+(e as Error).message);throw e as Error;}
+ }
+ private async run(userInitiated:boolean,force:boolean=false):Promise<void>{
   const context=this.context;if(!context)throw Error('APP_CONTEXT_REQUIRED');
   if(!this.foreground&&!userInitiated)return;
   const store=await preferences.getPreferences(context,{name:this.options.storeName});
+  if(!userInitiated&&await store.get('enabled',true)===false){this.paused=true;this.set('PAUSED','未接入协作中心');return;}
+  if(userInitiated)this.paused=false;
   let raw=await store.get('installation','') as string;
   this.set('CONNECTING',raw?'正在恢复协同连接…':'正在向调度连接 App 申请接入…');
   try{
    if(raw){
-    try{await this.activate(JSON.parse(raw) as Installation);return;}
+    try{if(force)throw Error('APP_REAUTHORIZE');await this.activate(JSON.parse(raw) as Installation);await store.put('enabled',true);await store.flush();return;}
     catch(e){
-     // Re-authorize only after a definite revocation; a network failure keeps the identity for the next foreground.
-     if(!TERMINAL.includes((e as Error).message))throw e as Error;
+     // Automatic restores retain failed identities; an explicit connect can authorize the current space after settlement.
+     if(!userInitiated&&!TERMINAL.includes((e as Error).message))throw e as Error;
+     await this.agent?.closeForSwitch();this.agent=null;this.client=null;this.sdkPort=null;
      await store.put('previousInstallation',raw);await store.delete('installation');await store.flush();raw='';
     }
    }
@@ -133,7 +147,7 @@ export class SchedulerAppSession {
     invitation:{version:2,inviteId:registration.registrationId,groupId:paired.peer.groupId,address:registration.address,certificate:registration.certificate,fingerprint:registration.fingerprint,code:'',expiresAt:registration.expiresAt},
     contribution:{ownerMode:'dedicated',maxCpuThreads:2,maxMemoryBytes:268435456,reserveMemoryBytes:0}}};
    await store.put('installation',JSON.stringify(saved));await store.put('exchangePending',false);await store.flush();
-   await this.activate(saved);
+   await this.activate(saved);await store.put('enabled',true);await store.flush();
   }catch(e){this.set('UNAVAILABLE','协同调度暂不可用：'+(e as Error).message+' · 新任务使用本机原有路径');throw e as Error;}
  }
 
@@ -143,10 +157,17 @@ export class SchedulerAppSession {
   const info=JSON.parse(await port.request('/v2/apps/me',null)) as AppContext;
   if(info.identity.appInstanceId!==installation.appInstanceId||(this.options.revision!==undefined&&info.declaration?.revision!==this.options.revision))throw Error('APP_HOST_IDENTITY_MISMATCH');
   if(this.agent&&this.agent.displayHolderId()!==installation.paired.peer.holderInstanceId){await this.agent.closeForSwitch();this.agent=null;}
-  if(!this.agent)this.agent=await NativeAgent.start(context,null,()=>this.foreground,installation,this.options.services??[]);
+  if(!this.agent)this.agent=await NativeAgent.start(context,null,()=>this.foreground&&!this.paused,installation,this.options.services??[]);
   this.sdkPort=port;this.client=await this.agent.sdk();this.installation=installation;
-  this.set('CONNECTED','已接入协同调度 · 前台时本机参与计算');
+  this.agent.setForeground(this.foreground&&!this.paused);
+  if(this.statusTimer<0)this.statusTimer=setInterval(()=>this.updateControlStatus(),1000);
+  this.set(this.foreground&&this.agent.isConnected()?'CONNECTED':'UNAVAILABLE',this.foreground&&this.agent.isConnected()?'已连接协作空间 · 本应用前台参与计算':'本应用控制连接尚未就绪，正在重连');
  }
 
+ private updateControlStatus():void {
+  if(this.paused||!this.agent||this.current.state==='CONNECTING'&&this.busy!==null)return;
+  const online=this.foreground&&this.agent.isConnected();
+  this.set(online?'CONNECTED':'UNAVAILABLE',online?'已连接协作空间 · 本应用前台参与计算':this.foreground?'本应用控制连接尚未就绪，正在重连':'应用已退到后台，前台返回后恢复贡献');
+ }
  private set(state:SchedulerAppState,message:string):void{this.current={state,message};for(const l of this.listeners)l(this.current);}
 }

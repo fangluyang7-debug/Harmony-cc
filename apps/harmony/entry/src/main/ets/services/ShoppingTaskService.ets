@@ -1,3 +1,4 @@
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { http } from '@kit.NetworkKit';
 import { CloudApiConfig } from './CloudApiConfig';
 import { NativeClock } from './NativeClock';
@@ -95,7 +96,7 @@ export class ShoppingTaskService {
     this.lastSubmittedTaskId = input.taskId;
     shoppingBusiness.begin(input.taskId);
     const handle=this.requireClient().submit<CloudShoppingInput, ShoppingResult>('product_search', input, context);
-    void handle.result.then(result=>{if(result.output===null)shoppingBusiness.failed(input.taskId,operation,String(result.status),result.reasonCode??'NO_SHOPPING_RESULT',result.nodes.flatMap(node=>node.executionPlan.reasonCodes));}).catch((error:Error)=>{shoppingBusiness.failed(input.taskId,operation,'FAILED',error.message);});
+    void handle.result.then(result=>{hilog.info(0x0000, 'SoleAITrace', 'task=%{public}s operation=%{public}s status=%{public}s reason=%{public}s nodes=%{public}s', input.taskId, operation, String(result.status), result.reasonCode ?? 'none', JSON.stringify(result.nodes.map(node => node.executionPlan.reasonCodes)));if(result.output===null)shoppingBusiness.failed(input.taskId,operation,String(result.status),result.reasonCode??'NO_SHOPPING_RESULT',result.nodes.flatMap(node=>node.executionPlan.reasonCodes));}).catch((error:Error)=>{shoppingBusiness.failed(input.taskId,operation,'FAILED',error.message);});
     return handle;
   }
   // Legacy Product[] API is an explicit projection; new consumers retain the full result.

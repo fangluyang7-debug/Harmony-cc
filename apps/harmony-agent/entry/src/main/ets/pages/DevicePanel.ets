@@ -43,9 +43,6 @@ export struct DevicePanel {
   Text('本机设备').fontSize(28).fontWeight(FontWeight.Bold);
   Text(this.status).fontSize(17);
   if(this.pairMessage){Text(this.pairMessage).fontSize(15).fontColor('#64748b');}
-  Button('连接 SoleAI（首次授权）').onClick(()=>{void (getContext(this) as common.UIAbilityContext).startAbility({action:'org.harmonycc.action.CONNECT_SHOPPING'}).catch(()=>{AppStorage.set('agentStatus','请先安装新版 SoleAI，再连接授权。');});});
-  Button('打开图片演示 App').onClick(()=>{void (getContext(this) as common.UIAbilityContext).startAbility({bundleName:'org.harmonycc.photo',abilityName:'EntryAbility'}).catch(()=>{AppStorage.set('agentStatus','请先安装 Harmony 图片演示 App。');});});
-  Text('在当前空间授权一次。之后直接使用 SoleAI 的文字、拍照和比价功能，计算期间无需切回 Harmony。').fontSize(14).fontColor('#64748b');
   if(this.warning){Text('最近诊断：'+this.warning).fontSize(12).fontColor('#64748b');}
   Button('结果展示').onClick(()=>{this.getUIContext().getRouter().pushUrl({url:'pages/Display'});});
   TextInput({placeholder:'协调中心地址（输入数字配对码时填写）',text:this.address})

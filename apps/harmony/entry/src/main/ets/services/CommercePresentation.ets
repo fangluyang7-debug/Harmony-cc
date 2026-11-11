@@ -7,6 +7,8 @@ export function cloudFailureText(reason?: string): string {
     case 'CLOUD_GUEST_NOT_DEPLOYED': return '云端尚未更新免登录接口，请更新服务后重试';
     case 'CLOUD_GUEST_FAILED':
     case 'CLOUD_HTTP_401': return '云端连接身份暂不可用，请重试';
+    case 'POLICY_REJECTED': return '任务未通过执行条件检查，请稍后重试';
+    case 'REMOTE_UNAVAILABLE': return '云端检索依赖暂不可用，请稍后重试';
     case 'NETWORK_NOT_ALLOWED': return '当前任务未获网络访问授权';
     case 'NETWORK_CHANGED_DURING_PROBE':
     case 'REMOTE_ROUTE_CHANGED': return '网络连接已变化，请重试';

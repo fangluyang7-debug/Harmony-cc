@@ -19,8 +19,9 @@ const manifest:RegistrationRequest={label:'SoleAI 日常购物工作流 3',allow
 export interface CapabilityAvailability {capability:string;targets:number;services:number;}
 interface CapabilityReply {capabilities?:CapabilityAvailability[];}
 // ArkTS requires object literals to carry a declared type (arkts-no-untyped-obj-literals).
-const sessionOptions:SchedulerAppOptions={storeName:'cooperative-shopping-3',declaration:manifest,revision:manifest.declaration.revision};
+const sessionOptions:SchedulerAppOptions={storeName:'cooperative-shopping-3',declaration:manifest,revision:manifest.declaration.revision,autoEnroll:false};
 class CooperativeSession {
+ executionHost():NativeAgent{const host=this.session.host();if(!host)throw Error('请先连接协作空间');return host;}
  declaration():RegistrationRequest{return manifest;}
  async capabilities():Promise<CapabilityAvailability[]>{if(!this.port)return [];const reply=JSON.parse(await this.port.request('/v2/apps/me/capabilities',null)) as CapabilityReply;return reply.capabilities??[];}
 
@@ -37,8 +38,8 @@ class CooperativeSession {
  private get foreground():boolean{return this.visible;}
  private get originDevice():string{return this.session.deviceId();}
  private visible=false;
- initialize(context:common.UIAbilityContext):void{this.context=context;this.session.initialize(context);AppStorage.setOrCreate('cooperativeEnabled',false);AppStorage.setOrCreate('cooperativeStatus','未连接协作空间 · 正常使用手机购物');AppStorage.setOrCreate('cooperativeChanging',false);AppStorage.setOrCreate('cooperativePreview','');AppStorage.setOrCreate('cooperativeDemoBusy',false);
-  this.session.onStatus((s:SchedulerAppStatus)=>{AppStorage.set('cooperativeEnabled',s.state==='CONNECTED');AppStorage.set('cooperativeChanging',s.state==='CONNECTING');
+ initialize(context:common.UIAbilityContext):void{this.context=context;this.session.initialize(context);AppStorage.setOrCreate('cooperativeEnabled',false);AppStorage.setOrCreate('cooperativeJoined',false);AppStorage.setOrCreate('cooperativeStatus','未连接协作空间 · 正常使用手机购物');AppStorage.setOrCreate('cooperativeChanging',false);AppStorage.setOrCreate('cooperativePreview','');AppStorage.setOrCreate('cooperativeDemoBusy',false);
+  this.session.onStatus((s:SchedulerAppStatus)=>{AppStorage.set('cooperativeEnabled',s.state==='CONNECTED');AppStorage.set('cooperativeJoined',this.session.host()!==null&&s.state!=='PAUSED');AppStorage.set('cooperativeChanging',s.state==='CONNECTING');
    AppStorage.set('cooperativeStatus',s.state==='CONNECTED'?'已连接空间 · 按任务实际开销自动选择本地或协作':s.message);});}
  /** Foreground automatically restores the identity, or asks the device agent once on first use. */
  lifecycle(value:boolean):void{this.visible=value;this.session.lifecycle(value);}
@@ -73,8 +74,9 @@ class CooperativeSession {
   catch(e){AppStorage.set('cooperativeEnabled',false);AppStorage.set('cooperativeStatus','协调中心不可用，新任务使用原业务路径；已提交任务不重投');return null;}
  }
  /** The switch now only pauses/resumes; joining happens automatically in lifecycle(). true also re-asks after a refusal. */
+ async reconnect():Promise<void>{await this.session.reauthorize();}
  async setEnabled(value:boolean):Promise<void>{
-  if(!value){this.session.pause();return;}
+  if(!value){await this.session.disconnect();return;}
   await this.session.resume();
  }
  async cancel():Promise<void>{this.cancelRequested=true;if(this.active)await this.active.cancel();}
