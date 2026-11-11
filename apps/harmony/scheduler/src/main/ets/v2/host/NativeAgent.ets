@@ -206,13 +206,18 @@ export class NativeAgent {
   agent.lifecycleForeground=lifecycleForeground;agent.foreground=lifecycleForeground();await agent.restorePreferences();agent.timer=setInterval(()=>{void agent.tick().catch((e:Error)=>agent.error(e as Error));},2000);await agent.tick();return agent;
  }
  isConnected():boolean{return this.ready&&!this.stopped;}
- async closeForSwitch():Promise<void>{
+ /**
+  * Close before pairing another identity. Unsettled work normally blocks the switch; with
+  * `abandon` (the old coordinator is a different, unreachable one) it cannot ever settle, so the
+  * host closes anyway and its scoped ledger stays on disk.
+  */
+ async closeForSwitch(abandon:boolean=false):Promise<void>{
   this.switching=true;
   try{
-   const until=monotonic()+15000;
+   const until=monotonic()+(abandon?3000:15000);
    while((this.refreshing||this.calibrating||this.grantBusy||this.connecting||this.running.size>0)&&monotonic()<until)await new Promise<void>(resolve=>setTimeout(resolve,100));
    await this.work;
-   if(this.refreshing||this.calibrating||this.grantBusy||this.connecting||this.store.read().state.entries.some(e=>!e.record.resourcesSettled))throw Error('SPACE_SWITCH_BUSY');
+   if(!abandon&&(this.refreshing||this.calibrating||this.grantBusy||this.connecting||this.store.read().state.entries.some(e=>!e.record.resourcesSettled)))throw Error('SPACE_SWITCH_BUSY');
    await this.close();
   }catch(e){this.switching=false;throw e as Error;}
  }
@@ -222,6 +227,7 @@ export class NativeAgent {
   return JSON.stringify(await this.transport.json('/v2/apps/registrations',declaration));
  }
  displayHolderId():string{return this.installation.paired.peer.holderInstanceId;}
+ coordinatorFingerprint():string{return this.installation.bootstrap.invitation.fingerprint;}
  async displayInbox():Promise<Object>{return this.transport.json('/v2/display');}
  async displayInvite(viewerHolderId:string):Promise<Object>{
   const invite:DisplayInvite={viewerHolderId,leaseMs:300000};

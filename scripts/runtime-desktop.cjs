@@ -27,6 +27,18 @@ async function pairingCertificate(value){
   const fingerprint=new (require('node:crypto').X509Certificate)(certificate).fingerprint256.replaceAll(':','').toLowerCase();
   return {address,certificate,fingerprint};
 }
+/** Certificate fingerprint the pairing input points at, known before any code is redeemed. */
+function pairingTarget(input){
+  const value=String(input.invitation||'').trim();
+  const link=/&pin=([a-f0-9]{64})$/.exec(value);if(link)return link[1];
+  return /^\d{6}$/.test(value)&&/^[a-f0-9]{64}$/.test(String(input.fingerprint||''))?input.fingerprint:null;
+}
+/** A device installation directory (paired, or an unfinished pairing). Other directories are never touched. */
+function deviceInstallation(directory){
+  try{const {connection}=JSON.parse(fs.readFileSync(path.join(directory,'agent.json'),'utf8'));return {fingerprint:connection?.fingerprint??''};}
+  catch(e){if(e.code!=='ENOENT')return null;}
+  return fs.existsSync(path.join(directory,'pairing.pending'))?{fingerprint:''}:null;
+}
 async function resolvePairingInput(input){
   const value=String(input.invitation||'').trim();
   if(value.startsWith('{'))return JSON.parse(value);
@@ -177,9 +189,18 @@ class RuntimeControl {
     if(this.child)throw Error('请先停止当前服务');
     if(typeof input.invitation!=='string')throw Error('请导入完整设备邀请');
     const directory=deviceDirectory(input.directory);
-    if(fs.existsSync(directory))throw Error('安装目录已存在，请恢复该设备或选择新目录；不覆盖账本');
+    // Decide before redeeming the one-time code. An old pairing to another coordinator, or an
+    // unfinished pairing, is moved aside (ledger kept); the same coordinator just needs starting.
+    let retire=false;
+    if(fs.existsSync(directory)){
+      const target=pairingTarget(input),existing=deviceInstallation(directory);
+      if(!existing||!target)throw Error('安装目录已存在，请恢复该设备或选择新目录；不覆盖账本');
+      if(existing.fingerprint===target)throw Error('本机已与该协调中心配对，请直接打开设备调度件电源');
+      retire=true;
+    }
     const bootstrap=await resolvePairingInput(input);
     if(!bootstrap?.invitation||!bootstrap.contribution||!bootstrap.holderInstanceId)throw Error('请导入完整设备邀请');
+    if(retire&&fs.existsSync(directory))fs.renameSync(directory,directory+'.retired-'+new Date().toISOString().replace(/[:.]/g,'-'));
     fs.mkdirSync(path.dirname(directory),{recursive:true});
     const staging=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-pair-')),file=path.join(staging,'invitation.json');
     fs.writeFileSync(file,JSON.stringify(bootstrap),{mode:0o600});

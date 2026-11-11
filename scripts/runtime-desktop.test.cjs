@@ -46,3 +46,14 @@ test('a host that reports COORDINATOR_GONE retires the pairing so the device can
   await new Promise(resolve=>control.child.once('exit',()=>setImmediate(resolve)));assert.equal(control.state,'FAILED');
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
+test('pairing over an old installation: same coordinator is refused, another coordinator is moved aside only after the code resolves',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-desktop-repair-')),device=path.join(root,'device'),control=new RuntimeControl();
+ const pin=c=>c.repeat(64),old={connection:{address:'https://198.51.100.7:7443/',fingerprint:pin('a')}};
+ fs.mkdirSync(path.join(device,'ledger'),{recursive:true});fs.writeFileSync(path.join(device,'agent.json'),JSON.stringify(old));
+ try{
+  await assert.rejects(control.pair({directory:device,invitation:'123456',address:'https://127.0.0.1:1',fingerprint:pin('a')}),/已与该协调中心配对/);
+  await assert.rejects(control.pair({directory:device,invitation:'123456',address:'https://127.0.0.1:1',fingerprint:pin('b')}));
+  assert.ok(fs.existsSync(path.join(device,'agent.json')),'an unresolved code never moves the old pairing');
+  assert.equal(fs.readdirSync(root).length,1);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});

@@ -13,6 +13,27 @@
 
 ---
 
+## 2026-11-11 · Windows 设备调度件：残留旧配对时可直接重新配对（第 4 次提交）
+
+- **现象**：设备目录残留旧配对（或未完成的配对）时，输入新协调中心的配对码报"安装目录已存在，请恢复该设备或选择新目录；不覆盖账本"，无法配对。
+- **修改**（`scripts/runtime-desktop.cjs` `pair()`）：在兑换一次性配对码之前先判断：
+  - 目录是同一协调中心（证书指纹相同）的配对 → 提示"本机已与该协调中心配对，请直接打开设备调度件电源"，不消耗配对码；
+  - 目录是其他协调中心的配对，或只有 `pairing.pending` 的未完成配对 → 配对码兑换成功后，把旧目录改名为 `<目录>.retired-<时间>`（账本保留），再继续配对；兑换失败则不动旧目录；
+  - 不是设备安装目录（没有 `agent.json` / `pairing.pending`）→ 仍按原逻辑拒绝。
+  - 新增辅助函数 `pairingTarget()`、`deviceInstallation()`。
+- **测试**：`scripts/runtime-desktop.test.cjs` 新增用例；`runtime-desktop.integration.test.cjs` 通过。
+- **分发产物**：Windows 设备调度件 zip 与协调中心包内的 `runtime-desktop.cjs` 已直接替换，`SHA256SUMS.txt` 已更新。
+
+### 鸿蒙版同类问题：旧协调中心不可达时无法切换到新协调中心
+- **现象**：鸿蒙设备调度件已有配对时，配对新协调中心要先 `closeForSwitch()`；旧账本里有未结算任务或正在连接时抛 `SPACE_SWITCH_BUSY`。旧协调中心已关闭时这些任务永远无法结算，配对新协调中心被永久阻塞。
+- **修改**：
+  - `NativeAgent.ets`：`closeForSwitch(abandon=false)`，`abandon` 时只等待 3 秒并跳过未结算检查直接关闭（按 holder 作用域的账本保留在本地）；新增 `coordinatorFingerprint()`。
+  - `AgentRuntime.ets`：目标协调中心证书指纹与当前不同、且当前未连接时，以 `abandon` 方式切换；旧协调中心仍在线或是同一协调中心时，未结算任务照旧拒绝切换。
+- **测试**：`tests/sdk/native-space-switch.test.cjs` 新增对应断言。
+- **分发产物**：`dist/调度系统分发-20261110-r5/03-Device-Agent-HarmonyOS/` HAP 已更新，并已安装到手机。
+
+---
+
 ## 2026-11-11 · Windows 设备调度件：协调中心关闭后断开并清除配对（第 3 次提交）
 
 - **现象**：新 Windows 设备保留旧配对，协调中心换 IP 或关闭后无限重试，日志刷 `CPU_HOST_IO_ERROR:EHOSTUNREACH / ECONNREFUSED`，看不出原因，也无法直接配对新协调中心。

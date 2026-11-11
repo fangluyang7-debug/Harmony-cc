@@ -43,8 +43,8 @@ test('native identity changes preserve old scoped ledgers and do not import old 
 });
 
 test('application runtime switches the existing host instead of silently accepting a different invitation',async()=>{
- const source=fs.readFileSync(path.join(root,'apps/harmony-agent/entry/src/main/ets/AgentRuntime.ets'),'utf8'),module={exports:{}};let active='old',closed=0,busy=false;
- const host=id=>({displayHolderId:()=>id,setForeground(){},closeForSwitch:async()=>{if(busy)throw Error('SPACE_SWITCH_BUSY');closed++;},close:async()=>{}});
+ const source=fs.readFileSync(path.join(root,'apps/harmony-agent/entry/src/main/ets/AgentRuntime.ets'),'utf8'),module={exports:{}};let active='old',closed=0,busy=false,connected=true,pinOf=id=>'pin-'+id;
+ const host=id=>({displayHolderId:()=>id,coordinatorFingerprint:()=>pinOf(id),isConnected:()=>connected,setForeground(){},closeForSwitch:async abandon=>{if(busy&&!abandon)throw Error('SPACE_SWITCH_BUSY');closed++;},close:async()=>{}});
  const NativeAgent={start:async(_ctx,bootstrap)=>{active=bootstrap?.holderInstanceId??active;return host(active);}};
  const storage=new Map();
  new Function('require','module','exports','AppStorage',transform(source))(()=>({NativeAgent}),module,module.exports,{setOrCreate:(key,value)=>storage.set(key,value)});
@@ -53,4 +53,9 @@ test('application runtime switches the existing host instead of silently accepti
  busy=true;await assert.rejects(module.exports.openAgent({},{holderInstanceId:'third'}),/SPACE_SWITCH_BUSY/);assert.equal(active,'new');
  assert.equal((await module.exports.openAgent({},null)).displayHolderId(),'new');
  assert.equal(storage.get('agentCenter'),'https://new-center.test','Rejected switches preserve the current displayed center');
+ // Old coordinator unreachable and different from the target: its unsettled work cannot block the switch.
+ busy=true;connected=false;await module.exports.openAgent({},{holderInstanceId:'fourth',invitation:{address:'https://other.test',fingerprint:'pin-elsewhere'}});assert.equal(active,'fourth');
+ // Same coordinator, or old coordinator still connected: busy work still refuses the switch.
+ await assert.rejects(module.exports.openAgent({},{holderInstanceId:'fifth',invitation:{address:'https://same.test',fingerprint:'pin-fourth'}}),/SPACE_SWITCH_BUSY/);
+ connected=true;await assert.rejects(module.exports.openAgent({},{holderInstanceId:'sixth',invitation:{address:'https://x.test',fingerprint:'pin-x'}}),/SPACE_SWITCH_BUSY/);assert.equal(active,'fourth');
 });

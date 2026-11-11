@@ -10,7 +10,8 @@ export async function openAgent(context:common.UIAbilityContext,bootstrap:Bootst
  if(opening!==null){if(bootstrap!==null)throw Error('SPACE_SWITCH_BUSY');return opening;}
  if(agent!==null&&(bootstrap===null||agent.displayHolderId()===bootstrap.holderInstanceId))return agent;
  opening=(async():Promise<NativeAgent>=>{
-  if(agent!==null){await agent.closeForSwitch();agent=null;}
+  // Switching away from a coordinator that is not connected and is not the target: its work can never settle there.
+  if(agent!==null){const abandon=bootstrap!==null&&!agent.isConnected()&&agent.coordinatorFingerprint()!==bootstrap.invitation.fingerprint;await agent.closeForSwitch(abandon);agent=null;}
   return NativeAgent.start(context,bootstrap,()=>desiredForeground);
  })();
  try{agent=await opening;const opened=agent;opened.onCoordinatorGone=()=>{if(agent===opened){agent=null;AppStorage.setOrCreate('agentPaired',false);AppStorage.setOrCreate('agentCenter','');}};agent.setForeground(desiredForeground);if(bootstrap!==null)AppStorage.setOrCreate('agentCenter',bootstrap.invitation.address);AppStorage.setOrCreate('agentPaired',true);return agent;}
