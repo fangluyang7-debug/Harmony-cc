@@ -10,7 +10,7 @@ export function imageState(run,index){
  }
  return {kind:'waiting',label:'待处理',workflow};
 }
-export function createPhotoGallery({source,output,base,digest,device,onError,fetcher=fetch,resolveInput=async url=>url}){
+export function createPhotoGallery({source,output,base,digest,device,onError,fetcher=fetch,resolveInput=async url=>url,onProduct}){
  let runId='',loaded=new Map(),pending=new Set();
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  function reset(run){for(const value of loaded.values())URL.revokeObjectURL(value);loaded.clear();pending.clear();runId=run.id;source.dataset.count=String(run.inputs.length);output.dataset.count=String(run.inputs.length);
@@ -29,10 +29,12 @@ export function createPhotoGallery({source,output,base,digest,device,onError,fet
     const response=await fetcher(`${base}/photo-runs/${encodeURIComponent(id)}/result?image=${index}`,{signal:AbortSignal.timeout(20000)});if(!response.ok)throw Error('成品暂未取到，将自动重试');
     const product=await response.json(),bytes=Uint8Array.from(atob(product.image),c=>c.charCodeAt(0));if(await digest(bytes)!==product.hash)throw Error('成品哈希校验失败');
     url=URL.createObjectURL(new Blob([bytes],{type:'image/png'}));const img=new Image();img.src=url;img.alt=run.inputs[index].name+' · 真实 AI 成品';await img.decode();
-    if(id!==runId){URL.revokeObjectURL(url);return;}loaded.set(index,url);
+    if(id!==runId){URL.revokeObjectURL(url);return;}
     const card=document.createElement('figure');card.className='result-photo';card.dataset.imageIndex=String(index);card.dataset.receivedAt=String(remote.receivedAt??'');
     const names=[...new Set(status.workflow?.nodes.filter(n=>n.committed&&n.target).map(n=>device(n.target.deviceId))??[])];
     card.innerHTML=`<div class="photo-frame"><span class="stamp">已校验交付</span></div><figcaption><span class="photo-name" title="${esc(run.inputs[index].name)}">${esc(run.inputs[index].name)}</span><a download="harmony-enhanced-${index+1}.png" href="${url}">保存 ↙</a></figcaption><span class="assigned" title="${esc(names.join(' · '))}">${esc(names.join(' · '))}</span>`;
+    if(onProduct){const save=card.querySelector('a');save.removeAttribute('download');save.removeAttribute('href');save.textContent='选择保存到相册 ↓';save.setAttribute('role','button');save.tabIndex=0;const choose=()=>void onProduct(product,run.inputs[index].name).catch(onError);save.onclick=choose;save.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();choose();}};await onProduct(product,run.inputs[index].name);}
+    if(id!==runId){URL.revokeObjectURL(url);return;}loaded.set(index,url);
     card.querySelector('.photo-frame').prepend(img);output.children[index].replaceWith(card);
    }catch(e){if(url&&!loaded.has(index))URL.revokeObjectURL(url);if(id===runId)onError(e);}finally{if(id===runId)pending.delete(index);}})();
   }

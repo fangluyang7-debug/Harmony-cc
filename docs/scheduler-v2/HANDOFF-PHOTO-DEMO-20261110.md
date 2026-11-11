@@ -1,5 +1,7 @@
 # 照片任务演示联调交接（2026-11-10）
 
+> 历史交接记录。图片入口现已拆为独立 App，单机模式也已支持不加入空间独立处理；本篇的旧操作步骤不能用于当前整合。最新基线和必须保留的功能见 [MERGE-PROTECTION.md](MERGE-PROTECTION.md)，性能与待验范围见 STATUS §118。
+
 ## 接续基线
 
 - 分支：`codex/real-device-acceptance`。

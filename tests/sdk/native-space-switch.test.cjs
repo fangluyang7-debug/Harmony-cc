@@ -12,7 +12,8 @@ test('native identity changes preserve old scoped ledgers and do not import old 
  const script=transform('class NativeAgent { constructor(context,db,store,transport,installation,packs){this.installation=installation;this.ledgerKey=store.key;} async restorePreferences(){} async tick(){} '+source.slice(start,end)+'} module.exports=NativeAgent;');
  class Transport {constructor(invite){this.invite=invite;this.lastStatus=0;}async initialize(){}async json(route,body){this.lastStatus=0;if(route==='/v2/identity')return {version:2,domain:'SIMULATED'};if(rejectBusy)throw Error('SPACE_SWITCH_BUSY');if(pairFailure){this.lastStatus=pairFailure.status;throw Error(pairFailure.message);}pairs++;lastPair=body;return installation(body.holderInstanceId).paired;}}
  class PeerLinks {start(){}}
- new Function('module','NativeDatabase','NativeTransport','AgentStoreV2','NativePeerLinks','validContribution','text','setInterval','factory',script)(module,{open:async()=>db},Transport,{open:async(_binding,key)=>({key,read:()=>({state:{grant:null}})})},PeerLinks,()=>true,x=>x,()=>0,{id:()=> 'a'.repeat(36)});
+ const history={exports:{}};new Function('module','exports',transform(fs.readFileSync(path.join(root,'apps/harmony/scheduler/src/main/ets/v2/host/PairingHistory.ets'),'utf8')))(history,history.exports);
+ new Function('module','NativeDatabase','NativeTransport','AgentStoreV2','NativePeerLinks','validContribution','text','setInterval','factory','pairingHistory',script)(module,{open:async()=>db},Transport,{open:async(_binding,key)=>({key,read:()=>({state:{grant:null}})})},PeerLinks,()=>true,x=>x,()=>0,{id:()=> 'a'.repeat(36)},history.exports.pairingHistory);
  const context={resourceManager:{getRawFileContent:async()=> '[]'}};
  const next=await module.exports.create(context,bootstrap('new'),()=>true,null,[]);
  assert.equal(next.ledgerKey,'ledger:new');assert.equal(saved.get('ledger:old'),'OLD_LEDGER');assert.equal(saved.get('contribution-enabled:old'),'false');assert.equal(saved.get('contribution-enabled:new'),undefined);assert.equal(pairs,1);
@@ -37,7 +38,7 @@ test('native identity changes preserve old scoped ledgers and do not import old 
  // previousDeviceId is only sent to the coordinator that issued it (same certificate pin).
  assert.equal(lastPair.previousDeviceId,'device-lost');
  await module.exports.create(context,{...bootstrap('foreign'),invitation:{...bootstrap('foreign').invitation,fingerprint:'other-pin'}},()=>true,null,[]);
- assert.equal(lastPair.previousDeviceId,undefined);assert.ok(lastPair.knownDeviceIds.includes('device-s4'));
+ assert.equal(lastPair.previousDeviceId,undefined);assert.ok(!lastPair.knownDeviceIds.includes('device-s4'),'device IDs are coordinator-scoped (pairingHistory)');
  // Legacy global marker no longer blocks pairing forever.
  saved.set('pairing-pending','legacy');assert.equal((await module.exports.create(context,bootstrap('legacy'),()=>true,null,[])).ledgerKey,'ledger:legacy');assert.equal(saved.get('pairing-pending'),'');
 });
@@ -47,7 +48,8 @@ test('application runtime switches the existing host instead of silently accepti
  const host=id=>({displayHolderId:()=>id,coordinatorFingerprint:()=>pinOf(id),isConnected:()=>connected,setForeground(){},closeForSwitch:async abandon=>{if(busy&&!abandon)throw Error('SPACE_SWITCH_BUSY');closed++;},close:async()=>{}});
  const NativeAgent={start:async(_ctx,bootstrap)=>{active=bootstrap?.holderInstanceId??active;return host(active);}};
  const storage=new Map();
- new Function('require','module','exports','AppStorage',transform(source))(()=>({NativeAgent}),module,module.exports,{setOrCreate:(key,value)=>storage.set(key,value)});
+ const prefs=new Map(),preferences={getPreferences:async()=>({get:async(k,d)=>prefs.has(k)?prefs.get(k):d,put:async(k,v)=>{prefs.set(k,v);},flush:async()=>{}})};
+ new Function('require','module','exports','AppStorage',transform(source))(name=>name==='@kit.ArkData'?{preferences}:{NativeAgent},module,module.exports,{setOrCreate:(key,value)=>storage.set(key,value)});
  await module.exports.openAgent({},null);await module.exports.openAgent({},{holderInstanceId:'new',invitation:{address:'https://new-center.test'}});assert.equal(active,'new');assert.equal(closed,1);
  assert.equal(storage.get('agentPaired'),true);assert.equal(storage.get('agentCenter'),'https://new-center.test');
  busy=true;await assert.rejects(module.exports.openAgent({},{holderInstanceId:'third'}),/SPACE_SWITCH_BUSY/);assert.equal(active,'new');

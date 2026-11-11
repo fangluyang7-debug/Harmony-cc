@@ -80,3 +80,20 @@ test('logical App concurrency/resource quota is shared across installations and 
   await assert.rejects(r.db.$transaction(tx=>r.apps.reserveJob(tx,bb.peer,'large',[{resourcePoolId:'cpu',amount:3}],Date.now()+30000)),/APP_QUOTA_EXCEEDED/);
  }finally{await r.close();}
 });
+
+test('App admission ignores settled history without per-attempt reads and retains unsettled expired work',async()=>{
+ const r=await runtime();try{
+  const o=await owner(r),a=await r.apps.register(o.peer,registration('history quota'),r.url),p=(await r.apps.exchange({registrationId:a.registrationId,code:a.code})).peer;
+  const reservation=id=>({id,groupId:p.groupId,principalId:p.principalId,appId:p.app.appId,appInstanceId:p.app.appInstanceId,resourcesJson:JSON.stringify(base),deadlineAt:1});
+  const attempt=(id,settled)=>({id,groupId:p.groupId,workflowId:id,nodeId:id,holderInstanceId:p.holderInstanceId,executionDigest:'test',taskJson:'{}',state:settled?'SUCCEEDED':'RUNNING',recordJson:JSON.stringify({resourcesSettled:settled})});
+  const ids=Array.from({length:100},(_,i)=>'history-'+i);
+  await r.db.appJobReservation.createMany({data:ids.map(reservation)});await r.db.attempt.createMany({data:ids.map(id=>attempt(id,true))});
+  const observed=r.db.$extends({query:{attempt:{findUnique:()=>{throw Error('HISTORICAL_N_PLUS_ONE_READ');}}}});
+  await observed.$transaction(tx=>r.apps.reserveJob(tx,p,'new',base,Date.now()+30000));
+  await r.db.appJobReservation.create({data:reservation('still-running')});await r.db.attempt.create({data:attempt('still-running',false)});
+  await assert.rejects(observed.$transaction(tx=>r.apps.reserveJob(tx,p,'new',base,Date.now()+30000)),/APP_QUOTA_EXCEEDED/);
+  await r.db.attempt.update({where:{id:'still-running'},data:{state:'REJECTED'}});
+  await observed.$transaction(tx=>r.apps.reserveJob(tx,p,'new',base,Date.now()+30000));
+  assert.equal(await r.db.appJobReservation.count(),102,'historical evidence is preserved');
+ }finally{await r.close();}
+});

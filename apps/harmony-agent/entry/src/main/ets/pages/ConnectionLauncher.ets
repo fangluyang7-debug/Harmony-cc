@@ -3,7 +3,7 @@ import { common } from '@kit.AbilityKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
 import { discoverCenters } from '../Discovery';
 import { Bootstrap } from '../NativePlatform';
-import { openAgent, contributeAgent } from '../AgentRuntime';
+import { openAgent, contributeAgent, leaveAgent } from '../AgentRuntime';
 import { resolveDevicePairingLink, readPairingTrust, resolvePairingCode, PairingTrust } from '../DevicePairingLink';
 
 @Entry
@@ -176,6 +176,20 @@ struct ConnectionLauncher {
     }
   }
 
+  private async leave():Promise<void>{
+    if(this.pairing)return;this.pairing=true;this.error='';
+    try{await leaveAgent(getContext(this) as common.UIAbilityContext);this.desktopSection='discover';void this.discover();}
+    catch(e){this.error='退出未完成：'+(e as Error).message;}finally{this.pairing=false;}
+  }
+  @Builder
+  private businessApps(){
+    Row({space:10}){
+      Button('图片高清增强').backgroundColor('#1756D4').onClick(()=>{void (getContext(this) as common.UIAbilityContext).startAbility({bundleName:'org.harmonycc.photo',abilityName:'EntryAbility'});})
+      Button('SoleAI').backgroundColor('#25314A').onClick(()=>{void (getContext(this) as common.UIAbilityContext).startAbility({bundleName:'org.harmonycc.soleai',abilityName:'EntryAbility'});})
+    }.width('100%')
+    Button('退出当前协作空间').backgroundColor('#583437').enabled(!this.pairing).onClick(()=>{void this.leave();})
+  }
+
   @Builder
   private headline(title: string) {
     Row({ space: 10 }) {
@@ -247,6 +261,7 @@ struct ConnectionLauncher {
   private contributionPage() {
     Column({ space: 16 }) {
       this.headline('贡献上限')
+      this.businessApps()
       Column({ space: 7 }) {
         Text(this.status.startsWith('已连接') ? '已连接' : '已配对').fontColor('#30D158').fontSize(14)
         Text(this.center || '协调中心').fontSize(20).fontWeight(FontWeight.Bold).fontColor(Color.White)
@@ -334,6 +349,7 @@ struct ConnectionLauncher {
               .onClick(() => { this.desktopSection = 'discover'; void this.discover(); })
           }.width('100%').padding({ bottom: 16 })
           if (this.paired && this.desktopSection !== 'discover') {
+            this.businessApps()
             Column({ space: 16 }) {
               Row({ space: 12 }) {
                 Column({ space: 6 }) {

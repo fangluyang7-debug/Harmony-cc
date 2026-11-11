@@ -170,8 +170,7 @@ async function refresh(){
 }
 function schedule(){clearTimeout(timer);timer=setTimeout(()=>void refresh(),150);}
 function selectSpace(id){
-
-  $('photo-studio-link').href='photo.html?space='+encodeURIComponent(id)+'&view=judge';
+  if(location.hostname==='127.0.0.1'){ $('photo-studio-link').href='http://127.0.0.1:7460/';$('photo-studio-link').target='_blank';}else $('photo-studio-link').href='photo.html?space='+encodeURIComponent(id)+'&view=judge';
   stream?.close();group=id;snapshot=null;trace=null;traceError='';selected='';traceSerial++;serverAnchor=0;$('domain').className='tag neutral';$('domain').textContent='UNKNOWN';$('updated').textContent='尚未取得快照';render();
   const requestedUrl=new URL(location.href);if(requestedUrl.searchParams.get('space')===id)selected=requestedUrl.searchParams.get('job')||'';
   const url=new URL(location.href);if(id)url.searchParams.set('space',id);else url.searchParams.delete('space');history.replaceState(null,'',url);

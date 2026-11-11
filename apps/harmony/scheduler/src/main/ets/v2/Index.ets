@@ -15,6 +15,7 @@ export { NativeAgent, NativeServiceAdapter, ReferenceCase, ReferencePack } from 
 export { NativeDatabase, Bootstrap, Paired, Installation, Contribution, factory } from './host/NativePlatform';
 export { NativeTrace } from './host/NativeTrace';
 export { cropImage } from './host/ImageCrop';
+export { enhancePhotoLocally, LocalPhotoProgress, LocalPhotoOptions } from './host/executors/PhotoLocal';
 export * from './client/VisualReviewFlow';
 export { packVisualRaw, matchVisualLocal } from './client/VisualReviewNative';
 export { SchedulerAppSession, SchedulerAppDeclaration, SchedulerAppOptions, SchedulerAppState, SchedulerAppStatus } from './app/SchedulerAppSession';

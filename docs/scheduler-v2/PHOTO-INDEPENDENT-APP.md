@@ -2,6 +2,18 @@
 
 2026-11-10，分支 `codex/real-device-acceptance`。实现基线为 `7a3a1fa`。后续已通过 DevEco 为新包生成独立调试签名，HDC 安装成功并启动到手机首次连接页；尚未验收新 App 的授权、选图或完整协作任务。已有 agent / SoleAI 安装包未被替换。
 
+## 本机独立处理与显式保存（2026-11-10，STATUS §110）
+
+图片 App 启动后直接进入原生选图首页，不恢复协调者连接、不要求账号、空间或应用授权。选择 1～8 张照片，点击“开始高清增强”，即可在手机执行同一套 Real-ESRGAN x4plus 模型与分块内核。分析、准备、增强、合成和交付都在 App 内完成；不创建 v2 离线任务，不上传照片。本机计算前会等待该 App 先前的协作宿主结算退出，避免并行占用未记账资源。
+
+需要协作时再点击“连接协作空间”，沿用一次授权、SDK、PlanningService 和现有手机业务页面。电脑评委页继续展示协作任务。STATUS §111 新增独立的“仅展示连接”：未连接协调者也可把手机本机进度与成品传给电脑展示，不产生调度账本，操作见 [手机单机展示](PHOTO-DISPLAY-ONLY.md)。未连接展示屏时仍完全本机运行。
+
+无论本机还是协作，成品都先经哈希和尺寸核验，写入 App 私有目录，**不自动写入系统相册**。两种模式均在每张成品卡片下点击系统“保存至图库”按钮，不需要另外选择结果或进入保存页。首次使用由系统提供本次保存授权，未添加全相册写入权限。当前成品列表属于本次页面会话，请在离开或开始新一批前保存需要保留的照片；私有临时文件不等于图库历史列表。
+
+主要新增代码：`apps/harmony-photo/entry/src/main/ets/PhotoFiles.ets`、原生 `pages/Index.ets`，以及 `apps/harmony/scheduler/src/main/ets/v2/host/executors/PhotoLocal.ets`。共享 `Photo.ets` 对模型首次准备合并并发请求，防止并行图块截断兄弟任务正在读取的模型文件。
+
+当前输入边界沿用照片任务：每张不超过 8 MiB、100 万像素、长边 1920 像素；不偷偷缩小输入。较大照片仍需后续完善内存和输出预算，不能将小样例验证视为任意原图已支持。
+
 ## 新版调度中心整合（STATUS §109）
 
 本次以本地 `8f10aa5` 与协作者 `codex/scheduler-v2-foundation` 的 `b840a99` 合并。保留协作者桌面启停、设备配对弹窗、自动 CPU/RAM 额度、能力缺口表；保留本地空间 WebView、8 位成员加入码、单设备单空间、独立图片 App 和电脑评委页。没有另设任务派发路径。
@@ -24,7 +36,7 @@
 | Harmony 图片演示 | `org.harmonycc.photo` / `apps/harmony-photo` | 从相册选图、提交照片工作流、手机本机/自动协作、进度与结果 |
 | SoleAI | `org.harmonycc.soleai` / `apps/harmony` | 现有日常购物业务；本轮没有迁移或修改购物界面 |
 
-评委页只在电脑上展示。手机图片 App 加载 `apps/team-space-web/photo-mobile.html`，仅有业务操作和结果，不显示评委图表、证据表或展示页入口。电脑仍使用原有 `photo.html?space=<空间ID>&view=judge`，保留左右照片队列、实时任务规划与设备分工、结束后的耗时；调度盘仍为 `dispatch.html`。两者读取同一份已核验任务记录。
+评委页只在电脑上展示。自 STATUS §115 起，手机图片 App 的本机与协作模式共用 `pages/Index.ets` 原生页面，授权后保留已选照片，只有连接状态与展示连接说明变化，不再加载 `photo-mobile.html`。两种模式均点击“开始高清增强”，结果纵向排列、逐张保存。电脑正式统一入口为新版中心的“打开真机任务展示（单机 / 协同）”，保留左右照片队列、实时任务规划与设备分工、结束后的耗时；调度盘仍为 `dispatch.html`。
 
 原协作空间的 WebView 桥已移除选照片与 USB 导入照片方法。空间和调度盘的照片链接改为只读展示链接，不能经该链接提交照片计算。图片提交职责转入独立 App。
 
@@ -33,11 +45,11 @@
 1. 在 Harmony 协作空间完成设备接入，再打开 Harmony 图片演示，点击“连接 Harmony 协作空间”。
 2. 经现有 `EnrollmentAbility` 完成一次授权；图片 App 交换并私有保存自己的 App 身份，不共用 SoleAI 凭据，不把设备凭据传入网页。
 3. 图片 App 前台运行自己的 `NativeAgent`，声明五项照片能力；模型及运行库可以预装，用户照片不打包。前台/后台额度沿用现有宿主管理。
-4. 从手机相册选图，点击“开始处理”后才上传本轮输入。网页复用 `SchedulerSdk` 和既有照片 DAG，经原生 `HarmonySdkPort` 提交、传输、等待与核验结果；设备由既有 PlanningService 决定。
+4. 从手机相册选图，点击“开始高清增强”后才上传本轮计算输入。原生 `PhotoBatch.ets` 通过 `SchedulerSdk` 和与网页保持一致的照片 DAG，经 `HarmonySdkPort` 提交、传输、等待与核验结果；设备由既有 PlanningService 决定。批次预算 180 秒，包含输入编码与上传；成品先为展示留存，再由 SDK 确认收到，避免结果提前回收。
 5. `/v2/apps/photo` 只处理 App 自己的展示记录、原图预览和已交付结果留存，**不派发计算**。结果留存从 SDK 读取已核验输出，不能提交自制成品冒充完成。
 6. 电脑登录同一空间，打开照片任务展示；逐张收到真实交付结果后才显示成品。
 
-原生入口：`apps/harmony-photo/entry/src/main/ets/pages/Index.ets`。身份与宿主：`PhotoSession.ets`；原生桥：`PhotoBridge.ets`。共享网页逻辑：`apps/team-space-web/photo.js`、`photo-app-port.mjs`、`photo-gallery.mjs`；手机样式：`photo-mobile.css`。
+原生入口：`apps/harmony-photo/entry/src/main/ets/pages/Index.ets`；身份与宿主：`PhotoSession.ets`；批处理：`PhotoBatch.ets`；DAG：`PhotoWorkflow.ets`。旧 `PhotoBridge.ets` 和 `apps/team-space-web/photo-mobile.*` 保留兼容，当前手机入口不使用它们。电脑展示逻辑仍复用 `photo-display.js`、`photo-gallery.mjs` 等。
 
 同时修正独立 App 的 CPU 总量上报：`/v2/apps/me` 返回设备所有者已确认的共享容量，宿主把它作为 PRIOR 总量；当前 App 的贡献额度仍分别限制，避免把较小 App 配额当作整台设备总容量后再重复扣减其他宿主额度。没有把申报额度当作实测物理核数。
 
@@ -74,4 +86,4 @@ node scripts/photo-local-rehearsal.cjs --check-app
 
 独立 App 元数据、身份隔离、超过 1 MiB 的输入上传、未完成结果拒绝及二进制 SDK 桥测试通过。本地完整验证用浏览器替代原生桥，但 HTTP SDK、模型 CPU 推理、七个唯一节点、回执与交付均为真实执行；手机视口不显示评委组件，电脑页收到同一份结果。测试输入在空执行宿主就绪后生成，仅用于链路验证，不能充当真实照片质量或加速证据。证据与截图在 `.test/photo-tools/independent-app/`。
 
-未验收：新包真机授权、系统相册、ArkWeb 桥、前后台切换、跨空间重新授权、手机与 Windows 协作、GPU 与同输入性能对照。当前单机选项仍需要连接协调中心，不是离线 App；原生结果保存到相册尚未提供。不要把本轮本地测试称为三设备或 GPU 提速。
+未验收：新包真机授权、系统相册、ArkWeb 桥、前后台切换、跨空间重新授权、手机与 Windows 协作、GPU 与同输入性能对照。上述为 §108–109 历史边界；本机离线处理与原生显式保存现已实现并完成手机验证，见本文 §110 增补。不要把本轮本地测试称为三设备或 GPU 提速。

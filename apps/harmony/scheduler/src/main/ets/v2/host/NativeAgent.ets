@@ -1,6 +1,7 @@
 import {executeLocal,encoderCapability,localExecutorVersion,hasLocalExecutor} from './executors/Registry';
 import {EngineResult} from './executors/Types';
 import { NativePeerLinks } from '../platform/NativePeerLinks';
+import { pairingHistory } from './PairingHistory';
 import { HarmonySdkPort } from '../client/HarmonySdkPort';
 import { SchedulerSdk, SdkInput } from '../client/SchedulerSdk';
 import { NativeInputStore } from '../platform/NativeInputStore';
@@ -42,7 +43,7 @@ interface MeasuredCapacity {cpuThreads:number|null;totalMemoryBytes:number;}
 interface SettingsRequest {measured?:MeasuredCapacity;}
 interface Qualification {executor:ExecutorV2;admission:CapabilityAdmissionV2;}
 interface Ticket {token:string;ref:ArtifactRefV2;bytes:number;operation:string;expiresAt:number;}
-interface Authorization {offer:DispatchOfferV2;snapshotVersion:number;inputTicket:Ticket;}
+interface Authorization {offer:DispatchOfferV2;snapshotVersion:number;inputTicket:Ticket;qualification?:Qualification;}
 interface OutputTicket {ticket:Ticket;delivery?:string;}
 interface Permit {id:string;groupId:string;holderInstanceId:string;targetId:string;identity:string;packDigest:string;caseId:string;inputHash:string;config:ExecutionConfigV2;maxOutputBytes:number;timeoutMs:number;domain:string;}
 interface Work {permit:Permit;executor:ExecutorV2;coordinatorEpoch:number;ledgerEpoch:number;deviceInstanceId:string;expiresAt:number;mode:string;}
@@ -177,10 +178,8 @@ export class NativeAgent {
    const info=await transport.json('/v2/identity') as Identity;if(info.version!==2||info.domain!==bootstrap.domain)throw Error('PAIR_DOMAIN_INVALID');
    await db.put(pendingKey,bootstrap.invitation.inviteId);
    let installationId=await db.get('device-installation-id');if(installationId===null){installationId=factory.id();await db.put('device-installation-id',installationId);}
-   // previousDeviceId only means something to the coordinator that issued it (same certificate pin).
-   const oldIdentity=await db.get('identity'),oldInstallation=oldIdentity===null?null:JSON.parse(oldIdentity) as Installation;
-   const previousDeviceId=oldInstallation!==null&&oldInstallation.bootstrap.invitation.fingerprint===bootstrap.invitation.fingerprint?oldInstallation.paired.peer.deviceId:undefined;
-   const knownDeviceIds=(await db.storedIdentities()).map((value:string)=>(JSON.parse(value) as Installation).paired.peer.deviceId);
+   const oldIdentity=await db.get('identity'),history=pairingHistory(bootstrap,oldIdentity===null?null:JSON.parse(oldIdentity) as Installation,(await db.storedIdentities()).map((value:string)=>JSON.parse(value) as Installation));
+   const previousDeviceId=history.previousDeviceId,knownDeviceIds=history.knownDeviceIds;
    const pairInput:PairInput={inviteId:bootstrap.invitation.inviteId,code:bootstrap.invitation.code,holderInstanceId:bootstrap.holderInstanceId,installationId,previousDeviceId,knownDeviceIds};let paired:Paired;
    try{paired=await transport.json('/v2/pair',pairInput) as Paired;}
    catch(error){
@@ -221,6 +220,11 @@ export class NativeAgent {
    await this.close();
   }catch(e){this.switching=false;throw e as Error;}
  }
+ async leaveSpace():Promise<void>{
+  this.switching=true;
+  try{const port=await HarmonySdkPort.open(this.context,this.installation.bootstrap.invitation,this.installation.paired.credential);await this.closeForSwitch();await port.request('/v2/devices/leave','{}');}
+  catch(e){this.switching=false;throw e as Error;}
+ }
  async registerApplication(declaration:Object):Promise<string>{
   if(!this.isConnected())throw Error('SDK_COORDINATOR_OFFLINE');
   if(this.installation.appInstanceId)throw Error('DEVICE_OWNER_CREDENTIAL_REQUIRED');
@@ -238,11 +242,15 @@ export class NativeAgent {
   return this.transport.json('/v2/display/'+id+(action?'/'+action:''),action?body:null);
  }
  async sdk():Promise<SchedulerSdk>{
+  return new SchedulerSdk(await this.sdkPort());
+ }
+ /** Share this App host's private input cache with business SDK wrappers. */
+ async sdkPort():Promise<HarmonySdkPort>{
   if(this.policy===null||this.inputs===null)throw Error('APP_HOST_REQUIRED');
   const port=await HarmonySdkPort.open(this.context,this.installation.bootstrap.invitation,this.installation.paired.credential);
   port.connected=()=>this.ready&&!this.stopped;
   const inputs=this.inputs;port.localRead=(contentHash:string):Promise<Uint8Array|null>=>inputs.read(contentHash);port.stageInput=(input:SdkInput,data:Uint8Array):Promise<void>=>inputs.stage(input.contentHash,input.bytes,data);
-  return new SchedulerSdk(port);
+  return port;
  }
  private showStatus():void {
   const status=this.gone?'协调中心已断开，请重新配对':this.stopped?'已停止':!this.ready?'正在连接协调中心':!this.idle()?'已连接 · 贡献已暂停':this.energyGate!==null?'已连接 · 等待电量或温控条件':'已连接 · 前台贡献';
@@ -444,12 +452,12 @@ export class NativeAgent {
    }
    if(!this.idle()||!this.ready)throw Error('OWNER_ACTIVE');
    const queueStart=monotonic();await this.waitTurn(offer);const queueEnd=monotonic();
-   const authorization=await this.transport.json('/v2/executions/'+id+'/authorize',{} as Record<string,Object>) as Authorization;
+   const admitStart=monotonic();const authorization=await this.transport.json('/v2/executions/'+id+'/authorize',{} as Record<string,Object>) as Authorization;
    if(canonical(authorization.offer)!==canonical(offer))throw Error('OFFER_SCOPE');
-   const evidence=await this.transport.json('/v2/qualification/'+offer.target.targetId) as Qualification;
+   const evidence=authorization.qualification??await this.transport.json('/v2/qualification/'+offer.target.targetId) as Qualification;
    const local=this.executors().find(e=>e.target.targetId===offer.target.targetId);const a=evidence.admission;
    if(local===undefined||!validCapabilityAdmissionV2(a)||a.domain!==this.installation.bootstrap.domain||a.groupId!==offer.task.groupId||a.holderInstanceId!==this.installation.paired.peer.holderInstanceId||!['CANARY','ACTIVE'].includes(a.state)||a.quality.value===null||a.quality.sampledAt+a.quality.ttlMs<=this.transport.now()||canonical(evidence.executor.target)!==canonical(local.target)||canonical(local.contract)!==canonical(offer.task.contract)||canonical(local.resources)!==canonical(offer.resources)||a.identity!==this.executorDigest(local)||offer.allowedConfigs.some(c=>!local.configurations.some(config=>canonical(config)===canonical(c))))throw Error('CAPABILITY_NOT_QUALIFIED');
-   const trace=new NativeTrace(offer,message.traceId,authorization.snapshotVersion,this.instance);const history=this.waitReasons.get(id),reasons=history?.reasons,reason=reasons===undefined||reasons.size===0?null:reasons.size>1?'OBSERVED_MIXED_WAIT':'OBSERVED_'+Array.from(reasons)[0];trace.add('QUEUE',queueStart,queueEnd,reason,history?.samples);await trace.segment('ADMIT',()=>this.admit(offer,message,true));this.queue.start(id,monotonic());this.queueStarted.add(id);this.launching=false;this.pumpQueue();this.running.add(id);
+   const trace=new NativeTrace(offer,message.traceId,authorization.snapshotVersion,this.instance);const history=this.waitReasons.get(id),reasons=history?.reasons,reason=reasons===undefined||reasons.size===0?null:reasons.size>1?'OBSERVED_MIXED_WAIT':'OBSERVED_'+Array.from(reasons)[0];trace.add('QUEUE',queueStart,queueEnd,reason,history?.samples);await this.admit(offer,message,true);trace.add('ADMIT',admitStart,monotonic(),'INCLUDES_AUTHORIZATION');this.queue.start(id,monotonic());this.queueStarted.add(id);this.launching=false;this.pumpQueue();this.running.add(id);
    // Admission is already durable. A transient control send must not orphan
    // its reserved slot before execute can produce a terminal receipt.
    void this.flush().catch((e:Error)=>this.error(e));

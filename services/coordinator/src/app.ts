@@ -189,6 +189,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       @Get('apps/registrations')async listApps(@Headers('authorization') header:string){return this.jobResponse(async()=>apps.list(await auth.authenticate(bearer(header))));}
       @Post('apps/registrations/:id/revoke')async revokeApp(@Headers('authorization') header:string,@Param('id') id:string){return this.jobResponse(async()=>apps.revoke(await auth.authenticate(bearer(header)),id));}
       @Post('credentials/rotate')async rotate(@Headers('authorization') header:string){try{return await auth.rotate(bearer(header));}catch{throw new UnauthorizedException('CREDENTIAL_REJECTED');}}
+      @Post('devices/leave')async leaveDevice(@Headers('authorization') header:string){return this.jobResponse(async()=>auth.leaveDevice(await auth.authenticate(bearer(header))));}
       @Post('credentials/revoke')async revoke(@Headers('authorization') header:string){try{const peer=await auth.authenticate(bearer(header));await auth.revoke(peer.credentialId);return {revoked:true};}catch{throw new UnauthorizedException('CREDENTIAL_REJECTED');}}
       @Get('identity')info(){if(!ready)throw new ServiceUnavailableException();return {version:2,coordinatorId:identity.id,epoch,domain:config.domain};}
       @Post('allotments/request')async grant(@Headers('authorization') header:string,@Body() body:any){

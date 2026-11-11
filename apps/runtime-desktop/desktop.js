@@ -57,6 +57,7 @@ function render() {
     if (select.dataset.items !== options) {
       select.replaceChildren(...visibleAddresses.map(item => new Option(item.name + ' · ' + item.address, item.address)));
       if (visibleAddresses.some(item => item.address === selected)) select.value = selected;
+      else { const wifi = visibleAddresses.find(item => /WLAN|Wi-Fi|Wireless|无线/i.test(item.name)); if (wifi) select.value = wifi.address; }
       select.dataset.items = options;
     }
     const ready = running && !otherRole;
@@ -70,6 +71,8 @@ function render() {
     $('port').disabled = select.disabled;
     $('center-suite').disabled = select.disabled;
     $('dashboard').disabled = !ready || addressLost;
+    $('create-workspace').disabled=!ready||busy;
+    $('workspace-name').textContent=snapshot.workspace?.name||'启动中心后读取当前空间';
     $('devices').disabled = !ready || addressLost || busy;
     if (addressLost && $('pair-dialog').open) $('pair-dialog').close();
     message('network-change', addressLost ? '网络已切换，旧地址已停止发布。请关闭协调中心，选择新的局域网地址后重新启动。' : '');
@@ -95,7 +98,14 @@ function render() {
 let refreshing;
 async function refresh() {
   if (!refreshing) {
-    refreshing = api('/state').then(result => { snapshot = result; render(); })
+    refreshing = api('/state').then(async result => {
+      snapshot = result;
+      if(isCenter&&result.state==='RUNNING'){try{snapshot.workspace=await api('/workspace');}catch{}}
+      // Automatic policy changes are persisted by the host after pairing. Do
+      // not keep showing the invitation's provisional 2 CPU / 1 GiB forever.
+      if(!isCenter&&installation.paired&&!busy){try{installation=await api('/agent/status',{directory:installation.directory});}catch{}}
+      render();
+    })
       .finally(() => { refreshing = null; });
   }
   await refreshing;
@@ -120,6 +130,8 @@ async function action(work, errorId = 'error') {
 }
 
 function initCenter() {
+  $('create-workspace').onclick=()=>void action(async()=>{await api('/workspace/create',{name:$('workspace-name-input').value});$('workspace-name-input').value='';});
+  $('photo-display').onclick=()=>void action(async()=>{const r=await api('/display/open',{});window.open(r.url,'harmony-photo-display');});
   $('port').oninput = render;
   $('power').onclick = () => {
     if (snapshot.state === 'RUNNING') {
@@ -138,7 +150,7 @@ function initCenter() {
       location.assign(path);
     });
   }
-  $('dashboard').onclick = () => openConsole('/dispatch.html');
+  $('dashboard').onclick = () => openConsole('/dispatch.html'+(snapshot.workspace?'?space='+encodeURIComponent(snapshot.workspace.id):''));
   const pairing = $('pair-dialog');
   const download = $('pair-download');
   let invitationTimer;
@@ -159,8 +171,7 @@ function initCenter() {
     void action(async () => {
       try {
         await api('/console/session', {});
-        const { spaces } = await api('/v2/spaces/me');
-        const space = spaces.find(item => item.name === '本地调度空间') ?? spaces[0];
+        const space = await api('/workspace');
         if (!space) throw Error('本地调度空间不可用。');
         if (!pairing.open) return;
         // The invitation carries a provisional 2-slot / 1 GiB ceiling for the first connection. With
@@ -213,6 +224,7 @@ function initAgent() {
   }
   async function loadInstallation() {
     installation = await api('/agent/status', { directory: directory.value });
+    if(installation.directory)directory.value=installation.directory;
     sessionStorage.setItem('device-directory', directory.value);
     showQuota(installation.paired);
   }

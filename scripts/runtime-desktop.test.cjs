@@ -32,7 +32,7 @@ test('desktop reports readiness only from child, rejects duplicate start, and st
 });
 test('a host that reports COORDINATOR_GONE retires the pairing so the device can pair again',async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-desktop-gone-')),device=path.join(root,'device'),child=path.join(root,'host.cjs'),control=new RuntimeControl();
- fs.mkdirSync(path.join(device,'ledger'),{recursive:true});fs.writeFileSync(path.join(device,'agent.json'),JSON.stringify({connection:{address:'https://198.51.100.7:7443/'}}));fs.writeFileSync(path.join(device,'contribution.json'),JSON.stringify({maxCpuThreads:2,maxMemoryBytes:1073741824}));
+ fs.mkdirSync(path.join(device,'ledger'),{recursive:true});fs.writeFileSync(path.join(device,'agent.json'),JSON.stringify({identity:{groupId:'g',deviceId:'d'},connection:{address:'https://198.51.100.7:7443/'}}));fs.writeFileSync(path.join(device,'contribution.json'),JSON.stringify({maxCpuThreads:2,maxMemoryBytes:1073741824}));
  fs.writeFileSync(child,"console.log('COORDINATOR_GONE: test');process.exitCode=3;");
  try{
   assert.equal(control.deviceStatus({directory:device}).paired,true);

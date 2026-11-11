@@ -639,7 +639,7 @@ export class CpuJobs {
       ['OWNER_OR_HOST_NOT_AVAILABLE','EVALUATION_RESOURCE_REQUIRED','EVALUATION_WINDOW_REQUIRED','CALIBRATION_PAUSED'].includes(evidence.admission.reasonCode);
     if((!['CANARY','ACTIVE'].includes(evidence.admission.state)&&!finishing)||!sampleUsableV2(evidence.admission.quality,Date.now(),this.directory.domain))throw Error('CAPABILITY_NOT_QUALIFIED');
     if(action==='retained'&&this.directTransfers)return this.directTransfers.publishOutput(peer,id,body);
-    if(action==='authorize')return {offer,snapshotVersion:d.plan?.snapshotVersion??null,inputTicket:this.artifacts.issue(d.input,peer,'READ')};
+    if(action==='authorize')return {offer,snapshotVersion:d.plan?.snapshotVersion??null,inputTicket:this.artifacts.issue(d.input,peer,'READ'),qualification:evidence};
     if(action==='input')return {ticket:this.artifacts.issue(d.input,peer,'READ')};
     if(action!=='output'||!body||!Number.isSafeInteger(body.bytes)||body.bytes<1||body.bytes>8388608||typeof body.contentHash!=='string'||!/^[a-f0-9]{64}$/.test(body.contentHash)||!offer.task.contract.outputSchemas.includes(body.schemaId))throw Error('OUTPUT_INVALID');
     const output:ArtifactDescriptor={...d.input,ref:{artifactId:'out-'+id,contentVersion:1,contentHash:body.contentHash,schemaId:body.schemaId,schemaVersion:1},bytes:body.bytes};

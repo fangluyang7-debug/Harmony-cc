@@ -1,0 +1,803 @@
+{
+  "date": "2026-11-11",
+  "baseline": "cee4fa3",
+  "branch": "imageprocessing",
+  "notes": [
+    "Cumulative phase times overlap and are not batch wall time.",
+    "ADMIT now includes native authorization.",
+    "No precomputed task outputs; all cooperative runs have 66 committed unique attempts.",
+    "Model and budget were not reported by the existing local-only display protocol.",
+    "Thermal conditions were not controlled; these are engineering measurements, not a statistical benchmark."
+  ],
+  "runs": [
+    {
+      "id": "local:e87aef2b-b861-4d42-a26e-b8805aef1e20",
+      "state": "SUCCEEDED",
+      "durationMs": 70789,
+      "reportedBudgetMs": null,
+      "codeCancellationBudgetMs": 180000,
+      "originalHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "model": null,
+      "results": [
+        {
+          "imageIndex": 0,
+          "hash": "d076be313c3a9598f50bc2f3277d0ec3961a907a505b38cad0329de34f16368c"
+        },
+        {
+          "imageIndex": 1,
+          "hash": "c76c52b13cde00ee6a8b141b920f038b73c1bf7cff489a29db2895b1a68ce6d2"
+        },
+        {
+          "imageIndex": 2,
+          "hash": "dc9a6ef33b216e2aa79a0e3a7d87be39494b98df9cad91c4414d0c0f76f6cffa"
+        },
+        {
+          "imageIndex": 3,
+          "hash": "d5bdf80b4cad55cd01f9c83954425455a2244100c94f7bfeb61dfd9dcd2b550d"
+        },
+        {
+          "imageIndex": 4,
+          "hash": "fecc0a51916c13bfe1f4d1e991aacdc9023d6233979375956f62a1e2ffbb8bac"
+        },
+        {
+          "imageIndex": 5,
+          "hash": "2ff0fe57859691af4049f44e0f2c2e99419f6d689e67bd8e70d435e6da5428a7"
+        }
+      ],
+      "committedNodes": 0,
+      "uniqueAttempts": 0,
+      "devices": {},
+      "phases": {},
+      "experimentalReverted": false
+    },
+    {
+      "id": "coop:2fdd97f0-31e8-4c93-a5eb-89071aa360fa",
+      "state": "SUCCEEDED",
+      "durationMs": 87401,
+      "reportedBudgetMs": 180000,
+      "codeCancellationBudgetMs": 180000,
+      "originalHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "results": [
+        {
+          "imageIndex": 0,
+          "hash": "91e19c864ff0008faca49d83fc0e3b343a01293ec131785529fa272e0a060a03"
+        },
+        {
+          "imageIndex": 1,
+          "hash": "3b6050a283db3cea75ce2f9ee7983cd82346227bb028dc90073ffdfdb6131a5d"
+        },
+        {
+          "imageIndex": 2,
+          "hash": "26beb5f81f1155a44a73b8d6f38332d5ced131d9b5a2e73473aa8699692670d0"
+        },
+        {
+          "imageIndex": 3,
+          "hash": "cb3599788601bb28b996ced924a8b03c3d2bb37b25f5bdff83740ed73fde5d04"
+        },
+        {
+          "imageIndex": 4,
+          "hash": "b9dba82add26df1950d32aa02b0957f1785deed95eebec3c2eb34ed209aed4fd"
+        },
+        {
+          "imageIndex": 5,
+          "hash": "c652223c5729c1b79732906b5fe8571adbe508fb45ec1a32c22b269375186d15"
+        }
+      ],
+      "committedNodes": 66,
+      "uniqueAttempts": 66,
+      "devices": {
+        "phone": {
+          "nodes": 33,
+          "enhance": 11
+        },
+        "windows": {
+          "nodes": 33,
+          "enhance": 13
+        }
+      },
+      "phases": {
+        "PLAN": {
+          "spans": 66,
+          "cumulativeMs": 17.135
+        },
+        "OFFER": {
+          "spans": 66,
+          "cumulativeMs": 9975.301
+        },
+        "QUEUE": {
+          "spans": 66,
+          "cumulativeMs": 758.09
+        },
+        "ADMIT": {
+          "spans": 66,
+          "cumulativeMs": 9733.482
+        },
+        "LOAD": {
+          "spans": 66,
+          "cumulativeMs": 1511.51
+        },
+        "EXECUTE": {
+          "spans": 66,
+          "cumulativeMs": 186387.891
+        },
+        "PUBLISH": {
+          "spans": 66,
+          "cumulativeMs": 8961.536
+        },
+        "TRANSFER_RECV": {
+          "spans": 35,
+          "cumulativeMs": 1124.512
+        },
+        "TRANSFER_SEND": {
+          "spans": 44,
+          "cumulativeMs": 2513.611
+        },
+        "DELIVER": {
+          "spans": 6,
+          "cumulativeMs": 156685
+        }
+      },
+      "experimentalReverted": false
+    },
+    {
+      "id": "coop:b6d6d4cb-eec4-4a72-af83-6b410c494f85",
+      "state": "SUCCEEDED",
+      "durationMs": 98640,
+      "reportedBudgetMs": 180000,
+      "codeCancellationBudgetMs": 180000,
+      "originalHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "results": [
+        {
+          "imageIndex": 0,
+          "hash": "6930e878a2156bc1339b5876d117c3123d4c27767302c351ff2d3c1e02828d24"
+        },
+        {
+          "imageIndex": 1,
+          "hash": "510756578fa2830ba568609bdf52f4e4346af250bf679db7c57a045d1abb9434"
+        },
+        {
+          "imageIndex": 2,
+          "hash": "f72040afdef4b36a4154766a8db46116f42a7538739249747bdcfd5f72f9810c"
+        },
+        {
+          "imageIndex": 3,
+          "hash": "03f274d2ee3a103c2486710a366ff1c3c94707d5636b3b66c0bb3025fa1c313b"
+        },
+        {
+          "imageIndex": 4,
+          "hash": "023f16089f40a2489c8c3bbde485e9e6bd2679d06ee0f5b7912f978df9482512"
+        },
+        {
+          "imageIndex": 5,
+          "hash": "633f8995f35b906e9526253f526d1e828fda0ab332b7a4b52d69af60a959cbce"
+        }
+      ],
+      "committedNodes": 66,
+      "uniqueAttempts": 66,
+      "devices": {
+        "phone": {
+          "nodes": 37,
+          "enhance": 12
+        },
+        "windows": {
+          "nodes": 29,
+          "enhance": 12
+        }
+      },
+      "phases": {
+        "PLAN": {
+          "spans": 66,
+          "cumulativeMs": 21.382
+        },
+        "OFFER": {
+          "spans": 66,
+          "cumulativeMs": 15882.11
+        },
+        "QUEUE": {
+          "spans": 66,
+          "cumulativeMs": 1915.016
+        },
+        "ADMIT": {
+          "spans": 66,
+          "cumulativeMs": 14924.557
+        },
+        "LOAD": {
+          "spans": 66,
+          "cumulativeMs": 1287.357
+        },
+        "EXECUTE": {
+          "spans": 66,
+          "cumulativeMs": 117944.369
+        },
+        "PUBLISH": {
+          "spans": 66,
+          "cumulativeMs": 13155.013
+        },
+        "TRANSFER_RECV": {
+          "spans": 28,
+          "cumulativeMs": 1179.154
+        },
+        "TRANSFER_SEND": {
+          "spans": 38,
+          "cumulativeMs": 2654.845
+        },
+        "DELIVER": {
+          "spans": 6,
+          "cumulativeMs": 185206
+        }
+      },
+      "experimentalReverted": false
+    },
+    {
+      "id": "coop:b3ee3b3a-c8ea-4fff-8f39-2c82fe59ce0b",
+      "state": "SUCCEEDED",
+      "durationMs": 94915,
+      "reportedBudgetMs": 180000,
+      "codeCancellationBudgetMs": 180000,
+      "originalHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "results": [
+        {
+          "imageIndex": 0,
+          "hash": "aebfe8001d87c57e924476f0854304f364dd986f833e1656693550ab4984dae1"
+        },
+        {
+          "imageIndex": 1,
+          "hash": "60a472632e454f2769e5d1536c6ef4d7c2a53c2238c918440ed67f6ba97e261a"
+        },
+        {
+          "imageIndex": 2,
+          "hash": "fcfc45a2ccad89716192fd74f2da55202a65e813c3e01261ae85837ee4735be5"
+        },
+        {
+          "imageIndex": 3,
+          "hash": "25963cd2696a5eed2efd07146f65c5e04069331e4bd2f06449c65097050aafa9"
+        },
+        {
+          "imageIndex": 4,
+          "hash": "29f8edff9580df69cb50aecc04c058cb0c8becc4ee9b6891d28ba701c23b945e"
+        },
+        {
+          "imageIndex": 5,
+          "hash": "d460014c25bf8292b198613b81b4893b8bbe3c322c6de17985e68060f43ceb48"
+        }
+      ],
+      "committedNodes": 66,
+      "uniqueAttempts": 66,
+      "devices": {
+        "phone": {
+          "nodes": 38,
+          "enhance": 9
+        },
+        "windows": {
+          "nodes": 28,
+          "enhance": 15
+        }
+      },
+      "phases": {
+        "PLAN": {
+          "spans": 66,
+          "cumulativeMs": 16.458
+        },
+        "OFFER": {
+          "spans": 66,
+          "cumulativeMs": 15968.202
+        },
+        "QUEUE": {
+          "spans": 66,
+          "cumulativeMs": 1167.289
+        },
+        "ADMIT": {
+          "spans": 66,
+          "cumulativeMs": 14654.569
+        },
+        "LOAD": {
+          "spans": 66,
+          "cumulativeMs": 1333.088
+        },
+        "EXECUTE": {
+          "spans": 66,
+          "cumulativeMs": 121216.165
+        },
+        "PUBLISH": {
+          "spans": 66,
+          "cumulativeMs": 8854.88
+        },
+        "TRANSFER_SEND": {
+          "spans": 30,
+          "cumulativeMs": 1363.398
+        },
+        "TRANSFER_RECV": {
+          "spans": 15,
+          "cumulativeMs": 655.016
+        },
+        "DELIVER": {
+          "spans": 6,
+          "cumulativeMs": 183971
+        }
+      },
+      "experimentalReverted": false
+    },
+    {
+      "id": "coop:3d3cae40-3c94-40eb-bf90-4612133df671",
+      "state": "SUCCEEDED",
+      "durationMs": 98553,
+      "reportedBudgetMs": 180000,
+      "codeCancellationBudgetMs": 180000,
+      "originalHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "results": [
+        {
+          "imageIndex": 0,
+          "hash": "e2be4e2e049a259cac41e7f8876529ff4d13fe40030b4d7f93d0bfe1ad16f518"
+        },
+        {
+          "imageIndex": 1,
+          "hash": "eede82876c60fd6ffc5c57231defcc0892694902f55f39b042948064650e1094"
+        },
+        {
+          "imageIndex": 2,
+          "hash": "80c92a258d7b624eac65edce07306b0bc76bc085f4cfe32f3b39ebfe999604b1"
+        },
+        {
+          "imageIndex": 3,
+          "hash": "40609e93c57881e16207f39f7bf9a6acd7d33e92e6d1c0475e6a28042c53ea28"
+        },
+        {
+          "imageIndex": 4,
+          "hash": "bc7ecee6604434a30f6ac145139d50eb4d839e2a8df15af0f8183b24c9882b42"
+        },
+        {
+          "imageIndex": 5,
+          "hash": "975a61b8455533bbb2c1288ceac307f111565707338673365132153e2df42da7"
+        }
+      ],
+      "committedNodes": 66,
+      "uniqueAttempts": 66,
+      "devices": {
+        "phone": {
+          "nodes": 35,
+          "enhance": 11
+        },
+        "windows": {
+          "nodes": 31,
+          "enhance": 13
+        }
+      },
+      "phases": {
+        "PLAN": {
+          "spans": 66,
+          "cumulativeMs": 16.542
+        },
+        "OFFER": {
+          "spans": 66,
+          "cumulativeMs": 18422.679
+        },
+        "QUEUE": {
+          "spans": 66,
+          "cumulativeMs": 1499.525
+        },
+        "ADMIT": {
+          "spans": 66,
+          "cumulativeMs": 15654.245
+        },
+        "LOAD": {
+          "spans": 66,
+          "cumulativeMs": 1364.359
+        },
+        "EXECUTE": {
+          "spans": 66,
+          "cumulativeMs": 120733.914
+        },
+        "PUBLISH": {
+          "spans": 66,
+          "cumulativeMs": 12682.306
+        },
+        "TRANSFER_RECV": {
+          "spans": 32,
+          "cumulativeMs": 1569.637
+        },
+        "TRANSFER_SEND": {
+          "spans": 36,
+          "cumulativeMs": 3271.434
+        },
+        "DELIVER": {
+          "spans": 6,
+          "cumulativeMs": 184595
+        }
+      },
+      "experimentalReverted": true
+    },
+    {
+      "id": "coop:59ee6a1d-29ac-4df7-a4cf-d125284b10b7",
+      "state": "SUCCEEDED",
+      "durationMs": 113720,
+      "reportedBudgetMs": 180000,
+      "codeCancellationBudgetMs": 180000,
+      "originalHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "results": [
+        {
+          "imageIndex": 0,
+          "hash": "deb1e02c5cbd0990a9696f28f4010954dda97a0e447c62a8c43fd033eaa656b1"
+        },
+        {
+          "imageIndex": 1,
+          "hash": "88f99fb55d5aa9cb34bf3f56d649efde47c0cd2e1c28f827cef837269f7f9f57"
+        },
+        {
+          "imageIndex": 2,
+          "hash": "ebe581be7322bcf1736032b3da227e8109bba7c2ff1afefcc1024c8ef118fb80"
+        },
+        {
+          "imageIndex": 3,
+          "hash": "25963cd2696a5eed2efd07146f65c5e04069331e4bd2f06449c65097050aafa9"
+        },
+        {
+          "imageIndex": 4,
+          "hash": "b4b676ddfd2ed90914c16d2fa644c9eaab4102d4cf836a81199359764500367a"
+        },
+        {
+          "imageIndex": 5,
+          "hash": "9f4b6201620b58a8607ae49a202c6dccd0fc37c9c44ab114b7cb84448a113145"
+        }
+      ],
+      "committedNodes": 66,
+      "uniqueAttempts": 66,
+      "devices": {
+        "phone": {
+          "nodes": 33,
+          "enhance": 9
+        },
+        "windows": {
+          "nodes": 33,
+          "enhance": 15
+        }
+      },
+      "phases": {
+        "PLAN": {
+          "spans": 66,
+          "cumulativeMs": 16.924
+        },
+        "OFFER": {
+          "spans": 66,
+          "cumulativeMs": 25254.147
+        },
+        "QUEUE": {
+          "spans": 66,
+          "cumulativeMs": 1359.489
+        },
+        "ADMIT": {
+          "spans": 66,
+          "cumulativeMs": 16948.432
+        },
+        "LOAD": {
+          "spans": 66,
+          "cumulativeMs": 1125.029
+        },
+        "EXECUTE": {
+          "spans": 66,
+          "cumulativeMs": 117148.127
+        },
+        "PUBLISH": {
+          "spans": 66,
+          "cumulativeMs": 17792.056
+        },
+        "TRANSFER_SEND": {
+          "spans": 31,
+          "cumulativeMs": 1890.173
+        },
+        "TRANSFER_RECV": {
+          "spans": 17,
+          "cumulativeMs": 575.085
+        },
+        "DELIVER": {
+          "spans": 6,
+          "cumulativeMs": 213020
+        }
+      },
+      "experimentalReverted": true
+    },
+    {
+      "id": "coop:6fde2f7c-cdc1-4c89-90ad-ac56e84fd1f6",
+      "state": "SUCCEEDED",
+      "durationMs": 87089,
+      "reportedBudgetMs": 180000,
+      "codeCancellationBudgetMs": 180000,
+      "originalHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "results": [
+        {
+          "imageIndex": 0,
+          "hash": "e2be4e2e049a259cac41e7f8876529ff4d13fe40030b4d7f93d0bfe1ad16f518"
+        },
+        {
+          "imageIndex": 1,
+          "hash": "eede82876c60fd6ffc5c57231defcc0892694902f55f39b042948064650e1094"
+        },
+        {
+          "imageIndex": 2,
+          "hash": "fcfc45a2ccad89716192fd74f2da55202a65e813c3e01261ae85837ee4735be5"
+        },
+        {
+          "imageIndex": 3,
+          "hash": "6e7fcf85c67c7719f1a4c9d1408fc4a438ab97d8f615a400a69dff63900dcc57"
+        },
+        {
+          "imageIndex": 4,
+          "hash": "bc7ecee6604434a30f6ac145139d50eb4d839e2a8df15af0f8183b24c9882b42"
+        },
+        {
+          "imageIndex": 5,
+          "hash": "0be484a4655bb9884a8f2aaeccd7d131379c9be633d6dc8ead3a1914fc9920b1"
+        }
+      ],
+      "committedNodes": 66,
+      "uniqueAttempts": 66,
+      "devices": {
+        "phone": {
+          "nodes": 33,
+          "enhance": 10
+        },
+        "windows": {
+          "nodes": 33,
+          "enhance": 14
+        }
+      },
+      "phases": {
+        "PLAN": {
+          "spans": 66,
+          "cumulativeMs": 19.377
+        },
+        "OFFER": {
+          "spans": 66,
+          "cumulativeMs": 3824.947
+        },
+        "QUEUE": {
+          "spans": 67,
+          "cumulativeMs": 2114.85
+        },
+        "ADMIT": {
+          "spans": 66,
+          "cumulativeMs": 13898.022
+        },
+        "LOAD": {
+          "spans": 66,
+          "cumulativeMs": 1605.342
+        },
+        "EXECUTE": {
+          "spans": 66,
+          "cumulativeMs": 135736.685
+        },
+        "PUBLISH": {
+          "spans": 66,
+          "cumulativeMs": 10311.17
+        },
+        "TRANSFER_SEND": {
+          "spans": 37,
+          "cumulativeMs": 2420.285
+        },
+        "TRANSFER_RECV": {
+          "spans": 25,
+          "cumulativeMs": 1158.214
+        },
+        "DELIVER": {
+          "spans": 6,
+          "cumulativeMs": 165799
+        }
+      },
+      "experimentalReverted": false
+    },
+    {
+      "id": "coop:d7e49038-92a2-4f93-9f80-1f67bad4fe33",
+      "state": "SUCCEEDED",
+      "durationMs": 88990,
+      "reportedBudgetMs": 180000,
+      "codeCancellationBudgetMs": 180000,
+      "originalHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "model": {
+        "modelId": "realesrgan-x4plus",
+        "version": "1",
+        "weightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+        "preprocessVersion": "rgb-unit-v1",
+        "embeddingKind": "image-rgb",
+        "dimension": 3,
+        "dtype": "float32",
+        "normalization": "unit"
+      },
+      "results": [
+        {
+          "imageIndex": 0,
+          "hash": "d11d7753188ba619831f71c9a97de8a8d6e73b5f0d4f2da70593e742fd176699"
+        },
+        {
+          "imageIndex": 1,
+          "hash": "13bd646164a3554616c66c98a4cfa5f147c77d46e57e39d089be23bd4da5c272"
+        },
+        {
+          "imageIndex": 2,
+          "hash": "9d39d56b28a2547ac0a80df3fa5b46b0975f26a5ef76f46f03f50d9b880e6f27"
+        },
+        {
+          "imageIndex": 3,
+          "hash": "077f5dc4a9f8345670d971e194b8d2b88f942a6d19ee58ea7ce6f02aeb6c89c0"
+        },
+        {
+          "imageIndex": 4,
+          "hash": "00ec7fca3c2b78c0a046a85b73b1b8f6b36637ed8342b3ee97ca55216adae8a4"
+        },
+        {
+          "imageIndex": 5,
+          "hash": "c65a7f46087aba893360e3013dad75d0d4a2c5ad4c4f2edb0d0a389977df07fd"
+        }
+      ],
+      "committedNodes": 66,
+      "uniqueAttempts": 66,
+      "devices": {
+        "phone": {
+          "nodes": 32,
+          "enhance": 11
+        },
+        "windows": {
+          "nodes": 34,
+          "enhance": 13
+        }
+      },
+      "phases": {
+        "PLAN": {
+          "spans": 66,
+          "cumulativeMs": 18.648
+        },
+        "OFFER": {
+          "spans": 66,
+          "cumulativeMs": 4105.206
+        },
+        "QUEUE": {
+          "spans": 66,
+          "cumulativeMs": 2505.988
+        },
+        "ADMIT": {
+          "spans": 66,
+          "cumulativeMs": 14799.386
+        },
+        "LOAD": {
+          "spans": 66,
+          "cumulativeMs": 1918.522
+        },
+        "EXECUTE": {
+          "spans": 66,
+          "cumulativeMs": 127075.343
+        },
+        "PUBLISH": {
+          "spans": 66,
+          "cumulativeMs": 9059.463
+        },
+        "TRANSFER_RECV": {
+          "spans": 31,
+          "cumulativeMs": 1637.147
+        },
+        "TRANSFER_SEND": {
+          "spans": 39,
+          "cumulativeMs": 2434.957
+        },
+        "DELIVER": {
+          "spans": 6,
+          "cumulativeMs": 169877
+        }
+      },
+      "experimentalReverted": false
+    }
+  ]
+}

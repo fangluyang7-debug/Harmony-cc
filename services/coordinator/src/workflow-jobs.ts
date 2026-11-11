@@ -10,6 +10,11 @@ import {CpuJobs} from './cpu-jobs';
 import {AppRegistry} from './apps';
 interface NodeState {reassignedAttempts?:string[];excludedDeviceId?:string;yieldedAttempts?:string[];id:string;jobId:string;state:'PENDING'|'SUBMITTED'|'COMMITTED';output?:ArtifactDescriptor;local?:boolean;}
 interface GraphData {priority?:'REMOTE_INTERACTIVE'|'REMOTE_BATCH';stop?:{state:string;reconciliationJobId?:string};peer:Peer;workflow:SdkWorkflow;fingerprint:string;deadlineAt:number;originLocal:boolean;inputs:Record<string,ArtifactDescriptor>;nodes:NodeState[];plan:SnapshotDecision;failure?:{code:string;reason:string;nodeId:string};resultReceivedAt?:number;}
+// Fan-in currently materializes a bundle at the relay. Only its immediate inputs
+// need materialization; unrelated linear edges may stay at their executor.
+export function retainableOutput(workflow:SdkWorkflow,id:string):boolean{
+ return workflow.nodes.some(n=>n.inputFrom===id)&&!workflow.nodes.some(n=>n.inputFroms?.includes(id));
+}
 /** Durable DAG progression. Every node is still dispatched by CpuJobs/PlanningService. */
 export class WorkflowJobs {
  private scheduled=new Map<string,Promise<void>>();
@@ -62,7 +67,7 @@ export class WorkflowJobs {
   for(const n of w.nodes)if(n.input)inputs[n.id]={ref:{artifactId:randomUUID(),contentVersion:1,contentHash:n.input.contentHash,schemaId:n.input.schemaId,schemaVersion:1},groupId:peer.groupId,ownerPrincipalId:peer.principalId,domain:this.artifacts.domain,bytes:n.input.bytes,expiresAt:now+3600000};
   const originLocal=o.inputLocation==='ORIGIN',relay=this.jobs.relayId();
   const bounds=new Map<string,number>();for(const n of w.nodes){const p=this.pack(n.capability),inputBytes=n.input?.bytes??(n.inputFroms?fanInByteBound(n.inputFroms.map(id=>bounds.get(id)??0)):bounds.get(n.inputFrom!)!);bounds.set(n.id,photoOutputBound(n.capability,n.parameters,p.manifest.contract.outputSchemas.includes('image.raster')?p.maxOutputBytes:Math.min(p.maxOutputBytes,inputBytes*64+4096)));}
-  const request:PlacementRequest={priority:o.priority??'REMOTE_INTERACTIVE',nodes:w.nodes.map(n=>{const p=this.pack(n.capability);return {id:n.id,workKey:workKeyV2(p.manifest.contract,n.parameters,n.input?.bytes??(n.inputFroms?fanInByteBound(n.inputFroms.map(id=>bounds.get(id)??0)):bounds.get(n.inputFrom!)!)),capability:n.capability,...(n.executionScope==='ORIGIN_DEVICE'?{dataScope:'LOCAL_ONLY' as const}:n.privacy&&n.privacy!=='SHARED'?{dataScope:n.privacy}:{}),serviceId:p.manifest.contract.serviceId,dependencies:n.dependsOn,inputs:n.inputFroms?n.inputFroms.map(id=>'graph-out-'+id):[n.inputFrom?'graph-out-'+n.inputFrom:inputs[n.id].ref.artifactId],output:{id:'graph-out-'+n.id,bytes:bounds.get(n.id)!,retainAtExecutor:!w.nodes.some(child=>child.inputFroms)&&w.nodes.some(child=>child.inputFrom===n.id)},modelManifest:p.manifest.model,baselineTargetId:n.targetId??'',allowedTargetIds:n.targetId?[n.targetId]:undefined,memoryBytes:p.manifest.resourceLimit.find(r=>r.resourcePoolId==='ram')?.amount??0,minimumQuality:p.manifest.qualityThreshold,candidates:[]};}),
+  const request:PlacementRequest={priority:o.priority??'REMOTE_INTERACTIVE',nodes:w.nodes.map(n=>{const p=this.pack(n.capability);return {id:n.id,workKey:workKeyV2(p.manifest.contract,n.parameters,n.input?.bytes??(n.inputFroms?fanInByteBound(n.inputFroms.map(id=>bounds.get(id)??0)):bounds.get(n.inputFrom!)!)),capability:n.capability,...(n.executionScope==='ORIGIN_DEVICE'?{dataScope:'LOCAL_ONLY' as const}:n.privacy&&n.privacy!=='SHARED'?{dataScope:n.privacy}:{}),serviceId:p.manifest.contract.serviceId,dependencies:n.dependsOn,inputs:n.inputFroms?n.inputFroms.map(id=>'graph-out-'+id):[n.inputFrom?'graph-out-'+n.inputFrom:inputs[n.id].ref.artifactId],output:{id:'graph-out-'+n.id,bytes:bounds.get(n.id)!,retainAtExecutor:retainableOutput(w,n.id)},modelManifest:p.manifest.model,baselineTargetId:n.targetId??'',allowedTargetIds:n.targetId?[n.targetId]:undefined,memoryBytes:p.manifest.resourceLimit.find(r=>r.resourcePoolId==='ram')?.amount??0,minimumQuality:p.manifest.qualityThreshold,candidates:[]};}),
    artifacts:Object.values(inputs).map(a=>({id:a.ref.artifactId,bytes:a.bytes,replicas:[originLocal?{deviceId:peer.deviceId,holderInstanceId:peer.holderInstanceId,readMs:0}:{deviceId:relay,readMs:0}]})),links:[],deviceResources:[],remainingBudgetMs:o.budgetMs,networkAllowed:true,privacy:'AUTHORIZED_REMOTE',localDeviceId:peer.deviceId,domain:this.artifacts.domain,now,committedNodeIds:[],committedArtifacts:[],appInstanceId:app.identity.appInstanceId,originHolderId:peer.holderInstanceId,inputRelayId:relay,localResultHolderId:peer.holderInstanceId,materializeOutputsAt:relay,finalDestination:relay};
   const plan=await this.jobs.graphPlan(peer,request);if(!plan.decision.suggestion)throw Error(plan.decision.reason);
   const data:GraphData={peer,priority:request.priority,workflow:w,fingerprint,deadlineAt:now+o.budgetMs,originLocal,inputs,nodes:w.nodes.map(n=>({id:n.id,jobId:randomUUID(),state:'PENDING'})),plan};
@@ -80,10 +85,10 @@ export class WorkflowJobs {
    // Notifications that arrive during this pass need at most one subsequent pass.
    this.scheduled.delete(groupId);
    if(this.stopped)return;
-   await this.retention?.sweepRelay();
    const active=await this.db.sdkWorkflowJob.findMany({where:{groupId,state:{in:['ACTIVE','CANCEL_REQUESTED']}}});
    for(const row of active)await this.progress(row.id,JSON.parse(row.metadataJson));
-   await this.retention?.sweepRelay();
+   // Cleanup has its own timer and receipt notifications. It must not put two
+   // full-history scans between a committed predecessor and its next node.
   });
   this.scheduled.set(groupId,next);
   this.work=next.catch(()=>{});
@@ -164,12 +169,12 @@ export class WorkflowJobs {
   }
   if(JSON.stringify(data)!==before)await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
   for(const n of data.workflow.nodes){
-   if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state!=='ACTIVE')return;
    const state=data.nodes.find(s=>s.id===n.id)!;if(state.state==='COMMITTED'||n.dependsOn.some(dep=>data.nodes.find(s=>s.id===dep)!.state!=='COMMITTED'))continue;
    if(data.deadlineAt<=Date.now()){await this.stop(id,data,'BUDGET_EXHAUSTED');return;}
    // A dispatched node progresses by its durable receipt, not by calling start
    // again on every UI poll. Avoid write-lock churn while its engine is running.
    if(dispatched.has(n.id))continue;
+   if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state!=='ACTIVE')return;
    const parent=n.inputFrom?data.nodes.find(s=>s.id===n.inputFrom)!:null;
    try{
    if(n.inputFroms&&!data.inputs[n.id]){
@@ -182,8 +187,7 @@ export class WorkflowJobs {
      if(n.modelManifest&&!sameModelV2(n.modelManifest,this.pack(n.capability).manifest.model)){
       data.failure={code:'SDK_MODEL_MISMATCH',reason:'REGISTERED_MODEL_CHANGED',nodeId:n.id};await this.stop(id,data,'FAILED');return;
      }
-     const assignment=data.plan.decision.suggestion!.find(a=>a.nodeId===n.id)!;
-     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,businessIdempotencyKey:n.businessIdempotencyKey,privacy:n.privacy,executionScope:n.executionScope,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{forceRelay:data.workflow.nodes.some(node=>!!node.inputFroms),workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:!data.workflow.nodes.some(node=>!!node.inputFroms)&&!!assignment.outputEndpointId&&data.workflow.nodes.some(child=>child.inputFrom===n.id&&data.plan.decision.suggestion?.find(a=>a.nodeId===child.id)?.inputEndpointOperation==='WRITE'),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
+     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,businessIdempotencyKey:n.businessIdempotencyKey,privacy:n.privacy,executionScope:n.executionScope,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{forceRelay:data.workflow.nodes.some(node=>!!node.inputFroms)&&!retainableOutput(data.workflow,n.id),workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:retainableOutput(data.workflow,n.id),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
      state.state='SUBMITTED';await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
     }
     if(await this.jobs.graphInput(data.peer,state.jobId,source))continue;

@@ -33,13 +33,36 @@ test('actual CPU neural photo graph plans, fans out, fans in and returns a verif
   // Input is created only after workers have joined; no task output is preinstalled.
   const bytes=await sharp({create:{width:72,height:16,channels:3,background:{r:127,g:74,b:31}}}).png().toBuffer(),sdk=host.sdk(),input=await sdk.registerInput(bytes,'image.raster'),id=randomUUID();
   const {photoWorkflow}=await import('../../../apps/team-space-web/photo-workflow.mjs');const graph=photoWorkflow(id,input,72,16);
-  const begin=performance.now(),task=await sdk.submit(graph.workflow,{requestId:id,budgetMs:180000,resultDestination:'ORIGIN'}),result=await task.result(185000),product=JSON.parse(Buffer.from(result.output));
+  const begin=performance.now(),task=await sdk.submit(graph.workflow,{requestId:id,budgetMs:180000,inputLocation:'ORIGIN',resultDestination:'ORIGIN'}),result=await task.result(185000),product=JSON.parse(Buffer.from(result.output));
   assert.equal(result.status.state,'SUCCEEDED');assert.equal(product.width,288);assert.equal(product.height,64);assert.equal(createHash('sha256').update(Buffer.from(product.image,'base64')).digest('hex'),product.hash);
   const attempts=await r.db.attempt.findMany({where:{workflowId:id}});assert.equal(attempts.length,graph.workflow.nodes.length);assert.equal(new Set(attempts.map(a=>a.nodeId)).size,attempts.length);
   for(const a of attempts)assert.equal((await r.db.receipt.findUnique({where:{id:a.id}})).committed,true);
   const row=await r.db.sdkWorkflowJob.findUnique({where:{id}}),data=JSON.parse(row.metadataJson);assert.ok(data.deadlineAt>Date.now());
+  assert.equal(data.originLocal,true);
+  const analyze=data.nodes.find(n=>n.id.startsWith('analyze'));assert.equal(analyze.local,true,'same-source analysis stays in the app host cache');
+  for(const n of data.nodes.filter(n=>n.id.startsWith('enhance')))assert.equal(n.local,false,'fan-in inputs remain materialized for bundle assembly');
   const evidence={kind:'LOCAL_PROCESS_TEST',model:packs.find(p=>p.manifest.model).manifest.model,workflow:id,durationMs:performance.now()-begin,inputHash:createHash('sha256').update(bytes).digest('hex'),inputBytes:bytes.length,outputHash:product.hash,outputWidth:product.width,outputHeight:product.height,nodes:attempts.map(a=>({nodeId:a.nodeId,state:a.state,backend:JSON.parse(a.offerJson).target.backend})),remainingMs:data.deadlineAt-Date.now()};
   fs.writeFileSync(path.resolve('../../.test/photo-tools/workflow-evidence.json'),JSON.stringify(evidence,null,2));console.log('PHOTO_EVIDENCE '+JSON.stringify(evidence));
  }catch(e){console.log('PHOTO_DIAGNOSTIC '+JSON.stringify({errors:errors.slice(-20),graphs:(await r.db.sdkWorkflowJob.findMany()).map(g=>({state:g.state,metadata:JSON.parse(g.metadataJson)}))}));throw e;}
  finally{for(const h of hosts)await h.close();await r.close();}
+});
+
+test('fan-in materializes only its immediate inputs, while linear edges stay retainable',()=>{
+ const {retainableOutput}=require('../dist/workflow-jobs');
+ const workflow={nodes:[{id:'analyze'},{id:'prepare-a',inputFrom:'analyze'},{id:'prepare-b',inputFrom:'analyze'},
+  {id:'enhance-a',inputFrom:'prepare-a'},{id:'enhance-b',inputFrom:'prepare-b'},
+  {id:'assemble',inputFroms:['enhance-a','enhance-b']},{id:'deliver',inputFrom:'assemble'}]};
+ for(const id of ['analyze','prepare-a','prepare-b','assemble'])assert.equal(retainableOutput(workflow,id),true,id);
+ for(const id of ['enhance-a','enhance-b','deliver'])assert.equal(retainableOutput(workflow,id),false,id);
+ workflow.nodes.push({id:'also-linear',inputFrom:'enhance-a'});
+ assert.equal(retainableOutput(workflow,'enhance-a'),false,'mixed fan-in + linear consumers must still have a relay copy');
+});
+test('graph polling does not wait for a full history cleanup or query inactive nodes',async()=>{
+ const {WorkflowJobs}=require('../dist/workflow-jobs');let reads=0,sweeps=0;
+ const data={peer:{groupId:'g'},deadlineAt:Date.now()+10000,workflow:{nodes:[{id:'done',dependsOn:[]},{id:'running',dependsOn:['done']},{id:'blocked',dependsOn:['running']}]},nodes:[{id:'done',jobId:'jd',state:'COMMITTED'},{id:'running',jobId:'jr',state:'SUBMITTED'},{id:'blocked',jobId:'jb',state:'PENDING'}]};
+ const db={sdkWorkflowJob:{findMany:async()=>[{id:'g',metadataJson:JSON.stringify(data)}],findUniqueOrThrow:async()=>{reads++;return {state:'ACTIVE'};}}};
+ const jobs={winnerFor:async()=> 'jr',status:async()=>({state:'RUNNING'}),graphOutput:async()=>null};
+ const retention={sweepRelay:async()=>{sweeps++;throw Error('cleanup should not block the graph');}};
+ const graph=new WorkflowJobs(db,jobs,{context:async()=>({})},null,[],retention);
+ await graph.advance('g');assert.equal(sweeps,0);assert.equal(reads,1,'only the cancellation cursor is checked; admitted and dependency-blocked nodes do not poll the DB again');
 });

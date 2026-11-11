@@ -13,11 +13,18 @@ export class ArtifactRetention {
  scheduleSweep(){if(!this.scheduled){this.scheduled=setTimeout(()=>{this.scheduled=undefined;void this.sweepRelay().catch(()=>{});},100);this.scheduled.unref();}}
  async close(){if(this.timer)clearInterval(this.timer);if(this.scheduled){clearTimeout(this.scheduled);this.scheduled=undefined;await this.sweepRelay();}await this.cleaning;}
  constructor(private db:PrismaClient,private direct:DirectTransfers,private channel:ArtifactChannel,private now=Date.now){}
- private async neededByRef(tx:Prisma.TransactionClient,groupId:string){
+ private async neededByRef(tx:Prisma.TransactionClient,groupId:string,artifactIds:string[]){
   // One transaction-local ownership view per group, never one full history read per object.
-  const jobs=await tx.cpuJob.findMany({where:{groupId},select:{id:true,state:true,metadataJson:true}});
-  const graphs=new Map((await tx.sdkWorkflowJob.findMany({where:{groupId},select:{id:true,state:true,metadataJson:true}})).map(row=>[row.id,{row,g:JSON.parse(row.metadataJson)}]));
-  const attempts=new Map((await tx.attempt.findMany({where:{groupId},select:{id:true,state:true,recordJson:true}})).map(a=>[a.id,{state:a.state,record:a.recordJson?JSON.parse(a.recordJson):null}]));
+  // Only cached objects can be released. Old jobs for unrelated bytes must not
+  // hold the writer transaction while every device asks for a cleanup plan.
+  const refs=JSON.stringify([...new Set(artifactIds)]);
+  const relevant=await tx.$queryRaw<{id:string}[]>`SELECT id FROM CpuJob WHERE groupId = ${groupId} AND
+    (json_extract(metadataJson, '$.input.ref.artifactId') IN (SELECT value FROM json_each(${refs})) OR
+     json_extract(metadataJson, '$.output.ref.artifactId') IN (SELECT value FROM json_each(${refs})))`;
+  const jobs=await tx.cpuJob.findMany({where:{groupId,id:{in:relevant.map(r=>r.id)}},select:{id:true,state:true,metadataJson:true}});
+  const graphIds=jobs.map(row=>JSON.parse(row.metadataJson).offer?.task.workflowId).filter((id):id is string=>typeof id==='string');
+  const graphs=new Map((await tx.sdkWorkflowJob.findMany({where:{groupId,OR:[{id:{in:graphIds}},{state:{in:['ACTIVE','WAITING_INPUT']}}]},select:{id:true,state:true,metadataJson:true}})).map(row=>[row.id,{row,g:JSON.parse(row.metadataJson)}]));
+  const attempts=new Map((await tx.attempt.findMany({where:{groupId,id:{in:jobs.map(j=>j.id)}},select:{id:true,state:true,recordJson:true}})).map(a=>[a.id,{state:a.state,record:a.recordJson?JSON.parse(a.recordJson):null}]));
   const needed=new Map<string,boolean>(),now=this.now();
   const mark=(ref:ArtifactDescriptor['ref']|undefined,keep:boolean)=>{if(ref){const key=canonical(ref);needed.set(key,(needed.get(key)??false)||keep);}};
   for(const row of jobs){
@@ -55,7 +62,7 @@ export class ArtifactRetention {
   const endpoint=await this.direct.ownedEndpoint(peer);
   return this.db.$transaction(async tx=>{
    const rows=await tx.dataReplica.findMany({where:{groupId:peer.groupId,endpointId:endpoint.id}}),release=[];
-   const needed=rows.length?await this.neededByRef(tx,peer.groupId):new Map<string,boolean>();
+   const needed=rows.length?await this.neededByRef(tx,peer.groupId,rows.map(r=>JSON.parse(r.metadataJson).ref.artifactId)):new Map<string,boolean>();
    const grants=(await tx.transferAuthorization.findMany({where:{groupId:peer.groupId,state:{in:['ISSUED','CONSUMED']},expiresAt:{gt:this.now()}}})).map(g=>JSON.parse(g.metadataJson).authorization);
    for(const row of rows){
     const r=JSON.parse(row.metadataJson);if(r.endpoint.epoch!==endpoint.epoch)continue;
@@ -82,7 +89,7 @@ export class ArtifactRetention {
   const groups=new Map<string,ArtifactDescriptor[]>();for(const d of snapshot.objects){const list=groups.get(d.groupId)??[];list.push(d);groups.set(d.groupId,list);}
   for(const [groupId,objects] of groups){
    const release=await this.db.$transaction(async tx=>{
-    const needed=await this.neededByRef(tx,groupId);
+    const needed=await this.neededByRef(tx,groupId,objects.map(d=>d.ref.artifactId));
     const grants=new Set((await tx.transferAuthorization.findMany({where:{groupId,state:{in:['ISSUED','CONSUMED']},expiresAt:{gt:this.now()}}})).map(g=>canonical(JSON.parse(g.metadataJson).authorization.ref)));
     return objects.filter(d=>needed.get(canonical(d.ref))===false&&!grants.has(canonical(d.ref)));
    });

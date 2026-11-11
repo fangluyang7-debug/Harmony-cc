@@ -566,10 +566,12 @@
         <div class="input-wrapper"><input id="center-suite" placeholder="仅在需要图像编码时填写绝对路径"></div>
       </details>
     </section>
+    <section class="panel-card"><div class="card-header"><h2 class="card-title">当前协作空间</h2></div><p id="workspace-name">启动中心后读取当前空间</p><div class="input-wrapper"><input id="workspace-name-input" maxlength="80" placeholder="新空间名称，例如：照片协同演示"></div><button class="action-tile-btn" id="create-workspace" disabled>创建并切换空间</button><p class="network-hint">每台设备同时只接入一个空间。新空间建好后，请重新为参与设备配对；历史任务保留。</p></section>
     <div class="sub-actions-row">
       <button class="action-tile-btn" type="button" id="dashboard" disabled>打开调度盘</button>
       <button class="action-tile-btn" type="button" id="devices" disabled>设备配对</button>
     </div>
+    <button class="action-tile-btn" id="photo-display">打开真机任务展示（单机 / 协同）</button>
     <div class="logs-panel">
       <details><summary><span class="summary-left">运行日志</span></summary><pre class="log-terminal" id="logs">暂无运行日志</pre></details>
     </div>

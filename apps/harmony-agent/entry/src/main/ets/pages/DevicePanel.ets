@@ -10,6 +10,7 @@ export struct DevicePanel {
  @StorageLink('agentWarning') warning:string='';
  @State invitation:string='';
  @State address:string='';
+ @State pairMessage:string='';
  @State pairing:boolean=false;
  @State fingerprint:string='';
  private numericTrust:PairingTrust|null=null;
@@ -22,7 +23,7 @@ export struct DevicePanel {
  private async scanDevice():Promise<void>{try{const result=await scanBarcode.startScanForResult(getContext(this) as common.UIAbilityContext,{scanTypes:[scanCore.ScanType.QR_CODE],enableMultiMode:false,enableAlbum:true});const bootstrap=await resolveDeviceInvitation(result.originalValue,getContext(this) as common.UIAbilityContext);this.invitation=JSON.stringify(bootstrap);AppStorage.set('agentStatus','已读取设备邀请。确认配对将退出原空间并接入新空间。');}catch(e){AppStorage.set('agentStatus','未读取有效设备邀请；成员邀请请在协作空间中扫码。');}}
  private async pair():Promise<void>{
   if(this.pairing)return;
-  this.pairing=true;
+  this.pairing=true;this.pairMessage='正在校验邀请并切换空间…';
   try{
    const context=getContext(this) as common.UIAbilityContext,input=this.invitation.trim();
    if(/^\d{6}$/.test(input)&&this.numericTrust===null){
@@ -34,13 +35,14 @@ export struct DevicePanel {
    const bootstrap=/^\d{6}$/.test(input)&&this.numericTrust!==null
     ?await resolvePairingCode(input,this.numericTrust,context):await resolveDeviceInvitation(input,context);
    await openAgent(context,bootstrap);
-   this.invitation='';this.numericTrust=null;this.fingerprint='';this.onPaired();
-  }catch(e){this.numericTrust=null;this.fingerprint='';AppStorage.set('agentStatus',(e as Error).message);}
+   this.pairMessage='已完成配对';this.invitation='';this.numericTrust=null;this.fingerprint='';this.onPaired();
+  }catch(e){this.pairMessage='配对未完成：'+(e as Error).message;this.numericTrust=null;this.fingerprint='';AppStorage.set('agentStatus',(e as Error).message);}
   finally{this.pairing=false;}
  }
  build(){Scroll(){Column({space:20}){
   Text('本机设备').fontSize(28).fontWeight(FontWeight.Bold);
   Text(this.status).fontSize(17);
+  if(this.pairMessage){Text(this.pairMessage).fontSize(15).fontColor('#64748b');}
   Button('连接 SoleAI（首次授权）').onClick(()=>{void (getContext(this) as common.UIAbilityContext).startAbility({action:'org.harmonycc.action.CONNECT_SHOPPING'}).catch(()=>{AppStorage.set('agentStatus','请先安装新版 SoleAI，再连接授权。');});});
   Button('打开图片演示 App').onClick(()=>{void (getContext(this) as common.UIAbilityContext).startAbility({bundleName:'org.harmonycc.photo',abilityName:'EntryAbility'}).catch(()=>{AppStorage.set('agentStatus','请先安装 Harmony 图片演示 App。');});});
   Text('在当前空间授权一次。之后直接使用 SoleAI 的文字、拍照和比价功能，计算期间无需切回 Harmony。').fontSize(14).fontColor('#64748b');
