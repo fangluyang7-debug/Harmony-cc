@@ -1,3 +1,4 @@
+process.env.HARMONY_PAIRING_TIMEOUT_MS=process.env.HARMONY_PAIRING_TIMEOUT_MS||'1500';const PAIRING_TEST_TIMEOUT_MS=Number(process.env.HARMONY_PAIRING_TIMEOUT_MS);
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {RuntimeControl,main}=require('./runtime-desktop.cjs');
 test('desktop process controls require a session token and same-origin POST',async()=>{
@@ -29,4 +30,60 @@ test('desktop reports readiness only from child, rejects duplicate start, and st
   const end=Date.now()+5000;while(control.state==='STARTING'&&Date.now()<end)await new Promise(r=>setTimeout(r,20));assert.equal(control.state,'RUNNING');
   const exited=new Promise(r=>control.child.once('exit',r));control.stop();await exited;assert.equal(control.state,'STOPPED');
  }finally{if(control.child)control.child.kill();fs.unlinkSync(file);fs.rmdirSync(directory);}
+});
+test('a host that reports COORDINATOR_GONE retires the pairing so the device can pair again',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-desktop-gone-')),device=path.join(root,'device'),child=path.join(root,'host.cjs'),control=new RuntimeControl();
+ fs.mkdirSync(path.join(device,'ledger'),{recursive:true});fs.writeFileSync(path.join(device,'agent.json'),JSON.stringify({identity:{groupId:'g',deviceId:'d'},connection:{address:'https://198.51.100.7:7443/'}}));fs.writeFileSync(path.join(device,'contribution.json'),JSON.stringify({maxCpuThreads:2,maxMemoryBytes:1073741824}));
+ fs.writeFileSync(child,"console.log('COORDINATOR_GONE: test');process.exitCode=3;");
+ try{
+  assert.equal(control.deviceStatus({directory:device}).paired,true);
+  control.mode='agent';control.agentDirectory=device;control.launch(child,[],process.env);
+  await new Promise(resolve=>control.child.once('exit',()=>setImmediate(resolve)));
+  assert.equal(control.state,'STOPPED');assert.equal(control.snapshot().coordinatorGone,true);
+  assert.equal(control.deviceStatus({directory:device}).paired,false,'the active pairing is gone');
+  const retired=fs.readdirSync(root).find(name=>name.startsWith('device.retired-'));assert.ok(retired);
+  assert.ok(fs.existsSync(path.join(root,retired,'ledger')),'the old ledger is kept for audit');
+  fs.writeFileSync(child,'process.exitCode=1;');control.launch(child,[],process.env);assert.equal(control.snapshot().coordinatorGone,false,'a new start clears the flag');
+  await new Promise(resolve=>control.child.once('exit',()=>setImmediate(resolve)));assert.equal(control.state,'FAILED');
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+test('pairing over an old installation: same coordinator is refused, another coordinator is moved aside only after the code resolves',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-desktop-repair-')),device=path.join(root,'device'),control=new RuntimeControl();
+ const pin=c=>c.repeat(64),old={connection:{address:'https://198.51.100.7:7443/',fingerprint:pin('a')}};
+ fs.mkdirSync(path.join(device,'ledger'),{recursive:true});fs.writeFileSync(path.join(device,'agent.json'),JSON.stringify(old));
+ try{
+  await assert.rejects(control.pair({directory:device,invitation:'123456',address:'https://127.0.0.1:1',fingerprint:pin('a')}),/已与该协调中心配对/);
+  await assert.rejects(control.pair({directory:device,invitation:'123456',address:'https://127.0.0.1:1',fingerprint:pin('b')}));
+  assert.ok(fs.existsSync(path.join(device,'agent.json')),'an unresolved code never moves the old pairing');
+  assert.equal(fs.readdirSync(root).length,1);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+test('leaving a space: the coordinator must confirm unless the caller forces a local-only leave',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-desktop-leave-')),device=path.join(root,'device'),binding=path.join(root,'binding.json');
+ const control=new RuntimeControl({bindingFile:binding}),pin='a'.repeat(64);
+ fs.mkdirSync(path.join(device,'ledger'),{recursive:true});
+ fs.writeFileSync(path.join(device,'agent.json'),JSON.stringify({identity:{groupId:'g',deviceId:'d',holderInstanceId:'h'},directory:path.join(device,'ledger'),connection:{address:'https://127.0.0.1:1/',certificate:'-----BEGIN CERTIFICATE-----\nMA==\n-----END CERTIFICATE-----\n',fingerprint:pin,credential:'c'.repeat(43),domain:'REAL'}}));
+ fs.writeFileSync(path.join(device,'ledger/ledger.json'),JSON.stringify({state:{entries:[]}}));
+ fs.writeFileSync(path.join(device,'contribution.json'),JSON.stringify({ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:67108864,reserveMemoryBytes:0}));
+ control.binding.activate(device);
+ try{
+  control.child={};await assert.rejects(control.leave({directory:device}),/先停止设备调度件/);control.child=null;
+  await assert.rejects(control.leave({directory:device}),error=>error.code==='COORDINATOR_UNREACHABLE'&&/协调中心未确认退出/.test(error.message));
+  assert.ok(fs.existsSync(path.join(device,'agent.json')),'an unconfirmed leave keeps the pairing');
+  const result=await control.leave({directory:device,force:true});
+  assert.equal(result.confirmed,false);assert.ok(result.directory.includes('device.left-'));
+  assert.equal(control.binding.data.active,null,'the active pairing is cleared');
+  assert.ok(fs.existsSync(path.join(result.directory,'ledger/ledger.json')),'the ledger is kept with the moved pairing');
+  assert.equal(control.deviceStatus({}).paired,false);
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+test('pairing requests fail fast with an explanation when the coordinator cannot be reached',async()=>{
+ const {pairingRequest}=require('./runtime-desktop.cjs');
+ await assert.rejects(pairingRequest('https://127.0.0.1:1','/v2/pairing/certificate'),/拒绝连接|无法到达/);
+ const net=require('node:net'),silent=net.createServer(()=>{});await new Promise(resolve=>silent.listen(0,'127.0.0.1',resolve));
+ try{
+  const started=Date.now();
+  await assert.rejects(pairingRequest('https://127.0.0.1:'+silent.address().port,'/v2/pairing/certificate'),/秒内没有响应.*7443/);
+  assert.ok(Date.now()-started<PAIRING_TEST_TIMEOUT_MS+1500,'the absolute deadline bounds a silent server');
+ }finally{silent.close();}
 });

@@ -47,3 +47,16 @@ test('one installation has one active space; switching retires credentials, hide
   assert.equal((await r.spaces.dashboard(user,'space-b')).devices.length,0);
  }finally{await r.close();}
 });
+test('a previousDeviceId issued by another coordinator is ignored instead of rejecting the pairing',async()=>{
+ const r=await runtime(),user='member-foreign',other='member-other';
+ try{
+  for(const u of [user,other])await r.db.spaceUser.create({data:{id:u,account:u,name:u,password:'unused'}});
+  await r.db.teamSpace.create({data:{id:'space-f',name:'space-f',createdAt:Date.now()}});
+  await r.db.spaceDevice.create({data:{id:'other-device',spaceId:'space-f',userId:other,holderId:'other-holder',name:'other',settingsJson:'{}',createdAt:Date.now()}});
+  const create=async(id,previous,installationId=randomUUID())=>r.db.$transaction(async tx=>{await tx.spaceDevice.create({data:{id,spaceId:'space-f',userId:user,holderId:'holder-'+id,name:id,settingsJson:'{}',createdAt:Date.now()}});await registerDeviceMembership(tx,installationId,id,previous,user,['unknown-elsewhere']);});
+  await create('fresh-device','device-from-another-coordinator');
+  const i=await r.auth.invite('space-f',user,'fresh-device',r.url),paired=await r.auth.exchange({inviteId:i.inviteId,code:i.code,holderInstanceId:'holder-fresh-device'});
+  assert.equal(paired.peer.deviceId,'fresh-device');assert.equal(await deviceMembershipActive(r.db,'fresh-device'),true);
+  await assert.rejects(create('stolen-device','other-device'),/DEVICE_FORBIDDEN/,'a known device of another user is still refused');
+ }finally{await r.close();}
+});

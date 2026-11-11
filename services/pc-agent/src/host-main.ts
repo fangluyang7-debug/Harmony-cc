@@ -5,6 +5,7 @@ import {openImageEncoder} from './image-encoder';
 import fs from 'node:fs';
 import { CpuHost, CpuHostConfig } from './host';
 import {validateDataHostConfig} from './data-host';
+import {CoordinatorGoneDetector} from './coordinator-gone';
 let stopRequested=false,shutdown:(()=>Promise<void>)|null=null;
 process.on('message',(message:any)=>{if(message==='stop'||message?.type==='shutdown'){stopRequested=true;if(shutdown)void shutdown().then(()=>process.disconnect?.());}});
 async function main(){
@@ -40,7 +41,10 @@ async function main(){
       console.error('PHOTO_GPU_UNAVAILABLE '+reason+': only CPU photo capabilities will be advertised. '+({PHOTO_GPU_RUNTIME_MISSING:'The Vulkan engine file is missing from this installation.',PHOTO_GPU_DRIVER_MISSING:'nvidia-smi is not available; install the NVIDIA driver.',PHOTO_GPU_DEVICE_UNMATCHED:'No Vulkan device matches an NVIDIA GPU; check HARMONY_PHOTO_GPU_ID and vulkan-1.dll from the driver.',PHOTO_GPU_MEMORY_TOO_SMALL:'The matched GPU has less than 512 MiB.',PHOTO_GPU_QUALITY_FAILED:'The reference inference did not reach the quality threshold.',PHOTO_GPU_PROBE_FAILED:'The reference inference did not finish; check vcomp140.dll beside the engine and the driver.'} as Record<string,string>)[reason]);
     }
   }else if(process.env.HARMONY_PHOTO_MODEL&&!process.env.HARMONY_PHOTO_VULKAN)console.log('PHOTO_GPU_RUNTIME_MISSING: no Vulkan engine configured; photo enhancement runs on CPU only.');
+  const detector=new CoordinatorGoneDetector();let gone=false;
   const host=await CpuHost.open(config,error=>{
+    if(!gone&&detector.observe(error,Date.now())){gone=true;console.log('COORDINATOR_GONE: coordinator stopped or unreachable; pairing will be cleared.');
+      void (shutdown?.()??Promise.resolve()).then(()=>{process.exitCode=3;process.disconnect?.();setTimeout(()=>process.exit(3),3000).unref();});}
     const ioCode=(error as NodeJS.ErrnoException)?.code;
     // Preserve actionable codes without logging paths, task input or credentials.
     console.error(error instanceof Error&&/^[A-Z_]+(?::[A-Z_]+)?$/.test(error.message)?error.message:

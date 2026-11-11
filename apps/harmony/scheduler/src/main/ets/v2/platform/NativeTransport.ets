@@ -24,6 +24,8 @@ export class NativeTransport {
  credential='';
  offset=0;
  endpointEpoch='';
+ // HTTP status of the last request; -1 when the request provably never reached the coordinator, 0 when unknown.
+ lastStatus=0;
  private key:cryptoFramework.PubKey|null=null;
  constructor(invitation:TrustedCoordinator,context:common.UIAbilityContext){
   this.address=invitation.address.replace(/\/$/,'');this.certificate=invitation.certificate;this.fingerprint=invitation.fingerprint;
@@ -41,16 +43,23 @@ export class NativeTransport {
  }
  async request(route:string,body:Object|null=null,method:http.RequestMethod=body===null?http.RequestMethod.GET:http.RequestMethod.POST,headers:Record<string,string>|null=null,binary:Uint8Array|null=null):Promise<Uint8Array>{
   if(!/^\/v2\/[A-Za-z0-9_.:/-]+$/.test(route)&&!/^\/v2\/direct\/probe\?bytes=(1024|8192|32768)$/.test(route))throw Error('CONTROL_ROUTE_INVALID');
+  this.lastStatus=0;
   const request=http.createHttp(),header:Record<string,string>=headers??{'Content-Type':'application/json','Authorization':'Bearer '+this.credential};
   try{
    const result=await request.request(this.address+route,{method,header,caPath:this.caPath,expectDataType:http.HttpDataType.ARRAY_BUFFER,connectTimeout:10000,readTimeout:10000,usingCache:false,extraData:binary===null?(body===null?'':JSON.stringify(body)):binary.buffer});
+   this.lastStatus=result.responseCode;
    const data=typeof result.result==='string'?bytes(result.result):new Uint8Array(result.result as ArrayBuffer);
    if(data.byteLength>8388608)throw Error('CONTROL_RESPONSE_TOO_LARGE');
    const date=(result.header as Record<string,string>)['date'];const serverTime=Date.parse(date??'');if(Number.isFinite(serverTime))this.offset=serverTime-Date.now();
    this.endpointEpoch=(result.header as Record<string,string>)['x-endpoint-epoch']??'';
    if(result.responseCode!==200&&result.responseCode!==201){let code='HTTP_'+result.responseCode;try{const error=JSON.parse(text(data)) as Record<string,string>;if(/^[A-Z][A-Z0-9_]{0,99}$/.test(error['message']))code=error['message'];}catch(e){}throw Error(code);}
    return data;
-  }catch(e){if((e as BusinessError).code===2300060)throw Error('TLS_CERTIFICATE_REJECTED');throw e as Error;}finally{request.destroy();}
+  }catch(e){
+   const code=(e as BusinessError).code;
+   // 2300006 resolve host, 2300007 connect refused, 2300060 TLS peer rejected: nothing was delivered.
+   if(this.lastStatus===0&&(code===2300006||code===2300007||code===2300060))this.lastStatus=-1;
+   if(code===2300060)throw Error('TLS_CERTIFICATE_REJECTED');throw e as Error;
+  }finally{request.destroy();}
  }
  async json(route:string,body:Object|null=null):Promise<Object>{return JSON.parse(text(await this.request(route,body))) as Object;}
  async connect(socket:webSocket.WebSocket):Promise<void>{

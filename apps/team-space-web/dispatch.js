@@ -28,29 +28,42 @@ async function get(route){
 function notice(message,warning=false){$('notice').textContent=message;$('notice').classList.toggle('warning',warning);}
 function connection(text,kind='neutral'){$('connection').className='tag '+kind;$('connection').innerHTML=`<i class="led"></i>${esc(text)}`;}
 
+// A device is online while one of its holders has an unexpired profile; paired devices without one are offline.
+function online(d){return d.holders.some(h=>h.evidenceFresh&&sample(h.profile.ownerActivity,now()).value!==null);}
 function renderMetrics(){
   const values=snapshot?[
-    ['设备规模',snapshot.devices.length,`已登记 / 上报 · ${snapshot.devices.flatMap(d=>d.holders).length} 个宿主`],
-    ['有效画像设备',snapshot.devices.filter(d=>d.holders.some(h=>h.evidenceFresh&&sample(h.profile.ownerActivity,now()).value!==null)).length,'按画像有效期统计，非空闲数'],
+    ['接入设备',snapshot.devices.length,`连接过本空间 · ${snapshot.devices.filter(online).length} 在线 / ${snapshot.devices.filter(d=>!online(d)).length} 离线`],
+    ['在线设备',snapshot.devices.filter(online).length,'画像在有效期内，可参与调度'],
     ['执行目标',snapshot.devices.flatMap(d=>d.holders.flatMap(h=>h.profile.executors)).length,'已发现能力 · 准入资格另行核验'],
     ['执行记录',snapshot.jobCount,`${snapshot.workflows.length} 个工作流 · 最近 ${snapshot.jobWindow} 条可见`]
-  ]:[['设备规模','—','等待协调者快照'],['有效画像设备','—','UNKNOWN'],['执行目标','—','UNKNOWN'],['执行记录','—','UNKNOWN']];
+  ]:[['接入设备','—','等待协调者快照'],['在线设备','—','UNKNOWN'],['执行目标','—','UNKNOWN'],['执行记录','—','UNKNOWN']];
   $('metrics').innerHTML=values.map(([label,value,hint],i)=>`<article class="metric"><span class="metric-index">0${i+1}</span><span>${esc(label)}</span><strong>${esc(value)}<em>${['台','台','个','条'][i]}</em></strong><small>${esc(hint)}</small></article>`).join('');
 }
 function renderTopology(){
   if(!snapshot){$('topology').innerHTML=empty('选择协作空间后显示实际设备');return;}
   const devices=snapshot.devices,n=devices.length;
   const wires=n?`<svg class="topology-wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path class="wire-spine" d="M0 50 H45 ${n>1?'M45 '+50/n+' V'+(100-50/n):''}"/>${devices.map((d,i)=>{const y=(i+.5)/n*100;return `<path class="wire-branch" d="M45 ${y} H100"/><circle cx="100" cy="${y}" r="2" vector-effect="non-scaling-stroke"/>`;}).join('')}</svg>`:'';
-  replaceContent('topology',`<div class="map-caption"><span>统一规划中心</span><span>${n} 台登记 / 上报终端</span></div><div class="topology-scroll"><div class="topology-scene" style="--node-count:${Math.max(1,n)}"><div class="topology-hub"><div class="hub-orbit"><div class="hub-core">${icon('coordinator')}</div><span class="orbit-point" aria-hidden="true"></span></div><strong>Harmony 协调者</strong><span class="hub-role">规划 · 资源协调</span><small class="coordinator-address">${esc(snapshot.coordinator.address??location.origin)}</small><span class="hub-state">快照 ${snapshot.coordinator.ready?'READY':'NOT READY'} · epoch ${esc(snapshot.coordinator.epoch)}</span></div>${wires}<div class="topology-nodes">${n?devices.map(d=>{
-    const readings=d.holders.map(h=>sample(h.profile.ownerActivity,now())),fresh=readings.some(v=>v.value!==null),profileLabel=fresh?'画像有效':!d.holders.length?'等待上报':readings.some(v=>v.reason==='证据已过期或时间无效')?'画像过期':'画像未知',executors=d.holders.flatMap(h=>h.profile.executors),backends=[...new Set(executors.map(e=>e.target.backend))];
-    return `<button class="topo-device ${fresh?'fresh':'unknown'}" data-device="${esc(d.id)}" type="button" aria-label="查看 ${esc(d.name)} 的设备资源"><span class="node-icon">${icon('device')}</span><span class="node-content"><strong>${esc(d.name)}</strong><span class="node-meta">${d.holders.length} 个宿主 · ${executors.length} 个执行目标${backends.length?' · '+esc(backends.join(' / ')):''}</span><span class="node-id">${esc(shortId(d.id))}</span></span><span class="node-state"><i class="led"></i>${esc(profileLabel)}${fresh?'':' / UNKNOWN'}</span><span class="node-arrow" aria-hidden="true">↗</span></button>`;
+  replaceContent('topology',`<div class="map-caption"><span>统一规划中心</span><span>${n} 台接入 · ${devices.filter(online).length} 在线</span></div><div class="topology-scroll"><div class="topology-scene" style="--node-count:${Math.max(1,n)}"><div class="topology-hub"><div class="hub-orbit"><div class="hub-core">${icon('coordinator')}</div><span class="orbit-point" aria-hidden="true"></span></div><strong>Harmony 协调者</strong><span class="hub-role">规划 · 资源协调</span><small class="coordinator-address">${esc(snapshot.coordinator.address??location.origin)}</small><span class="hub-state">快照 ${snapshot.coordinator.ready?'READY':'NOT READY'} · epoch ${esc(snapshot.coordinator.epoch)}</span></div>${wires}<div class="topology-nodes">${n?devices.map(d=>{
+    const readings=d.holders.map(h=>sample(h.profile.ownerActivity,now())),fresh=readings.some(v=>v.value!==null),profileLabel=fresh?'在线 · 可调度':'离线',executors=d.holders.flatMap(h=>h.profile.executors),backends=[...new Set(executors.map(e=>e.target.backend))];
+    return `<button class="topo-device ${fresh?'fresh':'unknown'}" data-device="${esc(d.id)}" type="button" aria-label="查看 ${esc(d.name)} 的设备资源"><span class="node-icon">${icon('device')}</span><span class="node-content"><strong>${esc(d.name)}</strong><span class="node-meta">${d.holders.length} 个宿主 · ${executors.length} 个执行目标${backends.length?' · '+esc(backends.join(' / ')):''}</span><span class="node-id">${esc(shortId(d.id))}</span></span><span class="node-state"><i class="led"></i>${esc(profileLabel)}</span><span class="node-arrow" aria-hidden="true">↗</span></button>`;
   }).join(''):empty('暂无设备画像。接入终端后显示协作关系。')}</div></div></div><div class="map-legend"><span><i class="line-key"></i>画像关联</span><span><i class="led"></i>有效画像</span><span>点击终端查看资源 ↗</span></div>`);
 }
-function pool(p,holderFresh){
+// Why a pool admits nothing right now. Only shown when the admission limit is zero.
+function zeroReason(p,profile){
+  if(!profile)return '';
+  const state=s=>s&&s.value!==undefined?s.value:null;
+  if(state(profile.foreground)==='BACKGROUND')return '调度件在后台，暂停接单';
+  const gate={THERMAL_LIMIT:'设备过热',POWER_SAVE:'省电模式',LOW_BATTERY:'电量低且未充电'}[profile.energyGate];
+  if(gate)return gate+'，暂停接单';
+  if(state(profile.ownerActivity)==='ACTIVE')return '设备端已暂停接收任务';
+  if(p.kind==='RAM_BYTES')return '可用内存低于系统预留';
+  return '';
+}
+function pool(p,holderFresh,profile){
   const total=sample(p.total,now()),limit=sample(p.admissionLimit,now()),occupied=sample(p.occupied,now()),usage=capacity(occupied.value,limit.value);
   const label={CPU_SLOTS:'CPU 协同槽位',RAM_BYTES:'内存额度'}[p.kind]??p.kind,tone=p.kind==='RAM_BYTES'?'memory':'compute';
   const percent=usage===null?'—':usage.percent.toFixed(usage.percent>0&&usage.percent<1?1:0)+'%';
-  return `<div class="pool ${tone} ${usage?.exceeded?'over-capacity':''}"><div class="capacity-ring ${usage===null?'unknown':''}" role="img" aria-label="${esc(label+'，任务占用 '+occupied.text+'，准入上限 '+limit.text)}"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="ring-track" cx="50" cy="50" r="42"/>${usage===null?'':`<circle class="ring-value" cx="50" cy="50" r="42" pathLength="100" stroke-dasharray="${usage.fill} 100"/>`}</svg><span><strong>${percent}</strong><small>${usage===null?'UNKNOWN':'额度占用'}</small></span></div><div class="pool-info"><div class="pool-title"><strong>${esc(label)}</strong><span>${!holderFresh?'排空 UNKNOWN':p.draining?'正在排空':'未排空'}</span></div><div class="pool-values"><strong>${esc(occupied.text)}</strong><span> / ${esc(limit.text)}</span></div><div class="pool-note">任务占用 / 准入上限${usage?.exceeded?' · 已超出上限':''}<br>上报总量 ${esc(total.text)}</div></div></div>`;
+  return `<div class="pool ${tone} ${usage?.exceeded?'over-capacity':''}"><div class="capacity-ring ${usage===null?'unknown':''}" role="img" aria-label="${esc(label+'，任务占用 '+occupied.text+'，准入上限 '+limit.text)}"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="ring-track" cx="50" cy="50" r="42"/>${usage===null?'':`<circle class="ring-value" cx="50" cy="50" r="42" pathLength="100" stroke-dasharray="${usage.fill} 100"/>`}</svg><span><strong>${percent}</strong><small>${usage===null?'UNKNOWN':'额度占用'}</small></span></div><div class="pool-info"><div class="pool-title"><strong>${esc(label)}</strong><span>${!holderFresh?'排空 UNKNOWN':p.draining?'正在排空':'未排空'}</span></div><div class="pool-values"><strong>${esc(occupied.text)}</strong><span> / ${esc(limit.text)}</span></div><div class="pool-note">任务占用 / 准入上限${usage?.exceeded?' · 已超出上限':''}${limit.value===0&&zeroReason(p,profile)?`<br><span class="zero-reason">准入为 0：${esc(zeroReason(p,profile))}</span>`:''}<br>上报总量 ${esc(total.text)}</div></div></div>`;
 }
 function renderDevices(){
   replaceContent('devices',!snapshot?empty('等待真实资源画像'):!snapshot.devices.length?empty('暂无设备；不会以样例硬件填充本页'):snapshot.devices.map(d=>`<article class="device" data-device-card="${esc(d.id)}" tabindex="-1"><div class="device-title"><h3>${esc(d.name)}</h3>${tag(d.holders.length?`${d.holders.length} 个宿主`:'UNKNOWN')}</div><div class="id">${esc(d.id)}</div>${d.holders.length?d.holders.map(h=>{
@@ -61,7 +74,7 @@ function renderDevices(){
     const control=tag(controlLabels[h.controlState]??'控制连接未知',h.controlState==='ONLINE'?'good':'warn');
     const blockers={NON_INTERRUPTIBLE_RUNNING:'不可中断任务占用',RELEASE_OVERDUE:'不可中断任务超过声明时长'};
     const forecasts=(h.resourceForecasts??[]).filter(a=>a.reason==='RESOURCE_CAPACITY').map(a=>`<p>目标 ${esc(shortId(a.targetId))} · ${blockers[a.blockingReason]??'资源占用'} · 等待估计 ${esc(sample(a.resourceWait,now()).text)}</p>`).join('');
-    return `<section class="holder"><div class="holder-header"><span class="id">HOLDER ${esc(shortId(p.holderInstanceId))} · seq ${esc(p.sequence)} / ledger ${esc(p.ledgerEpoch)}</span>${control}${tag(owner.value===null?'UNKNOWN':'画像有效',owner.value===null?'neutral':'good')}</div><div class="device-signals">${signal('所有者活动',p.ownerActivity)}${signal('电量',p.battery)}${signal('温度 / 热等级',p.temperature)}</div><div class="resource-pools">${p.pools.length?p.pools.map(poolValue=>pool(poolValue,owner.value!==null)).join(''):empty('资源池 UNKNOWN')}</div><details class="evidence-details" data-detail="${esc('work-'+p.holderInstanceId)}"><summary>在途任务与资源等待</summary>${live}${queued}${forecasts}</details><div class="targets">${p.executors.length?p.executors.map(e=>{const q=h.qualification.find(q=>q.targetId===e.target.targetId);return `<span class="target">${esc(e.target.backend)} / ${esc(capabilityLabel(e.contract.capability))}<small>${esc(e.contract.capability)} · ${esc(q?.state??'UNKNOWN')} · ${esc(shortId(e.target.targetId))}</small></span>`;}).join(''):'<span class="muted small">执行目标 UNKNOWN（含 GPU）</span>'}</div><details class="evidence-details" data-detail="${esc('sources-'+p.holderInstanceId)}"><summary>资源采集来源与有效性</summary>${p.pools.map(v=>`<p>${esc(v.kind+' / '+v.resourcePoolId)} · 总量 ${esc(sample(v.total,now()).reason)} · 占用 ${esc(sample(v.occupied,now()).reason)} · 准入 ${esc(sample(v.admissionLimit,now()).reason)}</p>`).join('')}</details></section>`;
+    return `<section class="holder"><div class="holder-header"><span class="id">HOLDER ${esc(shortId(p.holderInstanceId))} · seq ${esc(p.sequence)} / ledger ${esc(p.ledgerEpoch)}</span>${control}${tag(owner.value===null?'UNKNOWN':'画像有效',owner.value===null?'neutral':'good')}</div><div class="device-signals">${signal('所有者活动',p.ownerActivity)}${signal('电量',p.battery)}${signal('温度 / 热等级',p.temperature)}</div><div class="resource-pools">${p.pools.length?p.pools.map(poolValue=>pool(poolValue,owner.value!==null,p)).join(''):empty('资源池 UNKNOWN')}</div><details class="evidence-details" data-detail="${esc('work-'+p.holderInstanceId)}"><summary>在途任务与资源等待</summary>${live}${queued}${forecasts}</details><div class="targets">${p.executors.length?p.executors.map(e=>{const q=h.qualification.find(q=>q.targetId===e.target.targetId);return `<span class="target">${esc(e.target.backend)} / ${esc(capabilityLabel(e.contract.capability))}<small>${esc(e.contract.capability)} · ${esc(q?.state??'UNKNOWN')} · ${esc(shortId(e.target.targetId))}</small></span>`;}).join(''):'<span class="muted small">执行目标 UNKNOWN（含 GPU）</span>'}</div><details class="evidence-details" data-detail="${esc('sources-'+p.holderInstanceId)}"><summary>资源采集来源与有效性</summary>${p.pools.map(v=>`<p>${esc(v.kind+' / '+v.resourcePoolId)} · 总量 ${esc(sample(v.total,now()).reason)} · 占用 ${esc(sample(v.occupied,now()).reason)} · 准入 ${esc(sample(v.admissionLimit,now()).reason)}</p>`).join('')}</details></section>`;
   }).join(''):empty('未收到宿主画像；CPU / RAM / GPU / 温度 / 电量均 UNKNOWN')}<details class="evidence-details" data-detail="${esc(d.id)}"><summary>额度与资源结算 · ${d.allotments.length} 个宿主记录</summary>${d.allotments.map(a=>`<div class="allotment"><span class="id">额度 HOLDER ${esc(shortId(a.holderInstanceId))} / grant v${esc(a.version)} / ack ${esc(a.ack?.version??'UNKNOWN')}</span><p>基础：${esc(vector(a.base))}</p><p>在线增量：${esc(vector(a.extra))}</p><p>保留量：${esc(vector(a.reserved))}</p><p>已确认占用：${esc(vector(a.ack?.occupied))}</p></div>`).join('')}</details><p class="explanation">槽位是协同资源声明，不是整机 CPU 利用率；未上报的 GPU 指标保持 UNKNOWN。</p></article>`).join(''));
 }
 function renderNetwork(){
@@ -147,7 +160,7 @@ async function loadTrace(){
 async function refresh(){
   if(!group)return;if(busy){dirty=true;return;}busy=true;$('refresh').disabled=true;const current=group;
   try{const data=await get(`/v2/spaces/${encodeURIComponent(group)}/telemetry`);if(current!==group)return;
-    snapshot=data;serverAnchor=data.updatedAt;clockAnchor=performance.now();$('domain').className='tag '+(data.domain==='SIMULATED'?'warn':'neutral');$('domain').textContent=data.domain==='SIMULATED'?'SIMULATED · 软件联调':data.domain+' · 数据域';
+    snapshot={...data,devices:data.devices.filter(d=>d.paired!==false)};serverAnchor=data.updatedAt;clockAnchor=performance.now();$('domain').className='tag '+(data.domain==='SIMULATED'?'warn':'neutral');$('domain').textContent=data.domain==='SIMULATED'?'SIMULATED · 软件联调':data.domain+' · 数据域';
     $('updated').textContent='快照 '+date(data.updatedAt);notice(data.domain==='SIMULATED'?'当前为 SIMULATED 联调数据，不代表真实手机、GPU 或多物理设备验收。':'显示协调者当前数据；未知或过期指标显示 UNKNOWN，来源与测量范围分别标注。');
     document.querySelector('main').classList.remove('stale-data');render();await loadTrace();
   }catch(e){if(current!==group)return;document.querySelector('main').classList.add('stale-data');
@@ -157,7 +170,6 @@ async function refresh(){
 }
 function schedule(){clearTimeout(timer);timer=setTimeout(()=>void refresh(),150);}
 function selectSpace(id){
-  $('shopping-link').href='shopping.html?space='+encodeURIComponent(id);
   if(location.hostname==='127.0.0.1'){ $('photo-studio-link').href='http://127.0.0.1:7460/';$('photo-studio-link').target='_blank';}else $('photo-studio-link').href='photo.html?space='+encodeURIComponent(id)+'&view=judge';
   stream?.close();group=id;snapshot=null;trace=null;traceError='';selected='';traceSerial++;serverAnchor=0;$('domain').className='tag neutral';$('domain').textContent='UNKNOWN';$('updated').textContent='尚未取得快照';render();
   const requestedUrl=new URL(location.href);if(requestedUrl.searchParams.get('space')===id)selected=requestedUrl.searchParams.get('job')||'';

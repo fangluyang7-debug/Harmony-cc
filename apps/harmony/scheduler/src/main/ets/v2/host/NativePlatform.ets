@@ -40,6 +40,7 @@ export class NativeDatabase {
   return parts.join('');
  }
  put(key:string,value:string):Promise<void>{const run=this.operations.then(()=>this.db.executeSql('INSERT OR REPLACE INTO installation (id,value) VALUES (?,?)',[key,value]));this.operations=run.catch(()=>{});return run;}
+ delete(key:string):Promise<void>{const run=this.operations.then(()=>this.db.executeSql('DELETE FROM installation WHERE id=?',[key]));this.operations=run.catch(()=>{});return run;}
  async storedIdentities():Promise<string[]>{const rows=await this.db.querySql("SELECT value FROM installation WHERE id='identity' OR id LIKE 'identity:%'");const values:string[]=[];try{while(rows.goToNextRow())values.push(rows.getString(0));return values;}finally{rows.close();}}
  ledger(key:string='ledger'):AgentPersistenceV2 {return new NativeLedgerPersistence(this,key);}
 }
