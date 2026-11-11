@@ -42,23 +42,26 @@ export class AiTaskGateway {
 
   public async cancel(): Promise<void> { this.cancelRequested = true; if (this.active) { await this.active.cancel(); } }
 
-  /** Text shopping: shopping.text. No node of it has a schedulable target yet, so it runs locally with per-node reasons. */
+  /** Text shopping is not a declared workflow (see the manifest in CooperativeSession): it always runs locally and the report says so. */
   public async searchText(query: string, highQuality: boolean): Promise<GatewayOutcome> {
     const report = await this.plan('shopping.text');
     return this.publish({ handle: this.tasks().searchResult(query, highQuality), report });
   }
 
-  /** Image shopping: shopping.image. The declared prefix (quality/crop) that has targets runs through the scheduler; the rest locally. */
+  /**
+   * Image shopping: the declared `shopping.photo.prepare` workflow (image.crop.v1) runs through the scheduler when it has a
+   * qualified target; retrieval stays local. The workflow id and prefix must match the manifest, otherwise nothing is ever submitted.
+   */
   public async searchImage(photoUri: string): Promise<GatewayOutcome> {
-    const report = await this.plan('shopping.image');
-    const prefix = this.schedulablePrefix(report, ['image.quality.v1', 'image.crop.v1']);
+    const report = await this.plan('shopping.photo.prepare');
+    const prefix = this.schedulablePrefix(report, ['image.crop.v1']);
     let prepared = photoUri;
     if (prefix.length > 0) {
       const sdk = await cooperative.availableClient();
       if (sdk === null) { prefix.forEach((n: NodeReport) => { n.execution = 'local'; n.targetId = null; n.reason = '协调中心不可用'; }); }
       else { prepared = await this.runImagePrefix(sdk, photoUri, prefix); }
     }
-    report.mode = report.nodes.every((n: NodeReport) => n.execution === 'local') ? (cooperative.enabled() ? 'PARTIAL' : 'LOCAL') : 'PARTIAL';
+    report.mode = report.nodes.length === 0 ? 'LOCAL' : report.nodes.every((n: NodeReport) => n.execution === 'local') ? (cooperative.enabled() ? 'PARTIAL' : 'LOCAL') : 'PARTIAL';
     return this.publish({ handle: this.tasks().searchImageResult(prepared), report });
   }
 
@@ -79,6 +82,8 @@ export class AiTaskGateway {
     const declaration = cooperative.declaration();
     const workflow = declaration?.declaration.workflows.find((w: WorkflowDeclaration) => w.id === workflowId) ?? null;
     const nodes: DeclaredNode[] = workflow === null ? [] : (workflow.nodes ?? (workflow.alternatives ?? [])[0]?.nodes ?? []);
+    // An undeclared workflow has nothing the coordinator could run: report plain local mode, not an empty "partial" cooperation.
+    if (nodes.length === 0) return { workflowId, mode: 'LOCAL', nodes: [] };
     if (!cooperative.enabled()) {
       return { workflowId, mode: 'LOCAL', nodes: nodes.map((n: DeclaredNode): NodeReport => ({ id: n.id, capability: n.capability, execution: 'local', targetId: null, reason: '协同未开启' })) };
     }

@@ -86,6 +86,6 @@
   },
   "photo.enhance.v1": {
     "label": "AI 照片高清增强",
-    "install": "正式照片能力为 photo.enhance.v1。PC 配置 HARMONY_PHOTO_MODEL 与 HARMONY_PHOTO_RUNNER；GPU 路径为 ncnn Vulkan，需 HARMONY_PHOTO_VULKAN、NVIDIA 驱动及共享显存额度（不是 CUDA 执行器）。鸿蒙构建需 HARMONY_PHOTO_MODEL 与 HARMONY_NCNN_DIR。安装模型后启动宿主，通过评测才可参与；模型预装不包含任务照片。"
+    "install": "正式照片能力为 photo.enhance.v1。Windows 使用随包的 services/pc-agent/dist/photo 运行库（模型 + CPU 推理程序 + Vulkan 引擎及 vcomp140.dll）；包根目录若有 PHOTO-RUNTIME-NOT-INCLUDED.txt 则须用 HARMONY_PHOTO_RUNTIME 重新打包。NVIDIA GPU 只需显卡驱动（不是 CUDA 执行器）：调度件启动时自动选择 NVIDIA 的 Vulkan 设备并做参考推理，自动额度模式下协调中心按探测到的显存分配 GPU 份额；日志 PHOTO_GPU_READY / PHOTO_GPU_UNAVAILABLE <原因> 说明结果。鸿蒙构建需 HARMONY_PHOTO_MODEL 与 HARMONY_NCNN_DIR。通过评测才可参与；模型预装不包含任务照片。"
   }
 }

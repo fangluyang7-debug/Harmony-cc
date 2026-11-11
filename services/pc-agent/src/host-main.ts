@@ -27,7 +27,20 @@ async function main(){
       console.error('IMAGE_TARGET_UNAVAILABLE '+reason);
     }
   }
-  if(process.env.HARMONY_PHOTO_VULKAN&&!config.imageEncoder&&(config.contribution.maxVramBytes??0)>0){try{config.imageEncoder=await openPhotoAccelerator();}catch{console.error('PHOTO_GPU_UNAVAILABLE: GPU probe failed; only CPU capabilities will be advertised.');}}
+  // Photo GPU: probe whenever a Vulkan engine is installed and the owner has not fixed a zero VRAM share.
+  // Under automatic capacity the coordinator derives the VRAM share from the probed GPU, so the share
+  // cannot be a precondition of the probe (that ordering left every auto-paired GPU machine on CPU only).
+  if(process.env.HARMONY_PHOTO_VULKAN&&!config.imageEncoder){
+    const gpuAllowed=config.contribution.capacityMode==='auto'||(config.contribution.maxVramBytes??0)>0;
+    if(!gpuAllowed)console.error('PHOTO_GPU_NOT_CONTRIBUTED: fixed contribution has no VRAM share; set maxVramBytes or use automatic capacity.');
+    else try{
+      config.imageEncoder=await openPhotoAccelerator();
+      console.log('PHOTO_GPU_READY: VULKAN device '+process.env.HARMONY_PHOTO_GPU_ID+', '+Math.round((config.imageEncoder.gpu?.totalBytes??0)/1048576)+' MiB; the coordinator sets the VRAM share from this measurement.');
+    }catch(error){
+      const reason=error instanceof Error&&/^PHOTO_GPU_[A-Z_]+$/.test(error.message)?error.message:'PHOTO_GPU_PROBE_FAILED';
+      console.error('PHOTO_GPU_UNAVAILABLE '+reason+': only CPU photo capabilities will be advertised. '+({PHOTO_GPU_RUNTIME_MISSING:'The Vulkan engine file is missing from this installation.',PHOTO_GPU_DRIVER_MISSING:'nvidia-smi is not available; install the NVIDIA driver.',PHOTO_GPU_DEVICE_UNMATCHED:'No Vulkan device matches an NVIDIA GPU; check HARMONY_PHOTO_GPU_ID and vulkan-1.dll from the driver.',PHOTO_GPU_MEMORY_TOO_SMALL:'The matched GPU has less than 512 MiB.',PHOTO_GPU_QUALITY_FAILED:'The reference inference did not reach the quality threshold.',PHOTO_GPU_PROBE_FAILED:'The reference inference did not finish; check vcomp140.dll beside the engine and the driver.'} as Record<string,string>)[reason]);
+    }
+  }else if(process.env.HARMONY_PHOTO_MODEL&&!process.env.HARMONY_PHOTO_VULKAN)console.log('PHOTO_GPU_RUNTIME_MISSING: no Vulkan engine configured; photo enhancement runs on CPU only.');
   const detector=new CoordinatorGoneDetector();let gone=false;
   const host=await CpuHost.open(config,error=>{
     if(!gone&&detector.observe(error,Date.now())){gone=true;console.log('COORDINATOR_GONE: coordinator stopped or unreachable; pairing will be cleared.');

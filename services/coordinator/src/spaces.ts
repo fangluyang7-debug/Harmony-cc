@@ -34,18 +34,21 @@ export function capacityVector(settings:Contribution){
   return [{resourcePoolId:'cpu',amount:settings.maxCpuThreads},{resourcePoolId:'ram',amount:settings.maxMemoryBytes},...(settings.maxVramBytes?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:settings.maxVramBytes}]:[])];
 }
 /** What a paired device measured about itself. Either field may be unknown; neither is trusted beyond its own device. */
-export interface MeasuredCapacity {cpuThreads:number|null;totalMemoryBytes:number|null;}
+export interface MeasuredCapacity {cpuThreads:number|null;totalMemoryBytes:number|null;vramBytes:number|null;}
 export function measuredCapacity(v:any):MeasuredCapacity{
-  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).some(k=>!['cpuThreads','totalMemoryBytes'].includes(k)))throw Error('MEASUREMENT_INVALID');
-  const cpu=v.cpuThreads??null,ram=v.totalMemoryBytes??null;
-  if(cpu!==null&&(!Number.isInteger(cpu)||cpu<1||cpu>1024)||ram!==null&&(!Number.isSafeInteger(ram)||ram<64*MiB||ram>64*TiB))throw Error('MEASUREMENT_INVALID');
-  return {cpuThreads:cpu,totalMemoryBytes:ram};
+  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).some(k=>!['cpuThreads','totalMemoryBytes','vramBytes'].includes(k)))throw Error('MEASUREMENT_INVALID');
+  const cpu=v.cpuThreads??null,ram=v.totalMemoryBytes??null,vram=v.vramBytes??null;
+  if(cpu!==null&&(!Number.isInteger(cpu)||cpu<1||cpu>1024)||ram!==null&&(!Number.isSafeInteger(ram)||ram<64*MiB||ram>64*TiB)||vram!==null&&(!Number.isSafeInteger(vram)||vram<0||vram>64*TiB))throw Error('MEASUREMENT_INVALID');
+  return {cpuThreads:cpu,totalMemoryBytes:ram,vramBytes:vram};
 }
 /**
  * Automatic ceiling, not a reservation of all that memory. Keep 1/16 of RAM free,
  * bounded to 256 MiB..1 GiB; the host additionally gates admission on CURRENT free RAM.
  * Dedicated devices contribute 3/4 of logical CPUs; idle-mode devices keep half. Storage capacity
  * is deliberately not part of this: only RAM backs task execution. Unknown measurements keep the current value.
+ * VRAM is what the device's opened GPU backend reports (0 = no usable GPU backend): keep 256 MiB for the
+ * desktop and offer the rest; a GPU with less than 512 MiB left is not offered at all. A device that
+ * stops reporting a GPU loses its VRAM share, so the dashboard never shows a GPU quota without a GPU executor.
  */
 export function autoContribution(current:Contribution,measured:MeasuredCapacity):Contribution{
   const next:Contribution={...current,capacityMode:'auto'};
@@ -55,6 +58,10 @@ export function autoContribution(current:Contribution,measured:MeasuredCapacity)
     next.maxMemoryBytes=Math.min(TiB,Math.max(64*MiB,Math.floor((measured.totalMemoryBytes-reserve)/(64*MiB))*64*MiB));
   }
   if(measured.cpuThreads!==null)next.maxCpuThreads=Math.min(64,Math.max(1,Math.floor(measured.cpuThreads*(current.ownerMode==='dedicated'?0.75:0.5))));
+  if(measured.vramBytes!==null){
+    const usable=Math.floor((measured.vramBytes-256*MiB)/(64*MiB))*64*MiB;
+    if(usable>=512*MiB)next.maxVramBytes=Math.min(TiB,usable);else delete next.maxVramBytes;
+  }
   return next;
 }
 
@@ -120,7 +127,7 @@ export class TeamSpaces {
     const settings=JSON.parse(d.settingsJson) as Contribution;
     if(!measured||settings.capacityMode!=='auto')return settings;
     const next=autoContribution(settings,measured);
-    if(next.maxCpuThreads===settings.maxCpuThreads&&next.maxMemoryBytes===settings.maxMemoryBytes&&next.reserveMemoryBytes===settings.reserveMemoryBytes)return settings;
+    if(next.maxCpuThreads===settings.maxCpuThreads&&next.maxMemoryBytes===settings.maxMemoryBytes&&next.reserveMemoryBytes===settings.reserveMemoryBytes&&(next.maxVramBytes??0)===(settings.maxVramBytes??0))return settings;
     const budget=await this.allotments.budget(d.id);
     try{await this.allotments.confirmDevice(d.id,capacityVector(next),budget?.bindings??[{groupId:d.spaceId,holderInstanceId:d.holderId,appInstanceId:null}]);}
     catch(error){

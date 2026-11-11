@@ -4,8 +4,10 @@ const os = require('node:os');
 const {createRequire} = require('node:module');
 const {execFileSync} = require('node:child_process');
 const {createHash} = require('node:crypto');
+const {stagePhotoRuntime} = require('./lib/photo-runtime-package.cjs');
 const root = path.resolve(__dirname, '..');
 const release = process.argv[2] || '调度系统分发-20261110-r2';
+let photoRuntime = null;
 if (!/^调度系统分发-\d{8}(?:-r\d+)?$/.test(release)) throw Error('发行目录格式须为 调度系统分发-YYYYMMDD，可追加 -rN');
 const out = path.join(root, 'dist', release);
 const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'harmony-distribution-'));
@@ -35,6 +37,8 @@ const README_AGENT = `# Windows x64 设备调度件
 完整解压后双击 ZhiDiaoHongShu.exe，在独立程序窗口中选择协调中心，输入 6 位配对码或导入邀请链接。关闭程序会停止本机贡献。配对后进入“贡献上限”，点击“开启设备调度件”。安装身份默认保存在当前用户的 HarmonyRuntime/device，重新启动时可直接使用。
 
 基础 CPU 能力使用包内运行时，不需要在本机安装 Node.js。若需要执行图像编码，请另配 Python、模型与可信评测套件；包内 services/image-worker/requirements.txt 列出了 Python 依赖。使用 CUDA 时另外准备 NVIDIA 驱动和支持 CUDA 的 PyTorch，启动页选择 CUDA 并填写 Python 和套件路径，中心需配置同一评测套件。
+
+照片增强（photo.enhance.v1）：包内 services/pc-agent/dist/photo 若存在，表示已带模型、CPU 推理程序和（如有）Vulkan GPU 引擎及其 DLL，启动即自动登记；若包根目录有 PHOTO-RUNTIME-NOT-INCLUDED.txt，则本包不能执行照片增强。NVIDIA 显卡只需安装显卡驱动（提供 vulkan-1.dll），不需要 CUDA / PyTorch；设备调度件启动后会自动在多显卡中选择 NVIDIA 设备并做一次参考推理，通过后协调中心按显存自动分配 GPU 额度。运行日志中的 PHOTO_GPU_READY / PHOTO_GPU_UNAVAILABLE <原因> 说明 GPU 是否就绪。
 `;
 
 // The coordinator creates its TLS certificate with OpenSSL. Ship the one from Git for Windows
@@ -125,7 +129,19 @@ function windowsPackage(name, role) {
   if (center) dependency('prisma', manifest);
   for (const file of ['node.exe']) copy(path.join(nodeHome, file), path.join(dest, 'runtime', file));
   if(fs.existsSync(path.join(nodeHome,'LICENSE')))copy(path.join(nodeHome,'LICENSE'),path.join(dest,'runtime/LICENSE'));
-  if(!center&&process.env.HARMONY_PHOTO_RUNTIME){const configPath=path.resolve(process.env.HARMONY_PHOTO_RUNTIME),config=JSON.parse(fs.readFileSync(configPath)),base=path.dirname(configPath),target=path.join(dest,service,'dist/photo');fs.mkdirSync(target,{recursive:true});const settings={};for(const key of ['model','runner','vulkan'])if(config[key]){const src=path.resolve(base,config[key]),name=key==='model'?'models':path.basename(src);copy(src,path.join(target,name));settings[key]=name;}fs.writeFileSync(path.join(target,'runtime.json'),JSON.stringify(settings));}
+  if(!center){
+    // A device package either carries a complete photo runtime or says so in its name and README.
+    // It is never allowed to look like a photo-capable package while missing the model or an engine.
+    if(process.env.HARMONY_PHOTO_RUNTIME){
+      photoRuntime={included:true,...stagePhotoRuntime(path.resolve(process.env.HARMONY_PHOTO_RUNTIME),path.join(dest,service,'dist/photo'),copy)};
+      console.log('photo runtime: model + ' + photoRuntime.runner + (photoRuntime.vulkan ? ' + ' + photoRuntime.vulkan + ' [' + photoRuntime.dlls.join(', ') + ']' : ' (no Vulkan engine)'));
+    } else if (process.env.HARMONY_PHOTO_RUNTIME_OPTIONAL === '1') {
+      photoRuntime={included:false};
+      fs.writeFileSync(path.join(dest,'PHOTO-RUNTIME-NOT-INCLUDED.txt'),'本包未包含照片增强运行库（模型、CPU 推理程序、Vulkan GPU 引擎）。\r\n配对后只能登记 photo.analyze / prepare / assemble / deliver 等轻量阶段，不能执行 photo.enhance.v1。\r\n需要照片增强时，请用 HARMONY_PHOTO_RUNTIME 指向完整运行库重新运行 npm run dist:prepare。\r\n');
+    } else {
+      throw Error('PHOTO_RUNTIME_REQUIRED: set HARMONY_PHOTO_RUNTIME=<runtime.json from scripts/prepare-photo-runtime.cjs>, or HARMONY_PHOTO_RUNTIME_OPTIONAL=1 to build a device package that cannot run photo.enhance.v1');
+    }
+  }
   if (center) bundleOpenSsl(dest);
   copy(path.join(root, 'capabilities/coverage-requirements.json'), path.join(dest, 'node_modules/capabilities/coverage-requirements.json'));
   for (const file of [center ? 'index.html' : 'agent.html', 'desktop.js']) {
@@ -225,7 +241,9 @@ fs.writeFileSync(path.join(out, '00-使用说明.md'), `# 智调鸿枢分发包
 
 先启动协调中心并创建空间，再为每台设备生成独立邀请。Windows 和鸿蒙均可选择中心后输入 6 位配对码，也可使用邀请链接或二维码。第 03 包在手机显示手机布局，在鸿蒙电脑显示桌面布局。演示手机安装第 03、04 包，先配对设备，再打开 SoleAI 的「使用协同调度」并授权。
 
-照片演示另安装第 05 包，首次连接第 03 包授权，随后从手机选图并开始处理。电脑从调度盘打开“照片任务展示”。照片模型和引擎须按 PHOTO-WORKFLOW-LOCAL-20261110.md 配置，不能把 CUDA 图像编码配置当作照片增强引擎。
+照片演示另安装第 05 包，首次连接第 03 包授权，随后从手机选图并开始处理。电脑从调度盘打开“照片任务展示”。不能把 CUDA 图像编码配置当作照片增强引擎。
+
+第 02 包照片增强运行库：${photoRuntime&&photoRuntime.included?'**已包含**（模型 + '+photoRuntime.runner+(photoRuntime.vulkan?' + Vulkan GPU 引擎 '+photoRuntime.vulkan+'，附 '+photoRuntime.dlls.join('、'):' ，无 Vulkan GPU 引擎')+'）。NVIDIA 机器安装显卡驱动即可，启动后自动探测并按显存分配 GPU 额度。':'**未包含**（包根目录有 PHOTO-RUNTIME-NOT-INCLUDED.txt）。该包能配对并执行轻量阶段，但不能执行 photo.enhance.v1；需要照片增强时用 HARMONY_PHOTO_RUNTIME 重新打包。'}
 
 校验值见 SHA256SUMS.txt。完整签名和联调步骤见仓库 docs/scheduler-v2/分发包分组与联调说明.md。
 `);

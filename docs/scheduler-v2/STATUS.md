@@ -2587,3 +2587,12 @@ API 24 HAR、agent 签名 HAP、photo 签名 HAP、probe 未签名 HAP 重建通
 - 相比原始 147.232 秒减少约 40%，但仍慢于手机单机；不能宣称双机加速已验收。控制并行推进试验曾回退至 113.720 秒，已撤回；不等待资源的试验也撤回，保留原来的控制串行一致性。剩余重点为轻量阶段控制/账本开销、执行端多输入合并及成本模型。
 - 最新 App 额度回归 6/6、最终照片工作流与空间配额回归 9/9 通过；历史缓存、追踪、取消与改派恢复组合回归 15/15 通过。SDK / 原生适配 / 边界检查及 API 24 HAR、签名 HAP 构建通过；手机已覆盖安装并真机复测。另一次原生模拟器测试因 `EMULATOR_COMMAND_FAILED` 未通过，不能声称 API 22 或模拟器验收完成。
 - 本机已安装运行目录和手机图片 App 已更新。旧 20261110-r2 Windows ZIP 尚未重打包，不能作为本轮代码分发；该目录图片 HAP 与校验值已同步。本轮代码、测试与性能记录已经提交为 `52f58656eb630c8cb76d32ef7b00f92deb4f207d`；双方整合必须同时保留前序功能，详见持续维护的 [MERGE-PROTECTION.md](MERGE-PROTECTION.md)。不能引用旧基线 `cee4fa3` 为包含本轮优化的提交。
+
+## §119 独显设备画像接入、照片包完整性与 SoleAI 协同链修复（2026-11-11，main）
+
+- 针对 §118 之后队友的 [Windows 独显分发包排查](WINDOWS-GPU-PHOTO-PACKAGE-DIAGNOSIS-20261111.md)：根因是 `host-main.ts` 要求先有显存额度才探测 GPU，而默认邀请是自动额度且 `autoContribution` 不算显存，独显机永远只报 CPU 执行器。现在顺序改为“装有 Vulkan 引擎即探测 → measured 上报 `vramBytes` → 中心按显存减 256 MiB 分配 `maxVramBytes` → 设备采纳并写回”。没有 GPU 后端上报 0，份额撤销；旧中心不认识该字段时调度件自动退回 CPU/RAM 上报。
+- 双显卡：从引擎诊断日志解析全部 Vulkan 设备，选与 `nvidia-smi` 同名的索引并在该设备上重跑参考推理；失败原因拆为 RUNTIME_MISSING / DRIVER_MISSING / DEVICE_UNMATCHED / MEMORY_TOO_SMALL / PROBE_FAILED / QUALITY_FAILED，运行日志给出处理建议。
+- 打包：`stagePhotoRuntime()` 校验模型三件、CPU runner、Vulkan EXE，并携带同目录 DLL（必须含 `vcomp140.dll`）；`npm run dist:prepare` 未指定 `HARMONY_PHOTO_RUNTIME` 默认失败，`HARMONY_PHOTO_RUNTIME_OPTIONAL=1` 才生成带 `PHOTO-RUNTIME-NOT-INCLUDED.txt` 的无照片包。Windows 调度件页面新增显存额度。
+- SoleAI：`AiTaskGateway.ets` 的工作流 id（`shopping.image` 等）与 `CooperativeSession.ets` 声明（`shopping.photo.prepare` 等）不匹配、`image.quality.v1` 无能力包，协同链从未提交过任务；改为匹配声明并以 `image.crop.v1` 为可调度前缀，未声明工作流如实显示本机模式。04 HAP 需重新构建。
+- 验证：新增 auto-contribution 3/3、photo-accelerator 3/3、photo-runtime-package 2/2，runtime-desktop 6/6，coordinator / pc-agent `tsc` 通过。`spaces.test.cjs` 的 paired CPU host 用例在本机改动前后均 180 秒超时（本机无照片/视觉原生运行库），不计入本轮结论。本机无 NVIDIA、无 `.test/photo-tools`：GPU 路径仅单元验证，独显真机、干净机器解压启动和同六图对照仍待队友机器完成。
+- 分发：本机构建产物已直接替换 `dist/调度系统分发-20261110-r2/`（02 无照片运行库，包根带 PHOTO-RUNTIME-NOT-INCLUDED.txt；03/04 HAP 为合并后重编）；完整 02 包须在有运行库的机器以 `HARMONY_PHOTO_RUNTIME` 重打。合并保护见 [MERGE-PROTECTION.md](MERGE-PROTECTION.md) M12～M14，逐项记录见 [main 分支修改记录](../main分支修改记录.md)。

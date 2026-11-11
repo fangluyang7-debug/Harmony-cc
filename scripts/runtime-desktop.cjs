@@ -240,7 +240,7 @@ class RuntimeControl {
     try{
       const {connection}=JSON.parse(fs.readFileSync(path.join(directory,'agent.json'),'utf8'));
       const policy=JSON.parse(fs.readFileSync(path.join(directory,'contribution.json'),'utf8'));
-      return {paired:true,directory,groupId:JSON.parse(fs.readFileSync(path.join(directory,'agent.json'))).identity.groupId,address:connection.address,cpu:policy.maxCpuThreads,memory:policy.maxMemoryBytes};
+      return {paired:true,directory,groupId:JSON.parse(fs.readFileSync(path.join(directory,'agent.json'))).identity.groupId,address:connection.address,cpu:policy.maxCpuThreads,memory:policy.maxMemoryBytes,vram:policy.maxVramBytes??0,capacityMode:policy.capacityMode==='auto'?'auto':'fixed'};
     }catch(e){if(e.code==='ENOENT')return {paired:false};throw Error('设备配对记录无法读取，请检查安装目录');}
   }
   stop(){if(this.child){this.state='STOPPING';if(this.child.connected)this.child.send({type:'shutdown'},error=>{if(error)this.log('停止请求未确认，请查看进程状态');});}}
