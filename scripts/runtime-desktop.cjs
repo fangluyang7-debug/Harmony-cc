@@ -288,7 +288,7 @@ class RuntimeControl {
         });
       });
       fs.writeFileSync(path.join(directory,'contribution.json'),JSON.stringify(bootstrap.contribution),{flag:'wx',mode:0o600});
-      this.binding?.activate(directory);this.log('配对完成：'+bootstrap.invitation.address);return {directory};
+      this.binding?.activate(directory);this.coordinatorGone=false;this.log('配对完成：'+bootstrap.invitation.address);return {directory};
     }finally{fs.unlinkSync(file);fs.rmdirSync(staging);}
   }
   /**

@@ -1,4 +1,31 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),{transformSync}=require('esbuild');
+function readinessSession(){
+ let now=0;const m={exports:{}},code=transformSync(fs.readFileSync('apps/harmony-photo/entry/src/main/ets/PhotoSession.ets','utf8'),{loader:'ts',format:'cjs'}).code;
+ new Function('require','module','exports','setTimeout',code)(()=>({}),m,m.exports,(callback,ms)=>{now+=ms;callback();});
+ return {session:new m.exports.PhotoSession(),now:()=>now};
+}
+
+test('batch concurrency follows physical device counts with a bounded legacy fallback',async()=>{
+ const {session}=readinessSession();
+ for(const [devices,expected] of [[1,2],[2,3],[3,4],[40,4],[undefined,2],[0,2],[-1,2],[1.5,2]]){
+  session.request=async route=>{assert.equal(route,'/v2/apps/me/capabilities');return JSON.stringify({capabilities:[{capability:'photo.enhance.v1',devices}]});};
+  assert.equal(await session.batchConcurrency(),expected);
+ }
+ session.request=async()=>{throw Error('offline');};assert.equal(await session.batchConcurrency(),2);
+});
+test('photo readiness can exceed SDK 15 second planning wait without resetting the batch budget',async()=>{
+ const {session,now}=readinessSession(),messages=[];let calls=0;
+ session.host={pendingCapabilities:async capabilities=>{calls++;assert.ok(capabilities.includes('photo.deliver.v1'));return now()<17000?['photo.deliver.v1']:[];}};
+ await session.waitReady(()=>180000-now(),()=>false,m=>messages.push(m));
+ assert.equal(now(),17000);assert.equal(calls,18);assert.equal(180000-now(),163000);assert.ok(messages.every(m=>m.includes('成品生成')));
+});
+test('photo readiness respects cancellation, exhausted budget and a missing host',async()=>{
+ for(const mode of ['cancel','timeout','missing']){
+  const {session,now}=readinessSession();if(mode!=='missing')session.host={pendingCapabilities:async()=>['photo.deliver.v1']};
+  await assert.rejects(session.waitReady(()=>2500-now(),()=>mode==='cancel'&&now()>=1000,()=>{}),mode==='cancel'?/已取消/:mode==='timeout'?/预算已用尽/:/请先连接/);
+  assert.ok(now()<=2500);
+ }
+});
 test('native result transport verifies bytes and retains the product before SDK acknowledgement can run',async()=>{
  const events=[],data=new Uint8Array([1,2,3]);let corrupt=false;
  const code=transformSync(fs.readFileSync('apps/harmony-photo/entry/src/main/ets/PhotoSession.ets','utf8'),{loader:'ts',format:'cjs'}).code,m={exports:{}};

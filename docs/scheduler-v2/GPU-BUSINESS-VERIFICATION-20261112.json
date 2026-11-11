@@ -1,0 +1,1166 @@
+{
+  "run": {
+    "id": "a83ca1ee-5be8-4d0b-8f97-5bc0026eca50",
+    "state": "SUCCEEDED",
+    "createdAt": 1794415354041,
+    "updatedAt": 1794415404083,
+    "sourceDurationMs": 50074,
+    "budgetMs": 180000
+  },
+  "imageCount": 6,
+  "deliveryCount": 6,
+  "nodes": [
+    {
+      "imageIndex": 0,
+      "node": "analyze",
+      "attempt": "10bb30fc-6291-42a4-b1a0-9f2451cea4e8",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 0,
+      "node": "enhance-0",
+      "attempt": "e062ebf8-55ae-4d03-8b79-2d14006a13fc",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      }
+    },
+    {
+      "imageIndex": 0,
+      "node": "enhance-1",
+      "attempt": "a993e7c3-c455-4324-8fdc-114fd735867b",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      }
+    },
+    {
+      "imageIndex": 0,
+      "node": "enhance-2",
+      "attempt": "6a4b94e1-fcf7-4ad5-b2cf-02a62e66a738",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-99070b128444e2cd5d18fd4c3a38e778",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-99070b128444e2cd5d18fd4c3a38e778",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 0,
+      "node": "enhance-3",
+      "attempt": "dab86943-5674-4880-9e4b-4ed488f2dd6c",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-99070b128444e2cd5d18fd4c3a38e778",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-99070b128444e2cd5d18fd4c3a38e778",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 0,
+      "node": "deliver",
+      "attempt": "44379daf-3603-43ae-ab2f-b438dff880a6",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 1,
+      "node": "analyze",
+      "attempt": "9ba8c1f2-12e5-4a3f-8274-62f620a10271",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 1,
+      "node": "enhance-0",
+      "attempt": "e6b67e71-b49b-42fd-ada2-fb64b30d153d",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 1,
+      "node": "enhance-1",
+      "attempt": "e3bf2a65-c774-4cc3-8b09-1b9ffbc094f2",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      }
+    },
+    {
+      "imageIndex": 1,
+      "node": "enhance-2",
+      "attempt": "3b6cf0fb-5beb-4020-8a28-715eaac9f2e6",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cpu-1f9f1a43913b39e468a948f645919cf2",
+        "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3",
+        "executorId": "node.cpu.v1",
+        "executorVersion": "1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "node.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cpu-1f9f1a43913b39e468a948f645919cf2",
+        "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3",
+        "executorId": "node.cpu.v1",
+        "executorVersion": "1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "node.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 1,
+      "node": "enhance-3",
+      "attempt": "352aca0a-6b8a-4210-a13b-446a4960da28",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cpu-1f9f1a43913b39e468a948f645919cf2",
+        "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3",
+        "executorId": "node.cpu.v1",
+        "executorVersion": "1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "node.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cpu-1f9f1a43913b39e468a948f645919cf2",
+        "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3",
+        "executorId": "node.cpu.v1",
+        "executorVersion": "1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "node.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 1,
+      "node": "deliver",
+      "attempt": "d8d5c375-61ae-411e-aede-e258033f68c8",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 2,
+      "node": "analyze",
+      "attempt": "f3c79159-c44f-4d48-89fa-5de4f65b5ff2",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 2,
+      "node": "enhance-0",
+      "attempt": "ba974438-ef7b-47bc-8199-93194820c208",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 2,
+      "node": "enhance-1",
+      "attempt": "3673a8c1-cf3c-4bb1-9ca0-f5a41bb33380",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      }
+    },
+    {
+      "imageIndex": 2,
+      "node": "enhance-2",
+      "attempt": "ad26ea92-baa1-4623-89cc-24738618535c",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 2,
+      "node": "enhance-3",
+      "attempt": "81494dae-1b37-4499-9632-fb6222347e2a",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      }
+    },
+    {
+      "imageIndex": 2,
+      "node": "deliver",
+      "attempt": "947c4d5a-c54a-4def-9aff-b02ae928bcd1",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 3,
+      "node": "analyze",
+      "attempt": "e1abbb55-7044-4722-b6c9-aed5ca2c9d90",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 3,
+      "node": "enhance-0",
+      "attempt": "e1ff8c45-1b1a-49f5-a09f-86b338d5b65a",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 3,
+      "node": "enhance-1",
+      "attempt": "cf012168-2396-47db-861d-d91d9e87ced1",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      }
+    },
+    {
+      "imageIndex": 3,
+      "node": "enhance-2",
+      "attempt": "bda361ba-d0b1-4934-8359-6f42fb6c125f",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cpu-1f9f1a43913b39e468a948f645919cf2",
+        "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3",
+        "executorId": "node.cpu.v1",
+        "executorVersion": "1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "node.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cpu-1f9f1a43913b39e468a948f645919cf2",
+        "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3",
+        "executorId": "node.cpu.v1",
+        "executorVersion": "1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "node.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 3,
+      "node": "enhance-3",
+      "attempt": "bc4dba98-60ec-4e66-8942-3230b809cb28",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-99070b128444e2cd5d18fd4c3a38e778",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-99070b128444e2cd5d18fd4c3a38e778",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 3,
+      "node": "deliver",
+      "attempt": "cfc4fc78-e49e-4b5b-9575-5696e272dd00",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 4,
+      "node": "analyze",
+      "attempt": "a1fb5c4e-953b-4e5b-ad0b-50d8eaffc4b1",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 4,
+      "node": "enhance-0",
+      "attempt": "c015d4a7-331f-4794-9544-5d869fff8f74",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      }
+    },
+    {
+      "imageIndex": 4,
+      "node": "enhance-1",
+      "attempt": "ec4886e5-ff30-473a-881b-9af63626b721",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      }
+    },
+    {
+      "imageIndex": 4,
+      "node": "enhance-2",
+      "attempt": "6c0176e7-bb44-4bd3-9fda-8dbf6290849a",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 4,
+      "node": "enhance-3",
+      "attempt": "4cfb5193-af66-4790-8f11-58ab789c98ea",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 4,
+      "node": "deliver",
+      "attempt": "7b403f53-700e-4398-b36b-7886bb7ba542",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 5,
+      "node": "analyze",
+      "attempt": "55adc885-b444-4f66-9964-d8931baf9464",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-06d81777c5cea9dfceb40aadcfb216ca",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 5,
+      "node": "enhance-0",
+      "attempt": "86aa0172-fbfc-4ede-95e8-a83de8e1bf92",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      },
+      "plannedTarget": {
+        "targetId": "cuda-7c0d7f6b0ab49b3e76e89c5ab47f9779",
+        "deviceId": "ac894861-b8a2-4cbd-81b6-fec86f50abcb",
+        "executorId": "ncnn.photo.vulkan.v1",
+        "executorVersion": "1",
+        "backend": "VULKAN",
+        "resourcePoolIds": [
+          "cpu",
+          "ram",
+          "gpu",
+          "vram"
+        ],
+        "stableExecutionId": "ncnn.photo.vulkan.v1"
+      }
+    },
+    {
+      "imageIndex": 5,
+      "node": "enhance-1",
+      "attempt": "bd9c0fe4-beb0-473a-9d18-dbd6d4687a45",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 5,
+      "node": "enhance-2",
+      "attempt": "924203fd-7ffd-439e-97b5-c25d2c883197",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 5,
+      "node": "enhance-3",
+      "attempt": "57407b7a-8e17-4ba7-b1aa-a157c7f6d7ba",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-f8bedafb927ea4c1d534b0afc2297a0f",
+        "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    },
+    {
+      "imageIndex": 5,
+      "node": "deliver",
+      "attempt": "456746ed-6634-4ca5-99c0-296d74b9ffbf",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "actualTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      },
+      "plannedTarget": {
+        "targetId": "harmony-a0873f1c66c44962ae195e9bf0112951",
+        "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8",
+        "executorId": "harmony.cpu.v1",
+        "executorVersion": "photo-1",
+        "backend": "CPU",
+        "resourcePoolIds": [
+          "cpu",
+          "ram"
+        ],
+        "stableExecutionId": "harmony.cpu.v1"
+      }
+    }
+  ]
+}

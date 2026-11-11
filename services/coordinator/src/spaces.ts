@@ -57,7 +57,7 @@ export function autoContribution(current:Contribution,measured:MeasuredCapacity)
     next.reserveMemoryBytes=reserve;
     next.maxMemoryBytes=Math.min(TiB,Math.max(64*MiB,Math.floor((measured.totalMemoryBytes-reserve)/(64*MiB))*64*MiB));
   }
-  if(measured.cpuThreads!==null)next.maxCpuThreads=Math.min(64,Math.max(1,Math.floor(measured.cpuThreads*(current.ownerMode==='dedicated'?0.75:0.5))));
+  if(measured.cpuThreads!==null)next.maxCpuThreads=Math.min(64,Math.max(1,Math.floor(measured.cpuThreads*(current.ownerMode==='dedicated'?1:0.5))));
   if(measured.vramBytes!==null){
     const usable=Math.floor((measured.vramBytes-256*MiB)/(64*MiB))*64*MiB;
     if(usable>=512*MiB)next.maxVramBytes=Math.min(TiB,usable);else delete next.maxVramBytes;
@@ -123,7 +123,8 @@ export class TeamSpaces {
   /** Devices poll their settings; an auto-capacity device also reports its hardware so the ceiling follows the real machine. */
   async deviceSettings(peer:Peer,measured?:MeasuredCapacity):Promise<Contribution|null>{
     const d=await this.db.spaceDevice.findUnique({where:{id:peer.deviceId}});
-    if(!d||d.spaceId!==peer.groupId||d.holderId!==peer.holderInstanceId)return null;
+    if(!d||d.spaceId!==peer.groupId||d.userId!==peer.principalId)return null;
+    if(d.holderId!==peer.holderInstanceId){if(!peer.app)return null;await this.apps.context(peer);}
     const settings=JSON.parse(d.settingsJson) as Contribution;
     if(!measured||settings.capacityMode!=='auto')return settings;
     const next=autoContribution(settings,measured);

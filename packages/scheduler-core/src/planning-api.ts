@@ -22,6 +22,7 @@ export interface PlanningPolicy { costEstimate?:Partial<CostEstimatePolicy>; pri
 export interface PlanningClock { now:number; monotonic:()=>number; }
 export interface SnapshotDecision { groupId:string; domain:'REAL'|'SIMULATED'; snapshotVersion:number; policyVersion:string; decision:WorkflowPlacementDecision; }
 
+import {scaledWorkKey} from './capability-cost-model';
 import {NumericSampleV2,ResourceAmountV2,sampleUsableV2} from './resources-v2';
 import type {PlacementNode} from './planner';
 
@@ -29,10 +30,13 @@ function resolveCost(c:PlacementCandidate,node:PlacementNode,policy:PlanningPoli
   if(!c.costEvidence)return c;
   const e=c.costEvidence;
   const usable=(s:typeof e.compute)=>sampleUsableV2(s,now,domain)?s.value:null;
-  const measured=c.computeSamples?.find(s=>s.count>=minSamples&&s.workKey===node.workKey&&s.configId===c.configId&&s.startup===c.startup&&s.observedAt<=now&&now-s.observedAt<=s.ttlMs);
-  const compute=measured?.p50Ms??usable(e.compute);
-  return {...c,computeMs:compute,coldMs:measured?.coldP50Ms??usable(e.cold),publishMs:usable(e.publish),queueMs:c.availability?(c.queueObserved===false?usable(c.availability.policyWait):0):c.queueMs,
-    uncertaintyMs:measured?measured.p90Ms-measured.p50Ms:compute===null?null:Math.round(compute*(policy.priorUncertaintyRatio??0.5)),
+  const measured=c.computeSamples?.find(s=>s.count>=(scaledWorkKey(node.workKey)?1:minSamples)&&s.workKey===node.workKey&&s.configId===c.configId&&s.startup===c.startup&&s.observedAt<=now&&now-s.observedAt<=s.ttlMs);
+  let scale=1;try{const key=JSON.parse(node.workKey??'null'),model=key?.[2];if(model?.scale){const units=model.values?.[model.scale.parameter];if(Number.isFinite(units)&&units>0&&model.scale.reference>0)scale=units/model.scale.reference;}}catch{}
+  const prior=usable(e.compute),compute=measured?.p50Ms??(prior===null?null:prior*scale);
+  // A whole EXECUTE observation already includes its initialization. Do not add
+  // the calibration cold prior again when the host cannot split these intervals.
+  return {...c,computeMs:compute,coldMs:measured?.executionTotal?0:measured?.coldP50Ms??usable(e.cold),publishMs:usable(e.publish),queueMs:c.availability?(c.queueObserved===false?usable(c.availability.policyWait):0):c.queueMs,
+    uncertaintyMs:measured?Math.max(measured.p90Ms-measured.p50Ms,measured.count<3?measured.p50Ms:0):compute===null?null:Math.round(compute*(policy.priorUncertaintyRatio??0.5)),
     costSource:measured?'MEASURED':compute===null?'UNKNOWN':'PRIOR',costConfidence:measured?(measured.count<8?'LOW':'NORMAL'):undefined};
 }
 

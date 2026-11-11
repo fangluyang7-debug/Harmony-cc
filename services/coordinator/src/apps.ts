@@ -23,7 +23,7 @@ export class AppRegistry {
   if(existing&&(existing.groupId!==owner.groupId||existing.principalId!==owner.principalId))throw Error('APP_OWNER_REQUIRED');
   if(existing&&input.declaration&&existing.declarationJson&&canonical(JSON.parse(existing.declarationJson))!==canonical(input.declaration))throw Error('APP_DECLARATION_CONFLICT');
   if(input.appId&&!existing)throw Error('APP_UNKNOWN');
-  if(existing&&(canonical(JSON.parse(existing.contractsJson))!==canonical(input.allowedContracts)||existing.maxConcurrent!==input.maxConcurrent||input.batchWeight!==undefined&&existing.batchWeight!==input.batchWeight||canonical(JSON.parse(existing.resourcesJson))!==canonical(input.resources)))throw Error('APP_POLICY_CONFLICT');
+  if(existing&&(canonical(JSON.parse(existing.contractsJson))!==canonical(input.allowedContracts)||existing.maxConcurrent<input.maxConcurrent||input.batchWeight!==undefined&&existing.batchWeight!==input.batchWeight||!vectorFitsV2(input.resources,JSON.parse(existing.resourcesJson))))throw Error('APP_POLICY_CONFLICT');
   const app=existing??await tx.registeredApp.create({data:{id:ids?.appId??randomUUID(),groupId:owner.groupId,principalId:owner.principalId,label:input.label.trim(),batchWeight:input.batchWeight??1,contractsJson:JSON.stringify(input.allowedContracts),resourcesJson:JSON.stringify(input.resources),maxConcurrent:input.maxConcurrent}});
   if(input.declaration&&!app.declarationJson)await tx.registeredApp.update({where:{id:app.id},data:{declarationJson:JSON.stringify(input.declaration)}});
   const appBases=(await tx.registeredInstallation.findMany({where:{appId:app.id}})).map(i=>JSON.parse(i.offlineJson) as ResourceAmountV2[]);
@@ -66,6 +66,21 @@ export class AppRegistry {
   const i=await tx.registeredInstallation.findUnique({where:{id:peer.app.appInstanceId}}),app=i?await tx.registeredApp.findUnique({where:{id:i.appId}}):null;
   if(!i||!app||i.state!=='ACTIVE'||i.groupId!==peer.groupId||i.principalId!==peer.principalId||i.deviceId!==peer.deviceId||i.holderInstanceId!==peer.holderInstanceId||app.id!==peer.app.appId)throw Error('APP_CREDENTIAL_REVOKED');
   return {identity:this.identity(app,i.id),declaration:app.declarationJson?JSON.parse(app.declarationJson) as AppDeclaration:null,offlineBase:JSON.parse(i.offlineJson) as ResourceAmountV2[],onlineExtra:JSON.parse(i.onlineJson) as ResourceAmountV2[],quota:{maxConcurrent:app.maxConcurrent,resources:JSON.parse(app.resourcesJson) as ResourceAmountV2[]}};
+ }
+ /** Explicit foreground App request: use available shared device capacity, never an offline reservation. */
+ async performance(peer:Peer){
+  const context=await this.context(peer),row=await this.db.device.findUnique({where:{id:JSON.stringify(['budget',peer.deviceId])}});
+  if(!row)throw Error('IDENTITY_UNRESOLVED');
+  const capacity=JSON.parse(row.metadataJson).capacity as ResourceAmountV2[];
+  const requested:ResourceAmountV2[]=[{resourcePoolId:'cpu',amount:64},{resourcePoolId:'ram',amount:68719476736},{resourcePoolId:'gpu',amount:8},{resourcePoolId:'vram',amount:68719476736}];
+  const resources=vectorSumV2(...requested.map(r=>[{resourcePoolId:r.resourcePoolId,amount:Math.max(r.amount,context.quota.resources.find(v=>v.resourcePoolId===r.resourcePoolId)?.amount??0)}]),context.quota.resources.filter(r=>!requested.some(v=>v.resourcePoolId===r.resourcePoolId)));
+  const extra=capacity.map(r=>({resourcePoolId:r.resourcePoolId,amount:Math.max(0,r.amount-(context.offlineBase.find(v=>v.resourcePoolId===r.resourcePoolId)?.amount??0))}));
+  await this.db.$transaction(async tx=>{
+   await this.context(peer,tx);
+   await tx.registeredApp.update({where:{id:context.identity.appId},data:{resourcesJson:JSON.stringify(resources),maxConcurrent:Math.max(32,context.quota.maxConcurrent)}});
+   await tx.registeredInstallation.update({where:{id:context.identity.appInstanceId},data:{onlineJson:JSON.stringify(extra)}});
+  });
+  return this.context(peer);
  }
  async reserveJob(tx:Prisma.TransactionClient,peer:Peer,id:string,resources:ResourceAmountV2[],deadlineAt:number){
   const context=await this.context(peer,tx),existing=await tx.appJobReservation.findUnique({where:{id}});

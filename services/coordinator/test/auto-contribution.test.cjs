@@ -13,7 +13,7 @@ test('measurement accepts the legacy CPU/RAM payload and an explicit VRAM figure
 test('an opened GPU backend turns into a VRAM share with 256 MiB kept for the desktop',()=>{
  const next=autoContribution(base,{cpuThreads:16,totalMemoryBytes:32*GiB,vramBytes:8*GiB});
  assert.equal(next.maxVramBytes,8*GiB-256*MiB);
- assert.equal(next.maxCpuThreads,12);
+ assert.equal(next.maxCpuThreads,16);
  assert.deepEqual(capacityVector(next).map(r=>r.resourcePoolId),['cpu','ram','gpu','vram']);
 });
 

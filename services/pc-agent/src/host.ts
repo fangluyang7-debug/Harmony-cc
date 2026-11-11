@@ -199,11 +199,15 @@ export class CpuHost {
     const pack=this.packs.find(p=>p.manifest.contract.capability===capability)!,cost=this.costs.get(capability);
     const prior=(value:number|null,sampledAt=now):NumericSampleV2=>({value,source:value===null?'UNKNOWN':'PRIOR',sampledAt,ttlMs:3600000,unit:'ms'});
     const gpu=pack===this.config.imageEncoder?.pack&&!!this.config.imageEncoder.gpu;
-    const resources=pack.manifest.resourceLimit.filter(r=>gpu||!['gpu','vram'].includes(r.resourcePoolId));
+    const parallel=capability==='photo.enhance.v1'&&!gpu;
+    const slots=Math.min(collectSystemResources().cpuThreads,this.config.contribution.maxCpuThreads);
+    const threads=parallel?([8,4,2].find(n=>n<=Math.max(1,Math.floor(slots/2)))??1):1;
+    const configuration=pack.cases.find(c=>c.config.threads===threads)!.config;
+    const resources=pack.manifest.resourceLimit.filter(r=>gpu||!['gpu','vram'].includes(r.resourcePoolId)).map(r=>({...r,amount:capability==='photo.enhance.v1'&&r.resourcePoolId==='cpu'?threads:r.amount}));
     const executorId=pack===this.config.imageEncoder?.pack?(gpu?(this.config.imageEncoder?.backend==='VULKAN'?photoVulkanExecutorId:cudaExecutorId):imageExecutorId):pack.manifest.contract.serviceId?pack.manifest.executorIds[0]:(cpuRegistry.executorId(capability)??'node.cpu.v1');
-    return {startup:pack.manifest.contract.serviceId?"UNKNOWN":"COLD",target:{targetId:(gpu?'cuda-':'cpu-')+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
+    return {startup:pack.manifest.contract.serviceId||capability.startsWith('photo.')?"UNKNOWN":"COLD",target:{targetId:(gpu?'cuda-':'cpu-')+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
       executorId,executorVersion:'1',backend:gpu?(this.config.imageEncoder?.backend??'CUDA'):pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
-      resources:structuredClone(resources),configurations:[{...pack.cases[0].config}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(null),cold:prior(cost?.overhead??0,cost?cost.at+this.clockOffset:now),publish:prior(0),uncertainty:prior(null)};
+      resources:structuredClone(resources),configurations:[{...configuration}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(null),cold:prior(cost?.overhead??0,cost?cost.at+this.clockOffset:now),publish:prior(0),uncertainty:prior(null)};
   }
   private async sample(syncSettings=true){
     try{

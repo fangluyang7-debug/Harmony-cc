@@ -1,0 +1,1356 @@
+{
+  "kind": "USER_RUN_READ_ONLY_AUDIT",
+  "run": {
+    "id": "4e4de083-9a70-4df3-b1e6-41bf7ff5b369",
+    "group": "93daf728-a543-4ad3-bbc1-c2c17e118e69",
+    "inputs": [
+      {
+        "name": "照片 1",
+        "bytes": 46873,
+        "originalHash": "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "hash": "b12812ae3721470dadda34972b1cf41541eaf7355b9610266478bcc54a89ffab",
+        "width": 192,
+        "height": 128
+      },
+      {
+        "name": "照片 2",
+        "bytes": 38908,
+        "originalHash": "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "hash": "db630125bd24352d7b14825eb346463b726ed59d2d96107ea973eeb872cb25e3",
+        "width": 192,
+        "height": 128
+      }
+    ],
+    "budgetMs": 180000,
+    "createdAt": 1794403642089,
+    "updatedAt": 1794403657579,
+    "state": "SUCCEEDED",
+    "jobs": [
+      {
+        "id": "31c2875b-900d-4c0e-b3bc-1072b70466bb",
+        "imageIndex": 0
+      },
+      {
+        "id": "7f7fb547-9ddb-4ece-8084-6d697d37a5ef",
+        "imageIndex": 1
+      }
+    ],
+    "sourceDurationMs": 15504,
+    "error": null
+  },
+  "warning": "Phase intervals overlap; LOAD may contain TRANSFER_RECV, DELIVER is SDK submit-to-result root. Do not sum into wall time. Configuration is declared; old Windows NCNN was built without OpenMP.",
+  "nodes": [
+    {
+      "image": 1,
+      "node": "analyze",
+      "attemptId": "837c49b7-bd62-488c-8306-32d322acd87f",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.21180000016465783,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 27.23549999995157,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 2,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 82,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 4,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 83,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 68,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "prepare-0",
+      "attemptId": "64ef698e-3c1c-418d-bbc4-360bc20b5627",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.14140000008046627,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 75.20900000003166,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 191,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "OBSERVED_MIXED_WAIT"
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 120,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 6,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 65,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 36,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "enhance-0",
+      "attemptId": "12937ab7-1c21-4a86-bb80-767659772cdf",
+      "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "parallel-8",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.3443000002298504,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 111.77060000016354,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 5.44150000018999,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 67.8933000001125,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_RECV",
+          "durationMs": 10.469199999934062,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 16.817799999844283,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 6712.492199999979,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 16.125500000081956,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 41.629200000083074,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "prepare-1",
+      "attemptId": "51f30967-1375-41dc-9d15-2b1b1aebdfb9",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.17810000013560057,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 117.75980000011623,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 17,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 173,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 16,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 34,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 96,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "enhance-1",
+      "attemptId": "8dbc87a0-d460-4824-99be-c71e45321d1b",
+      "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "parallel-8",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.5748000000603497,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 38.25790000008419,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 16,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 143,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "TRANSFER_RECV",
+          "durationMs": 22,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 23,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 1758,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 132,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 258,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "prepare-2",
+      "attemptId": "c11a55c6-7c7d-49a7-80f3-771f1c608119",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.13629999989643693,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 117.49640000006184,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 225,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "OBSERVED_MIXED_WAIT"
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 94,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 7,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 60,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 105,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "enhance-2",
+      "attemptId": "41396ed0-ee9c-4c7e-af70-9428b1f9f1d8",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "parallel-4",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.28250000020489097,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 116.67560000019148,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 21,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 152,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 8,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 3063,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 45,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 118,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "prepare-3",
+      "attemptId": "1d256ee1-2697-4ff9-a716-1da99d160c16",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.15300000016577542,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 99.85399999981746,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 113,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "OBSERVED_ADMISSION_SERIALIZATION"
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 70,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 7,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 30,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 69,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "enhance-3",
+      "attemptId": "e7606ca5-23f6-4f5c-a71e-5c4f5bcbdd06",
+      "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "parallel-8",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.30839999997988343,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 39.529399999883026,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 11,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 78,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "TRANSFER_RECV",
+          "durationMs": 20,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 20,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 1037,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 139,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 281,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "assemble",
+      "attemptId": "ec5486c9-b485-4e77-bcac-4c0eb2d96363",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.22769999993033707,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 39.198199999984354,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 18,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 115,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "TRANSFER_RECV",
+          "durationMs": 255,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 259,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 233,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 263,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 1,
+      "node": "deliver",
+      "attemptId": "9ee8c8f9-c70c-4c8b-a6a7-aad6f4308972",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.23089999984949827,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 39.317700000014156,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 25,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 141,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 60,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 223,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 215,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 254,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "DELIVER",
+          "durationMs": 14625,
+          "clockDomainId": "photo-native-f54a212e-2dcc-4200-b32f-f77922263be9",
+          "reasonCode": "SOURCE_SDK_SUBMIT_TO_VERIFIED_RESULT"
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "analyze",
+      "attemptId": "52e5b10c-aa1c-4048-b803-cd7cdb1f4d75",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.18709999998100102,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 34.2160000000149,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 13,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 79,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 9,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 46,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 175,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "prepare-0",
+      "attemptId": "a2e3aef9-ed6e-4a0b-a089-9715d0fdd485",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.20470000011846423,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 119.24940000008792,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 37,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "OBSERVED_LOCAL_QUEUE_POLICY"
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 125,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 11,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 21,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 90,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "enhance-0",
+      "attemptId": "f8ea281a-9e68-423d-b142-04ea28708ada",
+      "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "parallel-8",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.45399999991059303,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 42.67999999993481,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 16,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 105,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "TRANSFER_RECV",
+          "durationMs": 103,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 103,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 1264,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 63,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 95,
+          "clockDomainId": "c241f014-df98-4a25-bf3c-0e0567e16bcb",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "prepare-1",
+      "attemptId": "4489dc20-d658-4b42-bfa5-7891913fd60a",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.2930999998934567,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 123.83929999987595,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 4,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 79,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 6,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 53,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 124,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "enhance-1",
+      "attemptId": "ed3f2e35-7424-426e-aad9-5a4c37261f09",
+      "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "parallel-8",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.3304000000935048,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 115.19200000003912,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 64.05080000008456,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 129.32949999999255,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_RECV",
+          "durationMs": 16.20020000007935,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 22.014699999941513,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 6768.215599999996,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 14.644099999917671,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 94.11509999982081,
+          "clockDomainId": "d50668fb-e785-478e-8a08-bebe490ebb46",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "prepare-2",
+      "attemptId": "17df90cc-f9a8-474c-a217-a8b88c12d103",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.14360000006854534,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 128.30569999990985,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 165,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "OBSERVED_LOCAL_QUEUE_POLICY"
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 128,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 9,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 130,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 131,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "enhance-2",
+      "attemptId": "ae8cfab7-82fb-478e-b98d-cfb5dcb34330",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "parallel-4",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.31000000005587935,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 195.35780000011437,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 4,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 55,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 3,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 3275,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 44,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 87,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "prepare-3",
+      "attemptId": "8277d6d5-0e6c-491d-a62a-9d06f721b99b",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.15149999991990626,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 128.55300000007264,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 285,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "OBSERVED_LOCAL_QUEUE_POLICY"
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 202,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 14,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 43,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 73,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "enhance-3",
+      "attemptId": "e75baf72-0852-4f75-997e-96c8f7628b59",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "parallel-4",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.2313000001013279,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 255.40989999985322,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 13,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 168,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 15,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 3050,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 42,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 84,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "assemble",
+      "attemptId": "12e95e2d-c299-49aa-8356-2f35ce27fd41",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.17140000010840595,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 23.08490000013262,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 2,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 78,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "TRANSFER_RECV",
+          "durationMs": 184,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 188,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 490,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 187,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        }
+      ]
+    },
+    {
+      "image": 2,
+      "node": "deliver",
+      "attemptId": "c4604e39-7a25-49c5-9603-1ad694c18837",
+      "deviceId": "b4478965-9780-499a-b65e-959721eddcb4",
+      "state": "SUCCEEDED",
+      "committed": true,
+      "configuration": "standard",
+      "phases": [
+        {
+          "phase": "PLAN",
+          "durationMs": 0.19170000008307397,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": null
+        },
+        {
+          "phase": "OFFER",
+          "durationMs": 32.31609999993816,
+          "clockDomainId": "ad28af4d-0421-4b06-a17e-92d467673cce",
+          "reasonCode": "DURABLE_OFFER_QUEUED"
+        },
+        {
+          "phase": "QUEUE",
+          "durationMs": 4,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "ADMIT",
+          "durationMs": 52,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "INCLUDES_AUTHORIZATION"
+        },
+        {
+          "phase": "LOAD",
+          "durationMs": 20,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "EXECUTE",
+          "durationMs": 165,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "TRANSFER_SEND",
+          "durationMs": 181,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": "RELAY_HTTP_ROUND_TRIP"
+        },
+        {
+          "phase": "PUBLISH",
+          "durationMs": 265,
+          "clockDomainId": "61c30bd8-9bb2-43d3-aa0b-48f34e3fb2d3",
+          "reasonCode": null
+        },
+        {
+          "phase": "DELIVER",
+          "durationMs": 15130,
+          "clockDomainId": "photo-native-60763e9e-e382-4c2d-a6da-785c1cd4fe5d",
+          "reasonCode": "SOURCE_SDK_SUBMIT_TO_VERIFIED_RESULT"
+        }
+      ]
+    }
+  ],
+  "localSyntheticBenchmark": {
+    "kind": "LOCAL_SYNTHETIC_RUNTIME_ONLY",
+    "width": 96,
+    "height": 64,
+    "model": "realesrgan-x4plus",
+    "rows": [
+      {
+        "label": "old-declared-8",
+        "threads": 8,
+        "durationMs": 2595.2597,
+        "maxRgbDifference": 0
+      },
+      {
+        "label": "new-8",
+        "threads": 8,
+        "durationMs": 1135.7827000000002,
+        "maxRgbDifference": 0
+      },
+      {
+        "label": "new-1",
+        "threads": 1,
+        "durationMs": 2183.3006,
+        "maxRgbDifference": 0
+      },
+      {
+        "label": "new-8-repeat",
+        "threads": 8,
+        "durationMs": 1056.4238999999998,
+        "maxRgbDifference": 0
+      }
+    ]
+  }
+}

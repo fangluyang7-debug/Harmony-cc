@@ -80,10 +80,10 @@ function windowsPackage(name, role) {
   const service = 'services/' + (center ? 'coordinator' : 'pc-agent');
   const manifest = path.join(root, service, 'package.json');
   const files = [service + '/dist', 'scripts/runtime-desktop.cjs', 'scripts/runtime-device-binding.cjs', 'scripts/start-coordinator-lan.cjs', 'apps/windows-agent/discovery.cjs',
-    'capabilities/coverage-requirements.json', 'capabilities/capability-hints.json'];
+    'capabilities/coverage-requirements.json', 'capabilities/capability-hints.json', 'contracts/scheduling/v2/schema/protocol.schema.json'];
   if (center) files.push(service + '/generated/client', service + '/scripts/migrate.cjs',
     service + '/prisma', 'apps/team-space-web','scripts/photo-display-server.cjs','scripts/photo-display-coordinator.cjs','scripts/photo-display-records.cjs');
-  else files.push('services/image-worker/encode_once.py', 'services/image-worker/app/main.py',
+  else files.push('scripts/check-photo-device.cjs', 'services/image-worker/encode_once.py', 'services/image-worker/app/main.py',
     'services/image-worker/app/__init__.py', 'services/image-worker/requirements.txt',
     'services/image-worker/README.md');
   for (const file of files) copy(path.join(root, file), path.join(dest, file));
@@ -160,6 +160,18 @@ function windowsPackage(name, role) {
     }));
   }
   fs.writeFileSync(path.join(dest, 'README.md'), center ? README_CENTER : README_AGENT);
+  if (!center) fs.writeFileSync(path.join(dest, 'Check-Photo-GPU.cmd'), '@echo off\r\nchcp 65001 >nul\r\ncd /d "%~dp0"\r\n"%~dp0runtime\\node.exe" "%~dp0scripts\\check-photo-device.cjs"\r\npause\r\n');
+  const hashes = {};
+  for (const file of ['scripts/runtime-desktop.cjs', 'packages/scheduler-core/dist/protocol-v2.js',
+    'packages/reference-capabilities/dist/photo.js', 'contracts/scheduling/v2/schema/protocol.schema.json',
+    ...(center ? ['services/coordinator/dist/spaces.js'] : ['services/pc-agent/dist/host-main.js',
+      'services/pc-agent/dist/photo-accelerator.js', 'services/pc-agent/dist/executors/photo.js'])]) {
+    hashes[file] = createHash('sha256').update(fs.readFileSync(path.join(dest, file))).digest('hex');
+  }
+  fs.writeFileSync(path.join(dest, 'BUILD-INFO.json'), JSON.stringify({release, role, builtAt: new Date().toISOString(),
+    baseline: execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim(),
+    includesWorkingTreeChanges: !!execFileSync('git', ['status', '--porcelain'], {cwd: root, encoding: 'utf8'}).trim(),
+    photoRuntime: center ? null : photoRuntime, hashes}, null, 2));
   console.log(name + ': ' + visited.size + ' runtime dependencies');
   return dest;
 }

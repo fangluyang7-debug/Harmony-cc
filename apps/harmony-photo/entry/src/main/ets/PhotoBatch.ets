@@ -4,6 +4,7 @@ import { SchedulerSdk, SdkTask, factory, base64, hash, text, monotonic } from 's
 import { photoSession } from './PhotoSession';
 import { PhotoInput, PhotoResult, readPhoto, storePhotoResult } from './PhotoFiles';
 import { photoWorkflow } from './PhotoWorkflow';
+import { recoverPhotoDelivery, transientPhotoTransport } from './PhotoRecovery';
 interface InputMeta {name:string;bytes:number;originalHash:string;hash:string;width:number;height:number;}
 interface Prepared {meta:InputMeta;data:Uint8Array;}
 interface PhotoJob {id:string;imageIndex:number;}
@@ -31,18 +32,29 @@ export class PhotoBatch {
  async cancel():Promise<void>{await Promise.allSettled(this.tasks.map(task=>task.cancel()));}
  async run(context:common.UIAbilityContext,inputs:PhotoInput[],options:BatchOptions):Promise<number>{
   if(inputs.length<1||inputs.length>8)throw Error('请选择 1～8 张照片');
-  const began=monotonic(),budget=180000,prepared:Prepared[]=[];let run:Run|null=null,queue:Promise<void>=Promise.resolve(),polling=false,active=true;
+  const began=monotonic(),budget=180000,prepared:Prepared[]=[];let run:Run|null=null,queue:Promise<void>=Promise.resolve(),polling=false,active=true,planningReady=false;
   const check=():void=>{if(options.cancelled())throw Error('已取消');if(monotonic()-began>=budget)throw Error('180 秒预算已用尽');};
-  const update=(changes:Mutation,job?:PhotoJob):Promise<void>=>{const next=queue.then(async()=>{if(!run)throw Error('PHOTO_RUN_REQUIRED');if(job)changes.jobs=[...run.jobs,job];changes.revision=run.revision;run=await request('/photo-runs/'+run.id,'POST',changes);});queue=next.catch(()=>{});return next;};
-  const total=inputs.reduce((count:number,i:PhotoInput)=>{const edge=Math.max(64,Math.ceil(Math.max(i.width,i.height)/2));return count+3+2*Math.ceil(i.width/edge)*Math.ceil(i.height/edge);},0);
-  const watch=async():Promise<void>=>{if(polling||!run||!active)return;polling=true;try{const view=await request('/photo-runs/'+run.id);if(!active)return;let done=0,current='等待任务规划';for(const w of view.workflows??[]){for(const n of w.nodes){if(n.committed)done++;else if(['RUNNING','ACCEPTED'].includes(n.state))current='照片 '+(w.imageIndex+1)+' · '+label(n.id);}}options.progress({phase:current,completed:done,total});}catch{/* Display polling cannot abort computation. */}finally{polling=false;}};
+  const remaining=():number=>budget-(monotonic()-began);
+  const update=(changes:Mutation,job?:PhotoJob):Promise<void>=>{const next=queue.then(async()=>{
+   await recoverPhotoDelivery<void>(async(attempt:number):Promise<void>=>{
+    if(!run)throw Error('PHOTO_RUN_REQUIRED');
+    // A timed-out POST may already be durable. Re-read revision before retrying.
+    if(attempt>0)run=await request('/photo-runs/'+run.id);
+    if(job)changes.jobs=run.jobs.some(j=>j.id===job.id)?run.jobs:[...run.jobs,job];
+    changes.revision=run.revision;run=await request('/photo-runs/'+run.id,'POST',changes);
+   },()=>changes.state==='FAILED'||changes.state==='CANCELLED'?10000:remaining(),()=>false,()=>{},(error:Error):boolean=>transientPhotoTransport(error)||error.message==='PHOTO_RUN_REVISION');
+  });queue=next.catch(()=>{});return next;};
+  const total=inputs.reduce((count:number,i:PhotoInput)=>{const edge=Math.max(64,Math.ceil(Math.max(i.width,i.height)/2));return count+2+Math.ceil(i.width/edge)*Math.ceil(i.height/edge);},0);
+  const watch=async():Promise<void>=>{if(polling||!run||!active||!planningReady)return;polling=true;try{const view=await request('/photo-runs/'+run.id);if(!active)return;let done=0,current='等待任务规划';for(const w of view.workflows??[]){for(const n of w.nodes){if(n.committed)done++;else if(['RUNNING','ACCEPTED'].includes(n.state))current='照片 '+(w.imageIndex+1)+' · '+label(n.id);}}options.progress({phase:current,completed:done,total});}catch{/* Display polling cannot abort computation. */}finally{polling=false;}};
   const timer=setInterval(()=>{void watch();},750);
   try{
    options.progress({phase:'正在准备原始照片',completed:0,total:1});
    for(const input of inputs){check();prepared.push(await prepare(input));}
    check();run=await request('/photo-runs','POST',{mode:'COOPERATIVE',budgetMs:budget,inputs:prepared.map(p=>p.meta)});
    for(let i=0;i<prepared.length;i++){check();await request('/photo-runs/'+run.id+'/input?image='+i,'PUT',undefined,prepared[i].data);}
-   await update({state:'RUNNING'});let next=0;const failures:string[]=[];
+   await update({state:'RUNNING'});
+   await photoSession.waitReady(()=>budget-(monotonic()-began),options.cancelled,(phase:string)=>options.progress({phase,completed:0,total}));
+   const parallel=await photoSession.batchConcurrency();check();planningReady=true;let next=0;const failures:string[]=[];
    const worker=async():Promise<void>=>{
     while(next<prepared.length&&!options.cancelled()){
      const i=next++,src=prepared[i],id=factory.id();let task:SdkTask|null=null;
@@ -53,14 +65,14 @@ export class PhotoBatch {
       // The capture hook must know this job before read/received can release output.
       await update({},{id:task.id,imageIndex:i});
       if(options.cancelled()){await task.cancel();throw Error('已取消');}
-      const result=await task.result(Math.max(1,Math.min(300000,budget-(monotonic()-began)+5000))),stored=await storePhotoResult(context,text(result.output),inputs[i].name);
+      const current=task;const result=await recoverPhotoDelivery(async()=>current.result(Math.max(1,Math.min(300000,remaining()))),remaining,options.cancelled,()=>options.progress({phase:'照片 '+(i+1)+' · 正在恢复结果接收，不重复计算',completed:0,total})),stored=await storePhotoResult(context,text(result.output),inputs[i].name);
       if(stored.width!==src.meta.width*4||stored.height!==src.meta.height*4)throw Error('PHOTO_RESULT_GEOMETRY');
       await update({deliveredImage:{imageIndex:i,hash:stored.id}});options.result(i,stored);
      }catch(e){failures.push(inputs[i].name+'：'+(e as Error).message);try{await (task??sdk.resume(id)).cancel();}catch{} }
      finally{if(task)this.tasks=this.tasks.filter(t=>t.id!==id);sdk.releaseInput(input);}
     }
    };
-   const workers:Promise<void>[]=[];for(let i=0;i<Math.min(2,inputs.length);i++)workers.push(worker().catch((e:Error)=>{failures.push(e.message);}));await Promise.all(workers);
+   const workers:Promise<void>[]=[];for(let i=0;i<Math.min(parallel,inputs.length);i++)workers.push(worker().catch((e:Error)=>{failures.push(e.message);}));await Promise.all(workers);
    if(options.cancelled())throw Error('已取消');if(failures.length)throw Error(failures.join('；'));
    const duration=monotonic()-began;await update({state:'SUCCEEDED',sourceDurationMs:duration});options.progress({phase:'处理完成',completed:1,total:1});return duration;
   }catch(e){await this.cancel();if(run)try{await update({state:options.cancelled()?'CANCELLED':'FAILED',error:(e as Error).message,sourceDurationMs:monotonic()-began});}catch{}throw e as Error;}

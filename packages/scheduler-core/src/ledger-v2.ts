@@ -19,8 +19,8 @@ export class RunTimings {
     this.starts.set(id,{at:now,inputBucket,startup});
   }
   private key(e:LedgerEntryV2,start:RunStart):string{
-    const o=e.offer;
-    return [o.task.app.appInstanceId,canonical(o.target),canonical(o.task.contract),start.startup,start.inputBucket,canonical(o.task.inputs.map(r=>[r.schemaId,r.schemaVersion.toString(),start.inputBucket&&start.startup!=='UNKNOWN'?'':r.contentHash])),
+    const o=e.offer,geometry=o.task.contract.workModel?.inputBytes==='IGNORE',bucket=geometry?'geometry':start.inputBucket;
+    return [o.task.app.appInstanceId,canonical(o.target),canonical(o.task.contract),start.startup,bucket,canonical(o.task.inputs.map(r=>[r.schemaId,r.schemaVersion.toString(),geometry||start.inputBucket&&start.startup!=='UNKNOWN'?'':r.contentHash])),
       timingConfiguration(o.task.parameters,o.task.contract.workModel),canonical(o.resources),canonical(o.allowedConfigs),canonical(o.transferPlan.map(h=>[h.from,h.to,h.via])),o.task.resultDestination].map(v=>canonical(v)).join('|');
   }
   finish(e:LedgerEntryV2,now:number):void{

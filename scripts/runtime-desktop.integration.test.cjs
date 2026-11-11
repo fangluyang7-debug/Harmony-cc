@@ -9,7 +9,7 @@ test('desktop starts the real LAN coordinator, serves authenticated dashboard en
  try{
   control.startCenter({address,port});try{await until(()=>control.state==='RUNNING'||control.state==='FAILED',60000);}catch(e){throw Error(e.message+'\n'+control.logs.join('\n'));}
   assert.equal(control.state,'RUNNING',control.logs.join('\n'));
-  const certificate=fs.readFileSync(path.join(dataRoot,'desktop-'+address,'coordinator-public.crt'));
+  const certificate=fs.readFileSync(path.join(control.coordinatorDirectory,'coordinator-public.crt'));
   const get=route=>new Promise((resolve,reject)=>{https.get(control.url+route,{ca:certificate},res=>{const chunks=[];res.on('data',b=>chunks.push(b));res.on('end',()=>resolve({status:res.statusCode,body:Buffer.concat(chunks).toString()}));}).on('error',reject);});
   assert.equal((await get('/v2/health/ready')).status,200);
   const dashboard=await get('/dispatch.html');assert.equal(dashboard.status,200);assert.match(dashboard.body,/已接入应用与工作流声明/);
@@ -33,11 +33,24 @@ test('desktop starts the real LAN coordinator, serves authenticated dashboard en
   assert.equal(invite.status,200);assert.equal((await invite.json()).address,control.url,'Invitations must advertise the LAN coordinator, not the loopback proxy');
   const {RuntimeControl}=require('./runtime-desktop.cjs'),device=new RuntimeControl({bindingFile:path.join(dataRoot,'device-binding.json')});
   const inviteDevice=async group=>{const response=await fetch(origin+'/v2/spaces/'+group+'/devices',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({name:'Windows test',settings:{ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:268435456,reserveMemoryBytes:0}})});assert.equal(response.status,200);return response.json();};
+  device.coordinatorGone=true;
   const firstDevice=await inviteDevice(space),firstPair=await device.pair({directory:path.join(dataRoot,'device'),invitation:JSON.stringify(firstDevice)}),installationId=device.binding.context().installationId;
+  assert.equal(device.snapshot().coordinatorGone,false,'successful pairing clears the old disconnect flag before the UI reloads the installation');
   const secondDevice=await inviteDevice(next.id),secondPair=await device.pair({directory:firstPair.directory,invitation:JSON.stringify(secondDevice)});
   assert.notEqual(secondPair.directory,firstPair.directory);assert.equal(device.binding.context().installationId,installationId);assert.equal(device.binding.data.active.groupId,next.id);assert.throws(()=>device.startAgent({directory:firstPair.directory}),/不能启动旧配对/);
   assert.ok(fs.existsSync(path.join(firstPair.directory,'agent.json')),'old ledger retained');
   const previous=JSON.parse(fs.readFileSync(path.join(firstPair.directory,'agent.json')));const rejected=await new Promise((resolve,reject)=>{https.get(control.url+'/v2/devices',{ca:certificate,headers:{Authorization:'Bearer '+previous.connection.credential}},res=>{res.resume();resolve(res.statusCode);}).on('error',reject);});assert.equal(rejected,401,'previous Windows space credential is retired');
+  try{
+   let activeDirectory=secondPair.directory;
+   for(let round=0;round<2;round++){
+    device.startAgent({directory:activeDirectory});await until(()=>device.connected||device.state==='FAILED',60000);assert.equal(device.connected,true,device.logs.join('\n'));
+    device.stop();await until(()=>device.child===null);await device.leave({directory:activeDirectory});
+    const fresh=await inviteDevice(next.id),{pairingCertificate}=require('./runtime-desktop.cjs'),trust=await pairingCertificate(control.url);
+    const paired=await device.pair({directory:activeDirectory,invitation:fresh.pairingCode,...trust});activeDirectory=paired.directory;
+    assert.equal(device.binding.context().installationId,installationId);
+   }
+   device.startAgent({directory:activeDirectory});await until(()=>device.connected||device.state==='FAILED',60000);assert.equal(device.connected,true,device.logs.join('\n'));
+  }finally{if(device.child){device.stop();await until(()=>device.child===null);}}
   control.stop();await until(()=>control.child===null);assert.equal(control.state,'STOPPED',control.logs.join('\n'));
   const reused=net.createServer();await new Promise((resolve,reject)=>reused.once('error',reject).listen(port,'0.0.0.0',resolve));await new Promise(r=>reused.close(r));
  }finally{if(control.child){control.stop();await until(()=>control.child===null).catch(()=>{});}await new Promise(resolve=>desktop.server.close(resolve));}

@@ -1,0 +1,237 @@
+{
+  "runId": "dabdefa2-8957-4143-8639-2048bd8391cf",
+  "state": "FAILED",
+  "sourceDurationMs": 39839,
+  "error": "鐓х墖 12锛歄peration timeout",
+  "deliveries": [
+    0,
+    1,
+    2,
+    5,
+    4
+  ],
+  "graphs": [
+    {
+      "imageIndex": 0,
+      "state": "SUCCEEDED",
+      "received": 1794411459308,
+      "nodes": [
+        {
+          "id": "analyze",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        },
+        {
+          "id": "enhance-0",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-1",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-2",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-3",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "deliver",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        }
+      ]
+    },
+    {
+      "imageIndex": 1,
+      "state": "SUCCEEDED",
+      "received": 1794411459862,
+      "nodes": [
+        {
+          "id": "analyze",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        },
+        {
+          "id": "enhance-0",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-1",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-2",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "enhance-3",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "deliver",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        }
+      ]
+    },
+    {
+      "imageIndex": 2,
+      "state": "SUCCEEDED",
+      "received": 1794411468043,
+      "nodes": [
+        {
+          "id": "analyze",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        },
+        {
+          "id": "enhance-0",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "enhance-1",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "enhance-2",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "enhance-3",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "deliver",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        }
+      ]
+    },
+    {
+      "imageIndex": 3,
+      "state": "SUCCEEDED",
+      "received": null,
+      "nodes": [
+        {
+          "id": "analyze",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        },
+        {
+          "id": "enhance-0",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-1",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "enhance-2",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-3",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "deliver",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        }
+      ]
+    },
+    {
+      "imageIndex": 4,
+      "state": "SUCCEEDED",
+      "received": 1794411476446,
+      "nodes": [
+        {
+          "id": "analyze",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        },
+        {
+          "id": "enhance-0",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "enhance-1",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-2",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "enhance-3",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "deliver",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        }
+      ]
+    },
+    {
+      "imageIndex": 5,
+      "state": "SUCCEEDED",
+      "received": 1794411474391,
+      "nodes": [
+        {
+          "id": "analyze",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        },
+        {
+          "id": "enhance-0",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-1",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "enhance-2",
+          "state": "SUCCEEDED",
+          "deviceId": "44462012-2e1f-4270-a848-a8acdd89cebe"
+        },
+        {
+          "id": "enhance-3",
+          "state": "SUCCEEDED",
+          "deviceId": "2ef0d092-70c9-400f-929f-c4777afec8a3"
+        },
+        {
+          "id": "deliver",
+          "state": "SUCCEEDED",
+          "deviceId": "ebdc6369-c7b7-459a-8d83-bb1400ddf6d8"
+        }
+      ]
+    }
+  ]
+}

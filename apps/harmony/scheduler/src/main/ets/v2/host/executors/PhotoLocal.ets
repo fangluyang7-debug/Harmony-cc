@@ -1,3 +1,4 @@
+import photoRuntime from 'libharmony_photo.so';
 import { common } from '@kit.AbilityKit';
 import { executePhoto } from './Photo';
 import { EngineResult } from './Types';
@@ -14,10 +15,11 @@ export interface LocalPhotoOptions { cancelled:()=>boolean; progress:(value:Loca
  * no coordinator, registration, SDK dispatch or input upload is involved. */
 export async function enhancePhotoLocally(context:common.UIAbilityContext,input:Uint8Array,options:LocalPhotoOptions):Promise<Uint8Array>{
  let completed=0,total=1;
+ const cores=Math.min(64,photoRuntime.cpuCount()),threads=[8,4,2].find((n:number)=>n<=Math.max(1,Math.floor(cores/2)))??1,parallel=Math.max(1,Math.floor(cores/threads));
  const stage=async(capability:string,data:Uint8Array,parameters:string,label:string):Promise<EngineResult>=>{
   if(options.cancelled())throw Error('CANCELLED_SETTLED');
   options.progress({completed,total,stage:label});
-  const result=await executePhoto(capability,{context,input:data,parameters,model:null,cancelled:options.cancelled});
+  const result=await executePhoto(capability,{context,input:data,parameters,model:null,threads,cancelled:options.cancelled});
   completed++;options.progress({completed,total,stage:label});return result;
  };
  const source=await stage('photo.analyze.v1',input,'{}','分析照片');
@@ -27,10 +29,10 @@ export async function enhancePhotoLocally(context:common.UIAbilityContext,input:
  for(let y=0;y<h;y+=edge)for(let x=0;x<w;x+=edge)tiles.push({x,y,width:Math.min(edge,w-x),height:Math.min(edge,h-y)});
  total=3+tiles.length*2;
  const parts:LocalPart[]=[];
- // Two local inferences at most, matching the photo App's two CPU contribution slots.
+ // Use the same per-tile thread policy as the cooperative host, bounded by actual cores.
  // All admitted siblings settle before cancellation/failure is returned to the caller.
- for(let start=0;start<tiles.length;start+=2){
-  const group=tiles.slice(start,start+2).map(async(tile:Tile,offset:number):Promise<LocalPart>=>{
+ for(let start=0;start<tiles.length;start+=parallel){
+  const group=tiles.slice(start,start+parallel).map(async(tile:Tile,offset:number):Promise<LocalPart>=>{
    const i=start+offset;
    const prepared=await stage('photo.prepare.v1',source.data,JSON.stringify(tile),'准备图块 '+(i+1)+'/'+tiles.length);
    const enhanced=await stage('photo.enhance.v1',prepared.data,JSON.stringify({width:tile.width,height:tile.height}),'AI 高清增强 '+(i+1)+'/'+tiles.length);

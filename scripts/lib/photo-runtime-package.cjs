@@ -27,10 +27,11 @@ function stagePhotoRuntime(configPath,target,copy=defaultCopy){
     const dir=path.join(target,'vulkan'),source=path.dirname(vulkan);fs.mkdirSync(dir,{recursive:true});
     copy(vulkan,path.join(dir,path.basename(vulkan)));
     for(const name of fs.readdirSync(source))if(/\.dll$/i.test(name)&&!/^vulkan-1\.dll$/i.test(name)){copy(path.join(source,name),path.join(dir,name));summary.dlls.push(name);}
-    if(!summary.dlls.some(name=>/^vcomp140\.dll$/i.test(name)))throw Error('PHOTO_RUNTIME_INCOMPLETE: vcomp140.dll beside '+vulkan);
+    for(const name of ['LICENSE-ncnn.txt','LICENSE-glslang.txt'])if(fs.existsSync(path.join(source,name)))copy(path.join(source,name),path.join(dir,name));
+    if(config.vulkanRuntime!=='harmony-raw-v1'&&!summary.dlls.some(name=>/^vcomp140\.dll$/i.test(name)))throw Error('PHOTO_RUNTIME_INCOMPLETE: vcomp140.dll beside '+vulkan);
     settings.vulkan='vulkan/'+path.basename(vulkan);summary.vulkan=settings.vulkan;
   }
-  for(const key of ['backend','cpuRuntime','ncnnRevision'])if(config[key]!==undefined)settings[key]=config[key];
+  for(const key of ['backend','cpuRuntime','ncnnRevision','vulkanRuntime'])if(config[key]!==undefined)settings[key]=config[key];
   fs.writeFileSync(path.join(target,'runtime.json'),JSON.stringify(settings));
   return summary;
 }

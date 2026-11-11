@@ -31,6 +31,10 @@ test('one installation has one active space; switching retires credentials, hide
   await r.db.attempt.create({data:{id:'pending-app-job',groupId:'space-a',workflowId:'app-workflow',nodeId:'node',holderInstanceId:'remote-holder',executionDigest:'digest',taskJson:'{}',state:'SUCCEEDED',recordJson:JSON.stringify({resourcesSettled:false})}});
   await assert.rejects(r.auth.exchange(request),/SPACE_SWITCH_BUSY/,'terminal state alone must not release unacknowledged resources');
   await r.db.attempt.update({where:{id:'pending-app-job'},data:{recordJson:JSON.stringify({resourcesSettled:true})}});
+  await r.db.$transaction(tx=>r.apps.reserveJob(tx,app.peer,'cancelled-before-dispatch',[{resourcePoolId:'cpu',amount:1}],Date.now()+30000));
+  await r.db.cpuJob.create({data:{id:'cancelled-before-dispatch',groupId:'space-a',principalId:user,sourceHolderId:app.peer.holderInstanceId,state:'WAITING_INPUT',metadataJson:JSON.stringify({offer:{target:{deviceId:'remote-device'},task:{contract:{capability:'text.count.v1'}}}})}});
+  await assert.rejects(r.auth.exchange(request),/SPACE_SWITCH_BUSY/,'unstarted but still active jobs block switching');
+  await r.db.cpuJob.update({where:{id:'cancelled-before-dispatch'},data:{state:'CANCELLED'}});
   const retired=[];r.auth.onRevoked(id=>retired.push(id));const next=await r.auth.exchange(request);
   assert.ok(retired.includes(first.peer.credentialId));await assert.rejects(r.auth.authenticate(first.credential),/REVOKED/);
   await assert.rejects(r.auth.authenticate(app.credential),/REVOKED/);
@@ -38,6 +42,7 @@ test('one installation has one active space; switching retires credentials, hide
   await assert.rejects(r.apps.exchange({registrationId:pendingInvite.registrationId,code:pendingInvite.code}));
   assert.equal((await r.auth.authenticate(next.credential)).groupId,'space-b');
   assert.equal(await r.db.appJobReservation.count({where:{id:'pending-app-job'}}),1,'settled reservation history is preserved');
+  assert.equal(await r.db.appJobReservation.count({where:{id:'cancelled-before-dispatch'}}),1,'cancelled pre-dispatch history is preserved');
   assert.equal(await deviceMembershipActive(r.db,'device-a'),false);assert.equal(await deviceMembershipActive(r.db,'device-b'),true);
   assert.equal((await r.spaces.dashboard(user,'space-a')).devices.length,0);assert.equal((await r.spaces.dashboard(user,'space-b')).devices.length,1);
   assert.equal(await r.db.spaceDevice.count(),3);assert.equal((await r.db.attempt.findUnique({where:{id:'busy-work'}})).state,'SUCCEEDED');
@@ -45,6 +50,14 @@ test('one installation has one active space; switching retires credentials, hide
   const back=await r.auth.exchange(await create('space-a','device-a-new','device-b'));
   await assert.rejects(r.auth.authenticate(next.credential),/REVOKED/);assert.equal(await deviceMembershipActive(r.db,back.peer.deviceId),true);
   assert.equal((await r.spaces.dashboard(user,'space-b')).devices.length,0);
+  const finalInvite=await r.apps.register(back.peer,registration,r.url),finalApp=await r.apps.exchange({registrationId:finalInvite.registrationId,code:finalInvite.code});
+  await r.db.$transaction(tx=>r.apps.reserveJob(tx,finalApp.peer,'leave-cancelled-job',[{resourcePoolId:'cpu',amount:1}],Date.now()+30000));
+  await r.db.cpuJob.create({data:{id:'leave-cancelled-job',groupId:'space-a',principalId:user,sourceHolderId:finalApp.peer.holderInstanceId,state:'CANCELLED',metadataJson:'{}'}});
+  await r.db.attempt.create({data:{id:'leave-cancelled-job',groupId:'space-a',workflowId:'leave-flow',nodeId:'n',holderInstanceId:'remote',executionDigest:'digest',taskJson:'{}',state:'RUNNING',recordJson:JSON.stringify({resourcesSettled:false})}});
+  await assert.rejects(r.auth.leaveDevice(back.peer),/SPACE_SWITCH_BUSY/,'an actual admitted attempt overrides the cancelled job marker');
+  await r.db.attempt.delete({where:{id:'leave-cancelled-job'}});
+  assert.deepEqual(await r.auth.leaveDevice(back.peer),{left:true});
+  assert.equal(await r.db.appJobReservation.count({where:{id:'leave-cancelled-job'}}),1);
  }finally{await r.close();}
 });
 test('a previousDeviceId issued by another coordinator is ignored instead of rejecting the pairing',async()=>{

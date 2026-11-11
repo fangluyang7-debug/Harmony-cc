@@ -34,3 +34,11 @@ test('a CPU-only runtime is accepted; missing model, runner or OpenMP DLL fails 
   fs.rmSync(r.dir,{recursive:true,force:true});
  }
 });
+
+test('statically linked shared-core Vulkan runtime keeps its ABI and needs no legacy OpenMP DLL',()=>{
+ const r=runtime({noOpenMp:true});const config=JSON.parse(fs.readFileSync(r.config));
+ config.vulkanRuntime='harmony-raw-v1';fs.writeFileSync(r.config,JSON.stringify(config));
+ stagePhotoRuntime(r.config,r.target);
+ assert.equal(JSON.parse(fs.readFileSync(path.join(r.target,'runtime.json'))).vulkanRuntime,'harmony-raw-v1');
+ fs.rmSync(r.dir,{recursive:true,force:true});
+});

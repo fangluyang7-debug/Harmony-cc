@@ -2,7 +2,7 @@ import { createHash, randomInt, randomBytes, randomUUID, X509Certificate } from 
 import { PrismaClient } from '../generated/client';
 import { protocolId } from '@harmony/scheduler-core';
 import { Peer } from './channel';
-import {activateDeviceMembership,deviceMembershipActive,registerDeviceMembership} from './device-membership';
+import {activateDeviceMembership,deviceMembershipActive,registerDeviceMembership,appReservationSettled} from './device-membership';
 export interface Invitation {version:2;inviteId:string;code:string;address:string;certificate:string;fingerprint:string;expiresAt:number;groupId:string;}
 interface InviteData {secretHash:string;expiresAt:number;used:boolean;principalId:string;deviceId:string;domain:string;}
 interface CredentialData {peer:Peer;expiresAt:number;domain:string;}
@@ -129,7 +129,7 @@ export class PairingService {
       const pending=await tx.attempt.findMany({where:{groupId:peer.groupId,holderInstanceId:{in:holders}}});
       if(pending.some(a=>a.state!=='REJECTED'&&(!a.recordJson||!JSON.parse(a.recordJson).resourcesSettled)))throw Error('SPACE_SWITCH_BUSY');
       const reservations=await tx.appJobReservation.findMany({where:{appInstanceId:{in:apps.map(a=>a.id)}}});
-      for(const r of reservations){const a=await tx.attempt.findUnique({where:{id:r.id}});if(!a||a.state!=='REJECTED'&&(!a.recordJson||!JSON.parse(a.recordJson).resourcesSettled))throw Error('SPACE_SWITCH_BUSY');}
+      for(const r of reservations)if(!await appReservationSettled(tx,r))throw Error('SPACE_SWITCH_BUSY');
       const credentials=(await tx.credential.findMany({where:{groupId:peer.groupId,revoked:false}})).filter(c=>JSON.parse(c.metadataJson).peer.deviceId===peer.deviceId);
       for(const c of credentials)await tx.credential.update({where:{id:c.id},data:{revoked:true,revision:{increment:1}}});
       await tx.registeredInstallation.updateMany({where:{deviceId:peer.deviceId,groupId:peer.groupId},data:{state:'REVOKED',secretHash:null}});

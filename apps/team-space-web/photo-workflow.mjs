@@ -8,9 +8,8 @@ export function tilePlan(width,height){
 }
 export function photoWorkflow(id,input,width,height){
  const {tiles,reason}=tilePlan(width,height),nodes=[{id:'analyze',capability:'photo.analyze.v1',input,parameters:JSON.stringify({width,height}),dependsOn:[]}];
- tiles.forEach((rect,i)=>{nodes.push({id:'prepare-'+i,capability:'photo.prepare.v1',inputFrom:'analyze',parameters:JSON.stringify(rect),dependsOn:['analyze']});nodes.push({id:'enhance-'+i,capability:'photo.enhance.v1',inputFrom:'prepare-'+i,parameters:JSON.stringify({width:rect.width,height:rect.height}),dependsOn:['prepare-'+i]});});
- const sources=tiles.map((_,i)=>'enhance-'+i);nodes.push({id:'assemble',capability:'photo.assemble.v1',inputFroms:sources,parameters:JSON.stringify({width,height}),dependsOn:sources});
- nodes.push({id:'deliver',capability:'photo.deliver.v1',inputFrom:'assemble',parameters:JSON.stringify({width:width*4,height:height*4}),dependsOn:['assemble']});
+ tiles.forEach((rect,i)=>{const iw=Math.min(width,rect.x+rect.width+16)-Math.max(0,rect.x-16),ih=Math.min(height,rect.y+rect.height+16)-Math.max(0,rect.y-16);nodes.push({id:'enhance-'+i,capability:'photo.enhance.v1',inputFrom:'analyze',parameters:JSON.stringify({...rect,pixels:iw*ih}),dependsOn:['analyze']});});
+ const sources=tiles.map((_,i)=>'enhance-'+i);nodes.push({id:'deliver',capability:'photo.deliver.v1',inputFroms:sources,parameters:JSON.stringify({width:width*4,height:height*4,assemble:true}),dependsOn:sources});
  return {workflow:{version:3,id,qualityTarget:'reference',outputContract:'photo.product',nodes},tiles,reason};
 }
 export function photoPort(group,fetcher,digest,onStatus=()=>{},sourceDeviceId=''){

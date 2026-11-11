@@ -44,7 +44,7 @@ export interface ModelCompatibility {
   indexSpaceId: string;
 }
 export interface CostParameterRule { name: string; bucketWidth?: number; }
-export interface CapabilityCostModel { version: string; parameters: CostParameterRule[]; }
+export interface CapabilityCostModel { version: string; parameters: CostParameterRule[]; inputBytes?:'IGNORE'; scale?:{parameter:string;reference:number}; }
 export interface TaskContractV1 {
   costModel?: CapabilityCostModel;
   protocolVersion: 1;

@@ -1,6 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),sharp=require('sharp');
 const {analyze,prepare,assemble}=require('../dist/executors/photo'),{encodeBundle,photoPacks,validateCoverage}=require('@harmony/reference-capabilities');
 const configuration={id:'standard',threads:1,batchSize:1,quality:'standard'};
+test('photo enhancement suite tests output and invalid inputs for each parallel configuration',()=>{
+ const p=photoPacks().find(p=>p.manifest.contract.capability==='photo.enhance.v1');
+ for(const threads of [1,2,4,8]){const cases=p.cases.filter(c=>c.config.threads===threads);assert.ok(cases.some(c=>c.expect.kind==='OUTPUT'));assert.ok(cases.some(c=>c.expect.kind==='REJECT'));}
+ assert.equal(p.manifest.resourceLimit.find(r=>r.resourcePoolId==='cpu').amount,8);
+});
 
 test('declared photo geometry cannot understate transfer bounds',async()=>{
  const {photoOutputBound}=require('@harmony/reference-capabilities');

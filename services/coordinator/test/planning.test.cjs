@@ -4,6 +4,22 @@ const fs=require('node:fs'),path=require('node:path');
 const {execFileSync}=require('node:child_process');
 const {PrismaClient}=require('../generated/client');
 const {SnapshotBuilder,PlanningService}=require('../dist/planning');
+test('batched snapshot publication crosses SQL batches, preserves retired rows and rolls back on invalid scope',async()=>{
+ const {runtime}=require('./helpers.cjs'),r=await runtime();
+ try{
+  const f=fixture(),builder=new SnapshotBuilder(r.db,'SIMULATED');
+  f.snapshot.candidates=Array.from({length:205},(_,i)=>({...f.snapshot.candidates[0],targetId:'target-'+i,executorId:"executor'quoted"}));
+  await builder.replace(f.snapshot,f.policy);
+  assert.equal((await builder.build('g1')).snapshot.candidates.length,205);
+  f.snapshot.candidates=f.snapshot.candidates.slice(0,2);f.snapshot.candidates[0].computeMs=99;
+  await builder.replace(f.snapshot,f.policy);
+  const saved=(await builder.build('g1')).snapshot;assert.equal(saved.version,2);assert.equal(saved.candidates.length,2);assert.equal(saved.candidates[0].computeMs,99);
+  assert.equal(await r.db.target.count({where:{groupId:'g1'}}),205,'retired projections remain available for audit');
+  f.snapshot.candidates[0].availability={snapshotVersion:999};
+  await assert.rejects(builder.replace(f.snapshot,f.policy),/AVAILABILITY_SCOPE_MISMATCH/);
+  assert.deepEqual((await builder.build('g1')).snapshot,saved,'a rejected publication cannot expose a partial revision');
+ }finally{await r.close();}
+});
 function fixture(){
   const policy={version:'p1',revoked:false,allowedTargetIds:['target1'],limits:{maxCandidates:8,lookahead:16,beamWidth:8,planningBudgetMs:20,switchCostMs:0,hysteresisMs:0}};
   const snapshot={version:1,policyVersion:'p1',groupId:'g1',domain:'SIMULATED',capturedAt:100,
@@ -166,11 +182,18 @@ test('planning resolves fresh matching costs, falls back to calibration and reje
  c.computeSamples=[{workKey:'work',configId:'main',startup:'COLD',count:3,p50Ms:12,p90Ms:19,coldP50Ms:3,observedAt:100,ttlMs:300}];
  const run=()=>new PlanningService(null).plan(f.snapshot,f.request,f.policy,f.clock).decision;
  let a=run().suggestion[0];assert.equal(a.costSource,'MEASURED');assert.equal(a.costConfidence,'LOW');assert.equal(a.uncertaintyMs,7);assert.equal(a.phaseCosts.EXECUTE,15);
+ c.computeSamples[0].executionTotal=true;assert.equal(run().suggestion[0].phaseCosts.EXECUTE,12,'whole EXECUTE does not pay cold initialization twice');delete c.computeSamples[0].executionTotal;
  c.startup='WARM';assert.equal(run().suggestion[0].costSource,'PRIOR');c.startup='COLD';
  c.configId='other';assert.equal(run().suggestion[0].costSource,'PRIOR');c.configId='main';
  c.computeSamples[0].count=2;assert.equal(run().suggestion[0].costSource,'PRIOR');c.computeSamples[0].count=3;
  node.workKey='other';a=run().suggestion[0];assert.equal(a.costSource,'PRIOR');assert.equal(a.uncertaintyMs,20);
  c.costEvidence.cold.ttlMs=1;f.clock.now=102;assert.equal(run().rejections[0].code,'COST_UNKNOWN');
+});
+
+test('capability availability counts live physical devices, not duplicate targets or stale profiles',async()=>{
+ const now=Date.now(),candidate=(deviceId,targetId,at=now)=>({deviceId,targetId,capability:'photo.enhance.v1',observedAt:at,ttlMs:10000});
+ const planner=new PlanningService({build:async()=>({snapshot:{candidates:[candidate('phone','a'),candidate('phone','b'),candidate('pc','c'),candidate('old','d',now-20000),candidate('future','e',now+20000)]}})});
+ assert.deepEqual(await planner.availability('g',['photo.enhance.v1']),[{capability:'photo.enhance.v1',targets:3,services:0,devices:2}]);
 });
 
 test('flight and equal-priority queue share one reservation calendar; unknown waits stay scoped to their pools',()=>{
@@ -207,4 +230,14 @@ test('choose an occupied RAM target only while its release is usable, then seria
  const placed=run().suggestion;assert.deepEqual(placed.map(a=>[a.targetId,a.startMs]),[['target1',200],['target1',250]]);
  live.releaseAt=ms(null);assert.deepEqual(run().suggestion.map(a=>a.targetId),['target2','target2']);
  live.releaseAt=ms(300);live.overdue=true;assert.equal(run().rejections.find(r=>r.targetId==='target1').code,'RESOURCE_WAIT_UNKNOWN');
+});
+
+test('declared pixel scale corrects calibration prior and sparse same-work feedback overrides it',()=>{
+ const f=fixture(),c=f.snapshot.candidates[0],node=f.request.nodes[0],ms=value=>({value,unit:'ms',source:'SIMULATED',sampledAt:100,ttlMs:900});
+ node.workKey=JSON.stringify(['neural',2,{model:'pixels',values:{pixels:200},scale:{parameter:'pixels',reference:100}},null]);
+ c.costEvidence={compute:ms(40),cold:ms(5),publish:ms(1)};c.configId='main';c.startup='UNKNOWN';
+ const run=()=>new PlanningService(null).plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0];
+ assert.equal(run().phaseCosts.EXECUTE,85);assert.equal(run().costSource,'PRIOR');
+ c.computeSamples=[{workKey:node.workKey,configId:'main',startup:'UNKNOWN',count:1,p50Ms:140,p90Ms:140,coldP50Ms:0,executionTotal:true,observedAt:100,ttlMs:300}];
+ assert.equal(run().phaseCosts.EXECUTE,140);assert.equal(run().costSource,'MEASURED');assert.equal(run().costConfidence,'LOW');assert.equal(run().uncertaintyMs,140);
 });

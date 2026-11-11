@@ -248,3 +248,11 @@ test('status returns durable state while graph progression is busy and notificat
   release();await graphs.work;assert.equal(passes,2);
  }finally{release();await graphs.close();}
 });
+
+test('blocked graph cannot stall a sibling; graph notifications preserve one cursor writer',async()=>{
+ const {WorkflowJobs}=require('../dist/workflow-jobs');let release,started,fast,active=0,peak=0,passes=0;
+ const gate=new Promise(r=>release=r),entered=new Promise(r=>started=r),other=new Promise(r=>fast=r);
+ const g=new WorkflowJobs({sdkWorkflowJob:{findMany:async()=>[{id:'slow'},{id:'fast'}],findUnique:async({where})=>({state:'ACTIVE',metadataJson:JSON.stringify({id:where.id})})}},null,null,null,[]);
+ g.progress=async(_group,data)=>{if(data.id==='fast'){fast();return;}active++;peak=Math.max(peak,active);passes++;started();await gate;active--;};
+ try{g.changed('g');await entered;for(let i=0;i<30;i++)g.changed('g');await Promise.race([other,new Promise((_,reject)=>setTimeout(()=>reject(Error('cross-workflow barrier')),1000))]);assert.equal(active,1);release();await g.work;assert.equal(peak,1);assert.ok(passes<=2);}finally{release();await g.close();}
+});

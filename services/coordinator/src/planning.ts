@@ -15,15 +15,18 @@ export class SnapshotBuilder {
       const snapshot:PlanningSnapshot={...input,version:(previous?.revision??0)+1,domain:this.domain};
       const data={groupId:input.groupId,revision:snapshot.version,metadataJson:JSON.stringify({snapshot:{...snapshot,candidates:[],devices:[]},policy,contributionPolicy})};
       await tx.group.upsert({where:{id:input.groupId},create:{id:input.groupId,...data},update:data});
-      // These rows are independently addressable control-plane directory projections.
+      // Publish directory rows in bounded SQL batches in the same transaction.
+      // No per-target IPC round-trip and no deletion of historical projections.
       for(const candidate of input.candidates){
         if(candidate.availability&&candidate.availability.snapshotVersion!==snapshot.version)throw Error('AVAILABILITY_SCOPE_MISMATCH');
-        await tx.target.upsert({where:{id:JSON.stringify([input.groupId,candidate.targetId])},
-        create:{id:JSON.stringify([input.groupId,candidate.targetId]),groupId:input.groupId,revision:snapshot.version,metadataJson:JSON.stringify(candidate)},update:{revision:snapshot.version,metadataJson:JSON.stringify(candidate)}});
       }
-      for(const device of input.devices){
-        const id=JSON.stringify(['snapshot-device',input.groupId,device.deviceId,device.holderInstanceId??null]);
-        await tx.deviceInstance.upsert({where:{id},create:{id,groupId:input.groupId,revision:snapshot.version,metadataJson:JSON.stringify(device)},update:{revision:snapshot.version,metadataJson:JSON.stringify(device)}});
+      const targets=input.candidates.map(c=>Prisma.sql`(${JSON.stringify([input.groupId,c.targetId])},${input.groupId},${snapshot.version},${JSON.stringify(c)})`);
+      const devices=input.devices.map(d=>Prisma.sql`(${JSON.stringify(['snapshot-device',input.groupId,d.deviceId,d.holderInstanceId??null])},${input.groupId},${snapshot.version},${JSON.stringify(d)})`);
+      for(let i=0;i<targets.length;i+=100){
+        await tx.$executeRaw(Prisma.sql`INSERT INTO "Target" ("id","groupId","revision","metadataJson") VALUES ${Prisma.join(targets.slice(i,i+100))} ON CONFLICT("id") DO UPDATE SET "revision"=excluded."revision","metadataJson"=excluded."metadataJson"`);
+      }
+      for(let i=0;i<devices.length;i+=100){
+        await tx.$executeRaw(Prisma.sql`INSERT INTO "DeviceInstance" ("id","groupId","revision","metadataJson") VALUES ${Prisma.join(devices.slice(i,i+100))} ON CONFLICT("id") DO UPDATE SET "revision"=excluded."revision","metadataJson"=excluded."metadataJson"`);
       }
     };
     if(transaction)await write(transaction);else await this.db.$transaction(write);
@@ -47,9 +50,10 @@ export class SnapshotBuilder {
 export class PlanningService {
   constructor(private readonly snapshots:SnapshotBuilder){}
   /** Read-only qualified-target counts per capability for an App's routing report. Counting candidates is not selecting them (R21). */
-  async availability(groupId:string,capabilities:string[]):Promise<{capability:string;targets:number;services:number}[]>{
+  async availability(groupId:string,capabilities:string[]):Promise<{capability:string;targets:number;services:number;devices:number}[]>{
     let candidates:PlanningSnapshot['candidates']=[];try{candidates=(await this.snapshots.build(groupId)).snapshot.candidates;}catch{candidates=[];}
-    return capabilities.map(capability=>{const mine=candidates.filter(c=>c.capability===capability);return {capability,targets:new Set(mine.map(c=>c.targetId)).size,services:new Set(mine.filter(c=>c.serviceId!==undefined).map(c=>c.targetId)).size};});
+    const now=Date.now();
+    return capabilities.map(capability=>{const mine=candidates.filter(c=>c.capability===capability&&c.observedAt<=now&&c.observedAt+c.ttlMs>now);return {capability,targets:new Set(mine.map(c=>c.targetId)).size,services:new Set(mine.filter(c=>c.serviceId!==undefined).map(c=>c.targetId)).size,devices:new Set(mine.map(c=>c.deviceId)).size};});
   }
   plan(snapshot:PlanningSnapshot,request:PlacementRequest,policy:PlanningPolicy,clock:PlanningClock):SnapshotDecision {
     return plan(snapshot,request,policy,clock);
