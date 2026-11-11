@@ -93,7 +93,10 @@ export class QualificationService {
       }
       if(!installed)return this.publish(peer,targetId,job,'SUSPENDED','TRUSTED_PACK_REQUIRED');
       if((job.retryAt??0)>this.now())return job.quality!==null&&job.expiresAt>this.now()?'CANARY':'WAITING_RESOURCE';
-      const pack=installed.pack;
+      // A host advertises only configurations its resource reservation supports.
+      // Run the full correctness/boundary suite for each advertised configuration.
+      const pack={...installed.pack,cases:installed.pack.cases.filter(test=>executor.configurations.some(config=>canonical(config)===canonical(test.config)))};
+      if(!pack.cases.length||executor.configurations.some(config=>!pack.cases.some(test=>canonical(config)===canonical(test.config))))return this.publish(peer,targetId,job,'SUSPENDED','PACK_EXECUTOR_INCOMPATIBLE');
       if(job.paused)return this.publish(peer,targetId,job,'WAITING_WINDOW','CALIBRATION_PAUSED');
       const gate=await this.gate(peer,executor);
       const qualified=job.quality!==null&&job.expiresAt>this.now()&&job.next>=Math.max(pack.cases.length,this.policy.canarySamples);

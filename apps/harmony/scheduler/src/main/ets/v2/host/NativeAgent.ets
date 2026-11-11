@@ -1,3 +1,4 @@
+import photoRuntime from 'libharmony_photo.so';
 import {executeLocal,encoderCapability,localExecutorVersion,hasLocalExecutor} from './executors/Registry';
 import {EngineResult} from './executors/Types';
 import { NativePeerLinks } from '../platform/NativePeerLinks';
@@ -205,6 +206,22 @@ export class NativeAgent {
   agent.lifecycleForeground=lifecycleForeground;agent.foreground=lifecycleForeground();await agent.restorePreferences();agent.timer=setInterval(()=>{void agent.tick().catch((e:Error)=>agent.error(e as Error));},2000);await agent.tick();return agent;
  }
  isConnected():boolean{return this.ready&&!this.stopped;}
+ /** Control connection alone does not mean this App's source-side capabilities are qualified. */
+ async pendingCapabilities(capabilities:string[]):Promise<string[]>{
+  if(!this.isConnected())return ['控制连接'];
+  if(!this.idle())return ['手机前台贡献'];
+  const executors=this.executors();
+  const pending=await Promise.all(capabilities.map(async(capability:string):Promise<string>=>{
+   const local=executors.find(e=>e.contract.capability===capability);
+   if(local===undefined)throw Error('本机缺少处理能力：'+capability);
+   const evidence=await this.transport.json('/v2/qualification/'+local.target.targetId) as Qualification,a=evidence.admission;
+   return validCapabilityAdmissionV2(a)&&a.groupId===this.installation.paired.peer.groupId&&a.holderInstanceId===this.installation.paired.peer.holderInstanceId&&
+    a.domain===this.installation.bootstrap.domain&&a.targetId===local.target.targetId&&a.identity===this.executorDigest(local)&&['CANARY','ACTIVE'].includes(a.state)&&
+    a.quality.value!==null&&a.quality.value>=(this.packs.find(p=>p.manifest.contract.capability===capability)?.manifest.qualityThreshold??1)&&
+    a.quality.sampledAt+a.quality.ttlMs>this.transport.now()?'':capability;
+  }));
+  return pending.filter(value=>value.length>0);
+ }
  /**
   * Close before pairing another identity. Unsettled work normally blocks the switch; with
   * `abandon` (the old coordinator is a different, unreachable one) it cannot ever settle, so the
@@ -265,7 +282,7 @@ export class NativeAgent {
  /** The settings poll carries this device's measured hardware so an auto-capacity ceiling follows the real phone, not the invitation's provisional 1 GiB. */
  private settingsRequest():SettingsRequest {
   const request:SettingsRequest={};
-  if(this.totalRam!==null){const measured:MeasuredCapacity={cpuThreads:null,totalMemoryBytes:this.totalRam};request.measured=measured;}
+  if(this.totalRam!==null){const measured:MeasuredCapacity={cpuThreads:Math.min(64,photoRuntime.cpuCount()),totalMemoryBytes:this.totalRam};request.measured=measured;}
   return request;
  }
  /** Adopt a ceiling the coordinator derived from our measurements. A contribution the owner left at the old ceiling follows it; one they lowered is only clamped. */
@@ -283,6 +300,15 @@ export class NativeAgent {
   this.showPreferences();
  }
  private showPreferences():void {AppStorage.setOrCreate('cpuLimit',String(this.contribution.maxCpuThreads));AppStorage.setOrCreate('memoryLimitMB',String(this.contribution.maxMemoryBytes/1048576));AppStorage.setOrCreate('maxCpuLimit',this.installation.bootstrap.contribution.maxCpuThreads);AppStorage.setOrCreate('maxMemoryLimitMB',this.installation.bootstrap.contribution.maxMemoryBytes/1048576);AppStorage.setOrCreate('contributing',this.enabled);}
+ /** The foreground application opts into all owner-shared capacity; grants remain device-accounted. */
+ async enablePerformance():Promise<void>{
+  const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;
+  const reply=await this.transport.json('/v2/device-settings',this.settingsRequest()) as Settings;
+  await this.transport.json('/v2/apps/me/performance',{} as Record<string,Object>);
+  this.policy=await this.transport.json('/v2/apps/me',null) as AppPolicy;
+  if(reply.settings!==null)await this.adoptCeiling(reply.settings);
+  this.renewAt=0;await this.tick();
+ }
  async configure(cpu:number,memoryMB:number):Promise<void>{const next:Contribution={ownerMode:'dedicated',maxCpuThreads:cpu,maxMemoryBytes:memoryMB*1048576,reserveMemoryBytes:this.contribution.reserveMemoryBytes};if(!this.withinCeiling(next))throw Error('CONTRIBUTION_EXCEEDS_PAIRED_CEILING');this.contribution=next;await this.db.put('contribution:'+this.displayHolderId(),JSON.stringify(next));this.showPreferences();await this.tick();}
  async setEnabled(value:boolean):Promise<void>{this.enabled=value;await this.db.put('contribution-enabled:'+this.displayHolderId(),String(value));if(!value)await this.yield();this.showPreferences();if(this.ready)await this.profile();}
  private idle():boolean{return this.foreground&&this.lifecycleForeground()&&this.enabled&&!this.paused&&!this.switching;}
@@ -371,8 +397,11 @@ export class NativeAgent {
  private executors():ExecutorV2[]{return this.packs.map((pack:ReferencePack):ExecutorV2=>{
   const encoder=pack.manifest.contract.capability===encoderCapability;
   const executorId=encoder?'harmony.image.cpu.v1':'harmony.cpu.v1';
-  const resources=pack.manifest.resourceLimit.filter((r:ResourceAmountV2)=>r.resourcePoolId==='cpu'||r.resourcePoolId==='ram');
-  return {startup:encoder?'COLD':'UNKNOWN',target:{targetId:'harmony-'+hash(bytes(this.installation.paired.peer.holderInstanceId+':'+pack.manifest.contract.capability)).slice(0,32),deviceId:this.installation.paired.peer.deviceId,executorId,executorVersion:localExecutorVersion(pack.manifest.contract.capability),backend:pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:['cpu','ram'],stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,resources,configurations:[pack.cases[0].config],compute:this.costs.get(pack.manifest.contract.capability)?.compute??this.sample(null,'ms'),queue:this.sample(null,'ms'),cold:this.costs.get(pack.manifest.contract.capability)?.cold??this.sample(null,'ms'),publish:this.sample(0,'ms'),uncertainty:this.sample(null,'ms','UNKNOWN')} as ExecutorV2;});}
+  const slots=Math.min(photoRuntime.cpuCount(),this.contribution.maxCpuThreads);
+  const threads=pack.manifest.contract.capability==='photo.enhance.v1'?([8,4,2].find((n:number)=>n<=Math.max(1,Math.floor(slots/2)))??1):1;
+  const config=pack.cases.find((c:ReferenceCase)=>c.config.threads===threads)!.config;
+  const resources=pack.manifest.resourceLimit.filter((r:ResourceAmountV2)=>r.resourcePoolId==='cpu'||r.resourcePoolId==='ram').map((r:ResourceAmountV2):ResourceAmountV2=>({resourcePoolId:r.resourcePoolId,amount:r.resourcePoolId==='cpu'&&pack.manifest.contract.capability==='photo.enhance.v1'?threads:r.amount}));
+  return {startup:encoder?'COLD':'UNKNOWN',target:{targetId:'harmony-'+hash(bytes(this.installation.paired.peer.holderInstanceId+':'+pack.manifest.contract.capability)).slice(0,32),deviceId:this.installation.paired.peer.deviceId,executorId,executorVersion:localExecutorVersion(pack.manifest.contract.capability),backend:pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:['cpu','ram'],stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,resources,configurations:[config],compute:this.costs.get(pack.manifest.contract.capability)?.compute??this.sample(null,'ms'),queue:this.sample(null,'ms'),cold:this.costs.get(pack.manifest.contract.capability)?.cold??this.sample(null,'ms'),publish:this.sample(0,'ms'),uncertainty:this.sample(null,'ms','UNKNOWN')} as ExecutorV2;});}
   private async profile():Promise<void>{
   await this.store.change(new HostChange(s=>{
    if(s.journal.outbox.some(m=>m.type==='DeviceProfile'))return;const used=occupiedV2(s.state),limits=this.limits();
@@ -414,7 +443,13 @@ export class NativeAgent {
   if(this.stopped||this.switching||this.refreshing)return;if(this.foreground!==this.lifecycleForeground())this.setForeground(this.lifecycleForeground());this.refreshing=true;
   try{try{const memory=hidebug.getSystemMemInfo();this.totalRam=Number(memory.totalMem)*1024;this.availableRam=Number(memory.availableMem)*1024;}catch(e){this.totalRam=null;this.availableRam=null;}try{const mode=power.getPowerMode();this.powerSaving=mode===power.DevicePowerMode.MODE_NORMAL||mode===power.DevicePowerMode.MODE_PERFORMANCE?'OFF':'ON';}catch(e){this.powerSaving=null;}this.sampleEnergy();AppStorage.setOrCreate('deviceTotalMemoryMB',this.totalRam===null?0:Math.floor(this.totalRam/1048576));
    // The ceiling follows the coordinator's auto capacity even while the control channel is still connecting.
-   let reply:Settings={settings:null};if(this.policy===null){try{reply=await this.transport.json('/v2/device-settings',this.settingsRequest()) as Settings;if(reply.settings!==null)await this.adoptCeiling(reply.settings);}catch(e){this.error(e as Error);}}
+   let reply:Settings={settings:null};try{
+    reply=await this.transport.json('/v2/device-settings',this.settingsRequest()) as Settings;
+    if(this.policy!==null){this.policy=await this.transport.json('/v2/apps/me',null) as AppPolicy;
+     const allocation=(id:string):number=>(this.policy!.offlineBase.find(r=>r.resourcePoolId===id)?.amount??0)+(this.policy!.onlineExtra.find(r=>r.resourcePoolId===id)?.amount??0);
+     if(reply.settings!==null)await this.adoptCeiling({ownerMode:'dedicated',maxCpuThreads:Math.max(1,Math.min(reply.settings.maxCpuThreads,allocation('cpu'))),maxMemoryBytes:Math.max(67108864,Math.min(reply.settings.maxMemoryBytes,allocation('ram'))),reserveMemoryBytes:reply.settings.reserveMemoryBytes});
+    }else if(reply.settings!==null)await this.adoptCeiling(reply.settings);
+   }catch(e){this.error(e as Error);}
    await this.connect();if(!this.ready)return;void this.peerLinks?.sample().catch((e:Error)=>{this.peerLinks?.invalidate();this.error(e);});const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
    await this.pollCancellation();this.pumpQueue();try{await this.renew();}catch(e){this.error(e as Error);}if(this.links.length===0||this.links[0].fixedMs.sampledAt+10000<this.transport.now())await this.probeLinks();await this.profile();this.pumpQueue();if(this.idle())void this.calibrate().catch((e:Error)=>this.error(e as Error));
   }finally{this.refreshing=false;this.showStatus();}
@@ -494,7 +529,7 @@ export class NativeAgent {
    const result=await service.execute(new Uint8Array(input),parameters,()=>this.cancelled(id));if(result.data.byteLength<1||result.data.byteLength>8388608||!entry.offer.task.contract.outputSchemas.includes(result.schemaId))throw Error('SERVICE_OUTPUT_INVALID');return result;
   }
   const pack=this.packs.find(p=>p.manifest.contract.capability===capability);
-  return executeLocal(capability,{context:this.context,input,parameters,model:pack?.manifest.model??null,cancelled:()=>this.cancelled(id)});
+  return executeLocal(capability,{context:this.context,input,parameters,model:pack?.manifest.model??null,threads:this.store.read().state.entries.find(e=>e.record.attemptId===id)?.offer.allowedConfigs[0].threads??1,cancelled:()=>this.cancelled(id)});
 
  }
  private cancelled(id:string):boolean{return this.store.isCancelled(id,monotonic())||!this.idle();}

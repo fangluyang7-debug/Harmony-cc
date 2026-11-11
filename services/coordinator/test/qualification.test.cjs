@@ -58,7 +58,7 @@ test('committed same-bucket execution drift opens circuit and a new reference ge
   assert.equal(samples.filter(s=>s.configId==='standard').length,6);
   const {computeHistories}=require('../dist/performance-feedback'),when=Date.now();
   const history=async()=> (await computeHistories(r.db,'g1',new Map([[key,job.identity]]),when)).get(key)??[];
-  assert.deepEqual(await history(),[],'unsplit EXECUTE cannot seed a compute estimate');
+  const [whole]=await history();assert.deepEqual([whole.count,whole.p50Ms,whole.p90Ms,whole.coldP50Ms,whole.startup,whole.executionTotal],[5,12,160,0,'UNKNOWN',true],'whole EXECUTE learns only committed samples and keeps its timing basis');
   await r.db.receipt.updateMany({data:{overheadMs:2,startup:'COLD'}});
   const [summary]=await history();
   assert.deepEqual([summary.count,summary.p50Ms,summary.p90Ms,summary.coldP50Ms],[5,10,158,2]);

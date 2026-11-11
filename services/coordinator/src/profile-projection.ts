@@ -15,6 +15,7 @@ function validPolicy(p:ContributionPolicy):boolean {
 
 /** Authenticated profile and planning projection commit together, before the channel ACK. */
 export class ProfileProjection {
+  private readonly refreshing=new Map<string,Promise<void>>();
   private readonly listeners=new Map<string,Set<()=>void>>();
   watch(group:string,holder:string,wake:()=>void){
     const key=JSON.stringify([group,holder]),listeners=this.listeners.get(key)??new Set<()=>void>();listeners.add(wake);this.listeners.set(key,listeners);
@@ -53,7 +54,12 @@ export class ProfileProjection {
     if(version!==undefined)dispatchDiagnostics.record({at:Date.now(),kind:"SNAPSHOT_REFRESH",groupId:peer.groupId,holderId:peer.holderInstanceId,source:"PROFILE",snapshotVersion:version});
   }
   /** Called by a future trusted evidence service after a qualification change; never accepts device self-approval. */
-  async refresh(groupId:string,source="EVIDENCE",jobId?:string):Promise<void>{
+  refresh(groupId:string,source="EVIDENCE",jobId?:string):Promise<void>{
+    const active=this.refreshing.get(groupId);if(active)return active;
+    const pending=this.refreshOnce(groupId,source,jobId).finally(()=>{if(this.refreshing.get(groupId)===pending)this.refreshing.delete(groupId);});
+    this.refreshing.set(groupId,pending);return pending;
+  }
+  private async refreshOnce(groupId:string,source:string,jobId?:string):Promise<void>{
     const version=await this.db.$transaction(async tx=>{
       const row=await tx.group.findUnique({where:{id:groupId}});
       if(!row)throw Error('GROUP_UNKNOWN');

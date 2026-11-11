@@ -1,4 +1,4 @@
-import {CostEstimatePolicy,costEstimatePolicy,ComputeSample,canonical,workKeyV2,TraceSpanV2} from '@harmony/scheduler-core';
+import {scaledWorkKey,CostEstimatePolicy,costEstimatePolicy,ComputeSample,canonical,workKeyV2,TraceSpanV2} from '@harmony/scheduler-core';
 import {Prisma,PrismaClient} from '../generated/client';
 
 interface Observation {id:string;observedAt?:number;bucket?:string;workKey?:string;configId?:string;ms:number;}
@@ -30,19 +30,21 @@ export async function observeExecution(tx:Prisma.TransactionClient,group:string,
 type SplitReceipt={id:string;overheadMs:number|null;startup:string|null};
 
 function summarize(samples:Observation[],receipts:Map<string,SplitReceipt>,policy:CostEstimatePolicy):ComputeSample[]{
-  const groups=new Map<string,{workKey:string;configId:string;startup:string;times:number[];overheads:number[];oldest:number}>();
+  const groups=new Map<string,{workKey:string;configId:string;startup:string;executionTotal:boolean;times:number[];overheads:number[];oldest:number}>();
   for(const sample of samples){
     const receipt=receipts.get(sample.id);
-    if(!receipt?.startup||receipt.overheadMs===null||receipt.overheadMs<0||receipt.overheadMs>sample.ms)continue;
-    const id=canonical([sample.workKey,sample.configId,receipt.startup]);
-    const group=groups.get(id)??{workKey:sample.workKey!,configId:sample.configId!,startup:receipt.startup,times:[],overheads:[],oldest:sample.observedAt!};
-    group.times.push(sample.ms-receipt.overheadMs);group.overheads.push(receipt.overheadMs);
+    if(!receipt)continue;
+    const executionTotal=receipt.overheadMs===null,startup=receipt.startup??'UNKNOWN',overhead=receipt.overheadMs??0;
+    if(!Number.isFinite(overhead)||overhead<0||overhead>sample.ms)continue;
+    const id=canonical([sample.workKey,sample.configId,startup,executionTotal]);
+    const group=groups.get(id)??{workKey:sample.workKey!,configId:sample.configId!,startup,executionTotal,times:[],overheads:[],oldest:sample.observedAt!};
+    group.times.push(sample.ms-overhead);group.overheads.push(overhead);
     group.oldest=Math.min(group.oldest,sample.observedAt!);groups.set(id,group);
   }
   const rank=(values:number[],q:number)=>values[Math.ceil(values.length*q)-1];
-  return [...groups.values()].filter(g=>g.times.length>=policy.minSamples).slice(-16).map(g=>{
+  return [...groups.values()].filter(g=>g.times.length>=(scaledWorkKey(g.workKey)?1:policy.minSamples)).slice(-16).map(g=>{
     g.times.sort((a,b)=>a-b);g.overheads.sort((a,b)=>a-b);
-    return {workKey:g.workKey,configId:g.configId,startup:g.startup,count:g.times.length,p50Ms:rank(g.times,.5),p90Ms:rank(g.times,.9),coldP50Ms:rank(g.overheads,.5),observedAt:g.oldest,ttlMs:policy.sampleTtlMs};
+    return {workKey:g.workKey,configId:g.configId,startup:g.startup,count:g.times.length,p50Ms:rank(g.times,.5),p90Ms:rank(g.times,.9),coldP50Ms:rank(g.overheads,.5),observedAt:g.oldest,ttlMs:policy.sampleTtlMs,...(g.executionTotal?{executionTotal:true}:{})};
   });
 }
 
@@ -60,13 +62,13 @@ export async function computeHistories(tx:Prisma.TransactionClient,groupId:strin
     const window:Window=JSON.parse(row.metadataJson);
     if(window.identity!==identity||window.generation!==calibration.generation)continue;
     const live=window.samples.slice(-policy.windowSamples).filter(s=>s.workKey&&s.configId&&s.observedAt!==undefined&&s.observedAt<=now&&now-s.observedAt<=policy.sampleTtlMs);
-    if(live.length<policy.minSamples)continue;
+    if(!live.length)continue;
     windows.set(key,live);for(const sample of live)attempts.add(sample.id);
   }
   const ids=[...attempts],receipts=new Map<string,SplitReceipt>();
   // Keep SQLite bind parameter counts bounded even in a large group.
   for(let i=0;i<ids.length;i+=500){
-    const batch=await tx.receipt.findMany({where:{id:{in:ids.slice(i,i+500)},committed:true,overheadMs:{not:null}},select:{id:true,overheadMs:true,startup:true}});
+    const batch=await tx.receipt.findMany({where:{id:{in:ids.slice(i,i+500)},committed:true},select:{id:true,overheadMs:true,startup:true}});
     for(const receipt of batch)receipts.set(receipt.id,receipt);
   }
   for(const [key,window] of windows)histories.set(key,summarize(window,receipts,policy));

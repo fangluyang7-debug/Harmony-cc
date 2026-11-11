@@ -93,3 +93,16 @@ test('work buckets use contract dimensions, quality steps and byte ranges',()=>{
  expect(key(0,32,80,10)).not.toBe(key(0,32,80,16));
  expect(()=>workKeyV2({...contract,workModel:{...model,parameters:[{name:'x',bucketWidth:0}]}},'{}',1)).toThrow('COST_MODEL_INVALID');
 });
+
+test('geometric work retains timing across content hashes and compressed sizes but separates pixels',()=>{
+ const {state,offer,context}=setup(),timing=new RunTimings();
+ offer.task.contract.workModel={version:'pixels-v1',inputBytes:'IGNORE',parameters:[{name:'pixels'}],scale:{parameter:'pixels',reference:12544}};
+ offer.task.parameters=JSON.stringify({pixels:12544});const entry=admitV2(state,offer,context).entry,id=entry.record.attemptId;
+ const key=workKeyV2(offer.task.contract,offer.task.parameters,100);
+ expect(key).toBe(workKeyV2(offer.task.contract,offer.task.parameters,9000));
+ expect(key).not.toBe(workKeyV2(offer.task.contract,'{"pixels":5000}',100));
+ timing.start(id,0,100,'UNKNOWN');timing.finish({...entry,record:{...entry.record,state:'SUCCEEDED',resourcesSettled:true}},50);
+ entry.offer.task.inputs[0].contentHash='b'.repeat(64);timing.start(id,100,9000,'UNKNOWN');
+ expect(timing.sample([entry],110,1000,'SIMULATED')![0].remaining.value).toBe(40);
+ entry.offer.task.parameters='{"pixels":5000}';expect(timing.sample([entry],110,1000,'SIMULATED')![0].remaining.value).toBeNull();
+});

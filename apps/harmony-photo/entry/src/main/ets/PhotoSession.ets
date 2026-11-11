@@ -6,6 +6,8 @@ interface Registration extends TrustedCoordinator {registrationId:string;code:st
 interface Exchange extends Paired {offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
 interface Identity {appInstanceId:string;}
 interface AppContext {identity:Identity;}
+interface CapabilityCount {capability:string;devices?:number;}
+interface CapabilityCounts {capabilities:CapabilityCount[];}
 interface Manifest {label:string;allowedContracts:string[];maxConcurrent:number;resources:ResourceAmountV2[];offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
 export interface PhotoConnection {address:string;fingerprint:string;groupId:string;deviceId:string;appInstanceId:string;}
 const manifest:Manifest={label:'Harmony 图片演示 v1',allowedContracts:['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'],maxConcurrent:4,resources:[{resourcePoolId:'cpu',amount:8},{resourcePoolId:'ram',amount:4294967296},{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:8589934592}],offlineBase:[],onlineExtra:[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:1073741824}]};
@@ -32,6 +34,7 @@ export class PhotoSession {
   if(info.identity.appInstanceId!==i.appInstanceId)throw Error('APP_HOST_IDENTITY_MISMATCH');
   if(this.host&&this.host.displayHolderId()!==i.paired.peer.holderInstanceId){await this.host.closeForSwitch();this.host=null;}
   if(!this.host)this.host=await NativeAgent.start(this.context,null,()=>this.foreground,i);
+  await this.host.enablePerformance();
   this.installation=i;this.port=await this.host.sdkPort();
  }
  async restore():Promise<boolean>{
@@ -63,6 +66,27 @@ export class PhotoSession {
   }finally{this.changing=false;}
  }
  async request(route:string,body:string|null):Promise<string>{if(!this.port)throw Error('PHOTO_APP_NOT_CONNECTED');return this.port.request(route,body);}
+ async batchConcurrency():Promise<number>{
+  try{
+   const view=JSON.parse(await this.request('/v2/apps/me/capabilities',null)) as CapabilityCounts;
+   const devices=view.capabilities.find(c=>c.capability==='photo.enhance.v1')?.devices;
+   // A small window overlaps input/compute/delivery without submitting the whole batch.
+   return devices!==undefined&&Number.isInteger(devices)&&devices>0?Math.min(4,devices+1):2;
+  }catch{return 2;} // Older coordinators retain the existing two-image window.
+ }
+ async waitReady(remaining:()=>number,cancelled:()=>boolean,progress:(message:string)=>void):Promise<void>{
+  const capabilities=['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'];
+  const labels=['照片分析','图块准备','高清增强','图像合成','成品生成'];
+  for(;;){
+   if(cancelled())throw Error('已取消');if(remaining()<=0)throw Error('180 秒预算已用尽，设备能力尚未就绪');
+   if(!this.host)throw Error('请先连接协作空间');
+   const pending=await this.host.pendingCapabilities(capabilities);
+   if(cancelled())throw Error('已取消');if(remaining()<=0)throw Error('180 秒预算已用尽，设备能力尚未就绪');
+   if(pending.length===0)return;
+   progress('正在等待协作能力就绪：'+pending.map(c=>{const i=capabilities.indexOf(c);return i<0?c:labels[i];}).join('、'));
+   await new Promise<void>(resolve=>{setTimeout(resolve,Math.min(1000,Math.max(1,remaining())));});
+  }
+ }
  workflowPort(cancelled:()=>boolean,capture:()=>Promise<void>):SdkPort{
   if(!this.port)throw Error('PHOTO_APP_NOT_CONNECTED');const port=this.port,domain='photo-native-'+factory.id();
   return {
@@ -70,7 +94,12 @@ export class PhotoSession {
    write:(ticket:SdkTicket,data:Uint8Array):Promise<void>=>port.write(ticket,data),
    writeDirect:(jobId:string,endpointId:string,ticket:SdkTicket,data:Uint8Array):Promise<void>=>port.writeDirect(jobId,endpointId,ticket,data),
    stageInput:async(input:SdkInput,data:Uint8Array):Promise<void>=>{if(!port.stageInput)throw Error('APP_HOST_REQUIRED');await port.stageInput(input,data);},
-   read:async(ticket:SdkTicket):Promise<Uint8Array>=>{const data=await port.read(ticket);if(data.length!==ticket.bytes||hash(data)!==ticket.ref.contentHash)throw Error('SDK_OUTPUT_INTEGRITY');if(ticket.ref.schemaId==='photo.product')await capture();return data;},
+   read:async(ticket:SdkTicket):Promise<Uint8Array>=>{
+    let data:Uint8Array;try{data=await port.read(ticket);}catch(e){throw Error('PHOTO_OUTPUT_READ: '+(e as Error).message);}
+    if(data.length!==ticket.bytes||hash(data)!==ticket.ref.contentHash)throw Error('SDK_OUTPUT_INTEGRITY');
+    if(ticket.ref.schemaId==='photo.product')try{await capture();}catch(e){throw Error('PHOTO_DISPLAY_CAPTURE: '+(e as Error).message);}
+    return data;
+   },
    digest:async(data:Uint8Array):Promise<string>=>hash(data),now:():number=>Date.now(),
    measure:()=>({clockDomainId:domain,milliseconds:monotonic()}),
    wait:async(ms:number):Promise<void>=>{await new Promise<void>(resolve=>{setTimeout(resolve,ms);});},cancelled

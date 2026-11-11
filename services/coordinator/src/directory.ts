@@ -137,11 +137,10 @@ export class DeviceDirectory {
     const histories=await computeHistories(db,groupId,identities,now,estimatePolicy);
     const installations=await db.registeredInstallation.findMany({where:{groupId},select:{id:true,holderInstanceId:true,deviceId:true,state:true}});
     const reservations=(await db.allotment.findMany()).filter(row=>row.id.startsWith('["allotment",')).map(row=>JSON.parse(row.metadataJson));
-    const budgets=new Map<string,any>();
-    for(const deviceId of new Set(profiles.map(p=>p.deviceId))){
-      const row=await db.device.findUnique({where:{id:JSON.stringify(['budget',deviceId])}});
-      if(row)budgets.set(deviceId,JSON.parse(row.metadataJson));
-    }
+    const deviceIds=[...new Set(profiles.map(p=>p.deviceId))];
+    const budgetRows=await db.device.findMany({where:{id:{in:deviceIds.map(id=>JSON.stringify(['budget',id]))}}});
+    const budgets=new Map<string,any>(budgetRows.map(row=>[JSON.parse(row.id)[1],JSON.parse(row.metadataJson)]));
+    const allInstallations=await db.registeredInstallation.findMany({where:{deviceId:{in:deviceIds}}});
     // A dormant App must not expire a live sibling's physical capacity. Its durable
     // reservation remains fully deducted below; expiry never releases resources.
     const capacityProfiles=profiles.filter(p=>p.pools.every(pool=>sampleUsableV2(pool.total,now,this.domain)&&sampleUsableV2(pool.occupied,now,this.domain))||
@@ -160,7 +159,7 @@ export class DeviceDirectory {
     for(const deviceId of new Set(profiles.map(p=>p.deviceId))){
       const budget=budgets.get(deviceId);if(!budget)continue;
       const members=capacityProfiles.filter(p=>p.deviceId===deviceId);
-      const unissued=(await db.registeredInstallation.findMany({where:{deviceId}})).filter(i=>!reservations.some(r=>r.grant.deviceId===deviceId&&r.grant.holderInstanceId===i.holderInstanceId));
+      const unissued=allInstallations.filter(i=>i.deviceId===deviceId&&!reservations.some(r=>r.grant.deviceId===deviceId&&r.grant.holderInstanceId===i.holderInstanceId));
       for(const c of capacity.values())if(c.deviceId===deviceId){
         const physical=budget.capacity.find((r:any)=>r.resourcePoolId===c.poolId)?.amount;
         const pools=members.map(p=>p.pools.find(pool=>pool.resourcePoolId===c.poolId));
@@ -171,6 +170,8 @@ export class DeviceDirectory {
       }
     }
     const inFlight:NonNullable<PlanningSnapshot['inFlight']>=[],queued:NonNullable<PlanningSnapshot['queued']>=[];
+    const queuedIds=profiles.flatMap(p=>[...(p.queued??[]),...(p.inFlight??[])].map(q=>q.attemptId));
+    const queuedJobs=new Map((await db.cpuJob.findMany({where:{id:{in:queuedIds}}})).map(row=>[row.id,row]));
     const projected=new Set<string>();
     for(const profile of profiles){
       const live=profile.inFlight;
@@ -180,11 +181,24 @@ export class DeviceDirectory {
         for(const f of live){
           const contract=profile.executors.find(e=>e.target.targetId===f.targetId)?.contract;
           const overdue=contract?.interruptibility==='NON_INTERRUPTIBLE'&&contract.maxNonPreemptibleMs!==null&&sampleUsableV2(f.elapsed,now,this.domain)&&f.elapsed.value!>contract.maxNonPreemptibleMs;
-          inFlight.push({deviceId:profile.deviceId,holderInstanceId:profile.holderInstanceId,targetId:f.targetId,resources:f.resources,overdue,releaseAt:{...f.remaining,value:f.remaining.value===null?null:f.remaining.sampledAt+f.remaining.value}});
+          let releaseAt={...f.remaining,value:f.remaining.value===null?null:f.remaining.sampledAt+f.remaining.value};
+          // Estimate waiting; never release actual ledger capacity from a forecast.
+          // Fresh elapsed + the admitted decision is a fallback when the host has
+          // no same-work survivor history (including its first real input).
+          if(releaseAt.value===null&&contract?.sideEffectPolicy==='PURE'&&sampleUsableV2(f.elapsed,now,this.domain)&&f.elapsed.value!==null){
+            const row=queuedJobs.get(f.attemptId),data=row?.groupId===groupId?JSON.parse(row.metadataJson):null;
+            const selected=data?.holderId===profile.holderInstanceId&&data.offer?.target.targetId===f.targetId?data.plan?.decision?.suggestion?.[0]:null;
+            const estimate=selected?selected.executionMs+(selected.uncertaintyMs??0):null;
+            if(typeof estimate==='number'&&Number.isFinite(estimate)&&estimate>0&&data.deadlineAt>now){
+              const remaining=Math.max(100,estimate-f.elapsed.value,Math.min(estimate,Math.max(100,f.elapsed.value*.25)));
+              releaseAt={value:now+remaining,unit:'ms',source:'PRIOR',sampledAt:now,ttlMs:Math.min(1000,f.elapsed.ttlMs)};
+            }
+          }
+          inFlight.push({deviceId:profile.deviceId,holderInstanceId:profile.holderInstanceId,targetId:f.targetId,resources:f.resources,overdue,releaseAt});
         }
       }
       for(const q of profile.queued??[]){
-        const job=await db.cpuJob.findUnique({where:{id:q.attemptId}});
+        const job=queuedJobs.get(q.attemptId);
         const data=job?.groupId===groupId?JSON.parse(job.metadataJson):null;
         const selected=data?.holderId===profile.holderInstanceId&&data.offer?.target.targetId===q.targetId?data.plan?.decision?.suggestion?.[0]:null;
         const duration=selected?selected.executionMs-(selected.policyQueueMs??0):null;

@@ -112,3 +112,21 @@ test('an overdue non-interruptible shared pool holder has no promised release ti
  assert.equal(late.reason,'RESOURCE_CAPACITY');assert.equal(late.blockingReason,'RELEASE_OVERDUE');
  assert.equal(late.resourceWait.value,null);assert.equal(late.resourceWait.source,'UNKNOWN');
 });
+
+test('fresh admitted cost forecasts unknown remaining time without freeing the physical ledger',async()=>{
+ const r=await runtime();try{
+  const dir=new DeviceDirectory(r.db,'SIMULATED',()=>100),p=fixture(),pool=p.pools[0],target=p.executors[0].target.targetId;
+  pool.occupied.value=1;pool.admissionLimit.value=1;pool.contributionLimit=1;
+  const ms=value=>({value,unit:'ms',source:value===null?'UNKNOWN':'SIMULATED',sampledAt:100,ttlMs:1000});
+  p.inFlight=[{attemptId:'forecast',targetId:target,state:'RUNNING',resources:[{resourcePoolId:pool.resourcePoolId,amount:1}],elapsed:ms(200),remaining:ms(null)}];
+  await dir.ingest(peer,p);
+  const data={holderId:'h1',deadlineAt:1000,offer:{target:{targetId:target}},plan:{decision:{suggestion:[{executionMs:500,uncertaintyMs:100}]}}};
+  await r.db.cpuJob.create({data:{id:'forecast',groupId:'g1',principalId:'p1',sourceHolderId:'h1',state:'DISPATCHED',metadataJson:JSON.stringify(data)}});
+  const snapshot=await dir.snapshot('g1','p1',1,policy);assert.equal(snapshot.inFlight[0].releaseAt.value,500);assert.equal(snapshot.inFlight[0].releaseAt.source,'PRIOR');
+  assert.equal((await dir.profiles('g1'))[0].pools[0].occupied.value,1);
+  data.holderId='other';await r.db.cpuJob.update({where:{id:'forecast'},data:{metadataJson:JSON.stringify(data)}});
+  assert.equal((await dir.snapshot('g1','p1',1,policy)).inFlight[0].releaseAt.value,null);
+  data.holderId='h1';data.deadlineAt=99;await r.db.cpuJob.update({where:{id:'forecast'},data:{metadataJson:JSON.stringify(data)}});
+  assert.equal((await dir.snapshot('g1','p1',1,policy)).inFlight[0].releaseAt.value,null);
+ }finally{await r.close();}
+});

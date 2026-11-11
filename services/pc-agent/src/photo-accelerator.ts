@@ -3,7 +3,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {photoPacks} from '@harmony/reference-capabilities';
 import {ImageEncoder} from './image-encoder';
-import {enhanceOn,geometry} from './executors/photo';
+import {enhanceOn,enhancementInput} from './executors/photo';
 export const photoVulkanExecutorId='ncnn.photo.vulkan.v1';
 export interface VulkanDevice {index:number;name:string;}
 export interface NvidiaDevice {uuid:string;name:string;totalBytes:number;}
@@ -54,7 +54,8 @@ export async function openPhotoAccelerator():Promise<ImageEncoder>{
  if(!run.output)throw Error('PHOTO_GPU_PROBE_FAILED');
  const device=selected.device;
  if(!Number.isSafeInteger(device.totalBytes)||device.totalBytes<536870912)throw Error('PHOTO_GPU_MEMORY_TOO_SMALL');
- if(await pack.evaluate(pack.cases[0],run.output)<pack.manifest.qualityThreshold)throw Error('PHOTO_GPU_QUALITY_FAILED');
+ const score=await pack.evaluate(pack.cases[0],run.output);
+ if(score<pack.manifest.qualityThreshold)throw Object.assign(Error('PHOTO_GPU_QUALITY_FAILED'),{diagnostic:{score,required:pack.manifest.qualityThreshold,device:device.name,index:selected.index,runtime:process.env.HARMONY_PHOTO_VULKAN_RUNTIME??'legacy-realesrgan-cli'}});
  process.env.HARMONY_PHOTO_GPU_ID=String(selected.index);
- return {pack,backend:'VULKAN',gpu:{totalBytes:device.totalBytes,limit:device.totalBytes,async freeBytes(){const r=await promisify(execFile)('nvidia-smi',['-i',device.uuid,'--query-gpu=memory.free','--format=csv,noheader,nounits'],{windowsHide:true,timeout:3000});const n=Number(r.stdout.trim());return Number.isFinite(n)&&n>=0?n*1048576:0;}},async execute(offer,input,signal){if(offer.target.backend!=='VULKAN'||offer.target.executorId!==photoVulkanExecutorId)throw Error('PHOTO_GPU_SCOPE');const tile=JSON.parse(input.toString());geometry(JSON.parse(offer.task.parameters),tile.rect?.width,tile.rect?.height);const r=await enhanceOn(input,1,'VULKAN',signal);return {bytes:r.output,schemaId:r.schemaId,model:pack.manifest.model!};}};
+ return {pack,backend:'VULKAN',gpu:{totalBytes:device.totalBytes,limit:device.totalBytes,async freeBytes(){const r=await promisify(execFile)('nvidia-smi',['-i',device.uuid,'--query-gpu=memory.free','--format=csv,noheader,nounits'],{windowsHide:true,timeout:3000});const n=Number(r.stdout.trim());return Number.isFinite(n)&&n>=0?n*1048576:0;}},async execute(offer,input,signal){if(offer.target.backend!=='VULKAN'||offer.target.executorId!==photoVulkanExecutorId)throw Error('PHOTO_GPU_SCOPE');input=await enhancementInput(input,JSON.parse(offer.task.parameters),offer.allowedConfigs[0]);const r=await enhanceOn(input,1,'VULKAN',signal);return {bytes:r.output,schemaId:r.schemaId,model:pack.manifest.model!};}};
 }

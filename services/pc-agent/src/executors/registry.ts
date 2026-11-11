@@ -2,7 +2,7 @@ import path from 'node:path';
 import {existsSync} from 'node:fs';
 import type {ExecutionConfigV2} from '@harmony/scheduler-core';
 
-export type CpuExecutor=(bytes:Buffer,parameters:any,config:ExecutionConfigV2)=>Promise<{output:Buffer;schemaId:string}>;
+export type CpuExecutor=(bytes:Buffer,parameters:any,config:ExecutionConfigV2,signal?:AbortSignal)=>Promise<{output:Buffer;schemaId:string}>;
 export class ExecutorRegistry {
   private readonly entries=new Map<string,{executorId:string;load:()=>Promise<CpuExecutor>}>();
   register(id:string,load:()=>Promise<CpuExecutor>,executorId='node.cpu.v1'){if(this.entries.has(id))throw Error('EXECUTOR_DUPLICATE');this.entries.set(id,{executorId,load});}

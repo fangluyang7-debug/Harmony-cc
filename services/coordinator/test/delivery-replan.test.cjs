@@ -1,3 +1,4 @@
+function frontierMock(jobs){jobs.graphProgress=async(peer,ids)=>Promise.all(ids.map(async id=>{const serving=await jobs.winnerFor(peer,id),status=await jobs.status(peer,serving);return {id,serving,state:status.state,output:status.state==='SUCCEEDED'?await jobs.graphOutput(peer,serving):null};}));return jobs;}
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {CpuJobs}=require('../dist/cpu-jobs'),{PlanningService}=require('../dist/planning');
 function fixture(localOnly=false,arranged=false){
@@ -38,7 +39,7 @@ test('confirmed source loss ends the graph with a distinguishable failure and ca
  const data={peer:{groupId:'g'},deadlineAt:Date.now()+10000,workflow:{nodes:[{id:'b',dependsOn:[]},{id:'c',inputFrom:'b',dependsOn:['b']}]},nodes:[{id:'b',jobId:'parent',state:'COMMITTED',output:{ref:{artifactId:'r'}}},{id:'c',jobId:'child',state:'SUBMITTED'}]};
  const db={cpuJob:{findMany:async()=>[{id:'child'}]},sdkWorkflowJob:{findUniqueOrThrow:async()=>({state}),updateMany:async({where,data:d})=>{if(state!==where.state)return {count:0};state=d.state;if(d.metadataJson)saved=JSON.parse(d.metadataJson);return {count:1};},update:async({data:d})=>{state=d.state??state;if(d.metadataJson)saved=JSON.parse(d.metadataJson);}}};
  const jobs={winnerFor:async(_peer,id)=>id,status:async()=>({state:'WAITING_INPUT'}),graphOutput:async()=>null,graphInput:async()=>{throw Error('ARTIFACT_UNAVAILABLE:CONFIRMED_MISSING');},start:async()=>{starts++;},cancel:async()=>{cancelled++;return {state:'CANCELLED'};}};
- const graphs=new WorkflowJobs(db,jobs,{context:async()=>({})},{},[]);await graphs.progress('g',data);assert.equal(state,'FAILED');assert.equal(saved.failure.code,'ARTIFACT_UNAVAILABLE');assert.equal(saved.failure.reason,'CONFIRMED_MISSING');assert.equal(cancelled,1);assert.equal(starts,0);assert.equal(saved.nodes[0].jobId,'parent');
+ const graphs=new WorkflowJobs(db,frontierMock(jobs),{context:async()=>({})},{},[]);await graphs.progress('g',data);assert.equal(state,'FAILED');assert.equal(saved.failure.code,'ARTIFACT_UNAVAILABLE');assert.equal(saved.failure.reason,'CONFIRMED_MISSING');assert.equal(cancelled,1);assert.equal(starts,0);assert.equal(saved.nodes[0].jobId,'parent');
 });
 
 test('fixed producer publication uses the shared planner cost, refuses missing paths and respects remaining budget',()=>{

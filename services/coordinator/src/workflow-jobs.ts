@@ -15,10 +15,20 @@ interface GraphData {priority?:'REMOTE_INTERACTIVE'|'REMOTE_BATCH';stop?:{state:
 export function retainableOutput(workflow:SdkWorkflow,id:string):boolean{
  return workflow.nodes.some(n=>n.inputFrom===id)&&!workflow.nodes.some(n=>n.inputFroms?.includes(id));
 }
+/** Bound fan-out while preserving a single cursor writer per graph. */
+export async function parallelReady<T>(items:T[],run:(item:T)=>Promise<void>,limit=4):Promise<void>{
+ let cursor=0;
+ const settled=await Promise.allSettled(Array.from({length:Math.min(limit,items.length)},async()=>{
+  for(;;){const index=cursor++;if(index>=items.length)return;await run(items[index]);}
+ }));
+ const failed=settled.find(r=>r.status==='rejected');if(failed?.status==='rejected')throw failed.reason;
+}
 /** Durable DAG progression. Every node is still dispatched by CpuJobs/PlanningService. */
 export class WorkflowJobs {
  private scheduled=new Map<string,Promise<void>>();
- private work=Promise.resolve();private stopped=false;
+ private runners=new Map<string,{group:string;again:boolean;promise:Promise<void>}>();
+ private rescans=new Set<string>();private stopped=false;
+ private get work():Promise<void>{return Promise.all([...this.scheduled.values(),...Array.from(this.runners.values(),r=>r.promise)]).then(()=>{});}
  constructor(private db:PrismaClient,private jobs:CpuJobs,private apps:AppRegistry,private artifacts:ArtifactChannel,private packs:ReferencePack[],private retention?:ArtifactRetention){}
  async exists(id:string){return !!await this.db.sdkWorkflowJob.findUnique({where:{id}});}
  /** Install a workflow cursor under the existing SDK id, in the transaction confirming non-admission. */
@@ -78,21 +88,35 @@ export class WorkflowJobs {
  private upload(id:string,data:GraphData){const tickets=Object.values(data.inputs).map(a=>this.artifacts.issue(a,data.peer,'WRITE')),first=data.plan.decision.suggestion![0];return {jobId:id,targetId:first.targetId,deviceId:first.deviceId,reason:data.plan.decision.reason,inputDelivery:data.originLocal?'LOCAL':'RELAY',inputTicket:tickets[0],inputTickets:tickets};}
  async start(peer:Peer,id:string){const {data}=await this.owned(peer,id);if(!data.originLocal&&Object.values(data.inputs).some(a=>!this.artifacts.available(a)))throw Error('INPUT_NOT_UPLOADED');await this.db.sdkWorkflowJob.updateMany({where:{id,state:'WAITING_INPUT'},data:{state:'ACTIVE'}});return this.status(peer,id);}
  changed(groupId:string){void this.advance(groupId).catch(()=>{});}
- private advance(groupId:string){
-  const scheduled=this.scheduled.get(groupId);
-  if(scheduled)return scheduled;
-  const next=this.work.then(async()=>{
-   // Notifications that arrive during this pass need at most one subsequent pass.
-   this.scheduled.delete(groupId);
-   if(this.stopped)return;
-   const active=await this.db.sdkWorkflowJob.findMany({where:{groupId,state:{in:['ACTIVE','CANCEL_REQUESTED']}}});
-   for(const row of active)await this.progress(row.id,JSON.parse(row.metadataJson));
-   // Cleanup has its own timer and receipt notifications. It must not put two
-   // full-history scans between a committed predecessor and its next node.
-  });
-  this.scheduled.set(groupId,next);
-  this.work=next.catch(()=>{});
-  return next;
+ private advance(groupId:string):Promise<void>{
+  this.rescans.add(groupId);
+  let scan=this.scheduled.get(groupId);
+  if(!scan){
+   scan=(async()=>{
+    while(this.rescans.delete(groupId)&&!this.stopped){
+     const active=await this.db.sdkWorkflowJob.findMany({where:{groupId,state:{in:['ACTIVE','CANCEL_REQUESTED']}}});
+     for(const row of active)this.runGraph(groupId,row.id);
+    }
+   })().finally(()=>{this.scheduled.delete(groupId);});
+   this.scheduled.set(groupId,scan);
+  }
+  // Only callers awaiting this operation wait for its current graph set. The
+  // scan gate is released independently; a slow graph cannot block another wakeup.
+  return scan.then(()=>Promise.all(Array.from(this.runners.values()).filter(r=>r.group===groupId).map(r=>r.promise))).then(()=>{});
+ }
+ private runGraph(group:string,id:string){
+  const existing=this.runners.get(id);if(existing){existing.again=true;return;}
+  const entry={group,again:true,promise:Promise.resolve()};this.runners.set(id,entry);
+  entry.promise=(async()=>{
+   while(entry.again&&!this.stopped){
+    entry.again=false;
+    // Never reuse a cursor from a prior scan. Each graph has exactly one writer.
+    const row=await this.db.sdkWorkflowJob.findUnique({where:{id}});
+    if(!row||!['ACTIVE','CANCEL_REQUESTED'].includes(row.state))break;
+    await this.progress(id,JSON.parse(row.metadataJson));
+   }
+  })().finally(()=>{this.runners.delete(id);});
+  void entry.promise.catch(()=>{});
  }
  private async drain(id:string,data:GraphData){
   // Submission and the workflow cursor are separate durable writes. A PENDING
@@ -156,52 +180,58 @@ export class WorkflowJobs {
   if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state==='CANCEL_REQUESTED'){
    await this.drain(id,data);return;
   }
-  for(const node of data.nodes){
+  const frontier=new Map((await this.jobs.graphProgress(data.peer,data.nodes.filter(n=>n.state==='SUBMITTED').map(n=>n.jobId))).map(s=>[s.id,s]));
+  await parallelReady(data.nodes,async node=>{
    if(node.state==='SUBMITTED'){
-    const serving=await this.jobs.winnerFor(data.peer,node.jobId);
-    const status=await this.jobs.status(data.peer,serving,false),output=await this.jobs.graphOutput(data.peer,serving);
+    const status=frontier.get(node.jobId)!;const {serving,output}=status;
     if(['OFFERED','ACCEPTED','RUNNING','SUCCEEDED','QUEUED'].includes(status.state))dispatched.add(node.id);
     if(output){node.jobId=serving;node.state='COMMITTED';node.output=output.descriptor;node.local=output.local;}
-    else if(['CANCELLED_SETTLED','YIELDED','REJECTED'].includes(status.state)&&await this.restartSettledOrUnstarted(id,data,node))continue;
+    else if(['CANCELLED_SETTLED','YIELDED','REJECTED'].includes(status.state)&&await this.restartSettledOrUnstarted(id,data,node))return;
     else if(['FAILED','REJECTED','CANCELLED','CANCELLED_SETTLED','YIELDED','SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING'].includes(status.state)){const needsReconciliation=['SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING'].includes(status.state);
      await this.stop(id,data,status.state,needsReconciliation?node.jobId:undefined);return;}
    }
-  }
+  });
   if(JSON.stringify(data)!==before)await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
-  for(const n of data.workflow.nodes){
-   const state=data.nodes.find(s=>s.id===n.id)!;if(state.state==='COMMITTED'||n.dependsOn.some(dep=>data.nodes.find(s=>s.id===dep)!.state!=='COMMITTED'))continue;
+  let writes=Promise.resolve();
+  const save=()=>{const next=writes.then(async()=>{await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});});writes=next.catch(()=>{});return next;};
+  await parallelReady(data.workflow.nodes,async n=>{
+   const state=data.nodes.find(s=>s.id===n.id)!;if(state.state==='COMMITTED'||n.dependsOn.some(dep=>data.nodes.find(s=>s.id===dep)!.state!=='COMMITTED'))return;
    if(data.deadlineAt<=Date.now()){await this.stop(id,data,'BUDGET_EXHAUSTED');return;}
    // A dispatched node progresses by its durable receipt, not by calling start
    // again on every UI poll. Avoid write-lock churn while its engine is running.
-   if(dispatched.has(n.id))continue;
+   if(dispatched.has(n.id))return;
    if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state!=='ACTIVE')return;
    const parent=n.inputFrom?data.nodes.find(s=>s.id===n.inputFrom)!:null;
    try{
    if(n.inputFroms&&!data.inputs[n.id]){
     const parts=[];for(const parentId of n.inputFroms){const p=data.nodes.find(s=>s.id===parentId)!;parts.push({nodeId:parentId,schemaId:p.output!.ref.schemaId,data:await this.artifacts.readForControl(p.output!)});}
     const bytes=encodeBundle(parts),descriptor:ArtifactDescriptor={ref:{artifactId:randomUUID(),contentVersion:1,contentHash:createHash('sha256').update(bytes).digest('hex'),schemaId:'artifact.bundle',schemaVersion:1},groupId:data.peer.groupId,ownerPrincipalId:data.peer.principalId,domain:this.artifacts.domain,bytes:bytes.length,expiresAt:Date.now()+3600000};
-    this.artifacts.register(descriptor);await this.artifacts.writeForControl(descriptor,bytes);data.inputs[n.id]=descriptor;await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
+    this.artifacts.register(descriptor);await this.artifacts.writeForControl(descriptor,bytes);data.inputs[n.id]=descriptor;await save();
    }
    const source=parent?parent.output!:data.inputs[n.id],local=n.inputFroms?false:parent?parent.local:data.originLocal;
     if(state.state==='PENDING'){
      if(n.modelManifest&&!sameModelV2(n.modelManifest,this.pack(n.capability).manifest.model)){
       data.failure={code:'SDK_MODEL_MISMATCH',reason:'REGISTERED_MODEL_CHANGED',nodeId:n.id};await this.stop(id,data,'FAILED');return;
      }
-     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,businessIdempotencyKey:n.businessIdempotencyKey,privacy:n.privacy,executionScope:n.executionScope,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{forceRelay:data.workflow.nodes.some(node=>!!node.inputFroms)&&!retainableOutput(data.workflow,n.id),workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:retainableOutput(data.workflow,n.id),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
-     state.state='SUBMITTED';await this.db.sdkWorkflowJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
+     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,businessIdempotencyKey:n.businessIdempotencyKey,privacy:n.privacy,executionScope:n.executionScope,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{inputSchema:source.ref.schemaId,forceRelay:data.workflow.nodes.some(node=>!!node.inputFroms)&&!retainableOutput(data.workflow,n.id),workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:retainableOutput(data.workflow,n.id),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
+     state.state='SUBMITTED';await save();
     }
-    if(await this.jobs.graphInput(data.peer,state.jobId,source))continue;
+    if(await this.jobs.graphInput(data.peer,state.jobId,source))return;
     if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state!=='ACTIVE')return;
     await this.jobs.start(data.peer,state.jobId);
-   }catch(error){if(['P1008','P2028'].includes(String((error as {code?:string})?.code))){return;}if(error instanceof Error&&(error.message.startsWith('ARTIFACT_UNAVAILABLE:')||error.message==='ARTIFACT_CACHE_FULL')){data.failure={code:error.message==='ARTIFACT_CACHE_FULL'?'ARTIFACT_CACHE_FULL':'ARTIFACT_UNAVAILABLE',reason:error.message==='ARTIFACT_CACHE_FULL'?'NO_FEASIBLE_INPUT_PATH':error.message.slice('ARTIFACT_UNAVAILABLE:'.length),nodeId:n.id};await this.stop(id,data,'FAILED');return;}if(error instanceof Error&&['APP_QUOTA_EXCEEDED','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','START_BUSY','DISPATCH_ADMISSION_PENDING','PLAN_STALE','INPUT_NOT_UPLOADED','TARGET_UNAVAILABLE','JOB_RECOVERY_REQUIRED'].includes(error.message))continue;data.failure={code:'GRAPH_NODE_FAILED',reason:error instanceof Error?error.message:'UNKNOWN',nodeId:n.id};await this.stop(id,data,'FAILED');return;}
-  }
+   }catch(error){if(['P1008','P2028'].includes(String((error as {code?:string})?.code))){return;}if(error instanceof Error&&(error.message.startsWith('ARTIFACT_UNAVAILABLE:')||error.message==='ARTIFACT_CACHE_FULL')){data.failure={code:error.message==='ARTIFACT_CACHE_FULL'?'ARTIFACT_CACHE_FULL':'ARTIFACT_UNAVAILABLE',reason:error.message==='ARTIFACT_CACHE_FULL'?'NO_FEASIBLE_INPUT_PATH':error.message.slice('ARTIFACT_UNAVAILABLE:'.length),nodeId:n.id};await this.stop(id,data,'FAILED');return;}if(error instanceof Error&&['APP_QUOTA_EXCEEDED','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','START_BUSY','DISPATCH_ADMISSION_PENDING','PLAN_STALE','INPUT_NOT_UPLOADED','TARGET_UNAVAILABLE','JOB_RECOVERY_REQUIRED'].includes(error.message))return;data.failure={code:'GRAPH_NODE_FAILED',reason:error instanceof Error?error.message:'UNKNOWN',nodeId:n.id};await this.stop(id,data,'FAILED');return;}
+  });
   if(data.nodes.every(n=>n.state==='COMMITTED'))await this.db.sdkWorkflowJob.updateMany({where:{id,state:'ACTIVE'},data:{state:'SUCCEEDED'}});
  }
  async status(peer:Peer,id:string){const {row,data}=await this.owned(peer,id);
   if(row.state==='ACTIVE'||row.state==='CANCEL_REQUESTED')this.changed(peer.groupId);
   const last=data.nodes[data.nodes.length-1],assignment=data.plan.decision.suggestion!.find(a=>a.nodeId===last.id)!;
   const inputTransfers:SdkInputTransfer[]=[];
-  for(const n of data.workflow.nodes){const s=data.nodes.find(s=>s.id===n.id)!;if(row.state!=='ACTIVE'||s.state!=='SUBMITTED')continue;const source=n.inputFrom?data.nodes.find(s=>s.id===n.inputFrom)!.output!:data.inputs[n.id];const transfer=await this.jobs.graphInput(peer,s.jobId,source,false);if(transfer)inputTransfers.push(transfer);}
+  const pending=row.state==='ACTIVE'?data.nodes.filter(n=>n.state==='SUBMITTED'):[];
+  // An Attempt is created only after the input gate. Its input need not be
+  // re-inspected or re-ticketed on every SDK poll while the executor works.
+  const admitted=new Set(pending.length?(await this.db.attempt.findMany({where:{id:{in:pending.map(n=>n.jobId)}},select:{id:true}})).map(a=>a.id):[]);
+  for(const s of pending){if(admitted.has(s.jobId))continue;const n=data.workflow.nodes.find(n=>n.id===s.id)!;const source=n.inputFrom?data.nodes.find(s=>s.id===n.inputFrom)!.output!:data.inputs[n.id];const transfer=await this.jobs.graphInput(peer,s.jobId,source,false);if(transfer)inputTransfers.push(transfer);}
   const output=row.state==='SUCCEEDED'&&!data.resultReceivedAt&&last.output&&this.artifacts.lookup(peer.groupId,last.output.ref)?this.artifacts.issueStatusRead(last.output,peer):null;
   const actual=last.state==='COMMITTED'?await this.db.attempt.findUnique({where:{id:last.jobId},select:{offerJson:true}}):null;
   const target=actual?.offerJson?JSON.parse(actual.offerJson).target:assignment;
@@ -217,7 +247,7 @@ export class WorkflowJobs {
 
  async writeInput(peer:Peer,id:string,artifactId:string,bytes:Buffer){const {row,data}=await this.owned(peer,id);const d=Object.values(data.inputs).find(a=>a.ref.artifactId===artifactId);if(row.state!=='WAITING_INPUT'||!d)throw Error('SDK_INPUT_SCOPE');await this.artifacts.writeForControl(d,bytes);}
  async readOutput(peer:Peer,id:string){const {row,data}=await this.owned(peer,id);const d=data.nodes[data.nodes.length-1].output;if(row.state!=='SUCCEEDED'||!d)throw Error('OUTPUT_NOT_READY');return this.artifacts.readForControl(d);}
- async close(){this.stopped=true;await this.work;}
+ async close(){this.stopped=true;await Promise.allSettled([...this.scheduled.values(),...Array.from(this.runners.values(),r=>r.promise)]);}
 }
 
 /** Base64 bundle size is always an integer number of bytes, including padding. */

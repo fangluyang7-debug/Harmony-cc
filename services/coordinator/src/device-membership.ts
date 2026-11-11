@@ -7,6 +7,14 @@ const deviceKey=(id:string)=>JSON.stringify(['space-device-installation',id]);
 const installationKey=(id:string)=>JSON.stringify(['space-installation',id]);
 interface Registration {installationId:string;}
 interface ActiveDevice {deviceId:string;groupId:string;holderInstanceId:string;}
+/** A cancelled, never-dispatched job has no device resources to reconcile.
+ * Missing jobs, expired reservations and admitted attempts remain conservative. */
+export async function appReservationSettled(db:Prisma.TransactionClient,reservation:{id:string;groupId:string;principalId:string}):Promise<boolean>{
+ const attempt=await db.attempt.findUnique({where:{id:reservation.id}});
+ if(attempt)return attempt.groupId===reservation.groupId&&(attempt.state==='REJECTED'||!!attempt.recordJson&&JSON.parse(attempt.recordJson).resourcesSettled===true);
+ const job=await db.cpuJob.findUnique({where:{id:reservation.id}});
+ return !!job&&job.groupId===reservation.groupId&&job.principalId===reservation.principalId&&job.state==='CANCELLED';
+}
 export async function deviceMembershipActive(db:Prisma.TransactionClient,deviceId:string):Promise<boolean>{
  const registration=await db.device.findUnique({where:{id:deviceKey(deviceId)}});
  if(!registration)return true; // Legacy/manual hosts are not guessed from names or accounts.
@@ -51,8 +59,7 @@ export async function activateDeviceMembership(db:Prisma.TransactionClient,peer:
   // expired reservations still block: a deadline is not proof of settlement.
   const reservations=await db.appJobReservation.findMany({where:{appInstanceId:{in:apps.map(a=>a.id)}}});
   for(const reservation of reservations){
-   const attempt=await db.attempt.findUnique({where:{id:reservation.id}});
-   if(attempt&&(attempt.state==='REJECTED'||attempt.recordJson&&JSON.parse(attempt.recordJson).resourcesSettled===true))continue;
+   if(await appReservationSettled(db,reservation))continue;
    throw Error('SPACE_SWITCH_BUSY');
   }
   const pending=await db.attempt.findMany({where:{groupId:old.spaceId,holderInstanceId:{in:[old.holderId,...apps.map(a=>a.holderInstanceId)]}}});

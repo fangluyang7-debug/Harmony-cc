@@ -223,7 +223,7 @@ class RuntimeControl {
         child.on('error',reject);child.on('exit',code=>code===0?resolve():reject(Error('配对失败；保留安装目录用于对账，勿重复兑换')));
       });
       fs.writeFileSync(path.join(directory,'contribution.json'),JSON.stringify(bootstrap.contribution),{flag:'wx',mode:0o600});
-      this.binding?.activate(directory);return {directory};
+      this.binding?.activate(directory);this.coordinatorGone=false;return {directory};
     }finally{fs.unlinkSync(file);fs.rmdirSync(staging);}
   }
   /** The coordinator stopped: move the pairing aside (ledger kept for audit) so the device can pair again. */

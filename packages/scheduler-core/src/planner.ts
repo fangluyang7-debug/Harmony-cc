@@ -11,7 +11,7 @@ export interface QualityEvidence {
 export interface PlacementReplica { deviceId: string; readMs: number | null; holderInstanceId?:string; localOnly?:boolean; transferOperation?:'READ'|'WRITE'; endpointId?:string;endpointEpoch?:string; }
 export interface PlacementArtifact { id: string; bytes: number; replicas: PlacementReplica[]; }
 export interface PlacementLink { from: string; to: string; bytesPerSecond: number; fixedMs: number; effective: boolean; observedAt: number; ttlMs: number; source: 'REAL' | 'SIMULATED'; endpointId?:string; endpointEpoch?:string; endpointOperation?:'READ'|'WRITE'; fromHolderInstanceId?:string; toHolderInstanceId?:string; }
-export interface ComputeSample { workKey:string;configId:string;startup:string;count:number;p50Ms:number;p90Ms:number;coldP50Ms:number;observedAt:number;ttlMs:number; }
+export interface ComputeSample { workKey:string;configId:string;startup:string;count:number;p50Ms:number;p90Ms:number;coldP50Ms:number;observedAt:number;ttlMs:number;executionTotal?:boolean; }
 export interface PlacementCandidate {
   costEvidence?:{compute:NumericSampleV2;cold:NumericSampleV2;publish:NumericSampleV2};
   queueObserved?:boolean;projectedSlots?:number;holderCapacity?:ResourceAmountV2[];

@@ -4,13 +4,21 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { ExecutionConfigV2, validExecutionConfigV2 } from '@harmony/scheduler-core';
 
-/** durationMs is monotonic time inside the child executor, excluding process startup, result encoding and IPC. */
+/** durationMs is monotonic engine time; disposable executors exclude child startup/IPC. Photo engines include model load or reuse. */
 export interface CpuResult {bytes:Buffer;hash:string;schemaId:string;durationMs:number;backend:'CPU';}
-/** Every invocation owns one disposable process; abort resolves only after its exit event. */
+/** Photo engines own cancellable native workers; other executors use disposable processes. */
 export function executeCpu(capability:string,input:Buffer,parameters:unknown,config:ExecutionConfigV2,signal:AbortSignal):Promise<CpuResult>{
   if(!validExecutionConfigV2(config)||input.length>8388608)return Promise.reject(Error('CPU_REQUEST_INVALID'));
   if(!cpuRegistry.has(capability))return Promise.reject(Error('CAPABILITY_UNSUPPORTED'));
   if(signal.aborted)return Promise.reject(Error('CANCELLED_SETTLED'));
+  if(capability.startsWith('photo.'))return (async()=>{
+    const executor=await cpuRegistry.load(capability),begin=performance.now();
+    if(signal.aborted)throw Error('CANCELLED_SETTLED');
+    const result=await executor(input,parameters,config,signal);
+    if(signal.aborted)throw Error('CANCELLED_SETTLED');
+    if(result.output.length>8388608)throw Error('CPU_RESULT_INVALID');
+    return {bytes:result.output,hash:createHash('sha256').update(result.output).digest('hex'),schemaId:result.schemaId,durationMs:performance.now()-begin,backend:'CPU' as const};
+  })();
   return new Promise((resolve,reject)=>{
     const options:ForkOptions&{windowsHide:boolean}={windowsHide:true,stdio:['ignore','ignore','ignore','ipc'],execArgv:['--max-old-space-size=256']};
     const child=fork(path.join(__dirname,'cpu-child.js'),[],options);

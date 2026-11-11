@@ -2,6 +2,17 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const {runtime}=require('./helpers.cjs'),{pinnedRequest}=require('../dist/pinned-client');
 const capacity=[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:268435456}],base=[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:67108864}];
 const registration=label=>({label,allowedContracts:['text.count.v1'],maxConcurrent:1,resources:capacity,offlineBase:base,onlineExtra:[]});
+test('foreground performance request expands online sharing without changing offline reservations or contracts',async()=>{
+ const r=await runtime();try{
+  const o=await owner(r),registrationInput=registration('performance'),a=await r.apps.register(o.peer,registrationInput,r.url),p=(await r.apps.exchange({registrationId:a.registrationId,code:a.code})).peer;
+  const before=await r.apps.context(p),after=await r.apps.performance(p);
+  assert.deepEqual(after.offlineBase,before.offlineBase);assert.deepEqual(after.identity.allowedContracts,before.identity.allowedContracts);
+  assert.equal(after.quota.maxConcurrent,32);assert.equal(after.onlineExtra.find(v=>v.resourcePoolId==='cpu').amount,1);
+  assert.equal(after.onlineExtra.find(v=>v.resourcePoolId==='ram').amount,capacity[1].amount-base[1].amount);
+  await assert.rejects(r.apps.performance({...p,deviceId:'other-device'}),/APP_CREDENTIAL_REVOKED/);
+  await r.apps.register(o.peer,{...registrationInput,offlineBase:[]},r.url);
+ }finally{await r.close();}
+});
 
 test('new phone console installation renews an existing browser policy only on submission',async()=>{
  const r=await runtime();try{

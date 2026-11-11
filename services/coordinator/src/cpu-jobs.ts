@@ -7,7 +7,7 @@ import { performance } from 'node:perf_hooks';
 import { DeviceProfileV2, workKeyV2, canonical, DispatchOfferV2, sampleUsableV2, protocolId, PlacementRequest, SnapshotDecision } from '@harmony/scheduler-core';
 import { ArtifactChannel, ArtifactDescriptor } from '@harmony/resource-transport';
 import { builtinCpuPacks, ReferencePack } from '@harmony/reference-capabilities';
-import { PrismaClient } from '../generated/client';
+import { Prisma, PrismaClient } from '../generated/client';
 import { Peer } from './channel';
 import { DeviceDirectory,executorIdentity } from './directory';
 import { CoordinatorStore } from './store';
@@ -71,7 +71,7 @@ export class CpuJobs {
     private readonly snapshots:SnapshotBuilder,private readonly allotments:AllotmentIssuer,private readonly artifacts:ArtifactChannel,
     private readonly store:CoordinatorStore,private readonly epoch:()=>number,private readonly flush:()=>Promise<void>,
     private readonly planning:PlanningService,private readonly traces:TraceService,private readonly apps:AppRegistry,private readonly packs:ReferencePack[]=builtinCpuPacks(),private readonly directTransfers?:DirectTransfers){this.batch=new BatchReadyQueue(db,(peer,id)=>this.dispatchReady(peer,id));}
-  async submit(peer:Peer,input:any,variants?:{parameters:string;targetId?:string}[],fingerprint?:string,graph?:{forceRelay?:boolean;excludedDeviceId?:string;workflowId:string;nodeId:string;deadlineAt:number;dependencies:string[];retain?:boolean;source?:{descriptor:ArtifactDescriptor;attemptId:string;nodeId:string}}){
+  async submit(peer:Peer,input:any,variants?:{parameters:string;targetId?:string}[],fingerprint?:string,graph?:{inputSchema?:string;forceRelay?:boolean;excludedDeviceId?:string;workflowId:string;nodeId:string;deadlineAt:number;dependencies:string[];retain?:boolean;source?:{descriptor:ArtifactDescriptor;attemptId:string;nodeId:string}}){
     const app=await this.apps.context(peer);
     if(!input||!protocolId(input.requestId)||input.requestId.length>100||typeof input.capability!=='string'||typeof input.contentHash!=='string'||!/^[a-f0-9]{64}$/.test(input.contentHash)||
       !Number.isSafeInteger(input.bytes)||input.bytes<1||input.bytes>8388608||input.targetId!==undefined&&!protocolId(input.targetId)||
@@ -81,13 +81,14 @@ export class CpuJobs {
     if(input.businessIdempotencyKey!==undefined&&!protocolId(input.businessIdempotencyKey))throw Error('JOB_INPUT_INVALID');
     const parameters=input.parameters??'{}';try{JSON.parse(parameters);}catch{throw Error('JOB_INPUT_INVALID');}
     const id=input.requestId,existing=await this.db.cpuJob.findUnique({where:{id}});
-    if(existing){const d=await this.owned(peer,id);if(d.offer.task.businessIdempotencyKey!==(input.businessIdempotencyKey??null)||d.offer.task.priority!==(input.priority??'REMOTE_INTERACTIVE')||d.fingerprint!==fingerprint||(!fingerprint&&d.offer.task.parameters!==parameters)||d.input.ref.contentHash!==input.contentHash||d.input.bytes!==input.bytes||d.offer.task.contract.capability!==input.capability||!fingerprint&&input.targetId&&d.offer.target.targetId!==input.targetId||input.budgetMs!==undefined&&d.budgetMs!==input.budgetMs)throw Error('JOB_CONFLICT');if(existing.state==='CANCELLED')throw Error('JOB_CANCELLED');this.artifacts.register(d.input);return this.upload(peer,id,d);}
+    if(existing){const d=await this.owned(peer,id);if(graph?.inputSchema!==undefined&&d.input.ref.schemaId!==graph.inputSchema||d.offer.task.businessIdempotencyKey!==(input.businessIdempotencyKey??null)||d.offer.task.priority!==(input.priority??'REMOTE_INTERACTIVE')||d.fingerprint!==fingerprint||(!fingerprint&&d.offer.task.parameters!==parameters)||d.input.ref.contentHash!==input.contentHash||d.input.bytes!==input.bytes||d.offer.task.contract.capability!==input.capability||!fingerprint&&input.targetId&&d.offer.target.targetId!==input.targetId||input.budgetMs!==undefined&&d.budgetMs!==input.budgetMs)throw Error('JOB_CONFLICT');if(existing.state==='CANCELLED')throw Error('JOB_CANCELLED');this.artifacts.register(d.input);return this.upload(peer,id,d);}
     const pack=this.packs.find(p=>p.manifest.contract.capability===input.capability);if(!pack)throw Error('CAPABILITY_UNSUPPORTED');
     if(pack.manifest.contract.sideEffectPolicy!=='PURE'&&!protocolId(input.businessIdempotencyKey))throw Error('JOB_IDEMPOTENCY_REQUIRED');
     if(!app.identity.allowedContracts.includes(pack.manifest.contract.contractId))throw Error('APP_CONTRACT_FORBIDDEN');
     const now=Date.now();
-    const artifact:ArtifactDescriptor=graph?.source?.descriptor??{ref:{artifactId:'in-'+id,contentVersion:1,contentHash:input.contentHash,schemaId:pack.manifest.contract.inputSchemas[0],schemaVersion:1},
+    const artifact:ArtifactDescriptor=graph?.source?.descriptor??{ref:{artifactId:'in-'+id,contentVersion:1,contentHash:input.contentHash,schemaId:graph?.inputSchema??pack.manifest.contract.inputSchemas[0],schemaVersion:1},
       groupId:peer.groupId,ownerPrincipalId:peer.principalId,domain:this.directory.domain,bytes:input.bytes,expiresAt:now+3600000};
+    if(!pack.manifest.contract.inputSchemas.includes(artifact.ref.schemaId))throw Error('GRAPH_INPUT_SCOPE');
     if(graph?.source&&(artifact.groupId!==peer.groupId||artifact.ownerPrincipalId!==peer.principalId||artifact.domain!==this.directory.domain||
       artifact.ref.contentHash!==input.contentHash||artifact.bytes!==input.bytes||!pack.manifest.contract.inputSchemas.includes(artifact.ref.schemaId)||
       !graph.dependencies.includes(graph.source.nodeId)))throw Error('GRAPH_INPUT_SCOPE');
@@ -279,6 +280,48 @@ export class CpuJobs {
     if(node.winnerAttemptId)return node.winnerAttemptId;
     const primary=await this.db.attempt.findUnique({where:{id}});
     return primary&&['FAILED','CANCELLED_SETTLED','REJECTED','YIELDED'].includes(primary.state)?node.backupAttemptId:id;
+  }
+  /** One consistent read for a graph frontier, instead of per-node ownership,
+   * winner, status and receipt queries on every wakeup. No scheduling mutations. */
+  async graphProgress(peer:Peer,ids:string[]){
+    if(ids.length>32||new Set(ids).size!==ids.length)throw Error('GRAPH_FRONTIER_INVALID');
+    if(!ids.length)return [];
+    await this.apps.context(peer);
+    // SQLite supplies a statement snapshot, without an interactive read transaction
+    // keeping its connection occupied across one JS round trip per table/node.
+    const snapshot=await this.db.$queryRaw<Array<{id:string;serving:string;ownerGroup:string;ownerPrincipal:string;ownerHolder:string;
+      groupId:string|null;principalId:string|null;sourceHolderId:string|null;metadataJson:string|null;
+      state:string;currentAttemptId:string|null;nodeState:string|null;committed:number|null;recordJson:string|null}>>(Prisma.sql`
+      WITH frontier AS (
+        SELECT j.id,j.groupId AS ownerGroup,j.principalId AS ownerPrincipal,j.sourceHolderId AS ownerHolder,
+          n.currentAttemptId,n.state AS nodeState,
+          CASE WHEN n.primaryAttemptId=j.id AND n.backupAttemptId IS NOT NULL
+            THEN COALESCE(n.winnerAttemptId,CASE WHEN a.state IN ('FAILED','CANCELLED_SETTLED','REJECTED','YIELDED') THEN n.backupAttemptId ELSE j.id END)
+            ELSE j.id END AS serving
+        FROM CpuJob j LEFT JOIN Node n ON n.id=json_array(json_extract(j.metadataJson,'$.offer.task.workflowId'),json_extract(j.metadataJson,'$.offer.task.nodeId'))
+          LEFT JOIN Attempt a ON a.id=j.id WHERE j.id IN (${Prisma.join(ids)})
+      )
+      SELECT f.*,j.groupId,j.principalId,j.sourceHolderId,j.metadataJson,
+        COALESCE(a.state,CASE WHEN j.state!='CANCELLED' AND q.id IS NOT NULL THEN 'QUEUED' ELSE j.state END) AS state,
+        r.committed,r.recordJson
+      FROM frontier f LEFT JOIN CpuJob j ON j.id=f.serving LEFT JOIN Attempt a ON a.id=f.serving
+        LEFT JOIN Receipt r ON r.id=f.serving LEFT JOIN BatchReadyJob q ON q.id=f.serving`);
+    if(snapshot.length!==ids.length)throw Error('JOB_SCOPE');
+    const rows=snapshot.map(row=>{
+      if(row.ownerGroup!==peer.groupId||row.ownerPrincipal!==peer.principalId||row.ownerHolder!==peer.holderInstanceId||
+        row.groupId!==peer.groupId||row.principalId!==peer.principalId||row.sourceHolderId!==peer.holderInstanceId||!row.metadataJson)throw Error('JOB_SCOPE');
+      const data=JSON.parse(row.metadataJson) as JobData,record=row.recordJson?JSON.parse(row.recordJson):null;
+      const committed=row.state==='SUCCEEDED'&&row.currentAttemptId===row.serving&&row.nodeState==='COMMITTED'&&row.committed&&record?.state==='SUCCEEDED'&&data.output&&record.outputs.some((ref:unknown)=>canonical(ref)===canonical(data.output!.ref));
+      return {id:row.id,serving:row.serving,state:row.state,data,committed:!!committed};
+    });
+    return Promise.all(rows.map(async row=>{
+      let output:{descriptor:ArtifactDescriptor;local:boolean}|null=null;
+      if(row.committed){
+        const descriptor=row.data.output!,available=this.artifacts.available(descriptor),local=this.localOutput(peer,row.data)&&!available;
+        if(local||available||await this.directTransfers?.hasInput(peer.groupId,row.data.holderId,row.data.offer.task.app.appInstanceId,descriptor.ref))output={descriptor,local};
+      }
+      return {id:row.id,serving:row.serving,state:row.state,output};
+    }));
   }
   relayId(){return this.store.senderInstanceId;}
   async graphInput(peer:Peer,id:string,source:ArtifactDescriptor,prepare=true){

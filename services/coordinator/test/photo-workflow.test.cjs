@@ -1,9 +1,20 @@
+function frontierMock(jobs){jobs.graphProgress=async(peer,ids)=>Promise.all(ids.map(async id=>{const serving=await jobs.winnerFor(peer,id),status=await jobs.status(peer,serving);return {id,serving,state:status.state,output:status.state==='SUCCEEDED'?await jobs.graphOutput(peer,serving):null};}));return jobs;}
 const {test}=require('node:test'),assert=require('node:assert/strict'),path=require('node:path'),fs=require('node:fs'),{randomUUID,createHash}=require('node:crypto');
 const settings=path.resolve('../../.test/photo-tools/runtime.json');
 if(fs.existsSync(settings)){const c=JSON.parse(fs.readFileSync(settings));process.env.HARMONY_PHOTO_MODEL=c.model;process.env.HARMONY_PHOTO_RUNNER=c.runner;}
 const {runtime}=require('./helpers.cjs'),{photoPacks,encodeBundle,decodeBundle}=require('@harmony/reference-capabilities');
 const {CpuHost}=require('../../pc-agent/dist/host'),{DurableLedger}=require('../../pc-agent/dist/durable-ledger');
 const sharp=require('sharp');
+test('ready sibling submissions proceed while another sibling is blocked, without duplicate starts',async()=>{
+ const {WorkflowJobs}=require('../dist/workflow-jobs');let release;const blocked=new Promise(r=>{release=r;});let second;const sibling=new Promise(r=>{second=r;});const started=[],submitted=[];
+ const data={peer:{groupId:'g'},deadlineAt:Date.now()+10000,workflow:{nodes:['a','b'].map(id=>({id,capability:'photo.analyze.v1',dependsOn:[],parameters:'{}'}))},inputs:{a:{ref:{contentHash:'a'},bytes:1},b:{ref:{contentHash:'b'},bytes:1}},nodes:['a','b'].map(id=>({id,jobId:id,state:'PENDING'}))};
+ let persisted;const db={sdkWorkflowJob:{findUniqueOrThrow:async()=>({state:'ACTIVE'}),update:async v=>{persisted=JSON.parse(v.data.metadataJson);}},cpuJob:{findUnique:async()=>null}};
+ const jobs={submit:async(_p,v)=>{submitted.push(v.requestId);if(v.requestId==='a')await blocked;else second();},graphInput:async()=>null,start:async(_p,id)=>{started.push(id);},winnerFor:async(_p,id)=>id,status:async()=>({state:'RUNNING'}),graphOutput:async()=>null};
+ const g=new WorkflowJobs(db,frontierMock(jobs),{context:async()=>({})},null,[]),work=g.progress('g',data);
+ try{await Promise.race([sibling,new Promise((_,reject)=>setTimeout(()=>reject(Error('sibling stalled behind first submission')),1000))]);}finally{release();}
+ await work;assert.deepEqual(started.sort(),['a','b']);assert.ok(persisted.nodes.every(n=>n.state==='SUBMITTED'));
+ await g.progress('g',data);assert.equal(submitted.length,2);assert.equal(started.length,2);
+});
 test('bundle rejects tampered, duplicate and oversized materialization',()=>{
  const b=encodeBundle([{nodeId:'a',schemaId:'photo.tile',data:Buffer.from('abc')}]);assert.equal(Buffer.from(decodeBundle(b)[0].data,'base64').toString(),'abc');
  const v=JSON.parse(b);v.parts[0].data=Buffer.from('xyz').toString('base64');assert.throws(()=>decodeBundle(Buffer.from(JSON.stringify(v))));
@@ -15,7 +26,7 @@ for(const refusal of ['ALLOTMENT_ACK_PENDING','P1008'])test('graph preserves the
  const data={peer:{groupId:'g'},deadlineAt:Date.now()+10000,workflow:{nodes:[{id:'a',capability:'photo.analyze.v1',dependsOn:[],parameters:'{}'},{id:'b',capability:'photo.deliver.v1',inputFrom:'a',dependsOn:['a'],parameters:'{}'}]},inputs:{a:{ref:{contentHash:'h'},bytes:1}},nodes:[{id:'a',jobId:'ja',state:'PENDING'},{id:'b',jobId:'jb',state:'PENDING'}],plan:{decision:{suggestion:[{nodeId:'a'},{nodeId:'b'}]}}};
  const db={sdkWorkflowJob:{findUniqueOrThrow:async()=>({state}),update:async()=>{},updateMany:async arg=>{state=arg.data.state;return {count:1};}},cpuJob:{findUnique:async()=>null}};
  const jobs={submit:async()=>{submitted++;},graphInput:async()=>null,start:async()=>{if(++started===1){const e=Error(refusal);if(refusal==='P1008')e.code=refusal;throw e;}},winnerFor:async()=> 'ja',status:async()=>({state:started>=2?'ACCEPTED':'WAITING_INPUT'}),graphOutput:async()=>null};
- const graph=new WorkflowJobs(db,jobs,{context:async()=>({})},null,[]);
+ const graph=new WorkflowJobs(db,frontierMock(jobs),{context:async()=>({})},null,[]);
  await graph.progress('g',data);assert.equal(state,'ACTIVE');assert.equal(data.failure,undefined);assert.equal(data.nodes[0].state,'SUBMITTED');
  await graph.progress('g',data);assert.equal(submitted,1);assert.equal(started,2);assert.equal(state,'ACTIVE');await graph.progress('g',data);assert.equal(started,2,'an admitted task is never restarted by polling');
 });
@@ -60,9 +71,28 @@ test('fan-in materializes only its immediate inputs, while linear edges stay ret
 test('graph polling does not wait for a full history cleanup or query inactive nodes',async()=>{
  const {WorkflowJobs}=require('../dist/workflow-jobs');let reads=0,sweeps=0;
  const data={peer:{groupId:'g'},deadlineAt:Date.now()+10000,workflow:{nodes:[{id:'done',dependsOn:[]},{id:'running',dependsOn:['done']},{id:'blocked',dependsOn:['running']}]},nodes:[{id:'done',jobId:'jd',state:'COMMITTED'},{id:'running',jobId:'jr',state:'SUBMITTED'},{id:'blocked',jobId:'jb',state:'PENDING'}]};
- const db={sdkWorkflowJob:{findMany:async()=>[{id:'g',metadataJson:JSON.stringify(data)}],findUniqueOrThrow:async()=>{reads++;return {state:'ACTIVE'};}}};
- const jobs={winnerFor:async()=> 'jr',status:async()=>({state:'RUNNING'}),graphOutput:async()=>null};
+ const db={sdkWorkflowJob:{findMany:async()=>[{id:'g',metadataJson:JSON.stringify(data)}],findUnique:async()=>({state:'ACTIVE',metadataJson:JSON.stringify(data)}),findUniqueOrThrow:async()=>{reads++;return {state:'ACTIVE'};}}};
+ const jobs={winnerFor:async()=> 'jr',status:async()=>({state:'RUNNING'}),graphOutput:async()=>{throw Error('running attempt must not inspect output');}};
  const retention={sweepRelay:async()=>{sweeps++;throw Error('cleanup should not block the graph');}};
- const graph=new WorkflowJobs(db,jobs,{context:async()=>({})},null,[],retention);
+ const graph=new WorkflowJobs(db,frontierMock(jobs),{context:async()=>({})},null,[],retention);
  await graph.advance('g');assert.equal(sweeps,0);assert.equal(reads,1,'only the cancellation cursor is checked; admitted and dependency-blocked nodes do not poll the DB again');
+});
+
+test('successful receipt still waits for committed output and retries visibility without dispatching twice',async()=>{
+ const {WorkflowJobs}=require('../dist/workflow-jobs');let available=false,outputs=0,done=0;
+ const descriptor={ref:{contentHash:'x'}};
+ const data={peer:{groupId:'g'},deadlineAt:Date.now()+10000,workflow:{nodes:[{id:'a',dependsOn:[]}]},nodes:[{id:'a',jobId:'ja',state:'SUBMITTED'}]};
+ const db={sdkWorkflowJob:{findUniqueOrThrow:async()=>({state:'ACTIVE'}),update:async()=>{},updateMany:async()=>{done++;}}};
+ const jobs={winnerFor:async()=> 'ja',status:async()=>({state:'SUCCEEDED'}),graphOutput:async()=>{outputs++;return available?{descriptor,local:true}:null;},start:async()=>{throw Error('duplicate start');}};
+ const graph=new WorkflowJobs(db,frontierMock(jobs),{context:async()=>({})},null,[]);
+ await graph.progress('g',data);assert.equal(data.nodes[0].state,'SUBMITTED');assert.equal(done,0);
+ available=true;await graph.progress('g',data);assert.equal(data.nodes[0].state,'COMMITTED');assert.equal(data.nodes[0].output,descriptor);assert.equal(done,1);assert.equal(outputs,2);
+});
+
+test('SDK graph polling requests input transfer only for attempts not yet admitted',async()=>{
+ const {WorkflowJobs}=require('../dist/workflow-jobs'),calls=[];
+ const peer={groupId:'g',holderInstanceId:'h'},data={nodes:[{id:'a',jobId:'ja',state:'SUBMITTED'},{id:'b',jobId:'jb',state:'SUBMITTED'},{id:'c',jobId:'jc',state:'PENDING'}],workflow:{nodes:[{id:'a'},{id:'b'},{id:'c'}]},inputs:{a:{bytes:1},b:{bytes:2}},plan:{decision:{suggestion:[{nodeId:'c',targetId:'t',deviceId:'d'}]}}};
+ const db={sdkWorkflowJob:{findUnique:async()=>({groupId:'g',sourceHolderId:'h',state:'ACTIVE',metadataJson:JSON.stringify(data)})},attempt:{findMany:async q=>{assert.deepEqual(q.where.id.in,['ja','jb']);return [{id:'ja'}];}}};
+ const graph=new WorkflowJobs(db,{graphInput:async(_p,id,_s,prepare)=>{calls.push(id);assert.equal(prepare,false);return {read:'source',write:'destination'};}},{context:async()=>({})},null,[]);graph.changed=()=>{};
+ const status=await graph.status(peer,'graph');assert.deepEqual(calls,['jb']);assert.equal(status.inputTransfers.length,1);
 });

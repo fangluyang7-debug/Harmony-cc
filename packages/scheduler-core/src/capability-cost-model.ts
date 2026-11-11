@@ -21,12 +21,18 @@ export function costConfiguration(parameters:unknown, model?:CapabilityCostModel
       values[rule.name]=value??null;
     }
   }
-  return {model:model.version,values};
+  return {model:model.version,values,...(model.scale?{scale:model.scale}:{})};
 }
 
 export function workKeyV2(contract:TaskContractV2, parameters:string, inputBytes:number):string {
   if(!Number.isSafeInteger(inputBytes)||inputBytes<0)throw new Error('INPUT_BYTES_INVALID');
   if(contract.workModel!==undefined&&!validWorkModelV2(contract.workModel))throw new Error('COST_MODEL_INVALID');
   const config=costConfiguration(contract.workModel?JSON.parse(parameters):null,contract.workModel);
-  return canonical([contract.contractId,contract.version,config,Math.floor(Math.log2(Math.max(1,inputBytes)))]);
+  return canonical([contract.contractId,contract.version,config,contract.workModel?.inputBytes==='IGNORE'?null:Math.floor(Math.log2(Math.max(1,inputBytes)))]);
+}
+
+/** Explicit geometric work models may learn from a sparse, low-confidence sample. */
+export function scaledWorkKey(key:string|undefined):boolean{
+ try{const model=JSON.parse(key??'null')?.[2],scale=model?.scale;
+ return !!scale&&typeof scale.parameter==='string'&&Number.isFinite(scale.reference)&&scale.reference>0&&Number.isFinite(model.values?.[scale.parameter])&&model.values[scale.parameter]>0;}catch{return false;}
 }

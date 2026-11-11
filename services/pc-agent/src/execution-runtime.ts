@@ -46,13 +46,13 @@ export class PcExecutionRuntime {
         return input;
       });
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
-      this.ledger.begin(task.attemptId,bytes.length,task.contract.serviceId?'UNKNOWN':'COLD'); // Durable RUNNING always precedes the engine call.
+      this.ledger.begin(task.attemptId,bytes.length,task.contract.serviceId||task.contract.capability.startsWith('photo.')?'UNKNOWN':'COLD'); // Durable RUNNING always precedes the engine call.
       const execute=()=>this.engines.run(offer,bytes,config,abort.signal);
       const started=performance.now();let wallMs:number|undefined;
       const result=trace?await trace.segment('EXECUTE',execute,ms=>{wallMs=ms;}):await execute();
       actualModel=result.model??null;
       wallMs??=performance.now()-started;
-      if('durationMs' in result&&typeof result.durationMs==='number'&&result.durationMs>=0&&result.durationMs<=wallMs)overheadMs=wallMs-result.durationMs;
+      if(!task.contract.capability.startsWith('photo.')&&'durationMs' in result&&typeof result.durationMs==='number'&&result.durationMs>=0&&result.durationMs<=wallMs)overheadMs=wallMs-result.durationMs;
       this.ports.measuredExecution?.(wallMs,overheadMs);
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
       const ref=await segment('PUBLISH',async()=>{

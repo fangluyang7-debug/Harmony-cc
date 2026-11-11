@@ -10,9 +10,12 @@ export interface AppIdentityV2 { groupId: string; principalId: string; appId: st
 export interface ArtifactRefV2 { artifactId: string; contentVersion: number; contentHash: string; schemaId: string; schemaVersion: number; }
 export interface ArtifactGrantV2 { ref: ArtifactRefV2; groupId: string; ownerPrincipalId: string; ownerAppId: string; allowedAppInstanceIds: string[]; operations: string[]; expiresAt: number; }
 export interface WorkParameterV2 { name:string; bucketWidth?:number; }
-export interface WorkModelV2 { version:string; parameters:WorkParameterV2[]; }
+export interface WorkScaleV2 {parameter:string;reference:number;}
+export interface WorkModelV2 { version:string; parameters:WorkParameterV2[]; inputBytes?:'IGNORE'; scale?:WorkScaleV2; }
 export function validWorkModelV2(model:WorkModelV2):boolean {
-  if(!exactV2(model,['version','parameters'])||!idV2(model.version)||!Array.isArray(model.parameters)||model.parameters.length>16)return false;
+  const fields=['version','parameters'];if(model&&Object.keys(model).includes('inputBytes'))fields.push('inputBytes');if(model&&Object.keys(model).includes('scale'))fields.push('scale');
+  if(!exactV2(model,fields)||(model.inputBytes!==undefined&&model.inputBytes!=='IGNORE')||!idV2(model.version)||!Array.isArray(model.parameters)||model.parameters.length>16)return false;
+  if(model.scale!==undefined&&(!exactV2(model.scale,['parameter','reference'])||!model.parameters.some(p=>p.name===model.scale!.parameter)||!Number.isFinite(model.scale.reference)||model.scale.reference<=0))return false;
   const names:string[]=[];
   for(const rule of model.parameters){
     if(!objectV2(rule))return false;

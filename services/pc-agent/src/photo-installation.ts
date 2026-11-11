@@ -7,4 +7,5 @@ if(fs.existsSync(candidate)){
  for(const [key,name] of [['HARMONY_PHOTO_MODEL','model'],['HARMONY_PHOTO_RUNNER','runner'],['HARMONY_PHOTO_VULKAN','vulkan']] as const){
   if(!process.env[key]&&typeof settings[name]==='string')process.env[key]=path.resolve(base,settings[name]);
  }
+ if(!process.env.HARMONY_PHOTO_VULKAN_RUNTIME&&settings.vulkanRuntime==='harmony-raw-v1')process.env.HARMONY_PHOTO_VULKAN_RUNTIME=settings.vulkanRuntime;
 }

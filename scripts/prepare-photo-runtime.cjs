@@ -18,13 +18,18 @@ async function main(){
  const scalar=process.argv.includes('--scalar'),simd=scalar?'OFF':'ON';
  const build=path.join(tools,scalar?'ncnn-build':'ncnn-simd-build'),env={...process.env,PATH:path.dirname(cxx)+path.delimiter+process.env.PATH};
  const log=fs.openSync(path.join(tools,'build.log'),'a');
- try{run('cmake',['-S',path.join(tools,'ncnn'),'-B',build,'-G','Ninja','-DCMAKE_MAKE_PROGRAM='+ninja,'-DCMAKE_C_COMPILER='+cc,'-DCMAKE_CXX_COMPILER='+cxx,'-DCMAKE_BUILD_TYPE=Release','-DNCNN_VULKAN=OFF','-DNCNN_BUILD_TOOLS=OFF','-DNCNN_BUILD_EXAMPLES=OFF','-DNCNN_BUILD_BENCHMARK=OFF','-DNCNN_BUILD_TESTS=OFF','-DNCNN_OPENMP=OFF','-DNCNN_RUNTIME_CPU=ON','-DNCNN_AVX='+simd,'-DNCNN_AVX2='+simd,'-DNCNN_FMA='+simd,'-DNCNN_AVX512=OFF','-DNCNN_XOP=OFF','-DNCNN_FMA4=OFF','-DNCNN_AVXVNNI=OFF','-DNCNN_AVXNECONVERT=OFF'],{env,stdio:['ignore',log,log]});run('cmake',['--build',build,'-j','4'],{env,stdio:['ignore',log,log]});}finally{fs.closeSync(log);}
- const runner=path.join(tools,scalar?'photo-runner.exe':'photo-runner-simd.exe');run(cxx,['-O3','-std=c++17','-static','-I'+path.join(tools,'ncnn/src'),'-I'+path.join(build,'src'),path.join(root,'services/pc-agent/native/photo-runner.cpp'),path.join(build,'src/libncnn.a'),'-o',runner],{env});
+ try{run('cmake',['-S',path.join(tools,'ncnn'),'-B',build,'-G','Ninja','-DCMAKE_MAKE_PROGRAM='+ninja,'-DCMAKE_C_COMPILER='+cc,'-DCMAKE_CXX_COMPILER='+cxx,'-DCMAKE_BUILD_TYPE=Release','-DNCNN_VULKAN=OFF','-DNCNN_BUILD_TOOLS=OFF','-DNCNN_BUILD_EXAMPLES=OFF','-DNCNN_BUILD_BENCHMARK=OFF','-DNCNN_BUILD_TESTS=OFF','-DNCNN_OPENMP=ON','-DNCNN_RUNTIME_CPU=ON','-DNCNN_AVX='+simd,'-DNCNN_AVX2='+simd,'-DNCNN_FMA='+simd,'-DNCNN_AVX512=OFF','-DNCNN_XOP=OFF','-DNCNN_FMA4=OFF','-DNCNN_AVXVNNI=OFF','-DNCNN_AVXNECONVERT=OFF'],{env,stdio:['ignore',log,log]});run('cmake',['--build',build,'-j','4'],{env,stdio:['ignore',log,log]});}finally{fs.closeSync(log);}
+ const cache=fs.readFileSync(path.join(build,'CMakeCache.txt'),'utf8');
+ if(!cache.includes('NCNN_OPENMP:BOOL=ON')||!cache.includes('OpenMP_CXX_FLAGS:STRING=-fopenmp'))throw Error('PHOTO_OPENMP_REQUIRED');
+ const runner=path.join(tools,scalar?'photo-runner.exe':'photo-runner-simd.exe');run(cxx,['-fopenmp','-O3','-std=c++17','-static','-I'+path.join(tools,'ncnn/src'),'-I'+path.join(build,'src'),path.join(root,'services/pc-agent/native/photo-runner.cpp'),path.join(build,'src/libncnn.a'),'-o',runner],{env});
+ const probe=spawnSync(runner,['--runtime-info','8'],{encoding:'utf8',windowsHide:true});
+ if(probe.status!==0||JSON.parse(probe.stdout).actualThreads!==8)throw Error('PHOTO_OPENMP_PROBE_FAILED');
  if(process.argv.includes('--harmony')){const zip=path.join(tools,'ncnn-harmony.zip');await download('https://github.com/Tencent/ncnn/releases/download/20261020/ncnn-20261020-harmonyos.zip',zip);
   if(createHash('sha256').update(fs.readFileSync(zip)).digest('hex')!=='e69e804f6161e15be07cbc1087b4486b671cc89319250883abbb4430e70ddad4')throw Error('PHOTO_NCNN_ARCHIVE_HASH');
   run('powershell.exe',['-NoProfile','-Command','Expand-Archive -LiteralPath .test/photo-tools/ncnn-harmony.zip -DestinationPath .test/photo-tools/harmony -Force']);
  }
- fs.writeFileSync(path.join(tools,'runtime.json'),JSON.stringify({model,runner,vulkan:path.join(tools,'realesrgan/realesrgan-ncnn-vulkan.exe'),backend:'CPU',ncnnRevision:commit.stdout.trim(),cpuRuntime:scalar?'baseline':'runtime-dispatched-avx2-fma',limitations:['GPU backend must pass its own probe.','One CPU thread per tile; concurrency is controlled by scheduler quotas.']},null,2));
+ fs.writeFileSync(path.join(tools,'runtime.json'),JSON.stringify({model,runner,vulkan:path.join(tools,'realesrgan/realesrgan-ncnn-vulkan.exe'),backend:'CPU',ncnnRevision:commit.stdout.trim(),cpuRuntime:scalar?'baseline-openmp':'runtime-dispatched-avx2-fma-openmp',limitations:['GPU backend must pass its own probe.','Per-tile OpenMP threads follow scheduler admission; no task inputs or results are cached.']},null,2));
  console.log('Photo CPU runtime prepared. Configuration: .test/photo-tools/runtime.json');
+ if(process.argv.includes('--vulkan'))run(process.execPath,[path.join(root,'scripts/prepare-photo-vulkan.cjs')]);
 }
 if(require.main===module)main().catch(e=>{console.error(e.message);process.exitCode=1;});module.exports={main,weights};

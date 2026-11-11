@@ -1,9 +1,9 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),crypto=require('node:crypto'),{transformSync}=require('esbuild');
 const bytes=t=>Buffer.from(t),text=b=>Buffer.from(b).toString(),hash=b=>crypto.createHash('sha256').update(b).digest('hex'),base64={encodeToStringSync:b=>Buffer.from(b).toString('base64')};
-function runner(executePhoto){const code=transformSync(fs.readFileSync('apps/harmony/scheduler/src/main/ets/v2/host/executors/PhotoLocal.ets','utf8'),{loader:'ts',format:'cjs'}).code,m={exports:{}};new Function('require','module','exports',code)(name=>name==='./Photo'?{executePhoto}:{bytes,text,hash,base64},m,m.exports);return m.exports.enhancePhotoLocally;}
+function runner(executePhoto){const code=transformSync(fs.readFileSync('apps/harmony/scheduler/src/main/ets/v2/host/executors/PhotoLocal.ets','utf8'),{loader:'ts',format:'cjs'}).code,m={exports:{}};new Function('require','module','exports',code)(name=>name==='./Photo'?{executePhoto}:name==='libharmony_photo.so'?{cpuCount:()=>8}:{bytes,text,hash,base64},m,m.exports);return m.exports.enhancePhotoLocally;}
 test('offline photo pipeline keeps collaborative tile geometry, bounds parallel inference and needs no registration/network',async()=>{
  const {tilePlan}=await import('../../apps/team-space-web/photo-workflow.mjs');let active=0,max=0;const calls=[],progress=[];
- const run=runner(async(cap,r)=>{calls.push({cap,parameters:JSON.parse(r.parameters)});let data;
+ const run=runner(async(cap,r)=>{assert.equal(r.threads,4);calls.push({cap,parameters:JSON.parse(r.parameters)});let data;
   if(cap==='photo.analyze.v1')data=bytes('{"width":192,"height":128}');
   else if(cap==='photo.enhance.v1'){active++;max=Math.max(max,active);await new Promise(r=>setTimeout(r,5));active--;data=r.input;}
   else if(cap==='photo.assemble.v1'){const bundle=JSON.parse(text(r.input));assert.equal(bundle.parts.length,4);assert.equal(new Set(bundle.parts.map(p=>p.nodeId)).size,4);for(const p of bundle.parts){assert.equal(p.contentHash,hash(Buffer.from(p.data,'base64')));}data=bytes('assembled');}

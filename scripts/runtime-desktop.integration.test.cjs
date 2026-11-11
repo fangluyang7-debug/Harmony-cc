@@ -33,7 +33,9 @@ test('desktop starts the real LAN coordinator, serves authenticated dashboard en
   assert.equal(invite.status,200);assert.equal((await invite.json()).address,control.url,'Invitations must advertise the LAN coordinator, not the loopback proxy');
   const {RuntimeControl}=require('./runtime-desktop.cjs'),device=new RuntimeControl({bindingFile:path.join(dataRoot,'device-binding.json')});
   const inviteDevice=async group=>{const response=await fetch(origin+'/v2/spaces/'+group+'/devices',{method:'POST',headers:{Cookie:cookie,Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({name:'Windows test',settings:{ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:268435456,reserveMemoryBytes:0}})});assert.equal(response.status,200);return response.json();};
+  device.coordinatorGone=true;
   const firstDevice=await inviteDevice(space),firstPair=await device.pair({directory:path.join(dataRoot,'device'),invitation:JSON.stringify(firstDevice)}),installationId=device.binding.context().installationId;
+  assert.equal(device.snapshot().coordinatorGone,false,'successful pairing clears the old disconnect flag before the UI reloads the installation');
   const secondDevice=await inviteDevice(next.id),secondPair=await device.pair({directory:firstPair.directory,invitation:JSON.stringify(secondDevice)});
   assert.notEqual(secondPair.directory,firstPair.directory);assert.equal(device.binding.context().installationId,installationId);assert.equal(device.binding.data.active.groupId,next.id);assert.throws(()=>device.startAgent({directory:firstPair.directory}),/不能启动旧配对/);
   assert.ok(fs.existsSync(path.join(firstPair.directory,'agent.json')),'old ledger retained');
