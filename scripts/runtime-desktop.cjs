@@ -241,6 +241,7 @@ class RuntimeControl {
   }
   startAgent(input){
     if(this.child)throw Error('服务已在运行');
+    if(!input.directory&&this.binding&&!this.binding.data.active&&this.binding.data.known.length)throw Error('请先导入邀请并完成配对');
     const directory=deviceDirectory(input.directory||this.binding?.data.active?.directory);
     this.binding?.assertActive(directory);
     if(!fs.existsSync(path.join(directory,'agent.json'))||!fs.existsSync(path.join(directory,'contribution.json')))throw Error('请先导入邀请并完成配对');
@@ -331,6 +332,8 @@ class RuntimeControl {
     catch(e){this.log('协调中心已断开，但配对记录无法移除：'+(e.code||e.message));}
   }
   deviceStatus(input){
+    // A cleared active binding must not resurrect a legacy default directory after leaving.
+    if(!input.directory&&this.binding&&!this.binding.data.active&&this.binding.data.known.length)return {paired:false};
     const directory=deviceDirectory(input.directory||this.binding?.data.active?.directory);
     this.binding?.assertActive(directory);
     try{

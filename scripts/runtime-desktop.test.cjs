@@ -73,7 +73,7 @@ test('pairing over an old installation: same coordinator is refused, another coo
   assert.equal(fs.readdirSync(root).length,1);
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
-test('leaving a space: the coordinator must confirm unless the caller forces a local-only leave',async()=>{
+test('leaving a space: the coordinator must confirm unless the caller forces a local-only leave',async(t)=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-desktop-leave-')),device=path.join(root,'device'),binding=path.join(root,'binding.json');
  const control=new RuntimeControl({bindingFile:binding}),pin='a'.repeat(64);
  fs.mkdirSync(path.join(device,'ledger'),{recursive:true});
@@ -81,6 +81,9 @@ test('leaving a space: the coordinator must confirm unless the caller forces a l
  fs.writeFileSync(path.join(device,'ledger/ledger.json'),JSON.stringify({state:{entries:[]}}));
  fs.writeFileSync(path.join(device,'contribution.json'),JSON.stringify({ownerMode:'dedicated',maxCpuThreads:1,maxMemoryBytes:67108864,reserveMemoryBytes:0}));
  control.binding.activate(device);
+ // An unrelated legacy pairing may still exist in the default directory.
+ t.mock.method(os,'homedir',()=>root);
+ const legacy=path.join(root,'HarmonyRuntime','device');fs.cpSync(device,legacy,{recursive:true});
  try{
   control.child={};await assert.rejects(control.leave({directory:device}),/先停止设备调度件/);control.child=null;
   await assert.rejects(control.leave({directory:device}),error=>error.code==='COORDINATOR_UNREACHABLE'&&/协调中心未确认退出/.test(error.message));
@@ -90,6 +93,8 @@ test('leaving a space: the coordinator must confirm unless the caller forces a l
   assert.equal(control.binding.data.active,null,'the active pairing is cleared');
   assert.ok(fs.existsSync(path.join(result.directory,'ledger/ledger.json')),'the ledger is kept with the moved pairing');
   assert.equal(control.deviceStatus({}).paired,false);
+  assert.throws(()=>control.startAgent({}),/请先导入邀请并完成配对/);
+  assert.ok(fs.existsSync(path.join(legacy,'agent.json')),'legacy records remain untouched');
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
 test('pairing requests fail fast with an explanation when the coordinator cannot be reached',async()=>{
