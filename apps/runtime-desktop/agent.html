@@ -83,8 +83,9 @@
     <div class="grid">
       <div class="quota">CPU 槽位<output id="cpu">待分配</output></div>
       <div class="quota">内存<output id="memory">待分配</output></div>
+      <div class="quota">显存<output id="vram">待分配</output></div>
     </div>
-    <p>额度由协调中心按本机上报的运行内存和 CPU 自动确定（预留系统及日常应用所需后），调度件运行后自动更新。能力就绪和实际在线状态请在调度盘查看。</p>
+    <p>额度由协调中心按本机上报的运行内存、CPU 和显存自动确定（预留系统及日常应用所需后），调度件运行后自动更新。NVIDIA 显卡需本包含照片 Vulkan 引擎且已安装显卡驱动，运行日志会给出 PHOTO_GPU_READY 或具体失败原因。能力就绪和实际在线状态请在调度盘查看。</p>
   </section>
   <details class="panel">
     <summary>设备配置</summary>

@@ -43,6 +43,8 @@ export class CpuHost {
   private readonly packs:ReferencePack[];
   private stopped=false;private timer:NodeJS.Timeout|undefined;private pending:Promise<void>|undefined;
   private limits:ResourceAmountV2[]=[];private owner:'IDLE'|'ACTIVE'|'UNKNOWN'='UNKNOWN';
+  /** Set once the coordinator rejected a measurement with vramBytes (older release). */
+  private legacyMeasurement=false;
   private readonly instance=randomUUID();
   private readonly costs=new Map<string,{value:number;overhead?:number;at:number}>();
   private clockOffset=0;
@@ -207,15 +209,27 @@ export class CpuHost {
       if(this.agent.ready&&syncSettings&&!this.appPolicy){
         // HTTPS Date is rounded down to seconds. Anchor at receipt time so telemetry is conservatively
         // aged by network delay, never moved into the coordinator's future by a fast device wall clock.
-        const measured=collectSystemResources();
-        const reply=await allotmentTransport(this.config.connection,time=>{this.clockOffset=time-Date.now();})('/v2/device-settings',{measured:{cpuThreads:measured.cpuThreads,totalMemoryBytes:measured.totalMemoryBytes}}) as {settings:CpuHostConfig['contribution']|null};
+        const measured=collectSystemResources(),transport=allotmentTransport(this.config.connection,time=>{this.clockOffset=time-Date.now();});
+        // VRAM is only reported for an opened GPU backend; a GPU without a working engine contributes nothing.
+        const vramBytes=this.config.imageEncoder?.gpu?.totalBytes??0;
+        const measurement:{cpuThreads:number;totalMemoryBytes:number;vramBytes?:number}={cpuThreads:measured.cpuThreads,totalMemoryBytes:measured.totalMemoryBytes};
+        if(!this.legacyMeasurement)measurement.vramBytes=vramBytes;
+        let reply:{settings:CpuHostConfig['contribution']|null};
+        try{reply=await transport('/v2/device-settings',{measured:measurement}) as typeof reply;}
+        catch(error){
+          // An older coordinator rejects the vramBytes field; fall back to the CPU/RAM-only measurement it understands.
+          if(this.legacyMeasurement||!(error instanceof Error)||!/MEASUREMENT_INVALID/.test(error.message))throw error;
+          this.legacyMeasurement=true;delete measurement.vramBytes;
+          reply=await transport('/v2/device-settings',{measured:measurement}) as typeof reply;
+        }
         const settings=reply.settings,local=this.config.contribution;
         if(settings&&['dedicated','windows-idle','paused'].includes(settings.ownerMode)){
           local.ownerMode=settings.ownerMode;
-          const ceiling=settings.capacityMode==='auto'&&Number.isSafeInteger(settings.maxCpuThreads)&&settings.maxCpuThreads>=1&&Number.isSafeInteger(settings.maxMemoryBytes)&&settings.maxMemoryBytes>=67108864&&Number.isSafeInteger(settings.reserveMemoryBytes)&&settings.reserveMemoryBytes>=0;
-          if(ceiling&&(local.maxCpuThreads!==settings.maxCpuThreads||local.maxMemoryBytes!==settings.maxMemoryBytes||local.reserveMemoryBytes!==settings.reserveMemoryBytes||local.capacityMode!=='auto')){
+          const ceiling=settings.capacityMode==='auto'&&Number.isSafeInteger(settings.maxCpuThreads)&&settings.maxCpuThreads>=1&&Number.isSafeInteger(settings.maxMemoryBytes)&&settings.maxMemoryBytes>=67108864&&Number.isSafeInteger(settings.reserveMemoryBytes)&&settings.reserveMemoryBytes>=0&&(settings.maxVramBytes===undefined||Number.isSafeInteger(settings.maxVramBytes)&&settings.maxVramBytes>=0);
+          if(ceiling&&(local.maxCpuThreads!==settings.maxCpuThreads||local.maxMemoryBytes!==settings.maxMemoryBytes||local.reserveMemoryBytes!==settings.reserveMemoryBytes||(local.maxVramBytes??0)!==(settings.maxVramBytes??0)||local.capacityMode!=='auto')){
             // Automatic capacity: the coordinator derived this ceiling from the measurements reported above.
             local.capacityMode='auto';local.maxCpuThreads=settings.maxCpuThreads;local.maxMemoryBytes=settings.maxMemoryBytes;local.reserveMemoryBytes=settings.reserveMemoryBytes;
+            if(settings.maxVramBytes)local.maxVramBytes=settings.maxVramBytes;else delete local.maxVramBytes;
             this.config.onContributionChanged?.({...local});
           }else if(!ceiling){
             // Fixed capacity: cloud preferences may pause/yield this installation; original local ceilings remain authoritative.

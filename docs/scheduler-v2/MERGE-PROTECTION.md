@@ -2,7 +2,7 @@
 
 最后更新：2026-11-11。本文是双方合并时持续维护的入口，不是一次性的性能报告。后续修改请更新对应功能编号、文件位置、验证结果和提交基线；可以重构实现，但必须保留下面的用户行为与接口语义。
 
-**新增待处理问题（仅诊断，未改代码/重打包）**：[Windows 独显照片节点分发包排查](WINDOWS-GPU-PHOTO-PACKAGE-DIAGNOSIS-20261111.md)。已确认用户 ZIP 缺少模型与 CPU/GPU 引擎，普通邀请缺显存额度；现用打包脚本还需处理 GPU DLL。后续合并不能把“有 GPU 代码”当作“交付包已具备 GPU 能力”，须完成报告中的整包及独显真机验证。
+**独显照片节点问题（代码已在 `main` 修复，真机待验）**：[Windows 独显照片节点分发包排查](WINDOWS-GPU-PHOTO-PACKAGE-DIAGNOSIS-20261111.md) 的 P1～P4 与风险 1 已按 M12～M14 落地（显存额度随画像自动分配、双显卡自动选 NVIDIA、打包缺件即失败并携带 OpenMP DLL），记录见 [main 分支修改记录](../main分支修改记录.md) 第 5 次提交。仍成立：后续合并不能把“有 GPU 代码”当作“交付包已具备 GPU 能力”，02 包必须用 `HARMONY_PHOTO_RUNTIME` 重打并完成独显真机验证。
 
 ## 1. 本次交付基线
 
@@ -51,6 +51,9 @@ P07 的“实时”指根据真实任务状态刷新，不是播放预排动画�
 | M09 缓存所有权查询 | `retention.ts` | 只为实际缓存对象查询相关任务/尝试；仍保留未结算、剩余分支、有效传输和未确认最终结果，不以性能优化为由提前删除。 |
 | M10 App 额度 N+1 | `services/coordinator/src/apps.ts` / `reserveJob` | 同一个准入事务内关联查询当前占用，避免每次遍历所有历史任务再逐个查两张表；已过期但未结算的尝试仍占额度。历史不清空，跨安装共享 App 配额语义不改变。 |
 | M11 真实配置显示 | `apps/runtime-desktop/desktop.js` | Windows 页面刷新执行器当前配置，不再永久显示初次邀请的 2 CPU / 1 GiB。展示上限与当前实际使用量应区分。 |
+| M12 显存自动额度（main） | `services/coordinator/src/spaces.ts` `measuredCapacity` / `autoContribution` / `deviceSettings`；`services/pc-agent/src/host.ts` `sample()`；`host-main.ts` | 设备先探测 GPU，再在 measured 中上报 `vramBytes`（无 GPU 后端为 0）；中心按显存减 256 MiB 分配 `maxVramBytes`，上报 0 即撤销。GPU 探测不以显存额度为前提（自动额度或固定额度 > 0 即探测）；旧中心拒绝 `vramBytes` 时调度件退回 CPU/RAM 字段。不要恢复“先有额度才探测”的顺序，也不要让中心在没有 GPU 执行器时显示 GPU 额度。 |
+| M13 双显卡与失败原因（main） | `services/pc-agent/src/photo-accelerator.ts` `parseVulkanDevices` / `selectVulkanDevice` | 从引擎诊断日志中选与 `nvidia-smi` 名称匹配的 Vulkan 索引，不假设 0 是独显；显式 `HARMONY_PHOTO_GPU_ID` 必须是 NVIDIA 设备；探测失败按 RUNTIME_MISSING / DRIVER_MISSING / DEVICE_UNMATCHED / MEMORY_TOO_SMALL / PROBE_FAILED / QUALITY_FAILED 区分。CPU 回退仍明确显示，不冒充 GPU。 |
+| M14 照片包完整性（main） | `scripts/lib/photo-runtime-package.cjs`；`scripts/prepare-harmony-distribution.cjs` | 02 包默认必须带完整照片运行库（模型三件 + CPU runner + Vulkan EXE 及同目录 DLL，含 `vcomp140.dll`，不带 `vulkan-1.dll`），缺件 `PHOTO_RUNTIME_INCOMPLETE`；只有 `HARMONY_PHOTO_RUNTIME_OPTIONAL=1` 才能生成无照片包，且包根与使用说明标明。不要退回旧 `build-windows-agent.cjs`。 |
 
 上述改动横跨手机宿主、业务 App、中心、执行器及打包脚本。不要用整文件“采用 ours/theirs”解决冲突；逐个功能块整合，保留协作者新版中心的其他功能。改名或迁移文件时，把本文路径同步更新。
 
@@ -110,5 +113,6 @@ try {
 | 日期 | 提交 / 范围 | 修改与保留要求 | 验证 |
 | --- | --- | --- | --- |
 | 2026-11-11 | `52f5865` 及本文后续文档提交 | 新增 M01～M11；汇总既有 P01～P12，明确新版中心与独立业务 App 的边界 | 两轮真实 Wi-Fi 双机完成；仍未达到单机提速目标 |
+| 2026-11-11 | `main`：`715c3d5` 合并 `imageprocessing`（`495bfd1`）后的第 5 次提交 | 新增 M12～M14（显存自动额度、双显卡选择、照片包完整性）；修复 SoleAI 网关工作流 id 与声明不匹配导致协同链不触发；M01～M11、P01～P12 未改动 | 单元/脚本回归通过（见 main 分支修改记录 §7）；本机无 NVIDIA 与照片运行库，独显真机与完整 02 包验收待队友机器完成 |
 
 后续每次双方整合时追加一行。若要改变任一 P 编号对应的用户行为，先说明替代方案和验证结果；若只是重构，保留行为并更新路径、接口和回归清单。

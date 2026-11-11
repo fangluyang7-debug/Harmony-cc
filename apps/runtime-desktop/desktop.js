@@ -89,6 +89,8 @@ function render() {
   $('connected-center').textContent = installation.paired ? '已配对 · ' + installation.address : '等待配对';
   $('cpu').textContent = installation.paired ? installation.cpu : '待分配';
   $('memory').textContent = installation.paired ? installation.memory / 1048576 + ' MiB' : '待分配';
+  // VRAM appears only after the host opened a GPU engine and the coordinator confirmed the share.
+  $('vram').textContent = !installation.paired ? '待分配' : installation.vram ? Math.round(installation.vram / 1048576) + ' MiB' : running ? '无 GPU 引擎' : '启动后探测';
 }
 
 let refreshing;
