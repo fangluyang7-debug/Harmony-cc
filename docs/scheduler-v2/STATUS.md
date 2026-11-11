@@ -2596,3 +2596,9 @@ API 24 HAR、agent 签名 HAP、photo 签名 HAP、probe 未签名 HAP 重建通
 - SoleAI：`AiTaskGateway.ets` 的工作流 id（`shopping.image` 等）与 `CooperativeSession.ets` 声明（`shopping.photo.prepare` 等）不匹配、`image.quality.v1` 无能力包，协同链从未提交过任务；改为匹配声明并以 `image.crop.v1` 为可调度前缀，未声明工作流如实显示本机模式。04 HAP 需重新构建。
 - 验证：新增 auto-contribution 3/3、photo-accelerator 3/3、photo-runtime-package 2/2，runtime-desktop 6/6，coordinator / pc-agent `tsc` 通过。`spaces.test.cjs` 的 paired CPU host 用例在本机改动前后均 180 秒超时（本机无照片/视觉原生运行库），不计入本轮结论。本机无 NVIDIA、无 `.test/photo-tools`：GPU 路径仅单元验证，独显真机、干净机器解压启动和同六图对照仍待队友机器完成。
 - 分发：本机构建产物已直接替换 `dist/调度系统分发-20261110-r2/`（02 无照片运行库，包根带 PHOTO-RUNTIME-NOT-INCLUDED.txt；03/04/05 HAP 均基于合并后 HAR 重编，05 为未签名包；本机无 ncnn/模型，03/05 的手机本地增强与 r5 相同为桩实现，真实推理 HAP 仍由队友机器构建）；完整 02 包须在有运行库的机器以 `HARMONY_PHOTO_RUNTIME` 重打。合并保护见 [MERGE-PROTECTION.md](MERGE-PROTECTION.md) M12～M14，逐项记录见 [main 分支修改记录](../main分支修改记录.md)。
+
+## §120 Windows 调度件配对与退出空间对齐手机端（2026-11-11，main）
+
+- 配对请求改为独立连接、10 秒绝对截止、复用已核对证书、只读请求重试一次、配对码绝不重复兑换；失败按步骤给出中文原因并写入运行日志。控制通道上线/掉线由宿主打印 `CONTROL_ONLINE/OFFLINE`，启动器显示"正在连接 / 已连接 / 未启动"。配对成功自动开启调度件。
+- 新增"退出当前协作空间"：停调度件 → 账本已结算 → 协调中心 `/v2/devices/leave` 注销 → 配对目录移为 `.left-<时间>`；中心不可达需用户确认后才本机清除。与鸿蒙 `leaveSpace()` 同一接口与语义。
+- `runtime-desktop` 回归 8/8。真机配对超时根因未现场复现，待用户按新日志反馈。记录见 [main 分支修改记录](../main分支修改记录.md) 第 6 次提交。

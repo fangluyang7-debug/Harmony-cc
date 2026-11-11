@@ -13,6 +13,22 @@
 
 ---
 
+## 2026-11-11 · Windows 设备调度件：配对连接与退出空间按手机端逻辑对齐（第 6 次提交）
+
+- **现象**：用 6 位配对码配对时经常"协调中心连接超时 / 配对码无效"，错误不说明是哪一步；配对成功后页面只有"开启设备调度件"电源键，没有连接状态，也没有像手机端那样的"退出当前协作空间"。
+- **配对链路改动**（`scripts/runtime-desktop.cjs`）：
+  - 每个配对请求使用独立连接（`agent:false`），不再复用可能已被协调中心 5 秒空闲关闭的 keep-alive 套接字；超时从 5 秒改为 10 秒并加绝对截止（`HARMONY_PAIRING_TIMEOUT_MS` 可调），与手机端 connect/read 预算一致；只读请求遇 `ECONNRESET` 重试一次，兑换配对码绝不重试（一次性）。
+  - 与手机端一样复用用户刚核对过的证书（`/agent/pair` 带 `certificate`），不再第二次抓证书。
+  - 错误分步说明：超时 / 拒绝连接 / 不可达 / 证书变化 / `PAIRING_RATE_LIMITED`（5 分钟内 5 次）/ 503 未就绪 / 码已被消耗；`pairing-main` 子进程的 `PAIR_TIMEOUT` / `PAIR_REJECTED` 等原因也会转成中文提示，并写入"运行日志"（配对：读取证书 → 兑换配对码 → 登记设备）。
+- **连接状态**：`host.ts` 在控制通道上线/掉线时打印 `CONTROL_ONLINE` / `CONTROL_OFFLINE`，启动器据此在"贡献上限"面板显示"正在连接协调中心… / 已连接 · 正在贡献 / 已配对 · 调度件未启动"。配对成功后自动开启调度件（与手机 `openAgent` 一致），不再需要第二次点击。
+- **退出当前协作空间**：新增 `RuntimeControl.leave()` 与 `/agent/leave`：先停调度件 → 校验本机账本已结算 → 以设备凭据调用协调中心 `/v2/devices/leave`（与鸿蒙 `NativeAgent.leaveSpace()` 相同接口，`SPACE_SWITCH_BUSY` 时拒绝）→ 把配对目录改名为 `<目录>.left-<时间>`（账本保留）并清除 binding active。协调中心不可达时返回 `COORDINATOR_UNREACHABLE`，页面询问后才允许"仅在本机清除配对"（`force`）。
+- **测试**：`scripts/runtime-desktop.test.cjs` 新增 2 例（退出空间需中心确认 / 强制本机退出；不可达与静默服务器的错误文案和截止时间），合计 8/8 通过。
+- **未验证**：本机没有第二台 Windows 和真实配对码流程，真机"超时"根因没有现场复现；本次是让链路与手机端一致并把失败步骤暴露到日志。如仍超时，请把"运行日志"面板中"配对：…"之后的那一行发我。
+- **分发**：01/02 ZIP 已重打并替换到 `dist/调度系统分发-20261110-r2/`。
+- **合并**：`runtime-desktop.cjs` / `desktop.js` 与 `imageprocessing` 差异较大，本次改为把 `main` 整体合并进 `imageprocessing`（见该分支合并提交）。
+
+---
+
 ## 2026-11-11 · 独显设备接入画像、照片包完整性、SoleAI 协同链（第 5 次提交）
 
 对应队友报告 [WINDOWS-GPU-PHOTO-PACKAGE-DIAGNOSIS-20261111.md](scheduler-v2/WINDOWS-GPU-PHOTO-PACKAGE-DIAGNOSIS-20261111.md) 的 P1～P4 与风险 1，以及本分支核对出的 SoleAI 网关缺陷。`imageprocessing` 已是 `main` 的祖先（`715c3d5` 合并），以下文件在两分支完全一致，可整体 cherry-pick。
