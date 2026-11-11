@@ -30,3 +30,19 @@ test('desktop reports readiness only from child, rejects duplicate start, and st
   const exited=new Promise(r=>control.child.once('exit',r));control.stop();await exited;assert.equal(control.state,'STOPPED');
  }finally{if(control.child)control.child.kill();fs.unlinkSync(file);fs.rmdirSync(directory);}
 });
+test('a host that reports COORDINATOR_GONE retires the pairing so the device can pair again',async()=>{
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-desktop-gone-')),device=path.join(root,'device'),child=path.join(root,'host.cjs'),control=new RuntimeControl();
+ fs.mkdirSync(path.join(device,'ledger'),{recursive:true});fs.writeFileSync(path.join(device,'agent.json'),JSON.stringify({connection:{address:'https://198.51.100.7:7443/'}}));fs.writeFileSync(path.join(device,'contribution.json'),JSON.stringify({maxCpuThreads:2,maxMemoryBytes:1073741824}));
+ fs.writeFileSync(child,"console.log('COORDINATOR_GONE: test');process.exitCode=3;");
+ try{
+  assert.equal(control.deviceStatus({directory:device}).paired,true);
+  control.mode='agent';control.agentDirectory=device;control.launch(child,[],process.env);
+  await new Promise(resolve=>control.child.once('exit',()=>setImmediate(resolve)));
+  assert.equal(control.state,'STOPPED');assert.equal(control.snapshot().coordinatorGone,true);
+  assert.equal(control.deviceStatus({directory:device}).paired,false,'the active pairing is gone');
+  const retired=fs.readdirSync(root).find(name=>name.startsWith('device.retired-'));assert.ok(retired);
+  assert.ok(fs.existsSync(path.join(root,retired,'ledger')),'the old ledger is kept for audit');
+  fs.writeFileSync(child,'process.exitCode=1;');control.launch(child,[],process.env);assert.equal(control.snapshot().coordinatorGone,false,'a new start clears the flag');
+  await new Promise(resolve=>control.child.once('exit',()=>setImmediate(resolve)));assert.equal(control.state,'FAILED');
+ }finally{fs.rmSync(root,{recursive:true,force:true});}
+});

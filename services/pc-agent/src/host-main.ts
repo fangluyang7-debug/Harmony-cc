@@ -5,6 +5,7 @@ import {openImageEncoder} from './image-encoder';
 import fs from 'node:fs';
 import { CpuHost, CpuHostConfig } from './host';
 import {validateDataHostConfig} from './data-host';
+import {CoordinatorGoneDetector} from './coordinator-gone';
 let stopRequested=false,shutdown:(()=>Promise<void>)|null=null;
 process.on('message',(message:any)=>{if(message==='stop'||message?.type==='shutdown'){stopRequested=true;if(shutdown)void shutdown().then(()=>process.disconnect?.());}});
 async function main(){
@@ -27,7 +28,10 @@ async function main(){
     }
   }
   if(process.env.HARMONY_PHOTO_VULKAN&&!config.imageEncoder&&(config.contribution.maxVramBytes??0)>0){try{config.imageEncoder=await openPhotoAccelerator();}catch{console.error('PHOTO_GPU_UNAVAILABLE: GPU probe failed; only CPU capabilities will be advertised.');}}
+  const detector=new CoordinatorGoneDetector();let gone=false;
   const host=await CpuHost.open(config,error=>{
+    if(!gone&&detector.observe(error,Date.now())){gone=true;console.log('COORDINATOR_GONE: coordinator stopped or unreachable; pairing will be cleared.');
+      void (shutdown?.()??Promise.resolve()).then(()=>{process.exitCode=3;process.disconnect?.();setTimeout(()=>process.exit(3),3000).unref();});}
     const ioCode=(error as NodeJS.ErrnoException)?.code;
     // Preserve actionable codes without logging paths, task input or credentials.
     console.error(error instanceof Error&&/^[A-Z_]+(?::[A-Z_]+)?$/.test(error.message)?error.message:

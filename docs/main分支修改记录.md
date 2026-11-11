@@ -9,6 +9,21 @@
 - `NativeAgent.ets` 的 `create()` 配对段、`connect()`、`tick()`、`adoptCeiling()`、`close()` 前新增的 `coordinatorGone()`
 - `services/coordinator/src/spaces.ts` 的 `autoContribution` 预留比例（1/4 → 1/8）
 - `apps/team-space-web/dispatch.js` 的 `renderMetrics` / `renderTopology` / `pool` 以及快照接收处的过滤
+- `scripts/runtime-desktop.cjs` 的 `RuntimeControl`（`launch` / `startAgent` / 新增 `retirePairing` / `snapshot`）
+
+---
+
+## 2026-11-11 · Windows 设备调度件：协调中心关闭后断开并清除配对（第 3 次提交）
+
+- **现象**：新 Windows 设备保留旧配对，协调中心换 IP 或关闭后无限重试，日志刷 `CPU_HOST_IO_ERROR:EHOSTUNREACH / ECONNREFUSED`，看不出原因，也无法直接配对新协调中心。
+- **修改**：
+  - 新增 `services/pc-agent/src/coordinator-gone.ts`：`CoordinatorGoneDetector`。收到关闭码 4001（`CHANNEL_CLOSED_4001_*`），或连续 20 秒确定不可达（`ECONNREFUSED` / `EHOSTUNREACH` / `ENETUNREACH` / `ENOTFOUND` / `EADDRNOTAVAIL`，中间静默超过 8 秒则重新计时）即判定协调中心已断开；超时（`ETIMEDOUT`）不计入。
+  - `services/pc-agent/src/host-main.ts`：判定后输出 `COORDINATOR_GONE`，停止宿主，退出码 3。
+  - `scripts/runtime-desktop.cjs`：看到 `COORDINATOR_GONE` 后，进程退出时把设备目录改名为 `<目录>.retired-<时间>`（保留账本，不删除），快照增加 `coordinatorGone`；下次启动清除该标记。
+  - `apps/runtime-desktop/desktop.js`：收到 `coordinatorGone` 后回到发现页，提示"协调中心已关闭，本机已断开并清除配对"。
+- **注意**：网络中断超过 20 秒也会清除配对，需要重新配对。
+- **测试**：新增 `services/pc-agent/test/coordinator-gone.test.cjs`；`scripts/runtime-desktop.test.cjs` 新增清除配对用例。
+- **分发产物**：已就地更新 `dist/调度系统分发-20261110-r2/02-Device-Agent-Windows-x64/02-Device-Agent-Windows-x64.zip`（直接替换，未保留旧包），并更新 `SHA256SUMS.txt`；协调中心包内同步替换 `runtime-desktop.cjs`、`desktop.js`（备份在 `.backup-20261111/`）。
 
 ---
 
