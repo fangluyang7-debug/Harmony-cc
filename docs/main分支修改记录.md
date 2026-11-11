@@ -53,7 +53,7 @@
 - 本机没有 `nvidia-smi` 和 `.test/photo-tools`，GPU 路径只做了单元级验证；独显真机验收待队友在装有运行库和 NVIDIA 驱动的机器上完成，验收口径见 §5 与诊断报告第 6 节。
 
 ### 8. 分发产物
-- 按用户要求直接替换 `dist/调度系统分发-20261110-r2/` 内容（`SHA256SUMS.txt` 已重算）：01 协调中心、02 Windows 调度件、03 鸿蒙调度件（HAR 与 HAP 均重编，包含 `715c3d5` 合并进来的队友改动；此前 r5 的 03 HAP 构建于合并之前）、04 SoleAI（含签名包）。鸿蒙构建顺序：`harmony-v2-build.cjs` → `harmony-v2-app-build.cjs <app> --har`；SoleAI 不带 `--har` 会因跨模块相对导入失败。本机无照片运行库，02 以 `HARMONY_PHOTO_RUNTIME_OPTIONAL=1` 构建，包根带 `PHOTO-RUNTIME-NOT-INCLUDED.txt`。
+- 按用户要求直接替换 `dist/调度系统分发-20261110-r2/` 内容（`SHA256SUMS.txt` 已重算）：01 协调中心、02 Windows 调度件、03 鸿蒙调度件（HAR 与 HAP 均重编，包含 `715c3d5` 合并进来的队友改动；此前 r5 的 03 HAP 构建于合并之前）、04 SoleAI（含签名包）、05 图片 App（未签名，`harmony-photo --har`；本机无 HARMONY_NCNN_DIR / 模型，手机本地增强仍是桩实现，与 r5 相同）。鸿蒙构建顺序：`harmony-v2-build.cjs` → `harmony-v2-app-build.cjs <app> --har`；SoleAI 不带 `--har` 会因跨模块相对导入失败。本机无照片运行库，02 以 `HARMONY_PHOTO_RUNTIME_OPTIONAL=1` 构建，包根带 `PHOTO-RUNTIME-NOT-INCLUDED.txt`。
 - **需要队友在有 `.test/photo-tools/runtime.json` 的机器上重打 02 包**：`HARMONY_PHOTO_RUNTIME=.test/photo-tools/runtime.json HARMONY_ELECTRON_DIST=<electron dist> node scripts/prepare-harmony-distribution.cjs 调度系统分发-20261110-r3`（或任意新目录）。脚本会校验模型、runner、Vulkan EXE 与 `vcomp140.dll`，缺一失败。
 - Electron 运行时本机以 r2 协调中心包还原为 `dist/electron-44.7.2-win-x64/`（不入库）。
 
