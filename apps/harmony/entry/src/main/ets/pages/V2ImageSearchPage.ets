@@ -32,7 +32,7 @@ struct V2ImageSearchPage {
       Text('图像候选检索 · v2').fontSize(26).fontWeight(FontWeight.Bold)
       Text('使用当前业务服务编码并检索。选择一张图片，查看匹配商品和余弦相似度。').fontSize(16)
       TextInput({text:this.space,placeholder:'已启用的商品索引空间 ID'}).enabled(!this.busy).onChange((v:string)=>{this.space=v;})
-      Row(){Text('使用协同调度').layoutWeight(1);Toggle({type:ToggleType.Switch,isOn:this.cooperativeEnabled}).enabled(!this.busy&&!this.cooperativeChanging).onChange((value:boolean)=>{void cooperative.setEnabled(value).catch((e:Error)=>{this.status=e.message;});})}
+      Row(){Text('协同调度（自动接入，可暂停）').layoutWeight(1);Toggle({type:ToggleType.Switch,isOn:this.cooperativeEnabled}).enabled(!this.busy&&!this.cooperativeChanging).onChange((value:boolean)=>{void cooperative.setEnabled(value).catch((e:Error)=>{this.status=e.message;});})}
       Text(this.cooperativeStatus).fontSize(14)
       Button('选择图片并检索').enabled(!this.busy&&!this.cooperativeChanging&&this.space.trim().length>0).onClick(()=>{void this.search();})
       Text(this.status).fontSize(15)

@@ -41,6 +41,10 @@ function render() {
   document.body.dataset.state = otherRole ? 'STOPPED' : state;
   $('status').textContent = otherRole ? '另一个角色正在运行，请先停止该服务' : labels[state];
   $('logs').textContent = logs.join('\n') || '暂无运行日志';
+  if (!isCenter && snapshot.coordinatorGone && installation.paired) {
+    installation = { paired: false };
+    window.dispatchEvent(new Event('coordinator-gone'));
+  }
   $('role-link').hidden = role !== 'both';
 
   if (isCenter) {
@@ -362,6 +366,11 @@ function initAgent() {
     } finally { scanning = false; }
   };
 
+  window.addEventListener('coordinator-gone', () => {
+    showQuota(false);
+    message('error', '协调中心已关闭，本机已断开并清除配对。请选择协调中心重新配对。');
+    void discover();
+  });
   void action(loadInstallation);
   void discover();
 }

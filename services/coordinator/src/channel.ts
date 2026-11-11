@@ -228,5 +228,7 @@ export class ControlChannel {
     }));
   }
   revoke(credentialId:string){for(const s of this.sessions)if(s.peer.credentialId===credentialId)s.socket.close(1008,'CREDENTIAL_REVOKED');}
-  async close(){this.closing=true;this.server.off('upgrade',this.upgrade);for(const s of this.sessions)s.socket.terminate();await Promise.allSettled([...this.pending]);await new Promise<void>(r=>this.wss.close(()=>r()));}
+  // 4001 tells devices the coordinator stopped on purpose, so they drop the pairing instead of reconnecting.
+  async close(){this.closing=true;this.server.off('upgrade',this.upgrade);for(const s of this.sessions){try{s.socket.close(4001,'COORDINATOR_SHUTDOWN');}catch{}}
+    if(this.sessions.size)await new Promise<void>(r=>setTimeout(r,300));for(const s of this.sessions)s.socket.terminate();await Promise.allSettled([...this.pending]);await new Promise<void>(r=>this.wss.close(()=>r()));}
 }

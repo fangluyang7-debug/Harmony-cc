@@ -28,6 +28,24 @@ async function pairingCertificate(value){
   const fingerprint=new (require('node:crypto').X509Certificate)(certificate).fingerprint256.replaceAll(':','').toLowerCase();
   return {address,certificate,fingerprint};
 }
+/** Whether the coordinator of an existing pairing still answers (any HTTP reply counts). */
+async function coordinatorReachable(directory){
+  let connection;try{({connection}=JSON.parse(fs.readFileSync(path.join(directory,'agent.json'),'utf8')));}catch{return false;}
+  return new Promise(resolve=>{const req=https.get(connection.address.replace(/\/$/,'')+'/v2/identity',{ca:connection.certificate},res=>{res.resume();resolve(true);});
+    req.setTimeout(5000,()=>req.destroy(Error('TIMEOUT')));req.on('error',()=>resolve(false));});
+}
+/** Certificate fingerprint the pairing input points at, known before any code is redeemed. */
+function pairingTarget(input){
+  const value=String(input.invitation||'').trim();
+  const link=/&pin=([a-f0-9]{64})$/.exec(value);if(link)return link[1];
+  return /^\d{6}$/.test(value)&&/^[a-f0-9]{64}$/.test(String(input.fingerprint||''))?input.fingerprint:null;
+}
+/** A device installation directory (paired, or an unfinished pairing). Other directories are never touched. */
+function deviceInstallation(directory){
+  try{const {connection}=JSON.parse(fs.readFileSync(path.join(directory,'agent.json'),'utf8'));return {fingerprint:connection?.fingerprint??''};}
+  catch(e){if(e.code!=='ENOENT')return null;}
+  return fs.existsSync(path.join(directory,'pairing.pending'))?{fingerprint:''}:null;
+}
 async function resolvePairingInput(input){
   const value=String(input.invitation||'').trim();
   if(value.startsWith('{'))return JSON.parse(value);
@@ -135,16 +153,18 @@ function openssl(){if(process.env.COORDINATOR_OPENSSL)return process.env.COORDIN
   for(const dir of dirs)for(const candidate of [path.join(dir,'openssl.exe'),path.resolve(dir,'../usr/bin/openssl.exe')])if(fs.existsSync(candidate))return candidate;
   return 'openssl';}
 class RuntimeControl {
-  constructor(options={}){this.dataRoot=options.dataRoot||path.join(root,'services/coordinator/data');this.binding=options.bindingFile?new DeviceBinding(options.bindingFile):null;this.child=null;this.state='STOPPED';this.logs=[];this.url=null;this.mode=null;}
+  constructor(options={}){this.dataRoot=options.dataRoot||path.join(root,'services/coordinator/data');this.binding=options.bindingFile?new DeviceBinding(options.bindingFile):null;this.child=null;this.state='STOPPED';this.logs=[];this.url=null;this.mode=null;this.coordinatorGone=false;this.agentDirectory=null;}
   log(value){this.logs.push(value);this.logs=this.logs.slice(-100);}
   launch(script,args,env){
     if(this.child)throw Error('请先停止当前服务');
-    this.state='STARTING';this.logs=[];
+    this.state='STARTING';this.logs=[];this.coordinatorGone=false;let gone=false;
     const child=spawn(process.execPath,[script,...args],{cwd:root,env,windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});this.child=child;
-    let pending='';const collect=chunk=>{pending+=chunk.toString();const lines=pending.split(/\r?\n/);pending=lines.pop();for(const line of lines){this.log(line);if(line.startsWith('Coordinator ready:')||line.startsWith('CPU host started:'))this.state='RUNNING';}};
+    let pending='';const collect=chunk=>{pending+=chunk.toString();const lines=pending.split(/\r?\n/);pending=lines.pop();for(const line of lines){this.log(line);if(line.startsWith('COORDINATOR_GONE'))gone=true;if(line.startsWith('Coordinator ready:')||line.startsWith('CPU host started:'))this.state='RUNNING';}};
     child.stdout.on('data',collect);child.stderr.on('data',collect);
     child.on('error',e=>{this.log(e.code||'PROCESS_START_FAILED');this.child=null;this.state='FAILED';});
-    child.on('exit',code=>{if(pending)this.log(pending);this.child=null;this.state=code===0?'STOPPED':'FAILED';});
+    child.on('exit',code=>{if(pending)this.log(pending);this.child=null;
+      if(gone&&this.mode==='agent'&&this.agentDirectory){this.retirePairing(this.agentDirectory);this.state='STOPPED';return;}
+      this.state=code===0?'STOPPED':'FAILED';});
   }
   startCenter(input){
     if(this.child)throw Error('服务已在运行');
@@ -171,15 +191,26 @@ class RuntimeControl {
     if(input.suite){if(!path.isAbsolute(input.suite)||!fs.existsSync(input.suite))throw Error('评测套件路径不存在');env.PC_IMAGE_ENCODING_SUITE=input.suite;}
     if(input.backend&&!env.PC_IMAGE_ENCODING_SUITE)throw Error('请先配置可信编码套件');
     if(this.binding&&!this.binding.data.active)this.binding.activate(directory);
-    this.mode='agent';this.url=null;
+    this.mode='agent';this.url=null;this.agentDirectory=directory;
     this.launch(path.join(root,'services/pc-agent/dist/host-main.js'),[path.join(directory,'agent.json'),path.join(directory,'contribution.json')],env);
   }
   async pair(input){
     if(this.child)throw Error('请先停止当前服务');
     if(typeof input.invitation!=='string')throw Error('请导入完整设备邀请');
-    this.binding?.assertSettled();
+    // Decide before redeeming the one-time code: the same coordinator just needs starting; unsettled
+    // work blocks a switch unless the old pairing is a different coordinator that no longer answers.
+    const target=pairingTarget(input),requested=deviceDirectory(input.directory),activeDirectory=this.binding?.data.active?.directory;
+    let retire=false;
+    for(const candidate of [requested,activeDirectory].filter(Boolean)){const existing=fs.existsSync(candidate)?deviceInstallation(candidate):null;
+      if(existing&&target&&existing.fingerprint===target)throw Error('本机已与该协调中心配对，请直接打开设备调度件电源');}
+    if(fs.existsSync(requested)&&!this.binding){if(!deviceInstallation(requested)||!target)throw Error('安装目录已存在，请恢复该设备或选择新目录；不覆盖账本');retire=true;}
+    if(this.binding&&activeDirectory){
+      try{this.binding.assertSettled();}
+      catch(error){if(!target||await coordinatorReachable(activeDirectory))throw error;this.log('旧协调中心不可达，其未结算记录保留在原账本中，继续配对新协调中心。');}
+    }
     const bootstrap=await resolvePairingInput(input);
-    let directory=deviceDirectory(input.directory);
+    let directory=requested;
+    if(retire&&fs.existsSync(directory))fs.renameSync(directory,directory+'.retired-'+new Date().toISOString().replace(/[:.]/g,'-'));
     if(fs.existsSync(directory)){if(!this.binding)throw Error('安装目录已存在，请恢复该设备或选择新目录；不覆盖账本');directory=path.join(path.dirname(directory),'device-'+bootstrap.holderInstanceId);}
     if(this.binding)bootstrap.localDevice=this.binding.context();
     if(!bootstrap?.invitation||!bootstrap.contribution||!bootstrap.holderInstanceId)throw Error('请导入完整设备邀请');
@@ -195,6 +226,14 @@ class RuntimeControl {
       this.binding?.activate(directory);return {directory};
     }finally{fs.unlinkSync(file);fs.rmdirSync(staging);}
   }
+  /** The coordinator stopped: move the pairing aside (ledger kept for audit) so the device can pair again. */
+  retirePairing(directory){
+    try{const target=directory+'.retired-'+new Date().toISOString().replace(/[:.]/g,'-');fs.renameSync(directory,target);
+      // The device keeps its installation identity and history (P09); only the active pointer is cleared.
+      if(this.binding?.data.active&&path.resolve(this.binding.data.active.directory)===path.resolve(directory)){this.binding.data.active=null;this.binding.save();}
+      this.coordinatorGone=true;this.log('协调中心已关闭或不可达，本机已断开并清除配对（原记录移至 '+path.basename(target)+'）。请重新配对。');}
+    catch(e){this.log('协调中心已断开，但配对记录无法移除：'+(e.code||e.message));}
+  }
   deviceStatus(input){
     const directory=deviceDirectory(input.directory||this.binding?.data.active?.directory);
     this.binding?.assertActive(directory);
@@ -205,7 +244,7 @@ class RuntimeControl {
     }catch(e){if(e.code==='ENOENT')return {paired:false};throw Error('设备配对记录无法读取，请检查安装目录');}
   }
   stop(){if(this.child){this.state='STOPPING';if(this.child.connected)this.child.send({type:'shutdown'},error=>{if(error)this.log('停止请求未确认，请查看进程状态');});}}
-  snapshot(){return {state:this.state,mode:this.mode,url:this.url,logs:this.logs,addresses:addresses()};}
+  snapshot(){return {state:this.state,mode:this.mode,url:this.url,logs:this.logs,addresses:addresses(),coordinatorGone:this.coordinatorGone};}
 }
 async function main(options={openBrowser:true}){
   process.chdir(root);const control=new RuntimeControl({bindingFile:options.bindingFile??path.join(os.homedir(),'HarmonyRuntime','device-binding.json')}),token=randomBytes(32).toString('hex');let origin='';let mutating=false;
