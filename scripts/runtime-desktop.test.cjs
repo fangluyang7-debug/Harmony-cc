@@ -2,18 +2,19 @@ process.env.HARMONY_PAIRING_TIMEOUT_MS=process.env.HARMONY_PAIRING_TIMEOUT_MS||'
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {RuntimeControl,main}=require('./runtime-desktop.cjs');
 test('desktop process controls require a session token and same-origin POST',async()=>{
- const runtime=await main({openBrowser:false}),url=new URL(runtime.url),base=url.origin,token=url.hash.slice(1);
+ const isolated=fs.mkdtempSync(path.join(os.tmpdir(),'harmony-desktop-auth-'));
+ const runtime=await main({openBrowser:false,role:'agent',bindingFile:path.join(isolated,'binding.json')}),url=new URL(runtime.url),base=url.origin,token=url.hash.slice(1);
  try{
   assert.equal((await fetch(base+'/state')).status,403);
   assert.equal((await fetch(base+'/state',{headers:{'X-Runtime-Token':token,Origin:'https://unrelated.example'}})).status,403);
   assert.equal((await fetch(base+'/stop',{method:'POST',headers:{'X-Runtime-Token':token,'Content-Type':'application/json'},body:'{}'})).status,400);
   const state=await fetch(base+'/state',{headers:{'X-Runtime-Token':token}});assert.equal(state.status,200);assert.equal((await state.json()).state,'STOPPED');
   for(const route of ['/agent/start','/agent/pair']){
-   const response=await fetch(base+route,{method:'POST',headers:{'X-Runtime-Token':token,Origin:base,'Content-Type':'application/json'},body:'{}'});
+   const response=await fetch(base+route,{method:'POST',headers:{'X-Runtime-Token':token,Origin:base,'Content-Type':'application/json'},body:JSON.stringify({directory:path.join(isolated,'unpaired')})});
    assert.equal(response.status,400);assert.match(await response.text(),/配对|邀请|安装目录/);
   }
   assert.equal((await fetch(base+'/stop',{method:'POST',headers:{'X-Runtime-Token':token,Origin:base,'Content-Type':'application/json'},body:'{}'})).status,200);
- }finally{await new Promise(resolve=>runtime.server.close(resolve));}
+ }finally{await new Promise(resolve=>runtime.server.close(resolve));fs.rmSync(isolated,{recursive:true,force:true});}
 });
 test('desktop refuses non-local coordinator addresses and preserves existing device installations',async()=>{
  const control=new RuntimeControl();assert.throws(()=>control.startCenter({address:'203.0.113.2'}),/LAN_ADDRESS_REQUIRED/);assert.equal(control.child,null);
