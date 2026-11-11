@@ -45,6 +45,7 @@ export class CpuHost {
   private limits:ResourceAmountV2[]=[];private owner:'IDLE'|'ACTIVE'|'UNKNOWN'='UNKNOWN';
   /** Set once the coordinator rejected a measurement with vramBytes (older release). */
   private legacyMeasurement=false;
+  private lastOnline=false;
   private readonly instance=randomUUID();
   private readonly costs=new Map<string,{value:number;overhead?:number;at:number}>();
   private clockOffset=0;
@@ -206,6 +207,8 @@ export class CpuHost {
   }
   private async sample(syncSettings=true){
     try{
+      // One line per transition so the desktop launcher can show "connected" instead of only "process running".
+      if(this.agent.ready!==this.lastOnline){this.lastOnline=this.agent.ready;console.log(this.lastOnline?'CONTROL_ONLINE: control channel connected to the coordinator.':'CONTROL_OFFLINE: control channel disconnected; reconnecting.');}
       if(this.agent.ready&&syncSettings&&!this.appPolicy){
         // HTTPS Date is rounded down to seconds. Anchor at receipt time so telemetry is conservatively
         // aged by network delay, never moved into the coordinator's future by a fast device wall clock.

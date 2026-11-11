@@ -23,7 +23,7 @@ async function api(route, input) {
   });
   if (response.status === 403) throw Error('本机控制会话已失效，请重新打开启动器。');
   const data = await response.json();
-  if (!response.ok) throw Error(data.error || '请求失败');
+  if (!response.ok) throw Object.assign(Error(data.error || '请求失败'), data.code ? { code: data.code } : {});
   return data;
 }
 
@@ -91,6 +91,9 @@ function render() {
   $('pair').disabled = $('import').disabled;
   for (const button of $('centers').children) button.disabled = $('import').disabled;
   $('connected-center').textContent = installation.paired ? '已配对 · ' + installation.address : '等待配对';
+  // Mirror the phone's status line: paired is not connected; connected means the control channel is up.
+  $('agent-connection').textContent = !installation.paired ? '' : running && !otherRole ? (snapshot.connected ? '已连接 · 正在贡献' : '正在连接协调中心…') : pending ? labels[state] : state === 'FAILED' ? '调度件启动失败，请查看运行日志' : '已配对 · 调度件未启动';
+  $('leave-space').disabled = !installation.paired || busy || pending || otherRole;
   $('cpu').textContent = installation.paired ? installation.cpu : '待分配';
   $('memory').textContent = installation.paired ? installation.memory / 1048576 + ' MiB' : '待分配';
   // VRAM appears only after the host opened a GPU engine and the coordinator confirmed the share.
@@ -268,24 +271,52 @@ function initAgent() {
   $('pair').onclick = () => void action(async () => {
     const invitation = $('invitation').value.trim();
     let address = $('pair-address-input').value.trim();
-    let fingerprint;
+    let fingerprint, certificate;
     if (/^\d{6}$/.test(invitation)) {
       address ||= onlyDiscoveredCenter;
       if (!address) throw Error('请选择或填写协调中心地址');
       const trust = await api('/agent/certificate', { address });
       if (!window.confirm('请与协调中心配对窗口核对证书指纹，一致后继续：\n' + trust.fingerprint)) return;
       fingerprint = trust.fingerprint;
+      certificate = trust.certificate;
     } else if (invitation.startsWith('{')) {
       const target = new URL(JSON.parse(invitation).invitation.address).origin;
       if (address && address !== target) throw Error('邀请所属中心与所选中心不一致');
     }
-    const result = await api('/agent/pair', { directory: directory.value, invitation, address, fingerprint });
+    const result = await api('/agent/pair', { directory: directory.value, invitation, address, fingerprint, certificate });
     directory.value = result.directory;
     $('invitation').value = '';
     $('file').value = '';
     pairDialog.close();
     await loadInstallation();
+    // Like the phone, a paired device connects right away instead of waiting for a second click.
+    await api('/agent/start', { directory: directory.value, backend: $('backend').value, python: $('python').value, suite: $('suite').value });
   }, 'pair-error');
+
+  $('leave-space').onclick = () => {
+    if (!window.confirm('退出当前协作空间？协调中心将注销本机，本机的配对记录和账本会移到备份目录。')) return;
+    void action(async () => {
+      if (snapshot.state === 'RUNNING' || snapshot.state === 'STARTING') {
+        await api('/stop', {});
+        const end = Date.now() + 30000;
+        while (Date.now() < end) {
+          const state = await api('/state');
+          if (state.state !== 'RUNNING' && state.state !== 'STOPPING' && state.state !== 'STARTING') break;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      try {
+        await api('/agent/leave', { directory: directory.value });
+      } catch (error) {
+        if (error.code !== 'COORDINATOR_UNREACHABLE' || !window.confirm(error.message + '\n\n仅在本机清除配对？')) throw error;
+        await api('/agent/leave', { directory: directory.value, force: true });
+      }
+      installation = { paired: false };
+      showQuota(false);
+      message('error', '已退出协作空间。选择协调中心可重新配对。');
+      void discover();
+    });
+  };
 
   async function discover() {
     $('discover').disabled = true;
