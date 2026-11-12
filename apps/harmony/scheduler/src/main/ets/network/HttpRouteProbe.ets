@@ -48,6 +48,18 @@ export class HttpRouteProbe implements RouteProbePort {
       estimatedTotalMs: 0, costEstimate: null };
   }
   private async call(path: string, body: string = ''): Promise<ProbeData> {
+    for(let attempt=0;attempt<2;attempt++){
+      try{return await this.callOnce(path,body);}
+      catch(error){
+        if(this.signal?.isCancellationRequested)throw new Error('CLOUD_CANCELLED');
+        const code=(error as Error).message;
+        // These endpoints only measure connectivity; retrying cannot create a shopping task.
+        if(attempt!==0||!['ROUTE_PROBE_NETWORK_2300028','ROUTE_PROBE_NETWORK_2300055','ROUTE_PROBE_NETWORK_2300056'].includes(code)||this.deadlineAt-Date.now()<1000)throw error as Error;
+      }
+    }
+    throw new Error('ROUTE_PROBE_FAILED');
+  }
+  private async callOnce(path: string, body: string): Promise<ProbeData> {
     if (this.signal?.isCancellationRequested) { throw new Error('CLOUD_CANCELLED'); }
     const remaining = Math.min(20000, this.deadlineAt - Date.now());
     if (remaining <= 0) { throw new Error('ROUTE_PROBE_DEADLINE'); }
@@ -57,7 +69,7 @@ export class HttpRouteProbe implements RouteProbePort {
       const url = path.startsWith('/api/') ? this.baseUrl + path : this.baseUrl + '/api/v1/runtime/probe' + path;
       const response = await request.request(url, {
         method: body.length === 0 ? http.RequestMethod.GET : http.RequestMethod.POST,
-        header: this.headers, extraData: body, connectTimeout: Math.min(3000, remaining), readTimeout: remaining });
+        header: this.headers, extraData: body, connectTimeout: Math.min(10000, remaining), readTimeout: remaining });
       if (response.responseCode !== 200 && response.responseCode !== 201) { throw new Error('ROUTE_PROBE_FAILED'); }
       return (JSON.parse(String(response.result)) as ProbeEnvelope).data;
     } catch (error) {

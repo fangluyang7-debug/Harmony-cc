@@ -1,3 +1,8 @@
+import { CoordinatorArtifacts } from './CoordinatorArtifacts';
+import { CoordinatorQualification, EvaluationReport } from './CoordinatorQualification';
+import { CoordinatorJobs } from './CoordinatorJobs';
+import { CoordinatorDatabase, CoordinatorTransaction } from './CoordinatorDatabase';
+import { SdkSubmission } from '../client/SchedulerSdk';
 import { util } from '@kit.ArkTS';
 import { CoordinatorPairing, NativePairRequest } from './CoordinatorPairing';
 import { CoordinatorCertificate } from './CoordinatorCertificate';
@@ -33,6 +38,11 @@ function exact(body:Object,required:string[],optional:string[]=[]):void{
 }
 /** HTTP surface retains the desktop endpoint names and response shapes. */
 export class CoordinatorRoutes {
+ private artifacts:CoordinatorArtifacts|null=null;
+ private qualification:CoordinatorQualification|null=null;
+ private jobs:CoordinatorJobs|null=null;
+ private database:CoordinatorDatabase|null=null;
+ installExecution(database:CoordinatorDatabase,artifacts:CoordinatorArtifacts,qualification:CoordinatorQualification,jobs:CoordinatorJobs):void{this.database=database;this.artifacts=artifacts;this.qualification=qualification;this.jobs=jobs;}
  private pairing:CoordinatorPairing;
  private identity:CoordinatorCertificate;
  private address:string;
@@ -52,6 +62,25 @@ export class CoordinatorRoutes {
  installAllotments(credentials:CoordinatorCredentials,allotments:CoordinatorAllotments):void{this.credentials=credentials;this.allotments=allotments;}
  constructor(pairing:CoordinatorPairing,identity:CoordinatorCertificate,address:string,epoch:number){this.pairing=pairing;this.identity=identity;this.address=address;this.epoch=epoch;}
  async handle(request:CoordinatorHttpRequest):Promise<CoordinatorHttpResponse>{
+  if(this.credentials&&this.artifacts&&this.qualification&&this.jobs&&this.database&&/^\/v2\/(artifacts|evaluations|qualification|sdk\/jobs|executions)(\/|$)/.test(request.path)){
+   try{
+    if(request.path.startsWith('/v2/artifacts/'))return await this.artifacts.handle(request);
+    if(!request.authorization.startsWith('Bearer '))throw Error('CREDENTIAL_REQUIRED');
+    const peer=await this.credentials.authenticate(request.authorization.slice(7));
+    const body=request.body.length?JSON.parse(util.TextDecoder.create('utf-8').decodeToString(request.body)) as Object:new Object();
+    if(request.path==='/v2/evaluations/claim'&&request.method==='POST'){exact(body,[]);return json(200,await this.qualification.claim(peer));}
+    const evaluation=/^\/v2\/evaluations\/([A-Za-z0-9_.:-]+)(\/report)?$/.exec(request.path);
+    if(evaluation){if(evaluation[2]&&request.method==='POST')return json(200,await this.qualification.report(peer,evaluation[1],body as EvaluationReport));if(!evaluation[2]&&request.method==='GET')return json(200,await this.qualification.status(peer,evaluation[1]));}
+    const target=/^\/v2\/qualification\/([A-Za-z0-9_.:-]+)$/.exec(request.path);
+    if(target&&request.method==='GET'){let evidence:Object=new Object();await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{evidence=await this.qualification!.evidence(tx,peer,target[1]);});return json(200,evidence);}
+    if(request.path==='/v2/sdk/jobs'&&request.method==='POST')return json(200,await this.jobs.submit(peer,body as SdkSubmission));
+    const job=/^\/v2\/sdk\/jobs\/([A-Za-z0-9_.:-]+)(?:\/(start|cancel|received))?$/.exec(request.path);
+    if(job){if(!job[2]&&request.method==='GET')return json(200,await this.jobs.status(peer,job[1]));if(request.method==='POST'){if(job[2]==='start')return json(200,await this.jobs.startJob(peer,job[1]));if(job[2]==='cancel')return json(200,await this.jobs.cancel(peer,job[1]));if(job[2]==='received')return json(200,await this.jobs.received(peer,job[1],body));}}
+    const execution=/^\/v2\/executions\/([A-Za-z0-9_.:-]+)\/(authorize|control|input|output)$/.exec(request.path);
+    if(execution&&request.method==='POST')return json(200,await this.jobs.execution(peer,execution[1],execution[2],body));
+    return json(404,{message:'ROUTE_NOT_FOUND'} as ErrorResponse);
+   }catch(e){const message=(e as Error).message;return json(message.startsWith('CREDENTIAL_')?401:400,{message:/^[A-Z][A-Z0-9_]{0,99}$/.test(message)?message:'EXECUTION_REQUEST_INVALID'} as ErrorResponse);}
+  }
   if(request.method==='GET'&&request.path==='/v2/health/live'){const response:LiveResponse={live:true};return json(200,response);}
   if(request.method==='GET'&&request.path==='/v2/identity'&&this.coordinatorId){const response:IdentityResponse={version:2,coordinatorId:this.coordinatorId,epoch:this.epoch,domain:'REAL'};return json(200,response);}
   if(request.method==='GET'&&request.path==='/v2/pairing/certificate')return {status:200,body:this.identity.certificate,contentType:'application/x-pem-file'};

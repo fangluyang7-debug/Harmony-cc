@@ -1,9 +1,9 @@
-export interface CoordinatorHttpRequest {method:string;path:string;authorization:string;body:Uint8Array;remoteAddress?:string;webSocketKey?:string;}
-/** HTTP/1.1 framing for JSON control requests. Artifact streaming has its own adapter. */
+export interface CoordinatorHttpRequest {method:string;path:string;authorization:string;body:Uint8Array;deviceCredential?:string;remoteAddress?:string;webSocketKey?:string;}
+/** Bounded HTTP/1.1 framing; artifact bodies remain bytes throughout the transport. */
 export class CoordinatorHttpParser {
  private data:Uint8Array=new Uint8Array(0);
  push(chunk:Uint8Array):CoordinatorHttpRequest|null {
-  if(this.data.length+chunk.length>1048576)throw Error('HTTP_REQUEST_TOO_LARGE');
+  if(this.data.length+chunk.length>8404992)throw Error('HTTP_REQUEST_TOO_LARGE');
   const next=new Uint8Array(this.data.length+chunk.length);next.set(this.data);next.set(chunk,this.data.length);this.data=next;
   let end=-1;for(let i=0;i+3<next.length;i++)if(next[i]===13&&next[i+1]===10&&next[i+2]===13&&next[i+3]===10){end=i;break;}
   if(end<0){if(next.length>16384)throw Error('HTTP_HEADERS_TOO_LARGE');return null;}
@@ -15,10 +15,12 @@ export class CoordinatorHttpParser {
   for(const line of lines){const colon=line.indexOf(':');if(colon<1||/^[ \t]/.test(line))throw Error('HTTP_HEADER_INVALID');const key=line.slice(0,colon).toLowerCase();if(!/^[a-z0-9-]+$/.test(key)||headers.has(key))throw Error('HTTP_HEADER_INVALID');headers.set(key,line.slice(colon+1).trim());}
   if(headers.has('transfer-encoding'))throw Error('HTTP_TRANSFER_ENCODING_UNSUPPORTED');
   const raw=headers.get('content-length')??'0';if(!/^\d+$/.test(raw))throw Error('HTTP_LENGTH_INVALID');const length=Number(raw);
-  if(!Number.isSafeInteger(length)||length>1048576-end-4)throw Error('HTTP_REQUEST_TOO_LARGE');
+  const limit=first[0]==='PUT'&&/^\/v2\/artifacts\/[A-Za-z0-9_.:-]+\/[1-9][0-9]*$/.test(first[1])?8388608:1048576;
+  if(!Number.isSafeInteger(length)||length>limit)throw Error('HTTP_REQUEST_TOO_LARGE');
   if(next.length<end+4+length)return null;
   if(next.length!==end+4+length)throw Error('HTTP_PIPELINING_UNSUPPORTED');
   const request:CoordinatorHttpRequest={method:first[0],path:first[1],authorization:headers.get('authorization')??'',body:next.slice(end+4)};
+  const credential=headers.get('x-device-credential');if(credential!==undefined)request.deviceCredential=credential;
   if(headers.has('upgrade')){
    const key=headers.get('sec-websocket-key')??'';
    if(first[0]!=='GET'||length!==0||headers.get('upgrade')?.toLowerCase()!=='websocket'||

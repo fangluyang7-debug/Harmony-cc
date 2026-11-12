@@ -39,7 +39,7 @@ async function pairingRequest(address,route,body,certificate,retry=true){
   const payload=body===undefined?undefined:JSON.stringify(body);
   try{
     return await new Promise((resolve,reject)=>{
-      const req=https.request(address+route,{method:payload?'POST':'GET',agent:false,...(certificate?{ca:certificate}:{rejectUnauthorized:false}),headers:payload?{'Content-Type':'application/json','Content-Length':Buffer.byteLength(payload)}:{}},res=>{
+      const req=https.request(address+route,{method:payload?'POST':'GET',agent:false,...(certificate?{ca:certificate,rejectUnauthorized:true,checkServerIdentity:(_host,cert)=>cert.fingerprint256?.replaceAll(':','').toLowerCase()===certificateFingerprint(certificate)?undefined:Error('CERTIFICATE_PIN_MISMATCH')}:{rejectUnauthorized:false}),headers:payload?{'Content-Type':'application/json','Content-Length':Buffer.byteLength(payload)}:{}},res=>{
         let text='';res.setEncoding('utf8');res.on('data',part=>{text+=part;if(text.length>32768)req.destroy(Error('响应过大'));});
         res.on('end',()=>res.statusCode===200||res.statusCode===201?resolve(text):reject(Object.assign(Error(pairingRejection(route,res.statusCode,text)),{rejected:true})));
       });

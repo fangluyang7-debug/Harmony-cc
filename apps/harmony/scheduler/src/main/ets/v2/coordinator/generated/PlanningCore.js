@@ -3,6 +3,35 @@ function compatibleModel(required, actual) {
   return required.modelId === actual.modelId && required.modelVersion === actual.modelVersion && required.embeddingKind === actual.embeddingKind && required.dimension > 0 && required.dimension === actual.dimension && required.dtype === actual.dtype && required.normalization === actual.normalization && required.preprocessVersion === actual.preprocessVersion && required.indexSpaceId === actual.indexSpaceId;
 }
 
+// packages/scheduler-core/src/protocol-v2.ts
+function validWorkModelV2(model) {
+  const fields = ["version", "parameters"];
+  if (model && Object.keys(model).includes("inputBytes")) fields.push("inputBytes");
+  if (model && Object.keys(model).includes("scale")) fields.push("scale");
+  if (!exactV2(model, fields) || model.inputBytes !== void 0 && model.inputBytes !== "IGNORE" || !idV2(model.version) || !Array.isArray(model.parameters) || model.parameters.length > 16) return false;
+  if (model.scale !== void 0 && (!exactV2(model.scale, ["parameter", "reference"]) || !model.parameters.some((p) => p.name === model.scale.parameter) || !Number.isFinite(model.scale.reference) || model.scale.reference <= 0)) return false;
+  const names = [];
+  for (const rule of model.parameters) {
+    if (!objectV2(rule)) return false;
+    const width = Object.keys(rule).indexOf("bucketWidth") >= 0;
+    if (!exactV2(rule, width ? ["name", "bucketWidth"] : ["name"]) || typeof rule.name !== "string" || !/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(rule.name) || names.indexOf(rule.name) >= 0) return false;
+    if (width && (typeof rule.bucketWidth !== "number" || !Number.isFinite(rule.bucketWidth) || rule.bucketWidth <= 0)) return false;
+    names.push(rule.name);
+  }
+  return true;
+}
+function objectV2(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+function exactV2(value, names) {
+  if (!objectV2(value)) return false;
+  const keys = Object.keys(value);
+  return keys.length === names.length && keys.every((key) => names.indexOf(key) >= 0);
+}
+function idV2(value) {
+  return typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/.test(value);
+}
+
 // packages/scheduler-core/src/resources-v2.ts
 function exact(v, keys) {
   return v !== null && typeof v === "object" && !Array.isArray(v) && Object.keys(v).length === keys.length && Object.keys(v).every((k) => keys.includes(k));
@@ -289,7 +318,38 @@ var WorkflowPlacementPlanner = class {
   }
 };
 
+// packages/scheduler-core/src/cost.ts
+function canonical(value) {
+  if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
+  if (value && typeof value === "object") return "{" + Object.entries(value).filter(([, v]) => v !== void 0).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => JSON.stringify(k) + ":" + canonical(v)).join(",") + "}";
+  return JSON.stringify(value) ?? "null";
+}
+
 // packages/scheduler-core/src/capability-cost-model.ts
+function costConfiguration(parameters, model) {
+  if (!model) return { model: "size-only-v1" };
+  if (!model.version || !Array.isArray(model.parameters) || model.parameters.length > 16 || new Set(model.parameters.map((p) => p.name)).size !== model.parameters.length) throw new Error("COST_MODEL_INVALID");
+  const input = parameters ?? {}, values = {};
+  for (const rule of model.parameters) {
+    if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(rule.name)) throw new Error("COST_MODEL_INVALID");
+    const value = input[rule.name];
+    if (rule.bucketWidth !== void 0) {
+      if (!Number.isFinite(rule.bucketWidth) || rule.bucketWidth <= 0) throw new Error("COST_MODEL_INVALID");
+      values[rule.name] = typeof value === "number" && Number.isFinite(value) ? Math.floor(value / rule.bucketWidth) : null;
+    } else {
+      if (value !== void 0 && value !== null && !["string", "number", "boolean"].includes(typeof value)) throw new Error("COST_PARAMETER_INVALID");
+      if (typeof value === "string" && value.length > 128) throw new Error("COST_PARAMETER_INVALID");
+      values[rule.name] = value ?? null;
+    }
+  }
+  return { model: model.version, values, ...model.scale ? { scale: model.scale } : {} };
+}
+function workKeyV2(contract, parameters, inputBytes) {
+  if (!Number.isSafeInteger(inputBytes) || inputBytes < 0) throw new Error("INPUT_BYTES_INVALID");
+  if (contract.workModel !== void 0 && !validWorkModelV2(contract.workModel)) throw new Error("COST_MODEL_INVALID");
+  const config = costConfiguration(contract.workModel ? JSON.parse(parameters) : null, contract.workModel);
+  return canonical([contract.contractId, contract.version, config, contract.workModel?.inputBytes === "IGNORE" ? null : Math.floor(Math.log2(Math.max(1, inputBytes)))]);
+}
 function scaledWorkKey(key) {
   try {
     const model = JSON.parse(key ?? "null")?.[2], scale = model?.scale;
@@ -471,6 +531,88 @@ function availability(profile, e, priority, version, now) {
   };
 }
 
+// packages/scheduler-core/src/native-coordinator-planning.ts
+function nativePlanJson(profilesJson, evidenceJson, requestJson, now, monotonic) {
+  const profiles = JSON.parse(profilesJson), evidence = JSON.parse(evidenceJson), input = JSON.parse(requestJson);
+  const version = now, priority = input.priority ?? "REMOTE_INTERACTIVE", candidates = [], resources = [], links = [];
+  const usable = (s) => sampleUsableV2(s, now, "REAL");
+  for (const p of profiles) {
+    if (!usable(p.ownerActivity) || p.ownerActivity.value !== "IDLE" || !usable(p.foreground) || p.foreground.value !== "FOREGROUND" || !usable(p.powerSave) || p.powerSave.value === "ON" || p.energyGate && p.energyGate !== "NONE") continue;
+    for (const pool of p.pools) {
+      if (!usable(pool.admissionLimit) || !usable(pool.occupied) || pool.draining) continue;
+      const free = Math.max(0, pool.admissionLimit.value - pool.occupied.value), existing = resources.find((r) => r.deviceId === p.deviceId && r.resourcePoolId === pool.resourcePoolId);
+      if (existing) existing.available += free;
+      else resources.push({ deviceId: p.deviceId, resourcePoolId: pool.resourcePoolId, available: free, availableMemoryBytes: null, availableSlots: null, observedAt: now, ttlMs: 1e3 });
+    }
+    for (const e of p.executors) {
+      const q = evidence.find((v) => v.admission.targetId === e.target.targetId && v.admission.holderInstanceId === p.holderInstanceId);
+      if (!q || q.admission.state !== "ACTIVE" || !usable(q.admission.quality)) continue;
+      const shares = e.resources.map((r) => {
+        const pool = p.pools.find((v) => v.resourcePoolId === r.resourcePoolId);
+        return { resourcePoolId: r.resourcePoolId, amount: pool && usable(pool.admissionLimit) && usable(pool.occupied) && !pool.draining ? Math.max(0, pool.admissionLimit.value - pool.occupied.value) : 0 };
+      });
+      if (e.resources.some((r) => shares.find((v) => v.resourcePoolId === r.resourcePoolId).amount < r.amount)) continue;
+      const ram = e.resources.filter((r) => p.pools.some((v) => v.resourcePoolId === r.resourcePoolId && v.kind === "RAM_BYTES")).reduce((sum, r) => sum + r.amount, 0);
+      const compute = usable(e.compute) ? e.compute.value : q.computeMs;
+      const idle = p.inFlight?.length === 0 && p.queued?.length === 0;
+      const projected = idle && !usable(e.queue) ? { ...e, queue: { value: 0, source: "MEASURED", sampledAt: now, ttlMs: 1e3, unit: "ms" } } : e;
+      candidates.push({
+        holderInstanceId: p.holderInstanceId,
+        targetId: e.target.targetId,
+        deviceId: p.deviceId,
+        executorId: e.target.executorId,
+        capability: e.contract.capability,
+        resourcePoolIds: e.target.resourcePoolIds,
+        resourceDemand: e.resources,
+        holderCapacity: shares,
+        modelManifest: e.model,
+        requiredMemoryBytes: ram,
+        trusted: true,
+        source: "REAL",
+        observedAt: now,
+        ttlMs: 1e3,
+        availableSlots: p.credits.find((v) => v.priority === priority)?.slots ?? 0,
+        availableMemoryBytes: shares.filter((r) => p.pools.some((v) => v.resourcePoolId === r.resourcePoolId && v.kind === "RAM_BYTES")).reduce((sum, r) => sum + r.amount, 0),
+        quality: q.admission.quality.value,
+        computeMs: compute,
+        queueMs: usable(projected.queue) ? projected.queue.value : null,
+        coldMs: usable(e.cold) ? e.cold.value : null,
+        publishMs: usable(e.publish) ? e.publish.value : null,
+        uncertaintyMs: compute === null ? null : compute * 0.5,
+        availability: availability(p, projected, priority, version, now),
+        ...e.contract.serviceId ? { serviceId: e.contract.serviceId } : {}
+      });
+    }
+    for (const l of p.links) {
+      if (l.via !== null || !usable(l.fixedMs) || !usable(l.bytesPerSecond) || l.bytesPerSecond.value <= 0) continue;
+      if (!links.some((v) => v.from === l.from && v.to === l.to)) links.push({ from: l.from, to: l.to, bytesPerSecond: l.bytesPerSecond.value, fixedMs: l.fixedMs.value, effective: false, source: "REAL", observedAt: now, ttlMs: 1e3 });
+    }
+  }
+  const contract = input.contract, node = input.node;
+  const request = {
+    priority,
+    nodes: [{ id: node.id, workKey: workKeyV2(contract, node.parameters, node.input.bytes), capability: node.capability, dependencies: [], inputs: [input.artifactId], output: { id: "out-" + input.id, bytes: Math.min(8388608, node.input.bytes * 64 + 4096) }, baselineTargetId: node.targetId ?? "", ...node.targetId ? { allowedTargetIds: [node.targetId] } : {}, ...node.executionScope === "ORIGIN_DEVICE" || node.privacy === "LOCAL_ONLY" ? { dataScope: "LOCAL_ONLY" } : {}, memoryBytes: 0, minimumQuality: 1, candidates: [] }],
+    artifacts: [{ id: input.artifactId, bytes: node.input.bytes, replicas: [{ deviceId: input.coordinatorId, readMs: 0 }] }],
+    links: [],
+    deviceResources: [],
+    remainingBudgetMs: input.budgetMs,
+    networkAllowed: true,
+    privacy: node.privacy === "LOCAL_ONLY" ? "LOCAL_ONLY" : "AUTHORIZED_REMOTE",
+    localDeviceId: input.originDeviceId,
+    originHolderId: input.originHolderId,
+    appInstanceId: input.appInstanceId,
+    domain: "REAL",
+    now,
+    committedNodeIds: [],
+    committedArtifacts: [],
+    materializeOutputsAt: input.coordinatorId,
+    finalDestination: input.coordinatorId
+  };
+  const snapshot = { version, policyVersion: "native-main-v1", groupId: input.groupId, domain: "REAL", capturedAt: now, devices: profiles.map((p) => ({ deviceId: p.deviceId, holderInstanceId: p.holderInstanceId, deviceInstanceId: p.deviceInstanceId, ledgerEpoch: p.ledgerEpoch, sampledAt: p.ownerActivity.sampledAt, ttlMs: p.ownerActivity.ttlMs })), resources, candidates, links };
+  const policy = { version: snapshot.policyVersion, revoked: false, allowedTargetIds: candidates.map((c) => c.targetId), limits: { maxCandidates: 64, lookahead: 8, beamWidth: 16, planningBudgetMs: 50, switchCostMs: 0, hysteresisMs: 0 } };
+  return JSON.stringify(plan(snapshot, request, policy, { now, monotonic }));
+}
+
 // <stdin>
 function planJson(snapshot, request, policy, now, monotonic) {
   return JSON.stringify(plan(JSON.parse(snapshot), JSON.parse(request), JSON.parse(policy), { now, monotonic }));
@@ -480,5 +622,6 @@ function availabilityJson(profile, executor, priority, version, now) {
 }
 export {
   availabilityJson,
+  nativePlanJson,
   planJson
 };

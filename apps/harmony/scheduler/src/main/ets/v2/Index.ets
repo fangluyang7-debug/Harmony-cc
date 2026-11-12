@@ -38,3 +38,7 @@ export { CoordinatorApps } from './coordinator/CoordinatorApps';
 export { CoordinatorDirectory } from './coordinator/CoordinatorDirectory';
 export { CoordinatorActivity, AppActivity, AppTaskActivity, StoredAppActivity } from './coordinator/CoordinatorActivity';
 export { CoordinatorPlanning } from './coordinator/CoordinatorPlanning';
+
+export { CoordinatorArtifacts } from './coordinator/CoordinatorArtifacts';
+export { CoordinatorQualification } from './coordinator/CoordinatorQualification';
+export { CoordinatorJobs } from './coordinator/CoordinatorJobs';

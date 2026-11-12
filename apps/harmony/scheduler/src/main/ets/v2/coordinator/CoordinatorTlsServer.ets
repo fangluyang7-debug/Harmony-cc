@@ -4,7 +4,7 @@ import * as nativeTls from 'libharmony_coordinator_tls.so';
 import { CoordinatorCertificate } from './CoordinatorCertificate';
 import { CoordinatorHttpParser, CoordinatorHttpRequest } from './CoordinatorHttpParser';
 import { CoordinatorSocket, CoordinatorWire, coordinatorWebSocketAccept } from './CoordinatorSocket';
-export interface CoordinatorHttpResponse {status:number;body:string;contentType?:string;}
+export interface CoordinatorHttpResponse {status:number;body:string;binaryBody?:Uint8Array;contentType?:string;}
 interface PendingWrite {clientId:number;resolve:()=>void;reject:(reason:Error)=>void;}
 interface Session {remoteAddress:string;wire:CoordinatorWire;parser:CoordinatorHttpParser;channel:CoordinatorSocket|null;work:Promise<void>;queued:number;done:boolean;timer:number;}
 
@@ -73,8 +73,10 @@ export class CoordinatorTlsServer {
   for(const id of Array.from(this.sessions.keys()))this.disconnected(id);
  }
  private async reply(client:CoordinatorWire,response:CoordinatorHttpResponse):Promise<void>{
-  const length=new util.TextEncoder().encodeInto(response.body).length;
+  const payload=response.binaryBody??(response.body.length===0?new Uint8Array(0):new util.TextEncoder().encodeInto(response.body)),length=payload.length;
   const contentType=response.contentType??'application/json; charset=utf-8';if(/[\r\n]/.test(contentType))throw Error('HTTP_RESPONSE_INVALID');
-  await client.send('HTTP/1.1 '+response.status+' '+(response.status===200?'OK':'Error')+'\r\nContent-Type: '+contentType+'\r\nDate: '+new Date().toUTCString()+'\r\nCache-Control: no-store\r\nContent-Length: '+length+'\r\nConnection: close\r\n\r\n'+response.body);
+  const header='HTTP/1.1 '+response.status+' '+(response.status===200?'OK':'Error')+'\r\nContent-Type: '+contentType+'\r\nDate: '+new Date().toUTCString()+'\r\nCache-Control: no-store\r\nContent-Length: '+length+'\r\nConnection: close\r\n\r\n';
+  const head=new util.TextEncoder().encodeInto(header),wire=new Uint8Array(head.length+payload.length);wire.set(head);wire.set(payload,head.length);
+  await client.send(wire.buffer);
  }
 }

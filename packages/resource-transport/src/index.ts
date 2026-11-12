@@ -151,7 +151,7 @@ export function pinOptions(endpoint:PinnedEndpoint):https.RequestOptions{
     new X509Certificate(endpoint.certificate).fingerprint256.replaceAll(':','').toLowerCase()!==endpoint.fingerprint)throw Error('ENDPOINT_INVALID');
   if(endpoint.tlsMode==='public')return {rejectUnauthorized:true};
   if(endpoint.tlsMode!==undefined&&endpoint.tlsMode!=='pinned')throw Error('TLS_MODE_INVALID');
-  return {ca:endpoint.certificate,rejectUnauthorized:true,checkServerIdentity:(host,cert)=>tls.checkServerIdentity(host,cert)||
+  return {ca:endpoint.certificate,rejectUnauthorized:true,checkServerIdentity:(host,cert)=>(endpoint.tlsMode==='pinned'?undefined:tls.checkServerIdentity(host,cert))||
     (cert.fingerprint256?.replaceAll(':','').toLowerCase()===endpoint.fingerprint?undefined:Error('CERTIFICATE_PIN_MISMATCH'))};
 }
 export async function transfer(endpoint:PinnedEndpoint,ticket:ArtifactTicket,credential:string,bytes?:Buffer):Promise<{bytes:Buffer;durationMs:number}>{

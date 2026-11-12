@@ -28,6 +28,28 @@ export class CoordinatorChannel {
  private sessions:Set<ChannelSession>=new Set();
  private handlers:Map<string,CoordinatorMessageHandler>=new Map();
  private closing:boolean=false;
+ private pumping:boolean=false;
+ onProfile:((group:string,holder:string)=>void)|null=null;
+ async enqueue(tx:CoordinatorTransaction,group:string,attemptId:string,type:string,payload:Object,traceId:string):Promise<void>{
+  await tx.executeSql('INSERT OR IGNORE INTO DispatchSequence (id,value) VALUES (?,0)',[this.coordinatorId]);
+  await tx.executeSql('UPDATE DispatchSequence SET value=value+1 WHERE id=?',[this.coordinatorId]);
+  const rows=await tx.querySql('SELECT value FROM DispatchSequence WHERE id=?',[this.coordinatorId]);let seq=0;try{if(rows.goToFirstRow())seq=rows.getLong(0);}finally{rows.close();}
+  const id=util.generateRandomUUID(true),message:MessageEnvelopeV2={protocolVersion:2,messageId:id,type,groupId:group,senderInstanceId:this.coordinatorId,coordinatorEpoch:this.epoch,seq,ackOf:null,traceId,payload:JSON.stringify(payload),extensions:[]};
+  await tx.executeSql('INSERT INTO Outbox (id,sequence,groupId,attemptId,kind,epoch,messageJson) VALUES (?,?,?,?,?,?,?)',[id,seq,group,attemptId,type,this.epoch,JSON.stringify(message)]);
+ }
+ async pump():Promise<void>{
+  if(this.closing||this.pumping)return;this.pumping=true;
+  try{
+   const messages:MessageEnvelopeV2[]=[],holders:string[]=[];
+   await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{const rows=await tx.querySql('SELECT o.messageJson,a.holderInstanceId FROM Outbox o JOIN Attempt a ON a.id=o.attemptId WHERE o.acked=0 AND o.superseded=0 AND o.epoch=? ORDER BY o.sequence LIMIT 64',[this.epoch]);try{while(rows.goToNextRow()){messages.push(JSON.parse(rows.getString(0)) as MessageEnvelopeV2);holders.push(rows.getString(1));}}finally{rows.close();}});
+   for(let i=0;i<messages.length;i++){const m=messages[i],s=Array.from(this.sessions).find(s=>s.hello&&s.recovered&&!s.heartbeat.suspect&&s.peer.groupId===m.groupId&&s.peer.holderInstanceId===holders[i]&&s.socket.isOpen());if(s)await s.socket.send(JSON.stringify(m));}
+  }finally{this.pumping=false;}
+ }
+ async evaluationChanged(group:string,holder:string):Promise<void>{
+  const session=Array.from(this.sessions).find(s=>s.hello&&s.recovered&&s.peer.groupId===group&&s.peer.holderInstanceId===holder&&s.socket.isOpen());if(!session)return;
+  let seq=0;await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{await tx.executeSql('INSERT OR IGNORE INTO DispatchSequence (id,value) VALUES (?,0)',[this.coordinatorId]);await tx.executeSql('UPDATE DispatchSequence SET value=value+1 WHERE id=?',[this.coordinatorId]);const rows=await tx.querySql('SELECT value FROM DispatchSequence WHERE id=?',[this.coordinatorId]);try{if(rows.goToFirstRow())seq=rows.getLong(0);}finally{rows.close();}});
+  const m:MessageEnvelopeV2={protocolVersion:2,messageId:util.generateRandomUUID(true),type:'EvaluationChanged',groupId:group,senderInstanceId:this.coordinatorId,coordinatorEpoch:this.epoch,seq,ackOf:null,traceId:util.generateRandomUUID(true),payload:'{}',extensions:[]};await session.socket.send(JSON.stringify(m));
+ }
  constructor(database:CoordinatorDatabase,credentials:CoordinatorCredentials,coordinatorId:string,epoch:number){
   this.database=database;this.credentials=credentials;this.coordinatorId=coordinatorId;this.epoch=epoch;
   database.controlState=(group,holder,instance,ledger)=>this.linkState(group,holder,instance,ledger);
@@ -107,6 +129,7 @@ export class CoordinatorChannel {
    if(!session.heartbeat.suspect&&age>=0&&age<=profile.ownerActivity.ttlMs&&stamp>session.lastProfileStamp){session.lastProfileStamp=stamp;session.heartbeat.freshReport(monotonic());}
    session.busy=(profile.inFlight?.length??0)>0;
   }
+  if(m.type==='DeviceProfile'&&!duplicate)this.onProfile?.(peer.groupId,peer.holderInstanceId);
   if(m.type==='Ack')return;
   let sequence=0;await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{
    await tx.executeSql('INSERT OR IGNORE INTO DispatchSequence (id,value) VALUES (?,0)',[this.coordinatorId]);

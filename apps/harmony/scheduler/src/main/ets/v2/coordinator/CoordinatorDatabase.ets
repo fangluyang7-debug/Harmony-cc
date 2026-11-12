@@ -2,6 +2,7 @@ import { relationalStore } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { coordinatorMigrations } from './CoordinatorSchema';
 import { DeviceProfileV2, sampleUsableV2, validDeviceProfileV2 } from '../protocol/ResourcesV2';
+import { CapabilityAdmissionV2 } from '../protocol/ResourcesV2';
 import { StoredAppActivity } from './CoordinatorActivity';
 
 export class CoordinatorTransaction {
@@ -10,7 +11,8 @@ export class CoordinatorTransaction {
  async executeSql(sql:string,args:relationalStore.ValueType[]=[]):Promise<void>{await this.native.execute(sql,args);}
  querySql(sql:string,args:relationalStore.ValueType[]=[]):Promise<relationalStore.ResultSet>{return this.native.querySql(sql,args);}
 }
-export interface CoordinatorOverviewRow {id:string;title:string;detail:string;state:string;profiles?:DeviceProfileV2[];activities?:StoredAppActivity[];}
+export interface CoordinatorOverviewRow {id:string;title:string;detail:string;state:string;profiles?:DeviceProfileV2[];activities?:StoredAppActivity[];qualifications?:CapabilityAdmissionV2[];}
+interface NativeQualificationRow {admission:CapabilityAdmissionV2;}
 export interface CoordinatorOverview {spaces:CoordinatorOverviewRow[];devices:CoordinatorOverviewRow[];tasks:CoordinatorOverviewRow[];apps:CoordinatorOverviewRow[];}
 /** Native persistence for the coordinator, separate from the execution-host ledger. */
 export class CoordinatorDatabase {
@@ -67,6 +69,13 @@ export class CoordinatorDatabase {
     const active=profiles.get(JSON.stringify([devices.getString(2),devices.getString(0)]))??[];
     if(active.length>0)result.devices.push({id:devices.getString(0),title:devices.getString(1),detail:String(active.length)+' 个在线宿主',state:'在线',profiles:active});
    }}finally{devices.close();}
+   const qualificationRows=await db.querySql('SELECT metadataJson FROM CapabilityState');
+   try{while(qualificationRows.goToNextRow()){
+    const value=JSON.parse(qualificationRows.getString(0)) as NativeQualificationRow;
+    if(!value.admission)continue;
+    const device=result.devices.find(d=>d.profiles?.some(p=>p.holderInstanceId===value.admission.holderInstanceId));
+    if(device){if(!device.qualifications)device.qualifications=[];device.qualifications.push(value.admission);}
+   }}finally{qualificationRows.close();}
    const activityRows=await db.querySql('SELECT id,metadataJson FROM Device WHERE id LIKE ?',['["app-activity",%']);
    try{while(activityRows.goToNextRow()){
     const value=JSON.parse(activityRows.getString(1)) as StoredAppActivity;

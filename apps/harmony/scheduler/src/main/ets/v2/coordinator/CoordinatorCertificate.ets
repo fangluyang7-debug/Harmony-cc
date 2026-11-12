@@ -9,7 +9,7 @@ function encoded(value:string):Uint8Array{return new util.TextEncoder().encodeIn
 function name(value:string):Uint8Array{return seq([der(49,seq([oid([85,4,3]),der(12,encoded(value))]))]);}
 function date(value:Date):Uint8Array {return der(24,encoded(value.toISOString().replace(/[-:]/g,'').replace('T','').slice(0,14)+'Z'));}
 function pem(label:string,data:Uint8Array):string{const b64=new util.Base64Helper().encodeToStringSync(data),lines:string[]=[];for(let i=0;i<b64.length;i+=64)lines.push(b64.slice(i,i+64));return '-----BEGIN '+label+'-----\n'+lines.join('\n')+'\n-----END '+label+'-----\n';}
-export interface CoordinatorCertificate {certificate:string;privateKey:string;fingerprint:string;}
+export interface CoordinatorCertificate {certificate:string;privateKey:string;fingerprint:string;ipAddresses?:string[];}
 /** Generate a device-local identity; no development private key is shipped in the HAP. */
 export async function createCoordinatorCertificate(ipAddresses:string[]):Promise<CoordinatorCertificate>{
  const addresses=Array.from(new Set<string>(['127.0.0.1',...ipAddresses]));
@@ -25,5 +25,5 @@ export async function createCoordinatorCertificate(ipAddresses:string[]):Promise
  const signer=cryptoFramework.createSign('RSA3072|PKCS1|SHA256');await signer.init(pair.priKey);const signature=await signer.sign({data:tbs});
  const certificate=seq([tbs,algorithm,der(3,join([new Uint8Array([0]),signature.data]))]);
  const digest=cryptoFramework.createMd('SHA256');digest.updateSync({data:certificate});
- return {certificate:pem('CERTIFICATE',certificate),privateKey:pem('PRIVATE KEY',pair.priKey.getEncoded().data),fingerprint:Array.from(digest.digestSync().data).map(n=>n.toString(16).padStart(2,'0')).join('')};
+ return {ipAddresses:addresses,certificate:pem('CERTIFICATE',certificate),privateKey:pem('PRIVATE KEY',pair.priKey.getEncoded().data),fingerprint:Array.from(digest.digestSync().data).map(n=>n.toString(16).padStart(2,'0')).join('')};
 }

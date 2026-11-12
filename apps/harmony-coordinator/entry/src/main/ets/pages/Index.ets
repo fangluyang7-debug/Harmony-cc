@@ -3,7 +3,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { common } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
 import { util } from '@kit.ArkTS';
-import { CoordinatorDatabase, CoordinatorOverview, CoordinatorOverviewRow, CoordinatorCertificate, createCoordinatorCertificate, CoordinatorTlsServer, CoordinatorDiscovery, CoordinatorPairing, CoordinatorRoutes, CoordinatorLocalAdmin, CoordinatorAllotments, CoordinatorGrantCrypto, CoordinatorCredentials, CoordinatorDeviceSettings, CoordinatorChannel, CoordinatorApps, CoordinatorDirectory, CoordinatorActivity } from 'scheduler';
+import { CoordinatorDatabase, CoordinatorOverview, CoordinatorOverviewRow, CoordinatorCertificate, createCoordinatorCertificate, CoordinatorTlsServer, CoordinatorDiscovery, CoordinatorPairing, CoordinatorRoutes, CoordinatorLocalAdmin, CoordinatorAllotments, CoordinatorGrantCrypto, CoordinatorCredentials, CoordinatorDeviceSettings, CoordinatorChannel, CoordinatorApps, CoordinatorDirectory, CoordinatorActivity, CoordinatorArtifacts, CoordinatorQualification, CoordinatorJobs } from 'scheduler';
 interface RowsInput {items:CoordinatorOverviewRow[];title:string;}
 @Entry
 @Component
@@ -26,11 +26,14 @@ struct Index {
  @State activeSpace:string='';
  @State invitationText:string='';
  @State pairingCode:string='';
+ @State invitationRemaining:number=0;
+ private invitationExpiresAt:number=0;
  @State pairingQr:string='';
  @State showInvitationDetails:boolean=false;
  @State operationStatus:string='';
  private admin:CoordinatorLocalAdmin|null=null;
  private channel:CoordinatorChannel|null=null;
+ private jobs:CoordinatorJobs|null=null;
  private server:CoordinatorTlsServer=new CoordinatorTlsServer();
  private discovery:CoordinatorDiscovery=new CoordinatorDiscovery();
  aboutToAppear():void{void this.refresh();this.refreshTimer=setInterval(()=>{void this.refresh();},2000);this.address=AppStorage.get<string>('coordinatorAddress')??'';if(AppStorage.get<boolean>('coordinatorAutoStart'))void this.start();}
@@ -48,8 +51,10 @@ struct Index {
    const storage=await preferences.getPreferences(context,{name:'coordinator-identity'});
    let id=await storage.get('id','') as string;if(!id){id=util.generateRandomUUID(true);await storage.put('id',id);await storage.flush();}
    this.status='正在生成设备证书';const raw=await storage.get('certificate','') as string,addresses=this.address.trim()?[this.address.trim()]:[];
-   const identity:CoordinatorCertificate=raw?JSON.parse(raw) as CoordinatorCertificate:await createCoordinatorCertificate(addresses);
-   if(!raw){await storage.put('certificate',JSON.stringify(identity));await storage.flush();}
+   const previous:CoordinatorCertificate|null=raw?JSON.parse(raw) as CoordinatorCertificate:null;
+   const renew=previous===null||previous.ipAddresses===undefined||addresses.some(address=>!previous.ipAddresses?.includes(address));
+   const identity:CoordinatorCertificate=renew?await createCoordinatorCertificate(addresses):previous as CoordinatorCertificate;
+   if(renew){await storage.put('certificate',JSON.stringify(identity));await storage.flush();if(previous!==null)this.operationStatus='网络地址已变更，服务证书已更新；请生成新的邀请并重新配对设备';}
    this.fingerprint=identity.fingerprint;const epoch=await db.startEpoch(id);
    const address='https://'+this.address.trim()+':7443';
    const pairing=new CoordinatorPairing(db,identity,'REAL'),routes=new CoordinatorRoutes(pairing,identity,address,epoch);
@@ -57,21 +62,26 @@ struct Index {
    routes.installApps(new CoordinatorApps(db,identity,address));
    routes.installDirectory(new CoordinatorDirectory(db));routes.installActivity(new CoordinatorActivity(db));
    const channel=new CoordinatorChannel(db,credentials,id,epoch);this.channel=channel;routes.installIdentity(id);this.server.installChannel((request,connection)=>channel.upgrade(request,connection));pairing.onRevoked(credentialId=>channel.revoke(credentialId));
+   const artifacts=new CoordinatorArtifacts(db,credentials),packBytes=await context.resourceManager.getRawFileContent('reference-packs.json');
+   const qualification=new CoordinatorQualification(db,util.TextDecoder.create('utf-8').decodeToString(packBytes),epoch);
+   const jobs=new CoordinatorJobs(db,channel,artifacts,qualification,id,epoch);this.jobs=jobs;routes.installExecution(db,artifacts,qualification,jobs);
+   qualification.onChanged=(group,holder)=>{void channel.evaluationChanged(group,holder).catch(()=>{});};channel.onProfile=qualification.onChanged;
    this.admin=new CoordinatorLocalAdmin(db,pairing,'local-'+id,address);
    this.activeSpace=await this.admin.ensureDefaultSpace();this.snapshot=await db.overview();
    await this.server.start(identity,7443,request=>routes.handle(request));
    if(this.address.trim())await this.discovery.start('https://'+this.address.trim()+':7443');
    hilog.info(0x0001,'HarmonyCoordinator','TLS_LISTENING epoch=%{public}d fingerprint=%{public}s',epoch,identity.fingerprint);
-   this.running=true;this.status='配对服务与数据库已启动 · epoch '+epoch+'\n任务调度协议仍在移植';
-  }catch(e){await this.discovery.close().catch(()=>{});await this.channel?.close().catch(()=>{});await this.server.close().catch(()=>{});this.status=(e as Error).message;hilog.error(0x0001,'HarmonyCoordinator','START_FAILED %{public}s',this.status);}finally{this.busy=false;}
+   jobs.start();this.running=true;this.status='配对服务与数据库已启动 · epoch '+epoch+'\n任务派发与回执服务已启动';
+  }catch(e){this.jobs?.close();await this.discovery.close().catch(()=>{});await this.channel?.close().catch(()=>{});await this.server.close().catch(()=>{});this.status=(e as Error).message;hilog.error(0x0001,'HarmonyCoordinator','START_FAILED %{public}s',this.status);}finally{this.busy=false;}
  }
  private async refresh():Promise<void>{
+  if(this.invitationExpiresAt>0){this.invitationRemaining=Math.max(0,Math.ceil((this.invitationExpiresAt-Date.now())/1000));if(this.invitationRemaining===0){this.pairingQr='';this.pairingCode='';this.invitationText='';this.invitationExpiresAt=0;this.operationStatus='配对邀请已过期，请生成新的二维码或配对码';}}
   if(this.refreshing)return;this.refreshing=true;
   try{const db=await this.openDatabase();this.snapshot=await db.overview();}catch(e){this.status=(e as Error).message;}finally{this.refreshing=false;}
  }
  private async inviteDevice():Promise<void>{
   if(!this.admin||!this.running||this.busy)return;this.busy=true;
-  try{const result=await this.admin.inviteDevice(this.activeSpace,this.deviceName);this.pairingCode=result.pairing.pairingCode;this.pairingQr=result.qrPayload;this.showInvitationDetails=false;this.invitationText=JSON.stringify(result.bootstrap);this.operationStatus='二维码与配对码五分钟内有效，配对完成后邀请失效';await this.refresh();}catch(e){this.operationStatus=(e as Error).message;}finally{this.busy=false;}
+  try{const result=await this.admin.inviteDevice(this.activeSpace,this.deviceName);this.invitationExpiresAt=result.pairing.pairingCodeExpiresAt;this.invitationRemaining=Math.max(0,Math.ceil((this.invitationExpiresAt-Date.now())/1000));this.pairingCode=result.pairing.pairingCode;this.pairingQr=result.qrPayload;this.showInvitationDetails=false;this.invitationText=JSON.stringify(result.bootstrap);this.operationStatus='二维码与配对码五分钟内有效，配对完成后邀请失效';await this.refresh();}catch(e){this.operationStatus=(e as Error).message;}finally{this.busy=false;}
  }
  @Builder
  spaceControls(){
@@ -84,7 +94,7 @@ struct Index {
     Column({space:12}){
      Text('使用节点应用扫描二维码').fontSize(16).fontColor('#173252')
      Column(){QRCode(this.pairingQr).width(220).height(220).color('#000000').backgroundColor('#FFFFFF')}.padding(20).backgroundColor('#FFFFFF')
-     Text('也可输入六位配对码').fontSize(14).fontColor('#64748B')
+     Text('有效期剩余 '+this.invitationRemaining+' 秒 · 也可输入六位配对码').fontSize(14).fontColor('#64748B')
      Text(this.pairingCode).fontSize(36).fontWeight(FontWeight.Bold).copyOption(CopyOptions.LocalDevice)
     }.width('100%')
     Text('请让节点与协调中心连接到可互访的同一网络').fontSize(13).fontColor('#64748B')
@@ -128,6 +138,10 @@ struct Index {
  private utilization(pool:PoolV2):number{if(this.sampleText(pool.occupied)==='UNKNOWN'||this.sampleText(pool.admissionLimit)==='UNKNOWN'||!pool.admissionLimit.value)return 0;return Math.min(100,100*pool.occupied.value!/pool.admissionLimit.value);}
  private evidence(sample:NumericSampleV2):string{return sample.source+' · '+new Date(sample.sampledAt).toLocaleTimeString()+' · 有效期 '+sample.ttlMs+' ms · '+(this.sampleText(sample)==='UNKNOWN'?'未知或过期':'有效');}
  private resourceVector(resources:ResourceAmountV2[]):string{return resources.map(r=>r.resourcePoolId+' '+(r.resourcePoolId==='ram'||r.resourcePoolId==='vram'?this.amount(r.amount,'bytes'):String(r.amount))).join(' · ');}
+ private qualificationText(holder:string,target:string):string{
+  for(const row of this.snapshot.devices){const admission=row.qualifications?.find(q=>q.holderInstanceId===holder&&q.targetId===target);if(admission)return admission.state+' · '+admission.reasonCode;}
+  return '等待评测';
+ }
  @Builder
  resources(profile:DeviceProfileV2){
   Column({space:12}){
@@ -157,7 +171,7 @@ struct Index {
      Text('任务资源需求 '+this.resourceVector(executor.resources)).fontSize(14)
      Text('计算 '+this.sampleText(executor.compute)+' · 排队 '+this.sampleText(executor.queue)+' · 冷启动 '+this.sampleText(executor.cold)).fontSize(13)
      Text('结果发布 '+this.sampleText(executor.publish)+' · 不确定性 '+this.sampleText(executor.uncertainty)).fontSize(13)
-     Text('资格状态：待协调中心评测证据确认').fontSize(13).fontColor('#9A650B')
+     Text('资格状态：'+this.qualificationText(profile.holderInstanceId,executor.target.targetId)).fontSize(13).fontColor('#9A650B')
     }.alignItems(HorizontalAlign.Start).padding(16).width('100%').backgroundColor('#EEF4FC').borderRadius(12)
    },(executor:ExecutorV2)=>executor.target.targetId)
    Text('在途任务 '+(profile.inFlight?.length??0)+' · 等待任务 '+(profile.queued?.length??0)).fontSize(19)
@@ -206,7 +220,7 @@ struct Index {
    Row(){Column({space:8}){Text('HARMONY / COORDINATOR').fontSize(12).fontColor('#64748B');Text(this.labels[this.selected]).fontSize(this.wide?32:26).fontWeight(FontWeight.Bold).fontColor('#173252')}.alignItems(HorizontalAlign.Start).layoutWeight(1)
     Button('刷新').fontSize(14).backgroundColor('#E3ECFA').fontColor('#2459A5').onClick(()=>{void this.refresh();})
    }.width('100%')
-   Text(this.running?'本地服务已启动 · 调度功能正在接入':'本地协调中心 · 服务尚未启动').fontSize(13).fontColor('#94600C').padding(14).width('100%').backgroundColor('#FFF5DD').borderRadius(10)
+   Text(this.running?'本地服务已启动 · 实时设备与任务观测':'本地协调中心 · 服务尚未启动').fontSize(13).fontColor('#94600C').padding(14).width('100%').backgroundColor('#FFF5DD').borderRadius(10)
    if(this.selected===0){
     GridRow({columns:this.wide?3:1,gutter:14}){
      GridCol(){this.card('在线设备',String(this.snapshot.devices.length),'控制连接在线 · 前台画像有效')}
