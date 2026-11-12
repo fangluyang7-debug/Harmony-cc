@@ -1,3 +1,4 @@
+import {visibleDevices,visibleNetwork} from './dispatch-presence.mjs';
 import {escapeHtml as esc,shortId,number,bytes,ms,sample,traceSummary} from './dispatch-view.mjs';
 import {replaceContent,navigate} from './dispatch-layout.js';
 import {capacity,clockLanes,costScale,networkLevels} from './dispatch-charts.mjs';
@@ -28,23 +29,22 @@ async function get(route){
 function notice(message,warning=false){$('notice').textContent=message;$('notice').classList.toggle('warning',warning);}
 function connection(text,kind='neutral'){$('connection').className='tag '+kind;$('connection').innerHTML=`<i class="led"></i>${esc(text)}`;}
 
-// A device is online while one of its holders has an unexpired profile; paired devices without one are offline.
-function online(d){return d.holders.some(h=>h.evidenceFresh&&sample(h.profile.ownerActivity,now()).value!==null);}
+const activeDevices=()=>visibleDevices(snapshot?.devices??[],now());
 function renderMetrics(){
   const values=snapshot?[
-    ['接入设备',snapshot.devices.length,`连接过本空间 · ${snapshot.devices.filter(online).length} 在线 / ${snapshot.devices.filter(d=>!online(d)).length} 离线`],
-    ['在线设备',snapshot.devices.filter(online).length,'画像在有效期内，可参与调度'],
-    ['执行目标',snapshot.devices.flatMap(d=>d.holders.flatMap(h=>h.profile.executors)).length,'已发现能力 · 准入资格另行核验'],
+    ['在线设备',activeDevices().length,'仅展示在线且处于前台的设备'],
+    ['在线宿主',activeDevices().reduce((count,d)=>count+d.holders.length,0),'控制连接在线 · 画像有效'],
+    ['执行目标',activeDevices().flatMap(d=>d.holders.flatMap(h=>h.profile.executors)).length,'已发现能力 · 准入资格另行核验'],
     ['执行记录',snapshot.jobCount,`${snapshot.workflows.length} 个工作流 · 最近 ${snapshot.jobWindow} 条可见`]
-  ]:[['接入设备','—','等待协调者快照'],['在线设备','—','UNKNOWN'],['执行目标','—','UNKNOWN'],['执行记录','—','UNKNOWN']];
-  $('metrics').innerHTML=values.map(([label,value,hint],i)=>`<article class="metric"><span class="metric-index">0${i+1}</span><span>${esc(label)}</span><strong>${esc(value)}<em>${['台','台','个','条'][i]}</em></strong><small>${esc(hint)}</small></article>`).join('');
+  ]:[['在线设备','—','等待协调者快照'],['在线宿主','—','UNKNOWN'],['执行目标','—','UNKNOWN'],['执行记录','—','UNKNOWN']];
+  $('metrics').innerHTML=values.map(([label,value,hint],i)=>`<article class="metric"><span class="metric-index">0${i+1}</span><span>${esc(label)}</span><strong>${esc(value)}<em>${['台','个','个','条'][i]}</em></strong><small>${esc(hint)}</small></article>`).join('');
 }
 function renderTopology(){
   if(!snapshot){$('topology').innerHTML=empty('选择协作空间后显示实际设备');return;}
-  const devices=snapshot.devices,n=devices.length;
+  const devices=activeDevices(),n=devices.length;
   const wires=n?`<svg class="topology-wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><path class="wire-spine" d="M0 50 H45 ${n>1?'M45 '+50/n+' V'+(100-50/n):''}"/>${devices.map((d,i)=>{const y=(i+.5)/n*100;return `<path class="wire-branch" d="M45 ${y} H100"/><circle cx="100" cy="${y}" r="2" vector-effect="non-scaling-stroke"/>`;}).join('')}</svg>`:'';
-  replaceContent('topology',`<div class="map-caption"><span>统一规划中心</span><span>${n} 台接入 · ${devices.filter(online).length} 在线</span></div><div class="topology-scroll"><div class="topology-scene" style="--node-count:${Math.max(1,n)}"><div class="topology-hub"><div class="hub-orbit"><div class="hub-core">${icon('coordinator')}</div><span class="orbit-point" aria-hidden="true"></span></div><strong>Harmony 协调者</strong><span class="hub-role">规划 · 资源协调</span><small class="coordinator-address">${esc(snapshot.coordinator.address??location.origin)}</small><span class="hub-state">快照 ${snapshot.coordinator.ready?'READY':'NOT READY'} · epoch ${esc(snapshot.coordinator.epoch)}</span></div>${wires}<div class="topology-nodes">${n?devices.map(d=>{
-    const readings=d.holders.map(h=>sample(h.profile.ownerActivity,now())),fresh=readings.some(v=>v.value!==null),profileLabel=fresh?'在线 · 可调度':'离线',executors=d.holders.flatMap(h=>h.profile.executors),backends=[...new Set(executors.map(e=>e.target.backend))];
+  replaceContent('topology',`<div class="map-caption"><span>统一规划中心</span><span>${n} 台在线</span></div><div class="topology-scroll"><div class="topology-scene" style="--node-count:${Math.max(1,n)}"><div class="topology-hub"><div class="hub-orbit"><div class="hub-core">${icon('coordinator')}</div><span class="orbit-point" aria-hidden="true"></span></div><strong>Harmony 协调者</strong><span class="hub-role">规划 · 资源协调</span><small class="coordinator-address">${esc(snapshot.coordinator.address??location.origin)}</small><span class="hub-state">快照 ${snapshot.coordinator.ready?'READY':'NOT READY'} · epoch ${esc(snapshot.coordinator.epoch)}</span></div>${wires}<div class="topology-nodes">${n?devices.map(d=>{
+    const readings=d.holders.map(h=>sample(h.profile.ownerActivity,now())),fresh=readings.some(v=>v.value!==null),profileLabel=fresh?'在线':'离线',executors=d.holders.flatMap(h=>h.profile.executors),backends=[...new Set(executors.map(e=>e.target.backend))];
     return `<button class="topo-device ${fresh?'fresh':'unknown'}" data-device="${esc(d.id)}" type="button" aria-label="查看 ${esc(d.name)} 的设备资源"><span class="node-icon">${icon('device')}</span><span class="node-content"><strong>${esc(d.name)}</strong><span class="node-meta">${d.holders.length} 个宿主 · ${executors.length} 个执行目标${backends.length?' · '+esc(backends.join(' / ')):''}</span><span class="node-id">${esc(shortId(d.id))}</span></span><span class="node-state"><i class="led"></i>${esc(profileLabel)}</span><span class="node-arrow" aria-hidden="true">↗</span></button>`;
   }).join(''):empty('暂无设备画像。接入终端后显示协作关系。')}</div></div></div><div class="map-legend"><span><i class="line-key"></i>画像关联</span><span><i class="led"></i>有效画像</span><span>点击终端查看资源 ↗</span></div>`);
 }
@@ -66,7 +66,8 @@ function pool(p,holderFresh,profile){
   return `<div class="pool ${tone} ${usage?.exceeded?'over-capacity':''}"><div class="capacity-ring ${usage===null?'unknown':''}" role="img" aria-label="${esc(label+'，任务占用 '+occupied.text+'，准入上限 '+limit.text)}"><svg viewBox="0 0 100 100" aria-hidden="true"><circle class="ring-track" cx="50" cy="50" r="42"/>${usage===null?'':`<circle class="ring-value" cx="50" cy="50" r="42" pathLength="100" stroke-dasharray="${usage.fill} 100"/>`}</svg><span><strong>${percent}</strong><small>${usage===null?'UNKNOWN':'额度占用'}</small></span></div><div class="pool-info"><div class="pool-title"><strong>${esc(label)}</strong><span>${!holderFresh?'排空 UNKNOWN':p.draining?'正在排空':'未排空'}</span></div><div class="pool-values"><strong>${esc(occupied.text)}</strong><span> / ${esc(limit.text)}</span></div><div class="pool-note">任务占用 / 准入上限${usage?.exceeded?' · 已超出上限':''}${limit.value===0&&zeroReason(p,profile)?`<br><span class="zero-reason">准入为 0：${esc(zeroReason(p,profile))}</span>`:''}<br>上报总量 ${esc(total.text)}</div></div></div>`;
 }
 function renderDevices(){
-  replaceContent('devices',!snapshot?empty('等待真实资源画像'):!snapshot.devices.length?empty('暂无设备；不会以样例硬件填充本页'):snapshot.devices.map(d=>`<article class="device" data-device-card="${esc(d.id)}" tabindex="-1"><div class="device-title"><h3>${esc(d.name)}</h3>${tag(d.holders.length?`${d.holders.length} 个宿主`:'UNKNOWN')}</div><div class="id">${esc(d.id)}</div>${d.holders.length?d.holders.map(h=>{
+  const devices=activeDevices();
+  replaceContent('devices',!snapshot?empty('等待真实资源画像'):!devices.length?empty('暂无在线前台设备；设备重新上线后自动恢复'):devices.map(d=>`<article class="device" data-device-card="${esc(d.id)}" tabindex="-1"><div class="device-title"><h3>${esc(d.name)}</h3>${tag(d.holders.length?`${d.holders.length} 个宿主`:'UNKNOWN')}</div><div class="id">${esc(d.id)}</div>${d.holders.length?d.holders.map(h=>{
     const p=h.profile,owner=sample(p.ownerActivity,now());
     const live=p.inFlight===undefined||!h.evidenceFresh||p.ownerActivity.sampledAt+p.ownerActivity.ttlMs<now()?'UNKNOWN':p.inFlight.length?p.inFlight.map(f=>`<p>${esc(shortId(f.attemptId))} · ${esc(f.state)} · 占用 ${esc(vector(f.resources))} · 已运行 ${esc(sample(f.elapsed,now()).text)} · 预计剩余 ${esc(sample(f.remaining,now()).text)}${f.history&&sample(f.elapsed,now()).value!==null?` · 参考 ${esc(f.history.samples)} 次，其中 ${esc(f.history.survivors)} 次超过当前用时 · 剩余 P90 ${esc(ms(f.history.p90RemainingMs))}`:''}</p>`).join(''):'采样时无未结算任务';
     const queued=owner.value===null?'':(p.queued??[]).map(q=>`<p>排队 ${esc(shortId(q.attemptId))} · ${esc(q.reason)} · 等待 ${esc(sample(q.elapsed,now()).text)} · 申请 ${esc(vector(q.resources))}</p>`).join('');
@@ -78,7 +79,7 @@ function renderDevices(){
   }).join(''):empty('未收到宿主画像；CPU / RAM / GPU / 温度 / 电量均 UNKNOWN')}<details class="evidence-details" data-detail="${esc(d.id)}"><summary>额度与资源结算 · ${d.allotments.length} 个宿主记录</summary>${d.allotments.map(a=>`<div class="allotment"><span class="id">额度 HOLDER ${esc(shortId(a.holderInstanceId))} / grant v${esc(a.version)} / ack ${esc(a.ack?.version??'UNKNOWN')}</span><p>基础：${esc(vector(a.base))}</p><p>在线增量：${esc(vector(a.extra))}</p><p>保留量：${esc(vector(a.reserved))}</p><p>已确认占用：${esc(vector(a.ack?.occupied))}</p></div>`).join('')}</details><p class="explanation">槽位是协同资源声明，不是整机 CPU 利用率；未上报的 GPU 指标保持 UNKNOWN。</p></article>`).join(''));
 }
 function renderNetwork(){
-  const states=snapshot?.network??[],counts=networkLevels(states);
+  const states=visibleNetwork(snapshot?.network??[],activeDevices()),counts=networkLevels(states);
   const distribution=states.length?`<div class="network-distribution"><div class="distribution-title"><span>宿主网络等级</span><strong>${states.length}<small> 个宿主</small></strong></div><div class="network-stack" role="img" aria-label="${esc(Object.entries(counts).map(([k,v])=>k+' '+v+' 个').join('，'))}">${Object.entries(counts).filter(([,v])=>v).map(([level,count])=>`<span class="level-${level}" style="width:${count/states.length*100}%">${level} · ${count}</span>`).join('')}</div><div class="level-counts">${Object.entries(counts).filter(([k,v])=>k!=='UNKNOWN'||v).map(([k,v])=>`<span><i class="level-${k}"></i>${k}<b>${v}</b></span>`).join('')}</div></div>`:'';
   replaceContent('network-summary',states.length?`${distribution}<div class="network-list">${states.map(n=>`<div class="network-row"><div>${esc(name(n.deviceId))}<small class="mono">HOLDER ${esc(shortId(n.holderInstanceId))}</small><small>${esc(n.coordinator==='REACHABLE'?'控制链路证据有效':'控制链路 UNKNOWN')} · ${n.pairs.length} 条方向证据</small></div>${tag(n.level,n.level==='L0'?'good':n.level==='L3'?'neutral':'warn')}</div>`).join('')}</div><div class="network-legend"><span>L0 全部可达</span><span>L1 部分可达</span><span>L2 仅控制可达</span><span>L3 控制未知 / 失联</span></div>`:empty('UNKNOWN · 尚无成对探测证据'));
   const pairs=states.flatMap(n=>n.pairs.map(p=>({...p,holderInstanceId:n.holderInstanceId})));

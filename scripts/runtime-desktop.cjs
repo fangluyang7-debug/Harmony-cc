@@ -7,7 +7,7 @@ const {discoverCenters:discover}=require('../apps/windows-agent/discovery.cjs');
 const {DeviceBinding}=require('./runtime-device-binding.cjs');
 const root=path.resolve(__dirname,'..');
 const consoleAssets=new Set(['/index.html','/style.css','/app.js','/dispatch.html','/dispatch.css',
-  '/dispatch.js','/dispatch-view.mjs','/dispatch-layout.js','/dispatch-charts.mjs','/scheduler-sdk.js',
+  '/dispatch.js','/dispatch-view.mjs','/dispatch-layout.js','/dispatch-charts.mjs','/dispatch-presence.mjs','/scheduler-sdk.js',
   '/qrcode.js','/join-key.mjs','/photo.html','/photo.css','/photo.js','/photo-workflow.mjs','/photo-gallery.mjs','/photo-app-port.mjs']);
 function pairingAddress(value){
   const url=new URL(value);

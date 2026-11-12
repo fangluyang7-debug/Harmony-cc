@@ -38,13 +38,17 @@ export class CoordinatorAllotments {
   await this.database.transaction(async(db:CoordinatorTransaction):Promise<void>=>{
    const raw=await read(db,'Device',key(peer.deviceId)),budget:CoordinatorBudget|null=raw===null?null:JSON.parse(raw) as CoordinatorBudget;
    const binding=budget?.bindings.find(b=>b.groupId===peer.groupId&&b.holderInstanceId===peer.holderInstanceId);if(!budget||!binding)throw Error('IDENTITY_UNRESOLVED');
-   // App authority is enabled only when the app credential adapter is installed.
-   if(binding.appInstanceId!==null)throw Error('APP_ALLOTMENT_POLICY');if(input.base.some(v=>v.amount>0))throw Error('AGENT_BASE_FORBIDDEN');
+   if(binding.appInstanceId!==null){
+    if(!peer.app||peer.app.appInstanceId!==binding.appInstanceId)throw Error('APP_ALLOTMENT_POLICY');
+    const policy=await db.querySql('SELECT state,offlineJson,onlineJson,deviceId,groupId,holderInstanceId FROM RegisteredInstallation WHERE id=?',[binding.appInstanceId]);
+    try{if(!policy.goToFirstRow()||policy.getString(0)!=='ACTIVE'||policy.getString(3)!==peer.deviceId||policy.getString(4)!==peer.groupId||policy.getString(5)!==peer.holderInstanceId||
+      canonical(JSON.parse(policy.getString(1)) as ResourceAmountV2[])!==canonical(input.base)||!vectorFitsV2(input.extra,JSON.parse(policy.getString(2)) as ResourceAmountV2[]))throw Error('APP_ALLOTMENT_POLICY');}finally{policy.close();}
+   }else{if(peer.app)throw Error('APP_ALLOTMENT_POLICY');if(input.base.some(v=>v.amount>0))throw Error('AGENT_BASE_FORBIDDEN');}
    const id=rowId(peer.groupId,peer.holderInstanceId),old=await read(db,'Allotment',id),previous:CoordinatorReservation|null=old===null?null:JSON.parse(old) as CoordinatorReservation;
    if(previous&&(previous.grant.deviceId!==peer.deviceId||previous.grant.appInstanceId!==binding.appInstanceId))throw Error('HOLDER_BINDING_CHANGED');
    if(previous&&input.leaseRequestId===previous.grant.leaseRequestId){const g=previous.grant;if(g.ledgerEpoch!==input.ledgerEpoch||g.coordinatorEpoch!==this.epoch||g.leaseMs!==input.leaseMs||canonical(g.base)!==canonical(input.base)||canonical(g.extra)!==canonical(input.extra))throw Error('LEASE_REQUEST_CONFLICT');result=g;return;}
    if(previous){const pending=await db.querySql('SELECT id FROM Attempt WHERE groupId=? AND holderInstanceId=? AND state=\'OFFERED\' LIMIT 1',[peer.groupId,peer.holderInstanceId]);try{if(pending.goToFirstRow())throw Error('DISPATCH_ADMISSION_PENDING');}finally{pending.close();}if(input.ledgerEpoch<previous.grant.ledgerEpoch)throw Error('LEDGER_EPOCH_REPLAY');}
-   const grant:AllotmentGrantV2={allotmentId:previous?.grant.allotmentId??'allotment:'+peer.holderInstanceId,groupId:peer.groupId,deviceId:peer.deviceId,holderInstanceId:peer.holderInstanceId,appInstanceId:null,ledgerEpoch:input.ledgerEpoch,coordinatorEpoch:this.epoch,version:(previous?.grant.version??0)+1,base:input.base,extra:input.extra,leaseRequestId:input.leaseRequestId,leaseMs:input.leaseMs,signature:'A'.repeat(64)};
+   const grant:AllotmentGrantV2={allotmentId:previous?.grant.allotmentId??'allotment:'+peer.holderInstanceId,groupId:peer.groupId,deviceId:peer.deviceId,holderInstanceId:peer.holderInstanceId,appInstanceId:binding.appInstanceId,ledgerEpoch:input.ledgerEpoch,coordinatorEpoch:this.epoch,version:(previous?.grant.version??0)+1,base:input.base,extra:input.extra,leaseRequestId:input.leaseRequestId,leaseMs:input.leaseMs,signature:'A'.repeat(64)};
    if(!validAllotmentGrantV2(grant))throw Error('GRANT_INVALID');
    const desired=vectorSumV2(grant.base,grant.extra),reserved=previous?maximum(previous.reserved,desired):desired;
    const others=(await reservations(db,peer.deviceId)).filter(r=>r.grant.holderInstanceId!==peer.holderInstanceId||r.grant.groupId!==peer.groupId);

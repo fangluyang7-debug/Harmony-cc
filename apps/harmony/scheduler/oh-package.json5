@@ -6,6 +6,7 @@
   "author": "SoleAI Team",
   "license": "Apache-2.0",
   "dependencies": {
+    "libharmony_coordinator_tls.so": "file:./src/main/cpp/types/libharmony_coordinator_tls",
     "libharmony_render.so": "file:./src/main/cpp/types/libharmony_render",
     "libharmony_visual.so": "file:./src/main/cpp/types/libharmony_visual",
     "libharmony_photo.so": "file:./src/main/cpp/types/libharmony_photo"

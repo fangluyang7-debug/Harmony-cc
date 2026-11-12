@@ -1,6 +1,8 @@
 import { http } from '@kit.NetworkKit';
 import { common } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
+import { hilog } from '@kit.PerformanceAnalysisKit';
+interface CloudNetworkFailure {code?:number;message?:string;}
 interface CloudAuthData { accessToken: string; }
 interface CloudAuthEnvelope { success: boolean; data?: CloudAuthData; }
 
@@ -33,6 +35,11 @@ export class CloudApiConfig {
       const body = JSON.parse(response.result) as CloudAuthEnvelope;
       if (!body.success || !body.data || !body.data.accessToken || origin !== CloudApiConfig.getBaseUrl()) { throw new Error('CLOUD_AUTH_FAILED'); }
       CloudApiConfig.setAccessToken(body.data.accessToken);
+    } catch (error) {
+      const failure=error as CloudNetworkFailure;
+      hilog.error(0x0000,'SoleAITrace','stage=guest code=%{public}s',String(failure.code??failure.message??'UNKNOWN'));
+      if(typeof failure.code==='number')throw new Error('CLOUD_GUEST_NETWORK_'+failure.code);
+      throw error as Error;
     } finally { client.destroy(); }
   }
   public static requestHeaders(): Record<string, string> {

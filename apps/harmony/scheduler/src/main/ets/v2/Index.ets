@@ -32,3 +32,9 @@ export { CoordinatorRoutes } from './coordinator/CoordinatorRoutes';
 export { CoordinatorAllotments } from './coordinator/CoordinatorAllotments';
 export { CoordinatorGrantCrypto } from './coordinator/CoordinatorGrantCrypto';
 export { CoordinatorDeviceSettings } from './coordinator/CoordinatorDeviceSettings';
+export { CoordinatorChannel } from './coordinator/CoordinatorChannel';
+
+export { CoordinatorApps } from './coordinator/CoordinatorApps';
+export { CoordinatorDirectory } from './coordinator/CoordinatorDirectory';
+export { CoordinatorActivity, AppActivity, AppTaskActivity, StoredAppActivity } from './coordinator/CoordinatorActivity';
+export { CoordinatorPlanning } from './coordinator/CoordinatorPlanning';

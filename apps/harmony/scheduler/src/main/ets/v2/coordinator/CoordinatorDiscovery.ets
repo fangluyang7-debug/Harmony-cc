@@ -1,5 +1,6 @@
 import { socket } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
+import { monotonic } from '../platform/NativeTransport';
 interface DiscoveryReply {version:number;service:string;address:string;}
 /** Same discovery wire format and UDP port as services/coordinator/src/discovery.ts. */
 export class CoordinatorDiscovery {
@@ -13,7 +14,7 @@ export class CoordinatorDiscovery {
   server.on('message',(message:socket.SocketMessageInfo)=>{
    if(message.message.byteLength>64)return;
    if(util.TextDecoder.create('utf-8').decodeToString(new Uint8Array(message.message))!=='HARMONY_DISCOVER_V1\n')return;
-   const now=Date.now(),remote=message.remoteInfo;if(now-(this.seen.get(remote.address)??0)<1000)return;
+   const now=monotonic(),remote=message.remoteInfo,last=this.seen.get(remote.address);if(last!==undefined&&now-last>=0&&now-last<1000)return;
    if(this.seen.size>1024)this.seen.clear();this.seen.set(remote.address,now);
    void server.send({data:JSON.stringify(reply),address:{address:remote.address,port:remote.port,family:1}}).catch(()=>{});
   });

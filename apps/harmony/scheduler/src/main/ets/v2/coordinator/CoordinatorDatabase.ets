@@ -1,6 +1,8 @@
 import { relationalStore } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { coordinatorMigrations } from './CoordinatorSchema';
+import { DeviceProfileV2, sampleUsableV2, validDeviceProfileV2 } from '../protocol/ResourcesV2';
+import { StoredAppActivity } from './CoordinatorActivity';
 
 export class CoordinatorTransaction {
  private native:relationalStore.Transaction;
@@ -8,10 +10,12 @@ export class CoordinatorTransaction {
  async executeSql(sql:string,args:relationalStore.ValueType[]=[]):Promise<void>{await this.native.execute(sql,args);}
  querySql(sql:string,args:relationalStore.ValueType[]=[]):Promise<relationalStore.ResultSet>{return this.native.querySql(sql,args);}
 }
-export interface CoordinatorOverviewRow {id:string;title:string;detail:string;state:string;}
+export interface CoordinatorOverviewRow {id:string;title:string;detail:string;state:string;profiles?:DeviceProfileV2[];activities?:StoredAppActivity[];}
 export interface CoordinatorOverview {spaces:CoordinatorOverviewRow[];devices:CoordinatorOverviewRow[];tasks:CoordinatorOverviewRow[];apps:CoordinatorOverviewRow[];}
 /** Native persistence for the coordinator, separate from the execution-host ledger. */
 export class CoordinatorDatabase {
+ /** The control transport supplies live session state; database rows are never presence. */
+ controlState:((group:string,holder:string,instance:string,epoch:number)=>string)|null=null;
  private tail:Promise<void>=Promise.resolve();
  private store:relationalStore.RdbStore;
  private constructor(store:relationalStore.RdbStore){this.store=store;}
@@ -45,8 +49,36 @@ export class CoordinatorDatabase {
   await this.transaction(async(db:CoordinatorTransaction):Promise<void>=>{
    const spaces=await db.querySql('SELECT id,name FROM TeamSpace ORDER BY createdAt DESC');
    try{while(spaces.goToNextRow())result.spaces.push({id:spaces.getString(0),title:spaces.getString(1),detail:spaces.getString(0),state:'已保存'});}finally{spaces.close();}
+   const now=Date.now(),profiles:Map<string,DeviceProfileV2[]>=new Map();
+   const holders=await db.querySql('SELECT id,groupId,metadataJson FROM DeviceInstance');
+   try{while(holders.goToNextRow()){
+    if(!holders.getString(0).startsWith('["profile",'))continue;
+    try{
+     const profile=JSON.parse(holders.getString(2)) as DeviceProfileV2,group=holders.getString(1);
+     if(!validDeviceProfileV2(profile)||profile.domain!=='REAL'||
+       this.controlState===null||this.controlState(group,profile.holderInstanceId,profile.deviceInstanceId,profile.ledgerEpoch)!=='ONLINE'||
+       !sampleUsableV2(profile.ownerActivity,now,'REAL')||profile.ownerActivity.sampledAt+profile.ownerActivity.ttlMs<=now||
+       !sampleUsableV2(profile.foreground,now,'REAL')||profile.foreground.sampledAt+profile.foreground.ttlMs<=now||profile.foreground.value!=='FOREGROUND')continue;
+     const key=JSON.stringify([group,profile.deviceId]),list=profiles.get(key)??[];list.push(profile);profiles.set(key,list);
+    }catch(e){continue;}
+   }}finally{holders.close();}
    const devices=await db.querySql('SELECT id,name,spaceId FROM SpaceDevice ORDER BY createdAt DESC');
-   try{while(devices.goToNextRow())result.devices.push({id:devices.getString(0),title:devices.getString(1),detail:'空间 '+devices.getString(2),state:'在线状态待接入'});}finally{devices.close();}
+   try{while(devices.goToNextRow()){
+    const active=profiles.get(JSON.stringify([devices.getString(2),devices.getString(0)]))??[];
+    if(active.length>0)result.devices.push({id:devices.getString(0),title:devices.getString(1),detail:String(active.length)+' 个在线宿主',state:'在线',profiles:active});
+   }}finally{devices.close();}
+   const activityRows=await db.querySql('SELECT id,metadataJson FROM Device WHERE id LIKE ?',['["app-activity",%']);
+   try{while(activityRows.goToNextRow()){
+    const value=JSON.parse(activityRows.getString(1)) as StoredAppActivity;
+    const device=result.devices.find(d=>d.id===value.deviceId&&d.profiles?.some(p=>p.holderInstanceId===value.holderInstanceId));
+    const fresh=now>=value.receivedAt&&now-value.receivedAt<=10000;
+    if(device&&fresh){if(!device.activities)device.activities=[];device.activities.push(value);}
+    for(const task of value.activity.tasks){
+     result.tasks.push({id:value.holderInstanceId+':'+task.taskId,title:task.operation+' · '+task.taskId,
+      detail:'应用观测 · '+task.phase+' · 设备 '+value.deviceId+' · '+Math.max(0,task.updatedAt-task.startedAt)+' ms'+(task.error?' · '+task.error:''),
+      state:task.state==='RUNNING'&&(!fresh||!device)?'状态待更新':task.state});
+    }
+   }}finally{activityRows.close();}
    const tasks=await db.querySql('SELECT id,workflowId,state,holderInstanceId FROM Attempt ORDER BY rowid DESC LIMIT 100');
    try{while(tasks.goToNextRow())result.tasks.push({id:tasks.getString(0),title:tasks.getString(1),detail:'宿主 '+tasks.getString(3),state:tasks.getString(2)});}finally{tasks.close();}
    const apps=await db.querySql('SELECT i.id,a.label,i.state,i.deviceId FROM RegisteredInstallation i JOIN RegisteredApp a ON a.id=i.appId ORDER BY i.rowid DESC');

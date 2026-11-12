@@ -1,6 +1,8 @@
 import { http } from '@kit.NetworkKit';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CancellationSignal } from '../api/SchedulerTypes';
 import { RouteProbePort, RemoteTaskProfile, RouteCandidate } from '../api/RemoteRouteProfile';
+interface ProbeFailure {code?:number;message?:string;}
 interface CapabilityCheck { available: boolean; }
 interface ProbeData { checkedAt?: string; receivedBytes?: number; available?: boolean; queueMs?: number; padding?: string;
   capabilities?: Record<string, CapabilityCheck> }
@@ -58,6 +60,11 @@ export class HttpRouteProbe implements RouteProbePort {
         header: this.headers, extraData: body, connectTimeout: Math.min(3000, remaining), readTimeout: remaining });
       if (response.responseCode !== 200 && response.responseCode !== 201) { throw new Error('ROUTE_PROBE_FAILED'); }
       return (JSON.parse(String(response.result)) as ProbeEnvelope).data;
+    } catch (error) {
+      const failure=error as ProbeFailure;
+      hilog.error(0x0000,'SoleAITrace','stage=route-probe path=%{public}s code=%{public}s',path,String(failure.code??failure.message??'UNKNOWN'));
+      if(typeof failure.code==='number')throw new Error('ROUTE_PROBE_NETWORK_'+failure.code);
+      throw error as Error;
     } finally { unsubscribe?.(); request.destroy(); }
   }
 }

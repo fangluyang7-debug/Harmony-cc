@@ -1,4 +1,4 @@
-export interface CoordinatorHttpRequest {method:string;path:string;authorization:string;body:Uint8Array;remoteAddress?:string;}
+export interface CoordinatorHttpRequest {method:string;path:string;authorization:string;body:Uint8Array;remoteAddress?:string;webSocketKey?:string;}
 /** HTTP/1.1 framing for JSON control requests. Artifact streaming has its own adapter. */
 export class CoordinatorHttpParser {
  private data:Uint8Array=new Uint8Array(0);
@@ -18,6 +18,14 @@ export class CoordinatorHttpParser {
   if(!Number.isSafeInteger(length)||length>1048576-end-4)throw Error('HTTP_REQUEST_TOO_LARGE');
   if(next.length<end+4+length)return null;
   if(next.length!==end+4+length)throw Error('HTTP_PIPELINING_UNSUPPORTED');
-  return {method:first[0],path:first[1],authorization:headers.get('authorization')??'',body:next.slice(end+4)};
+  const request:CoordinatorHttpRequest={method:first[0],path:first[1],authorization:headers.get('authorization')??'',body:next.slice(end+4)};
+  if(headers.has('upgrade')){
+   const key=headers.get('sec-websocket-key')??'';
+   if(first[0]!=='GET'||length!==0||headers.get('upgrade')?.toLowerCase()!=='websocket'||
+     !headers.get('connection')?.toLowerCase().split(',').map(v=>v.trim()).includes('upgrade')||headers.get('sec-websocket-version')!=='13'||
+     !/^[A-Za-z0-9+/]{22}==$/.test(key))throw Error('WS_HANDSHAKE_INVALID');
+   request.webSocketKey=key;
+  }
+  return request;
  }
 }

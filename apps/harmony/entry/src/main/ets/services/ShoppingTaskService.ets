@@ -10,6 +10,7 @@ import { ShoppingResult } from '../models/ShoppingResult';
 import { SearchPreference } from './SearchPreferences';
 import { CloudShoppingExecutor, CloudShoppingInput } from './CloudShoppingExecutor';
 import { shoppingBusiness } from './ShoppingBusinessCompute';
+import { shoppingActivity } from './ShoppingActivity';
 
 interface SessionMutationEnvelope { success: boolean; data?: SessionRevision; }
 interface SessionRevision { stateVersion?: number; requestRevision?: number; }
@@ -95,7 +96,9 @@ export class ShoppingTaskService {
       deviceProfile: state, context: context, template: this.template };
     this.lastSubmittedTaskId = input.taskId;
     shoppingBusiness.begin(input.taskId);
+    shoppingActivity.begin(input.taskId,operation);
     const handle=this.requireClient().submit<CloudShoppingInput, ShoppingResult>('product_search', input, context);
+    void handle.result.then(result=>shoppingActivity.finish(input.taskId,String(result.status),result.reasonCode??'')).catch((error:Error)=>shoppingActivity.finish(input.taskId,'FAILED',error.message));
     void handle.result.then(result=>{hilog.info(0x0000, 'SoleAITrace', 'task=%{public}s operation=%{public}s status=%{public}s reason=%{public}s nodes=%{public}s', input.taskId, operation, String(result.status), result.reasonCode ?? 'none', JSON.stringify(result.nodes.map(node => node.executionPlan.reasonCodes)));if(result.output===null)shoppingBusiness.failed(input.taskId,operation,String(result.status),result.reasonCode??'NO_SHOPPING_RESULT',result.nodes.flatMap(node=>node.executionPlan.reasonCodes));}).catch((error:Error)=>{shoppingBusiness.failed(input.taskId,operation,'FAILED',error.message);});
     return handle;
   }

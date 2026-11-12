@@ -1,5 +1,6 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { http, connection } from '@kit.NetworkKit';
+import { shoppingActivity } from './ShoppingActivity';
 import { ShoppingImageUpload } from './ShoppingImageUpload';
 import { shoppingBusiness } from './ShoppingBusinessCompute';
 import { ArtifactRef, ClockPort, WallClock, CancellationSignal, CloudClientTiming, DeviceState, ExecutionPlan, ExecutorResult, InferenceLocation,
@@ -98,6 +99,7 @@ export class CloudShoppingExecutor implements WorkloadExecutor<CloudShoppingInpu
     input.context = context;
     if (input.budgetMs === undefined || !Number.isFinite(input.budgetMs) || input.budgetMs <= 0) { throw new Error('DEADLINE_EXCEEDED'); }
     if (context.networkAllowed !== true) { throw new Error('NETWORK_NOT_ALLOWED'); }
+    shoppingActivity.phase(input.taskId,'AUTHORIZING');
     await CloudApiConfig.ensureGuest();
     if (input.photoUri !== undefined && input.assetId === undefined) {
       const uploaded = await ShoppingImageUpload.upload(input.photoUri, this.clock,
@@ -111,6 +113,7 @@ export class CloudShoppingExecutor implements WorkloadExecutor<CloudShoppingInpu
     context.remoteTask = { taskKind: input.photoUri === undefined ? 'text' : 'vision', latencyClass: 'interactive',
       input: { modality: input.photoUri === undefined ? 'text' : 'image', bytes: utf8Bytes(JSON.stringify(body)) + 8192,
         requiresUpload: true }, estimatedResultBytes: 512 * 1024, allowCloud: true };
+    shoppingActivity.phase(input.taskId,'PROBING');
     await this.watchNetwork();
     const endpoint = CloudApiConfig.getBaseUrl();
     const deadlineAt = Date.now() + Math.min(60000, this.remainingBudget(input));
@@ -130,6 +133,7 @@ export class CloudShoppingExecutor implements WorkloadExecutor<CloudShoppingInpu
   }
   public async execute(input: CloudShoppingInput, plan: ExecutionPlan, signal: CancellationSignal, checkpoint?: TaskCheckpoint, onProgress?: (event: ExecutionTelemetry) => void): Promise<ExecutorResult<ShoppingResult>> {
     if (!this.supports(plan)) { throw new Error('CLOUD_PLAN_REQUIRED'); }
+    shoppingActivity.phase(input.taskId,'CLOUD_REQUEST');
     const remote = plan as RemoteExecutionPlan;
     const selected = remote.routeCandidate;
     if (selected === undefined || routeStatus(selected) !== 'fresh' || this.routes.status(selected.networkKey) !== 'fresh' || input.preparedBody === undefined) {
@@ -176,6 +180,7 @@ export class CloudShoppingExecutor implements WorkloadExecutor<CloudShoppingInpu
       await this.request(baseUrl + '/api/v1/runtime/runs/' + envelope.data.runtimeRunId + '/client-telemetry',
         JSON.stringify({ taskId: input.taskId, timing: resultText.timing, events: events }), 3000, signal);
     } catch (_) { /* Result remains usable if the optional telemetry acknowledgement is unavailable. */ }
+    shoppingActivity.phase(input.taskId,'BUSINESS_COMPUTE');
     const output=await shoppingBusiness.complete(decodeShoppingResult(resultText.body,input.operation,input.taskId),input.photoUri,signal,
       this.clock.now()+Math.max(0,Math.min(30000,(input.budgetMs??0)-(this.clock.now()-(input.budgetStartedAt??this.clock.now()))-2000)));
     return { output,

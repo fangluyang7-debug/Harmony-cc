@@ -1,6 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { util } from '@kit.ArkTS';
 import { fileIo } from '@kit.CoreFileKit';
+import { shoppingActivity } from './ShoppingActivity';
 import { HarmonySdkPort, SchedulerSdk, SdkTask, NativeAgent, DeviceProfileV2, SchedulerAppSession, SchedulerAppOptions, SchedulerAppStatus, monotonic } from 'scheduler';
 export interface ShoppingCapacity {sdk:SchedulerSdk|null;originDevice:string;originTarget:string|null;roundTripMs:number;remoteAvailable:boolean;}
 interface Profiles {profiles:DeviceProfileV2[];}
@@ -41,7 +42,7 @@ class CooperativeSession {
   this.session.onStatus((s:SchedulerAppStatus)=>{AppStorage.set('cooperativeEnabled',s.state==='CONNECTED');AppStorage.set('cooperativeJoined',this.session.host()!==null&&s.state!=='PAUSED');AppStorage.set('cooperativeChanging',s.state==='CONNECTING');
    AppStorage.set('cooperativeStatus',s.state==='CONNECTED'?'已连接空间 · 按任务实际开销自动选择本地或协作':s.message);});}
  /** Foreground automatically restores the identity, or asks the device agent once on first use. */
- lifecycle(value:boolean):void{this.visible=value;this.session.lifecycle(value);}
+ lifecycle(value:boolean):void{this.visible=value;this.session.lifecycle(value);shoppingActivity.configure(async(body:string):Promise<void>=>{if(this.enabled()&&this.port)await this.port.request('/v2/apps/me/activity',body);});shoppingActivity.foreground(value);}
  async close():Promise<void>{this.visible=false;await this.session.close();}
  enabled():boolean{return this.session.status().state==='CONNECTED';}
  async capacity():Promise<ShoppingCapacity>{

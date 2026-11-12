@@ -3,7 +3,8 @@ import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { util } from '@kit.ArkTS';
 import { CoordinatorDatabase, CoordinatorTransaction } from './CoordinatorDatabase';
 import { hash, bytes } from '../platform/NativeTransport';
-export interface CoordinatorPeer {groupId:string;holderInstanceId:string;deviceId:string;principalId:string;credentialId:string;}
+import { AppIdentityV2 } from '../protocol/SchedulingProtocolV2';
+export interface CoordinatorPeer {groupId:string;holderInstanceId:string;deviceId:string;principalId:string;credentialId:string;app?:AppIdentityV2;}
 export interface CoordinatorCredential {credential:string;peer:CoordinatorPeer;}
 interface DeviceRegistration {installationId:string;}
 interface DeviceBinding {deviceId?:string;}
@@ -24,7 +25,8 @@ export class CoordinatorCredentials {
   });
   return {credential,peer};
  }
- async authenticateDevice(credential:string):Promise<CoordinatorPeer>{
+ authenticateDevice(credential:string):Promise<CoordinatorPeer>{return this.authenticate(credential,false);}
+ async authenticate(credential:string,allowApps:boolean=true):Promise<CoordinatorPeer>{
   if(!/^[A-Za-z0-9_-]{43}$/.test(credential))throw Error('CREDENTIAL_INVALID');
   let peer:CoordinatorPeer|null=null;
   await this.database.transaction(async(db:CoordinatorTransaction):Promise<void>=>{
@@ -33,8 +35,13 @@ export class CoordinatorCredentials {
    try{if(!rows.goToFirstRow()||rows.getLong(0)!==0)throw Error('CREDENTIAL_REVOKED');metadata=JSON.parse(rows.getString(1)) as CredentialMetadata;}finally{rows.close();}
    if(metadata===null||metadata.domain!==this.domain||metadata.expiresAt<=Date.now())throw Error('CREDENTIAL_EXPIRED');
    // App credentials must never be accepted as owner/device authority.
-   const installations=await db.querySql('SELECT id FROM RegisteredInstallation WHERE holderInstanceId=?',[metadata.peer.holderInstanceId]);
-   try{if(installations.goToFirstRow())throw Error('DEVICE_OWNER_CREDENTIAL_REQUIRED');}finally{installations.close();}
+   const installations=await db.querySql('SELECT i.id,i.state,i.groupId,i.principalId,i.deviceId,a.id,a.contractsJson FROM RegisteredInstallation i LEFT JOIN RegisteredApp a ON a.id=i.appId WHERE i.holderInstanceId=?',[metadata.peer.holderInstanceId]);
+   try{if(installations.goToFirstRow()){
+    if(!allowApps)throw Error('DEVICE_OWNER_CREDENTIAL_REQUIRED');
+    const app=metadata.peer.app;
+    if(!app||installations.getString(0)!==app.appInstanceId||installations.getString(1)!=='ACTIVE'||installations.getString(2)!==metadata.peer.groupId||installations.getString(3)!==metadata.peer.principalId||installations.getString(4)!==metadata.peer.deviceId||installations.getString(5)!==app.appId)throw Error('APP_CREDENTIAL_REVOKED');
+    metadata.peer.app={groupId:metadata.peer.groupId,principalId:metadata.peer.principalId,appId:app.appId,appInstanceId:app.appInstanceId,allowedContracts:JSON.parse(installations.getString(6)) as string[]};
+   }else if(metadata.peer.app)throw Error('APP_CREDENTIAL_REVOKED');}finally{installations.close();}
    const registration=await db.querySql('SELECT metadataJson FROM Device WHERE id=?',[JSON.stringify(['space-device-installation',metadata.peer.deviceId])]);
    let installationId='';try{if(registration.goToFirstRow())installationId=(JSON.parse(registration.getString(0)) as DeviceRegistration).installationId;}finally{registration.close();}
    if(installationId){const binding=await db.querySql('SELECT metadataJson FROM Device WHERE id=?',[JSON.stringify(['space-installation',installationId])]);
