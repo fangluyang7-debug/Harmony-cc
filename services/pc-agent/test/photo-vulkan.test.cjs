@@ -58,3 +58,15 @@ test('shared-core Vulkan reference inference matches unchanged CPU fixtures',{
  const restarted=await enhanceOn(input,1,'VULKAN',AbortSignal.timeout(120000));
  assert.ok(await pack.evaluate(sample,restarted.output)>=pack.manifest.qualityThreshold,'GPU worker restarts after actual process settlement');
 });
+
+ test('four concurrent Vulkan workers preserve reference quality and reuse their loaded models',{
+ skip:!process.env.HARMONY_PHOTO_VULKAN_TEST,timeout:180000
+ },async()=>{
+ const c=JSON.parse(fs.readFileSync(process.env.HARMONY_PHOTO_VULKAN_TEST));
+ process.env.HARMONY_PHOTO_MODEL=c.model;process.env.HARMONY_PHOTO_RUNNER=c.runner;process.env.HARMONY_PHOTO_VULKAN=c.vulkan;process.env.HARMONY_PHOTO_VULKAN_RUNTIME=c.vulkanRuntime;process.env.HARMONY_PHOTO_GPU_ID='0';
+ const sample=pack.cases.find(c=>c.id==='fused-prepare-threads-4'),input=await enhancementInput(sample.input,JSON.parse(sample.parameters),sample.config);
+ const timings=[];const outputs=await Promise.all(Array.from({length:4},()=>enhanceOn(input,1,'VULKAN',AbortSignal.timeout(120000),undefined,t=>timings.push(t))));
+ for(const out of outputs)assert.ok(await pack.evaluate(sample,out.output)>=pack.manifest.qualityThreshold);
+ assert.equal(timings.length,4);let warm;await enhanceOn(input,1,'VULKAN',AbortSignal.timeout(120000),undefined,t=>{warm=t;});assert.equal(warm.modelLoaded,false);
+ console.log(JSON.stringify({scope:'local-Vulkan-reference-not-NVIDIA-speedup',concurrent:4,timings,warm}));
+ });

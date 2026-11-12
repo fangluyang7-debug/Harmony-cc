@@ -159,14 +159,14 @@ test('automatic capacity follows the hardware a paired device reports',async()=>
   const budget=JSON.parse((await r.db.device.findUnique({where:{id:JSON.stringify(['budget',phone.deviceId])}})).metadataJson);
   assert.deepEqual(budget.capacity,[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:7.5*GiB}],'The physical budget follows the derived ceiling');
   const withCpu=await settingsCall(phone.invitation,phone.credential,{measured:{cpuThreads:8,totalMemoryBytes:8*GiB}});
-  assert.deepEqual(withCpu.body.settings,{...expected,maxCpuThreads:6},'Dedicated devices contribute three quarters of logical CPUs');
-  assert.deepEqual((await settingsCall(phone.invitation,phone.credential,{measured:{cpuThreads:8,totalMemoryBytes:8*GiB}})).body.settings,{...expected,maxCpuThreads:6},'Re-reporting the same hardware is idempotent');
+  assert.deepEqual(withCpu.body.settings,{...expected,maxCpuThreads:8},'Dedicated devices contribute all logical CPUs');
+  assert.deepEqual((await settingsCall(phone.invitation,phone.credential,{measured:{cpuThreads:8,totalMemoryBytes:8*GiB}})).body.settings,{...expected,maxCpuThreads:8},'Re-reporting the same hardware is idempotent');
   const small=await settingsCall(phone.invitation,phone.credential,{measured:{cpuThreads:2,totalMemoryBytes:2*GiB}});
-  assert.deepEqual(small.body.settings,{...provisional,maxCpuThreads:1,maxMemoryBytes:1.75*GiB,reserveMemoryBytes:256*MiB},'2 GiB RAM: bounded headroom leaves room for real work');
+  assert.deepEqual(small.body.settings,{...provisional,maxCpuThreads:2,maxMemoryBytes:1.75*GiB,reserveMemoryBytes:256*MiB},'2 GiB RAM: bounded headroom leaves room for real work');
   const tiny=await settingsCall(phone.invitation,phone.credential,{measured:{cpuThreads:1,totalMemoryBytes:512*MiB}});
   assert.deepEqual(tiny.body.settings,{...provisional,maxCpuThreads:1,maxMemoryBytes:256*MiB,reserveMemoryBytes:256*MiB},'Small hardware does not inherit a 1 GiB reserve');
   const desktop=await settingsCall(phone.invitation,phone.credential,{measured:{cpuThreads:22,totalMemoryBytes:32*GiB}});
-  assert.deepEqual(desktop.body.settings,{...provisional,maxCpuThreads:16,maxMemoryBytes:31*GiB,reserveMemoryBytes:GiB},'Desktop headroom is capped, not a quarter of physical RAM');
+  assert.deepEqual(desktop.body.settings,{...provisional,maxCpuThreads:22,maxMemoryBytes:31*GiB,reserveMemoryBytes:GiB},'Desktop headroom is capped, not a quarter of physical RAM');
   const fixed=await pairDevice('固定额度',{ownerMode:'dedicated',maxCpuThreads:2,maxMemoryBytes:GiB,reserveMemoryBytes:GiB});
   const ignored=await settingsCall(fixed.invitation,fixed.credential,{measured:{cpuThreads:16,totalMemoryBytes:32*GiB}});
   assert.deepEqual(ignored.body.settings,fixed.contribution,'A fixed-capacity device keeps the owner-confirmed ceiling');

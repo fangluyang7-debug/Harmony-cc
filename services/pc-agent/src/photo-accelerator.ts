@@ -1,3 +1,5 @@
+import type {PhotoEngineTiming} from './executors/photo-workers';
+import {gpuPipelineSlots} from '@harmony/scheduler-core';
 import fs from 'node:fs';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -57,5 +59,5 @@ export async function openPhotoAccelerator():Promise<ImageEncoder>{
  const score=await pack.evaluate(pack.cases[0],run.output);
  if(score<pack.manifest.qualityThreshold)throw Object.assign(Error('PHOTO_GPU_QUALITY_FAILED'),{diagnostic:{score,required:pack.manifest.qualityThreshold,device:device.name,index:selected.index,runtime:process.env.HARMONY_PHOTO_VULKAN_RUNTIME??'legacy-realesrgan-cli'}});
  process.env.HARMONY_PHOTO_GPU_ID=String(selected.index);
- return {pack,backend:'VULKAN',gpu:{totalBytes:device.totalBytes,limit:device.totalBytes,async freeBytes(){const r=await promisify(execFile)('nvidia-smi',['-i',device.uuid,'--query-gpu=memory.free','--format=csv,noheader,nounits'],{windowsHide:true,timeout:3000});const n=Number(r.stdout.trim());return Number.isFinite(n)&&n>=0?n*1048576:0;}},async execute(offer,input,signal){if(offer.target.backend!=='VULKAN'||offer.target.executorId!==photoVulkanExecutorId)throw Error('PHOTO_GPU_SCOPE');input=await enhancementInput(input,JSON.parse(offer.task.parameters),offer.allowedConfigs[0]);const r=await enhanceOn(input,1,'VULKAN',signal);return {bytes:r.output,schemaId:r.schemaId,model:pack.manifest.model!};}};
+ return {pack,backend:'VULKAN',gpu:{totalBytes:device.totalBytes,limit:device.totalBytes,pipelineSlots:gpuPipelineSlots(device.totalBytes),name:device.name,async freeBytes(){const r=await promisify(execFile)('nvidia-smi',['-i',device.uuid,'--query-gpu=memory.free','--format=csv,noheader,nounits'],{windowsHide:true,timeout:3000});const n=Number(r.stdout.trim());return Number.isFinite(n)&&n>=0?n*1048576:0;}},async execute(offer,input,signal){if(offer.target.backend!=='VULKAN'||offer.target.executorId!==photoVulkanExecutorId)throw Error('PHOTO_GPU_SCOPE');input=await enhancementInput(input,JSON.parse(offer.task.parameters),offer.allowedConfigs[0]);let timing:PhotoEngineTiming|undefined;const r=await enhanceOn(input,1,'VULKAN',signal,undefined,value=>{timing=value;console.info('PHOTO_GPU_TIMING '+JSON.stringify({attemptId:offer.task.attemptId,device:device.name,index:selected.index,...value}));});return {bytes:r.output,schemaId:r.schemaId,model:pack.manifest.model!,timing};}};
 }

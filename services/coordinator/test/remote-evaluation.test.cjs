@@ -96,3 +96,35 @@ test('unclaimed cancellation and stale queued installation have non-execution pr
   assert.equal(await restart.claim(s.pair.peer),null);assert.equal((await running2).settled,true);
  }finally{await s.r.close();}
 });
+
+test('background transition retires only unclaimed calibration promptly; stale telemetry and claimed engines remain unresolved',async()=>{
+ const s=await setup(),controllers=[];const timings=[];
+ const publish=async(value,fresh=true)=>{
+  s.profile.sequence++;
+  s.profile.foreground={value,source:'SIMULATED',sampledAt:fresh?Date.now():100,ttlMs:15000,unit:'state'};
+  await new DeviceDirectory(s.r.db,'SIMULATED').ingest(s.pair.peer,s.profile);
+ };
+ const begin=async()=>{
+  const permit=s.permit(),abort=new AbortController();controllers.push(abort);
+  const running=s.r.remoteEvaluation.run(permit,s.pack.cases[0],s.executor,abort.signal).catch(e=>e);
+  await until(async()=>!!await s.r.db.evaluationDispatch.findUnique({where:{id:permit.id}}));
+  return {permit,abort,running};
+ };
+ try{
+  await publish('FOREGROUND');const queued=await begin();
+  await publish('BACKGROUND',false);await new Promise(r=>setTimeout(r,350));
+  assert.equal((await s.r.db.evaluationDispatch.findUniqueOrThrow({where:{id:queued.permit.id}})).state,'QUEUED','stale background observation cannot cancel work');
+  const began=Date.now();await publish('BACKGROUND');const result=await queued.running;timings.push(Date.now()-began);
+  assert.equal(result.notRun,true);assert.equal(result.durationMs,0);assert.equal(result.output.length,0);
+  assert.ok(timings[0]<2500,'must not wait the 5 second case deadline');
+  assert.equal(await s.r.remoteEvaluation.claim(s.pair.peer),null,'retired permit cannot be delivered later');
+  await publish('FOREGROUND');const claimed=await begin();
+  assert.equal((await s.r.remoteEvaluation.claim(s.pair.peer)).permit.id,claimed.permit.id);
+  await publish('BACKGROUND');await new Promise(r=>setTimeout(r,350));
+  assert.equal((await s.r.db.evaluationDispatch.findUniqueOrThrow({where:{id:claimed.permit.id}})).state,'CLAIMED');
+  assert.equal(await s.r.remoteEvaluation.reconcile(claimed.permit),null,'claimed work still requires real settlement');
+  await s.r.remoteEvaluation.report(s.pair.peer,claimed.permit.id,{settled:true,interrupted:true,permitId:claimed.permit.id,domain:'SIMULATED',durationMs:0,output:''});
+  assert.equal((await claimed.running).interrupted,true);
+  console.log('unclaimed foreground-handoff retirement ms:',timings[0]);
+ }finally{controllers.forEach(c=>c.abort());await s.r.close();}
+});

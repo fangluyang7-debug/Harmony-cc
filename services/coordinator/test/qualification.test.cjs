@@ -147,15 +147,33 @@ test('missing pack, malformed output, budget exhaustion and unknown settlement n
 });
 
 const {QualificationLoop}=require('../dist/qualification-loop');
-test('calibration loop bounds work, prevents overlap, refreshes failed targets and rotates fairly',async()=>{
- const calls=[],refreshes=[],errors=[];let release;
- const gate=new Promise(r=>release=r);
- const targets=['a','b','c'].map(targetId=>({peer:{groupId:'g',holderInstanceId:'h'},targetId}));
- const loop=new QualificationLoop({advance:async(_,id)=>{calls.push(id);if(id==='a')await gate;if(id==='b')throw Error('FAILED');}},
-  {targets:async()=>targets,refresh:async g=>refreshes.push(g),onError:e=>errors.push(e.message)},60000,2);
- loop.start();const first=loop.tick();assert.equal(loop.tick(),first);release();await first;
- assert.deepEqual(calls,['a','b']);assert.deepEqual(refreshes,['g','g']);assert.deepEqual(errors,['FAILED']);
- await loop.tick();assert.deepEqual(calls,['a','b','c','a']);await loop.close();await loop.tick();assert.equal(calls.length,4);
+test('inactive owner targets do not insert a timer interval before foreground app calibration',async()=>{
+ const targets=Array.from({length:16},(_,i)=>({peer:{groupId:'g',holderInstanceId:i<11?'owner':'photo',deviceId:'phone'},targetId:String(i)}));
+ const calls=[];let release;
+ const blocked=new Promise(r=>release=r);
+ const loop=new QualificationLoop({advance:async(_,id)=>{calls.push(id);if(id==='11'){await blocked;return 'ACTIVE';}return 'WAITING_WINDOW';}},
+  {targets:async()=>targets,refresh:async()=>{},onError:e=>{throw e;}},60000,8,4);
+ try{loop.start();await loop.tick();for(let i=0;i<50&&!calls.includes('11');i++)await new Promise(r=>setTimeout(r,5));
+  assert.ok(calls.includes('11'),'foreground app reached without eleven timer intervals');
+  assert.equal(calls.length,12,'device has only one evaluation in flight');
+ }finally{release();await loop.close();}
+});
+
+test('calibration lanes isolate slow devices, serialize a device and stop cleanly',async()=>{
+ const calls=[],errors=[];let release;const blocked=new Promise(r=>release=r);
+ const targets=[{peer:{groupId:'g',holderInstanceId:'slow',deviceId:'pc'},targetId:'slow'},
+  ...['a','b'].map(targetId=>({peer:{groupId:'g',holderInstanceId:targetId,deviceId:'phone'},targetId}))];
+ let phoneActive=0,peak=0;const counts={};
+ const loop=new QualificationLoop({advance:async(_,id)=>{calls.push(id);if(id==='slow'){await blocked;throw Error('FAILED');}
+  peak=Math.max(peak,++phoneActive);await new Promise(r=>setTimeout(r,1));phoneActive--;counts[id]=(counts[id]??0)+1;return counts[id]<2?'CALIBRATING':'ACTIVE';}},
+  {targets:async()=>targets,refresh:async()=>{},onError:e=>errors.push(e.message)},60000,8,4);
+ try{
+  loop.start();const scan=loop.tick();assert.equal(loop.tick(),scan);await scan;
+  for(let i=0;i<100&&!(counts.a>=2&&counts.b>=2);i++)await new Promise(r=>setTimeout(r,5));
+  assert.ok(counts.a>=2&&counts.b>=2,'phone advances while PC is blocked');assert.equal(peak,1,'two Apps on same phone do not calibrate together');
+  assert.equal(calls.filter(x=>x==='slow').length,1);release();
+ }finally{release();await loop.close();}
+ const count=calls.length;await loop.tick();assert.equal(calls.length,count);assert.deepEqual(errors,['FAILED']);
 });
 
 test('qualification read is scoped to holder and invalidated when executor is removed',async()=>{
@@ -214,6 +232,19 @@ test('qualification accepts a matching FAILED code and defers interrupted or uns
   }
   next={errorCode:'UNEXPECTED_CODE'};assert.equal(await service.advance(peer,'target1'),'SUSPENDED');now+=policy.cooldownMs+1;
   next={errorCode:'VECTOR_INVALID'};await service.advance(peer,'target1');assert.equal(await service.advance(peer,'target1'),'ACTIVE');
+ }finally{await r.close();}
+});
+
+test('repeated engine failures back off without fabricated quality and recover on the same trusted suite',async()=>{
+ const r=await runtime();try{
+  let now=100,runs=0,broken=true;const dir=new DeviceDirectory(r.db,'SIMULATED',()=>now),p=profile();await dir.ingest(peer,p);
+  const runner={run:async permit=>{runs++;return {settled:true,permitId:permit.id,domain:'SIMULATED',durationMs:broken?0:1,output:broken?Buffer.alloc(0):Buffer.from('{"rows":[[0.6,0.8]]}'),...(broken?{errorCode:'CPU_FAILED'}:{})};},reconcile:async()=>null};
+  const service=new QualificationService(r.db,dir,[packFor(p)],runner,policy,async()=>null,()=>now);
+  await service.advance(peer,'target1');now+=policy.cooldownMs;await service.advance(peer,'target1');assert.equal(runs,2);
+  const saved=JSON.parse((await r.db.calibrationJob.findUniqueOrThrow({where:{id:key}})).metadataJson);assert.equal(saved.retryAt-now,policy.cooldownMs*2);assert.equal(saved.quality,null);assert.equal(saved.next,0);
+  now+=policy.cooldownMs;await service.advance(peer,'target1');assert.equal(runs,2);
+  now=saved.retryAt;broken=false;assert.equal(await service.advance(peer,'target1'),'CANARY');assert.equal(runs,3);
+  assert.equal(JSON.parse((await r.db.calibrationJob.findUniqueOrThrow({where:{id:key}})).metadataJson).transientFailures,0);
  }finally{await r.close();}
 });
 

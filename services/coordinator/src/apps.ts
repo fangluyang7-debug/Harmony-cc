@@ -82,7 +82,7 @@ export class AppRegistry {
   });
   return this.context(peer);
  }
- async reserveJob(tx:Prisma.TransactionClient,peer:Peer,id:string,resources:ResourceAmountV2[],deadlineAt:number){
+ async reserveJob(tx:Prisma.TransactionClient,peer:Peer,id:string,resources:ResourceAmountV2[],deadlineAt:number,pending=false){
   const context=await this.context(peer,tx),existing=await tx.appJobReservation.findUnique({where:{id}});
   if(existing&&(existing.appInstanceId!==context.identity.appInstanceId||existing.appId!==context.identity.appId))throw Error('JOB_SCOPE');
   // Keep admission atomic, but do not issue two SQL reads for every historical
@@ -94,9 +94,15 @@ export class AppRegistry {
       (a.recordJson IS NULL OR json_extract(a.recordJson,'$.resourcesSettled') IS NOT 1)
     ELSE j.id IS NOT NULL AND j.state IN ('WAITING_INPUT','DISPATCHING') AND r.deadlineAt>${this.now()} END`;
   const active=rows.map(row=>JSON.parse(row.resourcesJson) as ResourceAmountV2[]);
-  if(active.length>=context.quota.maxConcurrent||!vectorFitsV2(vectorSumV2(...active,resources),context.quota.resources))throw Error('APP_QUOTA_EXCEEDED');
-  if(existing)await tx.appJobReservation.update({where:{id},data:{resourcesJson:JSON.stringify(resources),deadlineAt}});
-  else await tx.appJobReservation.create({data:{id,groupId:peer.groupId,principalId:peer.principalId,appId:context.identity.appId,appInstanceId:context.identity.appInstanceId,resourcesJson:JSON.stringify(resources),deadlineAt}});
+  // An input-waiting draft occupies a bounded submission slot, not hardware.
+  // Otherwise multiple tentative GPU placements consume the App's entire GPU
+  // allowance before any offer exists, preventing ready work from progressing.
+  // persistOffer upgrades this same row atomically with real resource admission.
+  const reserved=pending?[]:resources;
+  if(active.length>=context.quota.maxConcurrent||!vectorFitsV2(resources,context.quota.resources)||!vectorFitsV2(vectorSumV2(...active,reserved),context.quota.resources))throw Error('APP_QUOTA_EXCEEDED');
+  if(pending&&existing)throw Error('JOB_RESERVATION_ALREADY_EXISTS');
+  if(existing)await tx.appJobReservation.update({where:{id},data:{resourcesJson:JSON.stringify(reserved),deadlineAt}});
+  else await tx.appJobReservation.create({data:{id,groupId:peer.groupId,principalId:peer.principalId,appId:context.identity.appId,appInstanceId:context.identity.appInstanceId,resourcesJson:JSON.stringify(reserved),deadlineAt}});
  }
  async revoke(owner:Peer,id:string){
   if(owner.app)throw Error('DEVICE_OWNER_CREDENTIAL_REQUIRED');const i=await this.db.registeredInstallation.findUnique({where:{id}});

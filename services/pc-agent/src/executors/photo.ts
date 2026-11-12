@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import {runPhotoWorker} from './photo-workers';
+import {runPhotoWorker,PhotoEngineTiming} from './photo-workers';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -35,7 +35,7 @@ async function validateModel(model:string){
  if(!check){check=(async()=>{const manifest=JSON.parse(await fs.readFile(path.join(model,names[0]),'utf8'));for(const name of names.slice(1))if(hash(await fs.readFile(path.join(model,name)))!==manifest.files[name])throw Error('PHOTO_MODEL_HASH');})();validations.clear();validations.set(key,check);check.catch(()=>validations.delete(key));}
  await check;return key;
 }
-export async function infer(input:Buffer,threads:number,backend='CPU',signal?:AbortSignal,onDiagnostic?:(text:string)=>void,crop?:sharp.Region):Promise<Buffer>{
+export async function infer(input:Buffer,threads:number,backend='CPU',signal?:AbortSignal,onDiagnostic?:(text:string)=>void,crop?:sharp.Region,onTiming?:(timing:PhotoEngineTiming)=>void):Promise<Buffer>{
  const model=process.env.HARMONY_PHOTO_MODEL,runner=process.env.HARMONY_PHOTO_RUNNER;
  if(!model||!runner)throw Error('PHOTO_MODEL_NOT_INSTALLED');
  const modelVersion=await validateModel(model);
@@ -46,7 +46,7 @@ export async function infer(input:Buffer,threads:number,backend='CPU',signal?:Ab
   const header=Buffer.alloc(8);header.writeUInt32LE(info.width,0);header.writeUInt32LE(info.height,4);await fs.writeFile(source,legacyVulkan?input:Buffer.concat([header,data]));
   if(backend==='CPU'||backend==='VULKAN'&&!legacyVulkan){
    const executable=backend==='CPU'?runner:process.env.HARMONY_PHOTO_VULKAN;if(!executable)throw Error('PHOTO_GPU_UNAVAILABLE');
-   await runPhotoWorker(executable,[path.join(model,'realesrgan-x4plus.param'),path.join(model,'realesrgan-x4plus.bin'),source,destination,String(threads),backend],signal,modelVersion,onDiagnostic);
+   const timing=await runPhotoWorker(executable,[path.join(model,'realesrgan-x4plus.param'),path.join(model,'realesrgan-x4plus.bin'),source,destination,String(threads),backend],signal,modelVersion,onDiagnostic);if(timing)onTiming?.(timing);
   }
   else await new Promise<void>((resolve,reject)=>{
    if(signal?.aborted){reject(Error('CANCELLED_SETTLED'));return;}
@@ -65,9 +65,9 @@ export async function infer(input:Buffer,threads:number,backend='CPU',signal?:Ab
   return await (crop?pixels.extract(crop):pixels).png().toBuffer();
  }finally{await fs.rm(dir,{recursive:true,force:true});}
 }
-export async function enhanceOn(bytes:Buffer,threads:number,backend:string,signal?:AbortSignal,onDiagnostic?:(text:string)=>void){
+export async function enhanceOn(bytes:Buffer,threads:number,backend:string,signal?:AbortSignal,onDiagnostic?:(text:string)=>void,onTiming?:(timing:PhotoEngineTiming)=>void){
  const tile=parse(bytes);if(tile.stage!=='prepared')throw Error('PHOTO_INVALID');const b=image(tile);
- const data=await infer(b,threads,backend,signal,onDiagnostic,tile.crop);
+ const data=await infer(b,threads,backend,signal,onDiagnostic,tile.crop,onTiming);
  return {schemaId:'photo.tile',output:object({...tile,stage:'enhanced',model:'realesrgan-x4plus',scale,backend,hash:hash(data),image:data.toString('base64')})};
 }
 export async function enhancementInput(bytes:Buffer,p:any,config:Parameters<CpuExecutor>[2]):Promise<Buffer>{

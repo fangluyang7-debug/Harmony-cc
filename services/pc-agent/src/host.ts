@@ -167,7 +167,7 @@ export class CpuHost {
           const admitted=await context();
           return admitted;
         }},
-      allotments:{policy:()=>({base:this.appPolicy?.offlineBase??[],extra:this.appPolicy?.onlineExtra??[{resourcePoolId:'cpu',amount:config.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:config.contribution.maxMemoryBytes},...(config.imageEncoder?.gpu?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:Math.min(config.imageEncoder.gpu.limit,config.contribution.maxVramBytes??Infinity)}]:[])],leaseMs:60000}),renewEveryMs:config.controlIntervalMs??20000},
+      allotments:{policy:()=>({base:this.appPolicy?.offlineBase??[],extra:this.appPolicy?.onlineExtra??[{resourcePoolId:'cpu',amount:config.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:config.contribution.maxMemoryBytes},...(config.imageEncoder?.gpu?[{resourcePoolId:'gpu',amount:config.imageEncoder.gpu.pipelineSlots??1},{resourcePoolId:'vram',amount:Math.min(config.imageEncoder.gpu.limit,config.contribution.maxVramBytes??Infinity)}]:[])],leaseMs:60000}),renewEveryMs:config.controlIntervalMs??20000},
       cancellationRequested:async offer=>(await request('/v2/executions/'+offer.task.attemptId+'/control',{}) as {cancel:boolean}).cancel===true,
       calibration:{executor:evaluator},onYield:()=>{},onExecutionSettled:()=>{void (this.pending??Promise.resolve()).then(()=>this.tick(false)).catch(onError);},onError});
   }
@@ -206,7 +206,7 @@ export class CpuHost {
     const resources=pack.manifest.resourceLimit.filter(r=>gpu||!['gpu','vram'].includes(r.resourcePoolId)).map(r=>({...r,amount:capability==='photo.enhance.v1'&&r.resourcePoolId==='cpu'?threads:r.amount}));
     const executorId=pack===this.config.imageEncoder?.pack?(gpu?(this.config.imageEncoder?.backend==='VULKAN'?photoVulkanExecutorId:cudaExecutorId):imageExecutorId):pack.manifest.contract.serviceId?pack.manifest.executorIds[0]:(cpuRegistry.executorId(capability)??'node.cpu.v1');
     return {startup:pack.manifest.contract.serviceId||capability.startsWith('photo.')?"UNKNOWN":"COLD",target:{targetId:(gpu?'cuda-':'cpu-')+createHash('sha256').update(this.config.identity.holderInstanceId+':'+capability).digest('hex').slice(0,32),deviceId:this.config.identity.deviceId,
-      executorId,executorVersion:gpu&&this.config.imageEncoder?.backend==='VULKAN'?'2':'1',backend:gpu?(this.config.imageEncoder?.backend??'CUDA'):pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
+      executorId,executorVersion:gpu&&this.config.imageEncoder?.backend==='VULKAN'?'3':'1',backend:gpu?(this.config.imageEncoder?.backend??'CUDA'):pack.manifest.contract.serviceId?'SERVICE':'CPU',resourcePoolIds:resources.map(r=>r.resourcePoolId),stableExecutionId:executorId},contract:pack.manifest.contract,model:pack.manifest.model,
       resources:structuredClone(resources),configurations:[{...configuration}],compute:prior(cost?.value??null,cost?cost.at+this.clockOffset:now),queue:prior(null),cold:prior(cost?.overhead??0,cost?cost.at+this.clockOffset:now),publish:prior(0),uncertainty:prior(null)};
   }
   private async sample(syncSettings=true){
@@ -252,7 +252,11 @@ export class CpuHost {
       this.owner=owner;this.limits=[{resourcePoolId:'cpu',amount:Math.min(system.cpuThreads,p.maxCpuThreads)},
         {resourcePoolId:'ram',amount:Math.min(p.maxMemoryBytes,system.totalMemoryBytes,ownRam+Math.max(0,system.freeMemoryBytes-p.reserveMemoryBytes))}];
       const gpu=this.config.imageEncoder?.gpu;
-      if(gpu){const free=await gpu.freeBytes();this.limits.push({resourcePoolId:'gpu',amount:free>0?1:0},{resourcePoolId:'vram',amount:Math.min(gpu.limit,p.maxVramBytes??Infinity,free)});}
+      if(gpu){const free=await gpu.freeBytes(),ownVram=before.find(r=>r.resourcePoolId==='vram')?.amount??0;
+        // admissionLimit is TOTAL admissible occupancy, not additional free memory.
+        // The ledger subtracts current reservations once; do not subtract them twice.
+        this.limits.push({resourcePoolId:'gpu',amount:free>0?(gpu.pipelineSlots??1):0},
+          {resourcePoolId:'vram',amount:Math.min(gpu.totalBytes,gpu.limit,p.maxVramBytes??Infinity,Math.max(0,free)+ownVram)});}
       if(owner!=='IDLE')this.limits=this.limits.map(r=>({...r,amount:0}));
       await this.agent.updateResources(this.limits,owner);
       const state=this.ledger.snapshot(),occupied=occupiedV2(state),now=Date.now()+this.clockOffset;
@@ -264,7 +268,7 @@ export class CpuHost {
       const executors=this.packs.filter(pack=>!this.appPolicy||this.appPolicy.identity.allowedContracts.includes(pack.manifest.contract.contractId)).map(pack=>this.executor(pack.manifest.contract.capability,now));
       const profile:Omit<DeviceProfileV2,'sequence'>={deviceId:state.deviceId,deviceInstanceId:this.instance,holderInstanceId:state.holderInstanceId,ledgerEpoch:state.ledgerEpoch,domain:this.config.connection.domain,
         ownerActivity:owner==='UNKNOWN'?unknown('state'):status(owner,p.ownerMode==='windows-idle'?source:'PRIOR'),foreground:status('FOREGROUND'),powerSave:status('OFF'),charging:unknown('state'),battery:unknown('percent'),temperature:unknown('level'),
-        pools:[{id:'cpu',kind:'CPU_SLOTS',unit:'slots',total:system.cpuThreads,limit:p.maxCpuThreads},{id:'ram',kind:'RAM_BYTES',unit:'bytes',total:system.totalMemoryBytes,limit:p.maxMemoryBytes},...(gpu?[{id:'gpu',kind:'GPU_SLOTS',unit:'slots',total:1,limit:1},{id:'vram',kind:'VRAM_BYTES',unit:'bytes',total:gpu.totalBytes,limit:Math.min(gpu.limit,p.maxVramBytes??Infinity)}]:[])].map(pool=>({resourcePoolId:pool.id,kind:pool.kind,exclusive:pool.id==='gpu',total:numeric(pool.total,pool.unit),ownerReserved:Math.max(0,pool.total-pool.limit),contributionLimit:pool.limit,
+        pools:[{id:'cpu',kind:'CPU_SLOTS',unit:'slots',total:system.cpuThreads,limit:p.maxCpuThreads},{id:'ram',kind:'RAM_BYTES',unit:'bytes',total:system.totalMemoryBytes,limit:p.maxMemoryBytes},...(gpu?[{id:'gpu',kind:'GPU_SLOTS',unit:'slots',total:gpu.pipelineSlots??1,limit:gpu.pipelineSlots??1},{id:'vram',kind:'VRAM_BYTES',unit:'bytes',total:gpu.totalBytes,limit:Math.min(gpu.limit,p.maxVramBytes??Infinity)}]:[])].map(pool=>({resourcePoolId:pool.id,kind:pool.kind,exclusive:pool.id==='gpu'&&(gpu?.pipelineSlots??1)===1,total:numeric(pool.total,pool.unit),ownerReserved:Math.max(0,pool.total-pool.limit),contributionLimit:pool.limit,
           admissionLimit:numeric(this.limits.find(r=>r.resourcePoolId===pool.id)!.amount,pool.unit),occupied:numeric(occupied.find(r=>r.resourcePoolId===pool.id)?.amount??0,pool.unit),draining:(occupied.find(r=>r.resourcePoolId===pool.id)?.amount??0)>this.limits.find(r=>r.resourcePoolId===pool.id)!.amount,drainMs:unknown('ms')})),
         executors,links,credits:this.agent.scheduler.capacityCredits(executors.map(e=>e.resources),occupied)};
       const facts=this.ledger.inFlight(state,now,profile.domain);if(facts)profile.inFlight=facts;

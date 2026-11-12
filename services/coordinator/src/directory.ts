@@ -1,4 +1,5 @@
 import {computeHistories} from './performance-feedback';
+import {settledProfile} from './dispatch-capacity';
 import { createHash } from 'node:crypto';
 import { Prisma, PrismaClient } from '../generated/client';
 import { CostEstimatePolicy,availability, canonical, DeviceProfileV2, DispatchOfferV2, ExecutorV2, validDeviceProfileV2, sampleUsableV2, PlanningSnapshot, PlacementCandidate, DeviceResources, CapabilityAdmissionV2, validCapabilityAdmissionV2 } from '@harmony/scheduler-core';
@@ -75,7 +76,10 @@ export class DeviceDirectory {
     const rows=await db.deviceInstance.findMany({where:{groupId}});
     const profiles=rows.filter(r=>r.id.startsWith('["profile",')).map(r=>JSON.parse(r.metadataJson)).filter(p=>validDeviceProfileV2(p)&&p.domain===this.domain);
     const active=await Promise.all(profiles.map(p=>deviceMembershipActive(db,p.deviceId)));
-    return profiles.filter((_,index)=>active[index]);
+    const visible=profiles.filter((_,index)=>active[index]);
+    const ids=visible.flatMap(p=>[...(p.inFlight??[]),...(p.queued??[])].map(f=>f.attemptId));
+    const settled=ids.length?await db.attempt.findMany({where:{groupId,id:{in:ids},recordJson:{not:null}},select:{id:true,holderInstanceId:true,offerJson:true,recordJson:true}}):[];
+    return visible.map(p=>settledProfile(p,settled,this.now(),this.domain));
   }
   /** Credential-scoped evidence read; a device cannot read or approve another holder's execution targets. */
   async qualification(peer:Peer,targetId:string){
@@ -101,32 +105,64 @@ export class DeviceDirectory {
   }
   /** Runs in the same transaction as first dispatch. An offer can precede the next device profile. */
   async hasDispatchCredit(tx:Prisma.TransactionClient,offer:DispatchOfferV2,holderId:string,identity?:string){
-    if(!await deviceMembershipActive(tx,offer.target.deviceId))return false;
+    return !!await this.dispatchAdmission(tx,offer,holderId,identity);
+  }
+  async dispatchAdmission(tx:Prisma.TransactionClient,offer:DispatchOfferV2,holderId:string,identity?:string,queueWaitMs?:number):Promise<'IMMEDIATE'|'GPU_QUEUE'|null>{
+    if(!await deviceMembershipActive(tx,offer.target.deviceId))return null;
     const row=await tx.deviceInstance.findUnique({where:{id:JSON.stringify(['profile',offer.task.groupId,holderId])}});
-    if(!row)return false;
-    const profile=JSON.parse(row.metadataJson) as DeviceProfileV2,now=this.now();
-    if(identity){const executor=profile.executors.find(e=>e.target.targetId===offer.target.targetId);if(!executor||executorIdentity(executor)!==identity)return false;}
-    if(this.controlState&&this.controlState(offer.task.groupId,holderId,profile.deviceInstanceId,profile.ledgerEpoch)!=='ONLINE')return false;
-    if(profile.deviceId!==offer.target.deviceId||profile.energyGate||!sampleUsableV2(profile.ownerActivity,now,this.domain))return false;
+    if(!row)return null;
+    const reported=JSON.parse(row.metadataJson) as DeviceProfileV2,now=this.now();
+    const observedIds=[...(reported.inFlight??[]),...(reported.queued??[])].map(f=>f.attemptId);
+    const observedFilter=observedIds.length?Prisma.sql`id IN (${Prisma.join(observedIds)})`:Prisma.sql`0`;
+    const pending=await tx.$queryRaw<Array<{id:string;holderInstanceId:string;offerJson:string|null;recordJson:string|null}>>`
+      SELECT id,holderInstanceId,offerJson,recordJson FROM Attempt
+      WHERE groupId=${offer.task.groupId} AND holderInstanceId=${holderId} AND state<>'REJECTED'
+      AND (recordJson IS NULL OR json_extract(recordJson,'$.resourcesSettled') IS NOT 1 OR ${observedFilter})`;
+    const profile=settledProfile(reported,pending,now,this.domain);
+    if(identity){const executor=profile.executors.find(e=>e.target.targetId===offer.target.targetId);if(!executor||executorIdentity(executor)!==identity)return null;}
+    if(this.controlState&&this.controlState(offer.task.groupId,holderId,profile.deviceInstanceId,profile.ledgerEpoch)!=='ONLINE')return null;
+    if(profile.deviceId!==offer.target.deviceId||profile.energyGate||!sampleUsableV2(profile.ownerActivity,now,this.domain))return null;
     const slots=profile.credits.find(c=>c.priority===offer.task.priority)?.slots??0;
     const observed=new Set((profile.inFlight??[]).map(f=>f.attemptId));
-    const pending=await tx.attempt.findMany({where:{groupId:offer.task.groupId,holderInstanceId:holderId,
-      state:{not:'REJECTED'}},select:{id:true,offerJson:true,recordJson:true}});
     const reserved=new Map<string,number>();
     let sameCategory=0;
     for(const attempt of pending){
       if(observed.has(attempt.id)||attempt.recordJson&&JSON.parse(attempt.recordJson).resourcesSettled)continue;
-      if(!attempt.offerJson)return false;
+      if(!attempt.offerJson)return null;
       const earlier=JSON.parse(attempt.offerJson) as DispatchOfferV2;
       if(earlier.task.priority===offer.task.priority)sameCategory++;
       for(const r of earlier.resources)reserved.set(r.resourcePoolId,(reserved.get(r.resourcePoolId)??0)+r.amount);
     }
-    if(sameCategory>=slots)return false;
-    return offer.resources.every(r=>{
+    const fits=offer.resources.every(r=>{
       const pool=profile.pools.find(p=>p.resourcePoolId===r.resourcePoolId);
       return !!pool&&sampleUsableV2(pool.admissionLimit,now,this.domain)&&sampleUsableV2(pool.occupied,now,this.domain)&&
         pool.admissionLimit.value!-pool.occupied.value!-(reserved.get(r.resourcePoolId)??0)>=r.amount;
     });
+    if(fits&&sameCategory<slots)return 'IMMEDIATE';
+    // Existing PC micro-queues can wait without holding physical resources.
+    // Keep a short pipeline of prepared GPU work, rather than one offer per RTT.
+    if(queueWaitMs===undefined||!Number.isFinite(queueWaitMs)||queueWaitMs<0||queueWaitMs>2000||
+      queueWaitMs+1000>=offer.task.budget.remainingMs||offer.task.contract.sideEffectPolicy!=='PURE'||
+      !['VULKAN','CUDA'].includes(offer.target.backend)||profile.ownerActivity.value!=='IDLE'||
+      !profile.inFlight||!profile.queued)return null;
+    const gpu=offer.resources.find(r=>profile.pools.some(p=>p.resourcePoolId===r.resourcePoolId&&p.kind==='GPU_SLOTS'));
+    if(!gpu||!offer.resources.every(r=>{const p=profile.pools.find(p=>p.resourcePoolId===r.resourcePoolId);return p&&!p.draining&&sampleUsableV2(p.admissionLimit,now,this.domain)&&sampleUsableV2(p.occupied,now,this.domain)&&r.amount<=p.admissionLimit.value!;}))return null;
+    const contenders=new Set(profile.inFlight.filter(f=>f.resources.some(r=>r.resourcePoolId===gpu.resourcePoolId&&r.amount>0)).map(f=>f.attemptId));
+    for(const a of pending){if(a.recordJson&&JSON.parse(a.recordJson).resourcesSettled)continue;
+      if(a.offerJson&&JSON.parse(a.offerJson).resources.some((r:{resourcePoolId:string;amount:number})=>r.resourcePoolId===gpu.resourcePoolId&&r.amount>0))contenders.add(a.id);}
+    // A reported local queue may contain work unknown to this coordinator.
+    for(const q of profile.queued)if(q.resources.some(r=>r.resourcePoolId===gpu.resourcePoolId&&r.amount>0))contenders.add(q.attemptId);
+    // The PC agent already supports eight pending offers. Limit this physical
+    // GPU to its execution lanes + three waiting (at most seven), also bounded by predicted wait
+    // and the original budget above. Queueing does not acquire physical slots.
+    const unsettled=new Set([...(profile.inFlight??[]).map(f=>f.attemptId),...profile.queued.map(q=>q.attemptId),
+      ...pending.filter(a=>!a.recordJson||!JSON.parse(a.recordJson).resourcesSettled).map(a=>a.id)]);
+    const lanes=profile.pools.find(p=>p.resourcePoolId===gpu.resourcePoolId)!.admissionLimit.value!;
+    if(contenders.size<1||contenders.size>=Math.min(7,lanes+3)||unsettled.size>=7)return null;
+    // Category credits describe immediately free execution slots, not queue
+    // capacity. Zero credits while this GPU is running must not disable its
+    // prepared successor queue; the device still admits execution atomically.
+    return 'GPU_QUEUE';
   }
   async snapshot(groupId:string,policyVersion:string,version:number,policy:ContributionPolicy,db:Prisma.TransactionClient=this.db,estimatePolicy?:CostEstimatePolicy):Promise<PlanningSnapshot>{
     const excludedTargets:NonNullable<PlanningSnapshot['excludedTargets']>=[];
@@ -174,11 +210,13 @@ export class DeviceDirectory {
     const queuedIds=profiles.flatMap(p=>[...(p.queued??[]),...(p.inFlight??[])].map(q=>q.attemptId));
     const queuedJobs=new Map((await db.cpuJob.findMany({where:{id:{in:queuedIds}}})).map(row=>[row.id,row]));
     const projected=new Set<string>();
+    const forecastProfiles=new Map<string,DeviceProfileV2>();
     for(const profile of profiles){
       const live=profile.inFlight;
       const connection=this.controlState?.(groupId,profile.holderInstanceId,profile.deviceInstanceId,profile.ledgerEpoch);
       if(capacityProfiles.includes(profile)&&(connection===undefined||connection==='ONLINE')&&live!==undefined&&profile.pools.every(pool=>!pool.draining&&sampleUsableV2(pool.occupied,now,this.domain)&&sampleUsableV2(pool.admissionLimit,now,this.domain)&&live.reduce((sum,f)=>sum+(f.resources.find(r=>r.resourcePoolId===pool.resourcePoolId)?.amount??0),0)===pool.occupied.value)){
         projected.add(profile.holderInstanceId);
+        const forecastFlights:NonNullable<DeviceProfileV2['inFlight']>=[];
         for(const f of live){
           const contract=profile.executors.find(e=>e.target.targetId===f.targetId)?.contract;
           const overdue=contract?.interruptibility==='NON_INTERRUPTIBLE'&&contract.maxNonPreemptibleMs!==null&&sampleUsableV2(f.elapsed,now,this.domain)&&f.elapsed.value!>contract.maxNonPreemptibleMs;
@@ -186,17 +224,22 @@ export class DeviceDirectory {
           // Estimate waiting; never release actual ledger capacity from a forecast.
           // Fresh elapsed + the admitted decision is a fallback when the host has
           // no same-work survivor history (including its first real input).
-          if(releaseAt.value===null&&contract?.sideEffectPolicy==='PURE'&&sampleUsableV2(f.elapsed,now,this.domain)&&f.elapsed.value!==null){
+          if((!sampleUsableV2(releaseAt,now,this.domain)||releaseAt.value!<=now)&&contract?.sideEffectPolicy==='PURE'&&sampleUsableV2(f.elapsed,now,this.domain)&&f.elapsed.value!==null){
             const row=queuedJobs.get(f.attemptId),data=row?.groupId===groupId?JSON.parse(row.metadataJson):null;
             const selected=data?.holderId===profile.holderInstanceId&&data.offer?.target.targetId===f.targetId?data.plan?.decision?.suggestion?.[0]:null;
-            const estimate=selected?selected.executionMs+(selected.uncertaintyMs??0):null;
+            const estimate=selected?selected.executionMs-(selected.policyQueueMs??0)+(selected.uncertaintyMs??0):null;
             if(typeof estimate==='number'&&Number.isFinite(estimate)&&estimate>0&&data.deadlineAt>now){
               const remaining=Math.max(100,estimate-f.elapsed.value,Math.min(estimate,Math.max(100,f.elapsed.value*.25)));
               releaseAt={value:now+remaining,unit:'ms',source:'PRIOR',sampledAt:now,ttlMs:Math.min(1000,f.elapsed.ttlMs)};
             }
           }
           inFlight.push({deviceId:profile.deviceId,holderInstanceId:profile.holderInstanceId,targetId:f.targetId,resources:f.resources,overdue,releaseAt});
+          forecastFlights.push({...f,remaining:{...releaseAt,value:releaseAt.value===null?null:Math.max(0,releaseAt.value-releaseAt.sampledAt)}});
         }
+        // Use the same forecast for candidate eligibility and pool reservations.
+        // Previously the latter knew when a busy GPU would finish, while the
+        // former still rejected it as RESOURCE_WAIT_UNKNOWN using raw telemetry.
+        forecastProfiles.set(profile.holderInstanceId,{...profile,inFlight:forecastFlights});
       }
       for(const q of profile.queued??[]){
         const job=queuedJobs.get(q.attemptId);
@@ -208,6 +251,27 @@ export class DeviceDirectory {
       }
     }
     for(const f of inFlight)for(const d of f.resources){const pool=capacity.get(JSON.stringify([f.deviceId,d.resourcePoolId]));if(pool?.occupied!==null&&pool)pool.occupied-=d.amount;}
+    // A durable offer already consumes dispatch credit before the next heartbeat.
+    // Price that queue in the planner too, instead of repeatedly selecting the
+    // same apparently idle GPU and discovering the reservation only at admission.
+    const offered=await db.$queryRaw<Array<{id:string;holderInstanceId:string;offerJson:string;metadataJson:string|null}>>`
+      SELECT a.id,a.holderInstanceId,a.offerJson,j.metadataJson FROM Attempt a
+      LEFT JOIN CpuJob j ON j.id=a.id WHERE a.groupId=${groupId} AND a.state<>'REJECTED'
+      AND a.offerJson IS NOT NULL AND (a.recordJson IS NULL OR json_extract(a.recordJson,'$.resourcesSettled') IS NOT 1)`;
+    for(const row of offered){
+      const p=profiles.find(p=>p.holderInstanceId===row.holderInstanceId);
+      if(!p||!projected.has(p.holderInstanceId)||(p.inFlight??[]).some(f=>f.attemptId===row.id)||(p.queued??[]).some(q=>q.attemptId===row.id))continue;
+      const offer=JSON.parse(row.offerJson) as DispatchOfferV2;
+      if(offer.target.deviceId!==p.deviceId||offer.task.attemptId!==row.id)continue;
+      const data=row.metadataJson?JSON.parse(row.metadataJson):null,selected=data?.plan?.decision?.suggestion?.[0];
+      // Match the heartbeat-reported queue's expected service duration. The
+      // candidate's own uncertainty remains in its completion estimate; adding
+      // that margin to every pending predecessor inflated GPU queues until ACK.
+      const estimate=selected?selected.executionMs-(selected.policyQueueMs??0):null;
+      const value=typeof estimate==='number'&&Number.isFinite(estimate)&&estimate>0&&data.deadlineAt>now?estimate:null;
+      queued.push({deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,targetId:offer.target.targetId,resources:offer.resources,priority:offer.task.priority,attemptId:row.id,elapsedMs:0,
+        holdEstimate:{value,unit:'ms',source:value===null?'UNKNOWN':'PRIOR',sampledAt:now,ttlMs:1000}});
+    }
     for(const c of capacity.values())resources.push({deviceId:c.deviceId,resourcePoolId:c.poolId,capacity:c.total,available:c.total===null||c.occupied===null?null:Math.max(0,c.total-c.occupied),availableMemoryBytes:null,availableSlots:null,observedAt:c.sampledAt,ttlMs:c.ttlMs});
     for(const p of profiles){
       const connection=this.controlState?.(groupId,p.holderInstanceId,p.deviceInstanceId,p.ledgerEpoch);
@@ -237,10 +301,11 @@ export class DeviceDirectory {
         }))continue;
         const ram=e.resources.filter(r=>p.pools.some(pool=>pool.resourcePoolId===r.resourcePoolId&&pool.kind==='RAM_BYTES')).reduce((n,r)=>n+r.amount,0);
         const freeRam=p.pools.filter(pool=>pool.kind==='RAM_BYTES'&&e.resources.some(r=>r.resourcePoolId===pool.resourcePoolId)).reduce((n,pool)=>n+pool.admissionLimit.value!-(projects?0:pool.occupied.value!),0);
-        const categoryCapacity=p.credits.filter(c=>c.priority!=='ORIGIN_INTERACTIVE').map(c=>({...c,availability:availability(p,e,c.priority,version,now)}));
+        const forecast=forecastProfiles.get(p.holderInstanceId)??p;
+        const categoryCapacity=p.credits.filter(c=>c.priority!=='ORIGIN_INTERACTIVE').map(c=>({...c,availability:availability(forecast,e,c.priority,version,now)}));
         const holderCapacity=e.resources.map(r=>{const pool=p.pools.find(x=>x.resourcePoolId===r.resourcePoolId)!;return {resourcePoolId:r.resourcePoolId,amount:Math.max(0,pool.admissionLimit.value!-(projects?0:pool.occupied.value!))};});
         const slots=Math.min(...e.resources.filter(r=>r.amount>0).map(r=>Math.floor(holderCapacity.find(h=>h.resourcePoolId===r.resourcePoolId)!.amount/r.amount)));
-        candidates.push({queueObserved:p.queued!==undefined,holderCapacity,...(projects&&Number.isFinite(slots)?{projectedSlots:slots}:{}),categoryCapacity,availability:availability(p,e,policy.priority,version,now),targetId:e.target.targetId,deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,executorId:e.target.executorId,capability:e.contract.capability,
+        candidates.push({queueObserved:p.queued!==undefined,holderCapacity,...(projects&&Number.isFinite(slots)?{projectedSlots:slots}:{}),categoryCapacity,availability:availability(forecast,e,policy.priority,version,now),targetId:e.target.targetId,deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,executorId:e.target.executorId,capability:e.contract.capability,
           ...(installation?{appInstanceId:installation.id}:{}),
           resourcePoolIds:e.target.resourcePoolIds,resourceDemand:e.resources,modelManifest:e.model,requiredMemoryBytes:ram,
           ...(e.contract.serviceId?{serviceId:e.contract.serviceId}:{}),trusted:true,source:this.domain,observedAt:now,ttlMs:Math.max(0,Math.min(...times.map(s=>s.sampledAt+s.ttlMs))-now),availableSlots:p.credits.find(c=>c.priority===policy.priority)!.slots,

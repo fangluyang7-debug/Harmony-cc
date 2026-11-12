@@ -3,10 +3,10 @@ const {DurableLedger,grantSigningText}=require('../dist/durable-ledger'),{PcExec
 const {TraceBuffer}=require('../dist/trace-buffer'),{ExecutionTrace}=require('../dist/execution-trace');
 const {occupiedV2,validTraceSpanV2}=require('@harmony/scheduler-core');
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
-async function setup(){
+async function setup(gpuLanes=0){
  const directory=fs.mkdtempSync(path.resolve('../../.test/queue-runtime-')),{privateKey,publicKey}=crypto.generateKeyPairSync('rsa',{modulusLength:2048});
  const ledger=await DurableLedger.open(directory,{groupId:'g1',deviceId:'device1',holderInstanceId:'h1',appInstanceId:null},publicKey.export({type:'spki',format:'pem'}),()=>0);
- const grant=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/AllotmentGrant.json'));grant.leaseMs=30000;grant.signature=crypto.sign('sha256',Buffer.from(grantSigningText(grant)),privateKey).toString('base64');ledger.requestGrant(grant.leaseRequestId);ledger.installGrant(grant);
+ const grant=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/AllotmentGrant.json'));grant.leaseMs=30000;if(gpuLanes)grant.extra.push({resourcePoolId:'gpu',amount:gpuLanes});grant.signature=crypto.sign('sha256',Buffer.from(grantSigningText(grant)),privateKey).toString('base64');ledger.requestGrant(grant.leaseRequestId);ledger.installGrant(grant);
  const input=Buffer.from('{"dimension":2,"rows":[[3,4]]}'),offer=structuredClone(require('../../../contracts/scheduling/v2/fixtures/t2/valid/DispatchOffer.json'));
  // Real child-process tests exercise lifecycle, not the fixture's one-second performance budget.
  offer.leaseMs=15000;offer.task.budget={remainingMs:15000,deadlineAt:Date.now()+15000};offer.task.priority='REMOTE_INTERACTIVE';offer.task.contract.capability='vector.normalize.v1';offer.task.contract.outputSchemas=['vector.normalized'];offer.task.inputs[0].contentHash=hash(input);offer.task.parameters='{}';
@@ -115,3 +115,19 @@ test('trace flush splits a large queue history batch without losing observations
  });
  assert.ok(batches>1);assert.equal(new Set(ids).size,96);assert.equal(buffer.dropped,0);
 });
+
+ test('GPU computes next task while previous result publication is blocked, without double execution',async()=>{
+ const x=await setup(4),computed=[],gates=[];let publishing=0;
+ x.offer.target.backend='VULKAN';x.offer.target.executorId='ncnn.photo.vulkan.v1';x.offer.target.resourcePoolIds.push('gpu');x.offer.resources=[{resourcePoolId:'gpu',amount:1}];
+ const imageEncoder={pack:{manifest:{contract:x.offer.task.contract}},gpu:{},execute:async(offer)=>{computed.push(offer.task.attemptId);return {bytes:x.input,schemaId:'vector.normalized'};}};
+ const runtime=new PcExecutionRuntime(x.ledger,{...x.ports,imageEncoder,publish:async(...args)=>{publishing++;await new Promise(r=>gates.push(r));return x.ports.publish(...args);}});
+ const scheduler=new DeviceScheduler(x.ledger,runtime,{shares:[.5,.3,.2],agingMs:100,maxConsecutive:2,yieldDeadlineMs:1000},()=>{},()=>100);
+ const waitFor=async f=>{for(let i=0;i<200&&!f();i++)await new Promise(r=>setTimeout(r,10));assert.ok(f());};
+ try{await scheduler.update([{resourcePoolId:'gpu',amount:4}],'IDLE');
+ const offers=Array.from({length:5},(_,i)=>{const o=structuredClone(x.offer);o.task.attemptId='gpu'+i;return o;});
+ const work=offers.map(o=>scheduler.submit(o,o.allowedConfigs[0]));await waitFor(()=>publishing===4);assert.equal(computed.length,4);assert.equal(occupiedV2(x.ledger.snapshot())[0].amount,4);
+ assert.equal(x.ledger.status('gpu4'),null,'fifth waits for actual settlement');gates.shift()();await waitFor(()=>publishing===5);for(const done of gates)done();
+ assert.ok((await Promise.all(work)).every(r=>r.state==='SUCCEEDED'));assert.equal(new Set(computed).size,5);assert.deepEqual(occupiedV2(x.ledger.snapshot()),[]);
+ assert.equal((await scheduler.submit(offers[0],offers[0].allowedConfigs[0])).state,'SUCCEEDED');assert.equal(computed.length,5,'replay uses durable receipt');
+ }finally{for(const done of gates)done();await scheduler.close();await x.ledger.close();}
+ });

@@ -40,6 +40,17 @@ export class ControlChannel {
     }});
     this.register('YieldNotice',{validate:validYieldNoticeV2,handle:async(peer,p)=>{
       const row=await db.attempt.findUnique({where:{id:p.attemptId}}),offer=row?.offerJson?JSON.parse(row.offerJson):null;
+      if(!row){
+        // Reference evaluation has its own durable mailbox, not a business
+        // Attempt. A foreground transition must not poison the reliable outbox
+        // with an unacknowledgeable YieldNotice and disconnect all later work.
+        const evaluation=await db.evaluationDispatch.findUnique({where:{id:p.attemptId}});
+        if(!evaluation||evaluation.groupId!==peer.groupId||evaluation.holderInstanceId!==peer.holderInstanceId||evaluation.deviceId!==peer.deviceId||evaluation.state==='QUEUED'||p.kind!=='RESTART'||p.checkpoint!==null)throw Error('YIELD_SCOPE');
+        await db.evaluationDispatch.updateMany({where:{id:evaluation.id,state:'CLAIMED'},data:{state:'CANCEL_REQUESTED'}});
+        // ACK is only receipt of the notice. The evaluation report still has to
+        // prove engine settlement; never fabricate quality or release resources.
+        return;
+      }
       if(!row||row.groupId!==peer.groupId||row.holderInstanceId!==peer.holderInstanceId||offer?.target.deviceId!==peer.deviceId||!row.recordJson)throw Error('YIELD_SCOPE');
       await db.attempt.update({where:{id:row.id},data:{yieldJson:JSON.stringify({notice:p,receivedAt:Date.now()})}});this.changed(peer.groupId);
     }});
@@ -60,14 +71,14 @@ export class ControlChannel {
           const row=await tx.attempt.findUnique({where:{id:p.attemptId}});
           if(!row||row.groupId!==peer.groupId||row.holderInstanceId!==peer.holderInstanceId)throw Error('ADMISSION_UNAUTHORIZED');
           if(row.recordJson!==null)throw Error('ADMISSION_CONFLICT');
-          if(p.reasonCode==='QUEUE_STARVED_NOT_STARTED'){
+          if(['QUEUE_STARVED_NOT_STARTED','RESOURCE_UNAVAILABLE'].includes(p.reasonCode)){
             const offer=message.ackOf&&await tx.outbox.findUnique({where:{id:message.ackOf}});
             if(!offer||offer.kind!=='DispatchOffer'||offer.attemptId!==row.id||offer.epoch!==message.coordinatorEpoch)throw Error('ADMISSION_CONFLICT');
           }
           if(row.rejectionJson){if(canonical(JSON.parse(row.rejectionJson).reply)!==canonical(p))throw Error('ADMISSION_CONFLICT');return;}
           await tx.attempt.update({where:{id:row.id},data:{state:'REJECTED',rejectionJson:JSON.stringify({reply:p,receivedAt:Date.now(),messageId:message.messageId,traceId:message.traceId})}});
           await store.recordNodeFailure(tx,row.nodeId,row.id,'REJECTED');
-          if(p.reasonCode==='QUEUE_STARVED_NOT_STARTED')await this.onUnstarted?.(tx,row.id);
+          if(['QUEUE_STARVED_NOT_STARTED','RESOURCE_UNAVAILABLE'].includes(p.reasonCode))await this.onUnstarted?.(tx,row.id);
           await settleBatchCharge(tx,row.id,0);
         });return;
       }

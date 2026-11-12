@@ -9,6 +9,23 @@ const peer={groupId:'g1',holderInstanceId:'h1',deviceId:'device1',principalId:'p
 const authenticate=async token=>{if(token!=='test-token')throw Error('UNAUTHORIZED');return peer;};
 function envelope(r,id,seq,type='Hello',payload={versions:[2],extensions:[]}){return {protocolVersion:2,messageId:id,type,groupId:'g1',senderInstanceId:'h1',coordinatorEpoch:r.epoch,seq,ackOf:null,traceId:'trace1',payload:JSON.stringify(payload),extensions:[]};}
 const deferred=()=>{let resolve;const promise=new Promise(r=>resolve=r);return {promise,resolve};};
+test('yielding reference calibration is acknowledged without settling it or poisoning reconnect',async()=>{
+ const r=await runtime({authenticate});let ws;
+ try{
+  await r.db.evaluationDispatch.create({data:{id:'eval-yield',groupId:'g1',holderInstanceId:'h1',deviceId:'device1',epoch:r.epoch,state:'CLAIMED',expiresAt:Date.now()+15000,workJson:'{}'}});
+  ws=await connect(r);ws.send(JSON.stringify(envelope(r,'hello-eval',1)));await ws.next();
+  const notice={attemptId:'eval-yield',kind:'RESTART',releaseMs:{value:null,source:'UNKNOWN',sampledAt:Date.now(),ttlMs:1000,unit:'ms'},checkpoint:null,reasonCode:'OWNER_ACTIVE'};
+  const message=envelope(r,'yield-eval',2,'YieldNotice',notice);
+  ws.send(JSON.stringify(message));assert.equal((await ws.next()).ackOf,'yield-eval');
+  ws.send(JSON.stringify(message));assert.equal((await ws.next()).ackOf,'yield-eval');
+  const row=await r.db.evaluationDispatch.findUniqueOrThrow({where:{id:'eval-yield'}});
+  assert.equal(row.state,'CANCEL_REQUESTED');assert.equal(row.resultJson,null);
+  ws.send(JSON.stringify(envelope(r,'still-connected',3)));assert.equal((await ws.next()).ackOf,'still-connected');
+  await r.db.evaluationDispatch.update({where:{id:'eval-yield'},data:{holderInstanceId:'another-holder'}});
+  const closed=once(ws,'close');ws.send(JSON.stringify(envelope(r,'wrong-owner',4,'YieldNotice',notice)));
+  const [code,reason]=await closed;assert.equal(code,1008);assert.equal(reason.toString(),'YIELD_SCOPE');
+ }finally{ws?.terminate();await r.close();}
+});
 async function connect(r,token='test-token',autoPong=true){
   const ws=new WebSocket(r.url.replace('https:','wss:')+'/v2/channel',{ca:r.identity.cert,family:4,autoPong,headers:{Authorization:'Bearer '+token}});
   const queue=[],waiters=[];ws.on('message',b=>{const m=JSON.parse(b.toString());if(waiters.length)waiters.shift()(m);else queue.push(m);});

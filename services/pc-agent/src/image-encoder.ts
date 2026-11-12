@@ -1,3 +1,4 @@
+import type {PhotoEngineTiming} from './executors/photo-workers';
 import {gpuReady} from './cpu-engine';
 import {promisify} from 'node:util';
 import {spawn,execFile} from 'node:child_process';
@@ -9,8 +10,8 @@ export const cudaExecutorId='pc.image.cuda.v1';
 export interface ImageEncoder {
   backend?:'CUDA'|'VULKAN';
   pack:ReferencePack;
-  gpu?:{totalBytes:number;limit:number;freeBytes():Promise<number>};
-  execute(offer:DispatchOfferV2,input:Buffer,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string;model:ModelManifestV2}>;
+  gpu?:{totalBytes:number;limit:number;pipelineSlots?:number;name?:string;freeBytes():Promise<number>};
+  execute(offer:DispatchOfferV2,input:Buffer,signal:AbortSignal):Promise<{bytes:Buffer;schemaId:string;model:ModelManifestV2;timing?:PhotoEngineTiming}>;
 }
 function run(command:string,args:string[],input:Buffer,limit:number,signal:AbortSignal):Promise<Buffer>{
   if(signal.aborted)throw Error('CANCELLED_SETTLED');

@@ -36,7 +36,7 @@ export async function runPhotoWorker(executable:string,args:string[],signal?:Abo
   });
  }finally{
   w.busy=false;
-  if(workers.includes(w)){w.idle=setTimeout(()=>{w.child.kill();},60000);w.idle.unref();w.child.unref();for(const pipe of [w.child.stdin,w.child.stdout,w.child.stderr])(pipe as Socket).unref();}
+  if(workers.includes(w)){w.idle=setTimeout(()=>{w.child.kill();},args[5]==='VULKAN'?600000:60000);w.idle.unref();w.child.unref();for(const pipe of [w.child.stdin,w.child.stdout,w.child.stderr])(pipe as Socket).unref();}
   for(const fn of wake)fn();
  }
 }

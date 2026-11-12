@@ -9,7 +9,7 @@ import {ArtifactRetention} from './retention';
 import {CpuJobs} from './cpu-jobs';
 import {AppRegistry} from './apps';
 interface NodeState {scheduling?:{readyAt:number;lastAttemptAt:number;blocks:Record<string,number>};reassignedAttempts?:string[];excludedDeviceId?:string;yieldedAttempts?:string[];id:string;jobId:string;state:'PENDING'|'SUBMITTED'|'COMMITTED';output?:ArtifactDescriptor;local?:boolean;}
-interface GraphData {priority?:'REMOTE_INTERACTIVE'|'REMOTE_BATCH';stop?:{state:string;reconciliationJobId?:string};peer:Peer;workflow:SdkWorkflow;fingerprint:string;deadlineAt:number;originLocal:boolean;inputs:Record<string,ArtifactDescriptor>;nodes:NodeState[];plan:SnapshotDecision;failure?:{code:string;reason:string;nodeId:string};resultReceivedAt?:number;}
+interface GraphData {submittedAt?:number;priority?:'REMOTE_INTERACTIVE'|'REMOTE_BATCH';stop?:{state:string;reconciliationJobId?:string};peer:Peer;workflow:SdkWorkflow;fingerprint:string;deadlineAt:number;originLocal:boolean;inputs:Record<string,ArtifactDescriptor>;nodes:NodeState[];plan:SnapshotDecision;failure?:{code:string;reason:string;nodeId:string};resultReceivedAt?:number;}
 // Fan-in currently materializes a bundle at the relay. Only its immediate inputs
 // need materialization; unrelated linear edges may stay at their executor.
 export function retainableOutput(workflow:SdkWorkflow,id:string):boolean{
@@ -28,6 +28,12 @@ export class WorkflowJobs {
  private scheduled=new Map<string,Promise<void>>();
  private runners=new Map<string,{group:string;again:boolean;promise:Promise<void>}>();
  private rescans=new Set<string>();private stopped=false;
+ private retries=new Map<string,ReturnType<typeof setTimeout>>();
+ private retryGraph(group:string,id:string){
+  if(this.stopped||this.retries.has(id))return;
+  const timer=setTimeout(()=>{this.retries.delete(id);if(!this.stopped)this.runGraph(group,id);},150);
+  timer.unref();this.retries.set(id,timer);
+ }
  private get work():Promise<void>{return Promise.all([...this.scheduled.values(),...Array.from(this.runners.values(),r=>r.promise)]).then(()=>{});}
  constructor(private db:PrismaClient,private jobs:CpuJobs,private apps:AppRegistry,private artifacts:ArtifactChannel,private packs:ReferencePack[],private retention?:ArtifactRetention){}
  async exists(id:string){return !!await this.db.sdkWorkflowJob.findUnique({where:{id}});}
@@ -80,7 +86,7 @@ export class WorkflowJobs {
   const request:PlacementRequest={priority:o.priority??'REMOTE_INTERACTIVE',nodes:w.nodes.map(n=>{const p=this.pack(n.capability);return {id:n.id,workKey:workKeyV2(p.manifest.contract,n.parameters,n.input?.bytes??(n.inputFroms?fanInByteBound(n.inputFroms.map(id=>bounds.get(id)??0)):bounds.get(n.inputFrom!)!)),capability:n.capability,...(n.executionScope==='ORIGIN_DEVICE'?{dataScope:'LOCAL_ONLY' as const}:n.privacy&&n.privacy!=='SHARED'?{dataScope:n.privacy}:{}),serviceId:p.manifest.contract.serviceId,dependencies:n.dependsOn,inputs:n.inputFroms?n.inputFroms.map(id=>'graph-out-'+id):[n.inputFrom?'graph-out-'+n.inputFrom:inputs[n.id].ref.artifactId],output:{id:'graph-out-'+n.id,bytes:bounds.get(n.id)!,retainAtExecutor:retainableOutput(w,n.id)},modelManifest:p.manifest.model,baselineTargetId:n.targetId??'',allowedTargetIds:n.targetId?[n.targetId]:undefined,memoryBytes:p.manifest.resourceLimit.find(r=>r.resourcePoolId==='ram')?.amount??0,minimumQuality:p.manifest.qualityThreshold,candidates:[]};}),
    artifacts:Object.values(inputs).map(a=>({id:a.ref.artifactId,bytes:a.bytes,replicas:[originLocal?{deviceId:peer.deviceId,holderInstanceId:peer.holderInstanceId,readMs:0}:{deviceId:relay,readMs:0}]})),links:[],deviceResources:[],remainingBudgetMs:o.budgetMs,networkAllowed:true,privacy:'AUTHORIZED_REMOTE',localDeviceId:peer.deviceId,domain:this.artifacts.domain,now,committedNodeIds:[],committedArtifacts:[],appInstanceId:app.identity.appInstanceId,originHolderId:peer.holderInstanceId,inputRelayId:relay,localResultHolderId:peer.holderInstanceId,materializeOutputsAt:relay,finalDestination:relay};
   const plan=await this.jobs.graphPlan(peer,request);if(!plan.decision.suggestion)throw Error(plan.decision.reason);
-  const data:GraphData={peer,priority:request.priority,workflow:w,fingerprint,deadlineAt:now+o.budgetMs,originLocal,inputs,nodes:w.nodes.map(n=>({id:n.id,jobId:randomUUID(),state:'PENDING'})),plan};
+  const data:GraphData={submittedAt:now,peer,priority:request.priority,workflow:w,fingerprint,deadlineAt:now+o.budgetMs,originLocal,inputs,nodes:w.nodes.map(n=>({id:n.id,jobId:randomUUID(),state:'PENDING'})),plan};
   for(const a of Object.values(inputs))this.artifacts.register(a);
   await this.db.sdkWorkflowJob.create({data:{id:o.requestId,groupId:peer.groupId,sourceHolderId:peer.holderInstanceId,state:'WAITING_INPUT',metadataJson:JSON.stringify(data)}});
   return this.upload(o.requestId,data);
@@ -153,7 +159,7 @@ export class WorkflowJobs {
    if(offer.task.contract.sideEffectPolicy!=='PURE')return false;
    const notice=row.yieldJson&&JSON.parse(row.yieldJson).notice;
    const refusal=row.rejectionJson&&JSON.parse(row.rejectionJson).reply;
-   const unstarted=row.state==='REJECTED'&&!record&&refusal?.reasonCode==='QUEUE_STARVED_NOT_STARTED'&&refusal.attemptId===oldId&&
+   const unstarted=row.state==='REJECTED'&&!record&&['QUEUE_STARVED_NOT_STARTED','RESOURCE_UNAVAILABLE'].includes(refusal?.reasonCode)&&refusal.attemptId===oldId&&
      refusal.holderInstanceId===row.holderInstanceId&&refusal.status==='REJECTED'&&refusal.record===null;
    const yielded=record?.resourcesSettled&&['CANCELLED_SETTLED','YIELDED'].includes(record.state)&&notice?.kind==='RESTART'&&
      notice.attemptId===oldId&&offer.task.contract.sideEffectPolicy==='PURE'&&offer.task.contract.interruptibility==='CANCEL_RESTART';
@@ -214,13 +220,15 @@ export class WorkflowJobs {
      if(n.modelManifest&&!sameModelV2(n.modelManifest,this.pack(n.capability).manifest.model)){
       data.failure={code:'SDK_MODEL_MISMATCH',reason:'REGISTERED_MODEL_CHANGED',nodeId:n.id};await this.stop(id,data,'FAILED');return;
      }
-     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,businessIdempotencyKey:n.businessIdempotencyKey,privacy:n.privacy,executionScope:n.executionScope,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{inputSchema:source.ref.schemaId,forceRelay:data.workflow.nodes.some(node=>!!node.inputFroms)&&!retainableOutput(data.workflow,n.id),workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:retainableOutput(data.workflow,n.id),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
+     if(await this.db.cpuJob.findUnique({where:{id:state.jobId}}))await this.jobs.status(data.peer,state.jobId,false);else await this.jobs.submit(data.peer,{requestId:state.jobId,priority:data.priority,capability:n.capability,contentHash:source.ref.contentHash,bytes:source.bytes,parameters:n.parameters,businessIdempotencyKey:n.businessIdempotencyKey,privacy:n.privacy,executionScope:n.executionScope,budgetMs:Math.max(1,data.deadlineAt-Date.now()),targetId:n.targetId,...(local?{inputLocation:'ORIGIN'}:{})},undefined,undefined,{submittedAt:data.submittedAt,inputSchema:source.ref.schemaId,forceRelay:data.workflow.nodes.some(node=>!!node.inputFroms)&&!retainableOutput(data.workflow,n.id),workflowId:id,nodeId:n.id,excludedDeviceId:state.excludedDeviceId,deadlineAt:data.deadlineAt,dependencies:n.dependsOn,retain:retainableOutput(data.workflow,n.id),source:parent?{descriptor:source,attemptId:parent.jobId,nodeId:parent.id}:undefined});
      state.state='SUBMITTED';await save();
     }
     if(await this.jobs.graphInput(data.peer,state.jobId,source))return;
     if((await this.db.sdkWorkflowJob.findUniqueOrThrow({where:{id}})).state!=='ACTIVE')return;
-    await this.jobs.start(data.peer,state.jobId);
-   }catch(error){const reason=String((error as {code?:string})?.code??(error instanceof Error?error.message:'UNKNOWN'));const code=/^[A-Z][A-Z0-9_]+$/.test(reason)?reason:'UNKNOWN';state.scheduling!.blocks[code]=(state.scheduling!.blocks[code]??0)+1;if(['P1008','P2028'].includes(String((error as {code?:string})?.code))){return;}if(error instanceof Error&&(error.message.startsWith('ARTIFACT_UNAVAILABLE:')||error.message==='ARTIFACT_CACHE_FULL')){data.failure={code:error.message==='ARTIFACT_CACHE_FULL'?'ARTIFACT_CACHE_FULL':'ARTIFACT_UNAVAILABLE',reason:error.message==='ARTIFACT_CACHE_FULL'?'NO_FEASIBLE_INPUT_PATH':error.message.slice('ARTIFACT_UNAVAILABLE:'.length),nodeId:n.id};await this.stop(id,data,'FAILED');return;}if(error instanceof Error&&['APP_QUOTA_EXCEEDED','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','START_BUSY','DISPATCH_ADMISSION_PENDING','PLAN_STALE','INPUT_NOT_UPLOADED','TARGET_UNAVAILABLE','JOB_RECOVERY_REQUIRED'].includes(error.message))return;data.failure={code:'GRAPH_NODE_FAILED',reason:error instanceof Error?error.message:'UNKNOWN',nodeId:n.id};await this.stop(id,data,'FAILED');return;}
+    // A resource wait must not hold this graph's single cursor writer.
+    // Receipts/profiles wake it immediately; a bounded retry covers missed wakes.
+    await this.jobs.start(data.peer,state.jobId,false);
+   }catch(error){const reason=String((error as {code?:string})?.code??(error instanceof Error?error.message:'UNKNOWN'));const code=/^[A-Z][A-Z0-9_]+$/.test(reason)?reason:'UNKNOWN';state.scheduling!.blocks[code]=(state.scheduling!.blocks[code]??0)+1;if(['P1008','P2028'].includes(String((error as {code?:string})?.code))){return;}if(error instanceof Error&&(error.message.startsWith('ARTIFACT_UNAVAILABLE:')||error.message==='ARTIFACT_CACHE_FULL')){data.failure={code:error.message==='ARTIFACT_CACHE_FULL'?'ARTIFACT_CACHE_FULL':'ARTIFACT_UNAVAILABLE',reason:error.message==='ARTIFACT_CACHE_FULL'?'NO_FEASIBLE_INPUT_PATH':error.message.slice('ARTIFACT_UNAVAILABLE:'.length),nodeId:n.id};await this.stop(id,data,'FAILED');return;}if(error instanceof Error&&['APP_QUOTA_EXCEEDED','NO_LEGAL_PLAN','ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','START_BUSY','DISPATCH_ADMISSION_PENDING','PLAN_STALE','INPUT_NOT_UPLOADED','TARGET_UNAVAILABLE','JOB_RECOVERY_REQUIRED'].includes(error.message)){this.retryGraph(data.peer.groupId,id);return;}data.failure={code:'GRAPH_NODE_FAILED',reason:error instanceof Error?error.message:'UNKNOWN',nodeId:n.id};await this.stop(id,data,'FAILED');return;}
   });
   await save();
   if(data.nodes.every(n=>n.state==='COMMITTED'))await this.db.sdkWorkflowJob.updateMany({where:{id,state:'ACTIVE'},data:{state:'SUCCEEDED'}});
@@ -249,7 +257,7 @@ export class WorkflowJobs {
 
  async writeInput(peer:Peer,id:string,artifactId:string,bytes:Buffer){const {row,data}=await this.owned(peer,id);const d=Object.values(data.inputs).find(a=>a.ref.artifactId===artifactId);if(row.state!=='WAITING_INPUT'||!d)throw Error('SDK_INPUT_SCOPE');await this.artifacts.writeForControl(d,bytes);}
  async readOutput(peer:Peer,id:string){const {row,data}=await this.owned(peer,id);const d=data.nodes[data.nodes.length-1].output;if(row.state!=='SUCCEEDED'||!d)throw Error('OUTPUT_NOT_READY');return this.artifacts.readForControl(d);}
- async close(){this.stopped=true;await Promise.allSettled([...this.scheduled.values(),...Array.from(this.runners.values(),r=>r.promise)]);}
+ async close(){this.stopped=true;for(const timer of this.retries.values())clearTimeout(timer);this.retries.clear();await Promise.allSettled([...this.scheduled.values(),...Array.from(this.runners.values(),r=>r.promise)]);}
 }
 
 /** Base64 bundle size is always an integer number of bytes, including padding. */

@@ -273,3 +273,22 @@ test('declared pixel scale corrects calibration prior and sparse same-work feedb
  c.computeSamples=[{workKey:node.workKey,configId:'main',startup:'UNKNOWN',count:1,p50Ms:140,p90Ms:140,coldP50Ms:0,executionTotal:true,observedAt:100,ttlMs:300}];
  assert.equal(run().phaseCosts.EXECUTE,140);assert.equal(run().costSource,'MEASURED');assert.equal(run().costConfidence,'LOW');assert.equal(run().uncertaintyMs,140);
 });
+
+test('photo placement uses measured GPU completion time, but a long GPU queue yields to an earlier CPU finish',()=>{
+ const f=fixture(),ms=value=>({value,unit:'ms',source:'SIMULATED',sampledAt:100,ttlMs:900}),demand=[{resourcePoolId:'memory',amount:100}];
+ const workKey=JSON.stringify(['neural',2,{model:'pixels',values:{pixels:12544},scale:{parameter:'pixels',reference:12544}},null]);
+ f.request.nodes[0].workKey=workKey;f.request.nodes[0].inputs=[];f.request.nodes[0].baselineTargetId='';
+ Object.assign(f.request,{networkAllowed:true,privacy:'AUTHORIZED_REMOTE',finalDestination:undefined,remainingBudgetMs:10000});
+ const make=(deviceId,targetId,time)=>({...f.snapshot.candidates[0],deviceId,targetId,holderInstanceId:deviceId,resourceDemand:demand,holderCapacity:demand,projectedSlots:1,configId:'photo-4x',startup:'UNKNOWN',
+  costEvidence:{compute:ms(5000),cold:ms(0),publish:ms(30)},computeSamples:[{workKey,configId:'photo-4x',startup:'UNKNOWN',count:8,p50Ms:time,p90Ms:time+50,coldP50Ms:0,executionTotal:true,observedAt:100,ttlMs:900}]});
+ f.snapshot.candidates=[make('gpu','gpu-target',292),make('cpu','cpu-target',1993)];
+ f.snapshot.devices=['gpu','cpu'].map(deviceId=>({...f.snapshot.devices[0],deviceId,holderInstanceId:deviceId}));
+ f.snapshot.resources=['gpu','cpu'].map(deviceId=>({...f.snapshot.resources[0],deviceId,available:100}));f.policy.allowedTargetIds=['gpu-target','cpu-target'];
+ const run=()=>new PlanningService(null).plan(f.snapshot,f.request,f.policy,f.clock).decision.suggestion[0];
+ assert.equal(run().targetId,'gpu-target');assert.equal(run().costSource,'MEASURED');
+ f.snapshot.inFlight=[{deviceId:'gpu',holderInstanceId:'gpu',targetId:'gpu-target',resources:demand,releaseAt:ms(600),overdue:false}];
+ assert.equal(run().targetId,'gpu-target','a short GPU wait is faster than immediately running the CPU');assert.equal(run().startMs,500);
+ f.snapshot.inFlight[0].releaseAt=ms(5100);assert.equal(run().targetId,'cpu-target','do not force all work onto a backlogged GPU');
+ f.snapshot.inFlight=[];f.snapshot.candidates[0].computeSamples[0].configId='other-model-config';
+ assert.equal(run().targetId,'cpu-target','incompatible GPU timing cannot make it artificially fast');
+});

@@ -365,7 +365,17 @@ async function main(options={openBrowser:true}){
     else space??=account.spaces[0];
     if(!space)throw Error('SPACE_NOT_FOUND');fs.writeFileSync(file,JSON.stringify(space));return space;
   }
-  let display=null;
+  let display=null,displayStarting=null;
+  async function ensureDisplay(){
+    if(role!=='center'||options.display===false)throw Error('DISPLAY_UNAVAILABLE');
+    if(display?.server.listening)return display;
+    if(!displayStarting){
+      const {startDisplay}=require('./photo-display-server.cjs');
+      displayStarting=Promise.resolve().then(()=>startDisplay({port:Number(process.env.HARMONY_DISPLAY_PORT||7460),dataDir:process.env.HARMONY_DISPLAY_DIR||path.join(os.homedir(),'HarmonyRuntime','photo-display'),coordinatorProvider:()=>control.state==='RUNNING'?{desktop:origin+'/#'+token,followCurrent:true}:null}))
+        .then(value=>{display=value;return value;}).finally(()=>{displayStarting=null;});
+    }
+    return displayStarting;
+  }
   if(!['both','center','agent'].includes(role))throw Error('DESKTOP_ROLE_INVALID');
   const server=http.createServer(async(req,res)=>{
     res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');
@@ -404,7 +414,7 @@ async function main(options={openBrowser:true}){
       try{const input=JSON.parse(body||'{}');let result={};
         if(req.url==='/center/start'&&role!=='agent')control.startCenter(input);
         else if(req.url==='/workspace/create'&&role!=='agent')result=await currentWorkspace(input.name);
-        else if(req.url==='/display/open'&&role!=='agent'){if(!display)throw Error('DISPLAY_UNAVAILABLE');result={url:display.url};}
+        else if(req.url==='/display/open'&&role!=='agent'){result={url:(await ensureDisplay()).url};}
         else if(req.url==='/agent/start'&&role!=='center')control.startAgent(input);
         else if(req.url==='/agent/certificate'&&role!=='center')result=await pairingCertificate(input.address);
         else if(req.url==='/agent/pair'&&role!=='center')result=await control.pair(input);
@@ -420,13 +430,12 @@ async function main(options={openBrowser:true}){
   sessionCookie='harmony_local_'+server.address().port+'='+localToken;
   const url=origin+'/#'+token;
   if(role==='center'&&options.display!==false){
-    const {startDisplay}=require('./photo-display-server.cjs');
-    try{display=await startDisplay({port:Number(process.env.HARMONY_DISPLAY_PORT||7460),dataDir:process.env.HARMONY_DISPLAY_DIR||path.join(os.homedir(),'HarmonyRuntime','photo-display'),coordinatorProvider:()=>control.state==='RUNNING'?{desktop:url,followCurrent:true}:null});}catch(e){control.log('展示服务未启动：'+e.message);}
+    try{await ensureDisplay();}catch(e){control.log('展示服务未启动：'+e.message+'；释放空间或端口后可再次点击打开展示');}
     server.on('close',()=>display?.server.close());
   }
   if(options.openBrowser){if(process.platform==='win32')spawn('rundll32.exe',['url.dll,FileProtocolHandler',url],{windowsHide:true,stdio:'ignore'}).on('error',()=>console.log('请在本机浏览器打开：'+url));else console.log('请在本机浏览器打开：'+url);}
   process.on('SIGINT',()=>{control.stop();if(!control.child)server.close();else control.child.once('exit',()=>server.close());});
-  return {server,control,url,display};
+  return {server,control,url,get display(){return display;}};
 }
 module.exports={RuntimeControl,addresses,main,pairingCertificate,resolvePairingInput,pairingRequest,deviceRequest};
 if(require.main===module)main({openBrowser:true,role:process.argv[2]}).catch(e=>{console.error(e.message);process.exitCode=1;});

@@ -20,6 +20,7 @@ export interface EvaluationRunner {
 }
 interface Job {
   retryAt?:number;
+  transientFailures?:number;
   identity:string;packDigest:string;ledgerEpoch:number;generation:number;next:number;runs:number;durationMs:number;bytes:number;
   paused:boolean;cooldownUntil:number;expiresAt:number;quality:number|null;inFlight:EvaluationPermit|null;lastDurationMs:number|null;
 }
@@ -142,7 +143,11 @@ export class QualificationService {
       if(!current||current.ledgerEpoch!==profile.ledgerEpoch||!current.executors.some(e=>executorIdentity(e)===identity))return this.publish(peer,targetId,job,'SUSPENDED','EVIDENCE_INVALIDATED');
       if(result.notRun===true||result.interrupted===true||['CPU_FAILED','CPU_PROCESS_FAILED','EXECUTION_FAILED','EVALUATION_SETTLEMENT_UNKNOWN'].includes(result.errorCode??'')){
         if(result.output.length!==0||result.durationMs!==0)throw Error('EVALUATION_REPORT_INVALID');
-        job.runs--;job.durationMs-=permit.timeoutMs;job.bytes-=bytes;job.retryAt=this.now()+this.policy.cooldownMs;
+        job.runs--;job.durationMs-=permit.timeoutMs;job.bytes-=bytes;
+        // A broken unrelated executor must not retry every five seconds forever.
+        // Genuine non-execution/resource pressure keeps the normal short retry.
+        job.transientFailures=result.errorCode?Math.min(5,(job.transientFailures??0)+1):0;
+        job.retryAt=this.now()+Math.min(60000,this.policy.cooldownMs*Math.pow(2,Math.max(0,job.transientFailures-1)));
         const retained=job.quality!==null&&job.expiresAt>this.now()&&job.next>=Math.max(pack.cases.length,this.policy.canarySamples);
         return this.publish(peer,targetId,job,retained?'CANARY':'WAITING_RESOURCE','EVALUATION_NOT_RUN');
       }
@@ -157,7 +162,7 @@ export class QualificationService {
         job.quality=null;job.next=0;job.expiresAt=0;job.cooldownUntil=this.now()+this.policy.cooldownMs;return this.publish(peer,targetId,job,'SUSPENDED','QUALITY_EVALUATION_FAILED');
       }
       job.durationMs-=permit.timeoutMs-result.durationMs;job.bytes-=permit.maxOutputBytes-result.output.length;
-      job.lastDurationMs=result.durationMs;job.quality=Math.min(job.quality??1,quality);job.next++;job.expiresAt=this.now()+this.policy.evidenceTtlMs;
+      job.transientFailures=0;job.lastDurationMs=result.durationMs;job.quality=Math.min(job.quality??1,quality);job.next++;job.expiresAt=this.now()+this.policy.evidenceTtlMs;
       const state=job.next>=Math.max(pack.cases.length,this.policy.activeSamples)?'ACTIVE':job.next>=Math.max(pack.cases.length,this.policy.canarySamples)?'CANARY':'CALIBRATING';
       return this.publish(peer,targetId,job,state,'EVALUATION_PASSED');
     }finally{this.busy.delete(id);}

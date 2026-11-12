@@ -82,6 +82,7 @@ export class NativeAgent {
  private socket:webSocket.WebSocket|null=null;
  private stopped=false;
  private switching=false;
+ private localOnly=false;
  private ready=false;
  private welcomed=false;
  private foreground=true;
@@ -98,6 +99,7 @@ export class NativeAgent {
  /** Called after the coordinator went away and this pairing was dropped. */
  onCoordinatorGone:(()=>void)|null=null;
  private calibrating=false;
+ private calibrationPending=false;
  private grantBusy=false;
  private renewAt=0;
  private renewalConfig='';
@@ -237,6 +239,24 @@ export class NativeAgent {
    await this.close();
   }catch(e){this.switching=false;throw e as Error;}
  }
+ /** Pause contribution without restarting the ledger or discarding qualification.
+  * Local inference starts only after all admitted cooperative work has settled. */
+ async pauseForLocal():Promise<void>{
+  if(this.stopped)throw Error('HOST_STOPPED');
+  if(this.localOnly)return;
+  this.localOnly=true;
+  try{
+   const until=monotonic()+15000;
+   while((this.refreshing||this.calibrating||this.grantBusy||this.connecting||this.running.size>0)&&monotonic()<until)await new Promise<void>(resolve=>setTimeout(resolve,50));
+   await this.work;
+   if(this.refreshing||this.calibrating||this.grantBusy||this.connecting||this.store.read().state.entries.some(e=>!e.record.resourcesSettled))throw Error('SPACE_SWITCH_BUSY');
+   if(this.ready){await this.renew();await this.profile();}
+  }catch(e){this.localOnly=false;throw e as Error;}
+ }
+ async resumeContribution():Promise<void>{
+  if(this.stopped)throw Error('HOST_STOPPED');
+  this.localOnly=false;this.renewAt=0;await this.tick();
+ }
  async leaveSpace():Promise<void>{
   this.switching=true;
   try{const port=await HarmonySdkPort.open(this.context,this.installation.bootstrap.invitation,this.installation.paired.credential);await this.closeForSwitch();await port.request('/v2/devices/leave','{}');}
@@ -311,7 +331,7 @@ export class NativeAgent {
  }
  async configure(cpu:number,memoryMB:number):Promise<void>{const next:Contribution={ownerMode:'dedicated',maxCpuThreads:cpu,maxMemoryBytes:memoryMB*1048576,reserveMemoryBytes:this.contribution.reserveMemoryBytes};if(!this.withinCeiling(next))throw Error('CONTRIBUTION_EXCEEDS_PAIRED_CEILING');this.contribution=next;await this.db.put('contribution:'+this.displayHolderId(),JSON.stringify(next));this.showPreferences();await this.tick();}
  async setEnabled(value:boolean):Promise<void>{this.enabled=value;await this.db.put('contribution-enabled:'+this.displayHolderId(),String(value));if(!value)await this.yield();this.showPreferences();if(this.ready)await this.profile();}
- private idle():boolean{return this.foreground&&this.lifecycleForeground()&&this.enabled&&!this.paused&&!this.switching;}
+ private idle():boolean{return this.foreground&&this.lifecycleForeground()&&this.enabled&&!this.paused&&!this.switching&&!this.localOnly;}
  private limits():ResourceAmountV2[]{const available=this.idle()&&this.energyGate===null,p=this.contribution,used=this.store.occupied().find(x=>x.resourcePoolId==='ram')?.amount??0;return [{resourcePoolId:'cpu',amount:available?p.maxCpuThreads:0},{resourcePoolId:'ram',amount:available&&this.availableRam!==null?Math.min(p.maxMemoryBytes,used+Math.max(0,this.availableRam-p.reserveMemoryBytes)):0}];}
  private enqueue(s:AgentSnapshotV2,type:string,payload:Object,ackOf:string|null=null):MessageEnvelopeV2 {const m=agentMessageV2(s.journal,s.state.groupId,s.state.holderInstanceId,type,payload,factory,ackOf);s.journal.outbox.push(m);return m;}
  private async flush():Promise<void>{
@@ -372,7 +392,7 @@ export class NativeAgent {
    if(old?.type==='RecoveryRequest'){this.ready=true;AppStorage.setOrCreate('agentStatus','已连接 · 前台贡献');void this.tick().catch((e:Error)=>this.error(e as Error));}
   }else if(m.type==='AttemptStatusQuery'){
    await this.store.change(new HostChange(s=>{const fresh=receiveAgentMessageV2(s.journal,m,s.state.groupId,factory);if(fresh)this.enqueue(s,'AttemptStatusReply',statusPayloadV2(m,s.state.groupId,s.state.holderInstanceId,s.state.entries.map(e=>e.record)),m.messageId);this.enqueue(s,'Ack',{messageId:m.messageId} as AckPayload,m.messageId);}));
-  }else if(m.type==='EvaluationChanged'){if(this.ready)void this.calibrate().catch((e:Error)=>this.error(e as Error));}
+  }else if(m.type==='EvaluationChanged'){this.calibrationPending=true;if(this.ready)void this.calibrate().catch((e:Error)=>this.error(e as Error));}
   else if(m.type==='DispatchOffer'){if(this.ready)void this.dispatch(m).catch((e:Error)=>this.error(e as Error));}
   else throw Error('SERVER_MESSAGE_UNSUPPORTED');await this.flush();
  }
@@ -451,7 +471,7 @@ export class NativeAgent {
     }else if(reply.settings!==null)await this.adoptCeiling(reply.settings);
    }catch(e){this.error(e as Error);}
    await this.connect();if(!this.ready)return;void this.peerLinks?.sample().catch((e:Error)=>{this.peerLinks?.invalidate();this.error(e);});const paused=reply.settings?.ownerMode==='paused';if(this.paused!==paused){this.paused=paused;if(!this.idle())await this.yield();}
-   await this.pollCancellation();this.pumpQueue();try{await this.renew();}catch(e){this.error(e as Error);}if(this.links.length===0||this.links[0].fixedMs.sampledAt+10000<this.transport.now())await this.probeLinks();await this.profile();this.pumpQueue();if(this.idle())void this.calibrate().catch((e:Error)=>this.error(e as Error));
+   await this.pollCancellation();this.pumpQueue();try{await this.renew();}catch(e){this.error(e as Error);}if(!this.localOnly&&(this.links.length===0||this.links[0].fixedMs.sampledAt+10000<this.transport.now()))await this.probeLinks();await this.profile();this.pumpQueue();if(this.idle())void this.calibrate().catch((e:Error)=>this.error(e as Error));
   }finally{this.refreshing=false;this.showStatus();}
  }
  setForeground(foreground:boolean):void {this.foreground=foreground;void (async()=>{if(!foreground){await this.yield();if(this.ready)await this.renew();}if(this.ready)await this.profile();})().catch((e:Error)=>this.error(e as Error));}
@@ -563,7 +583,7 @@ export class NativeAgent {
   try{await this.admit(offer,null,true);}finally{this.launching=false;this.pumpQueue();}
  }
  private async calibrate():Promise<void>{
-  if(this.calibrating||!this.ready||!this.idle()||this.store.read().state.grant===null)return;this.calibrating=true;
+  if(this.calibrating||!this.ready||!this.idle()||this.store.read().state.grant===null)return;this.calibrating=true;this.calibrationPending=false;
   try{
    const work=(await this.transport.json('/v2/evaluations/claim',{} as Record<string,Object>) as Claim).work;if(work===null)return;
    const permit=work.permit,pack=this.packs.find(x=>x.digest===permit.packDigest),test=pack?.cases.find(x=>x.id===permit.caseId),state=this.store.read().state;
@@ -605,7 +625,7 @@ export class NativeAgent {
     try{await this.admitEvaluation(offer);this.running.add(permit.id);report=await this.execute(offer,null,test);}catch(e){if(!this.store.read().state.entries.some(x=>x.record.attemptId===permit.id)){report={notRun:true,settled:true,permitId:permit.id,domain:permit.domain,output:'',durationMs:0};await this.db.put('evaluation:'+permit.id,JSON.stringify(report));}else throw Error('EVALUATION_SETTLEMENT_UNKNOWN');}finally{this.running.delete(permit.id);}
    }
    if(report!==null)await this.transport.json('/v2/evaluations/'+permit.id+'/report',report);
-  }finally{this.calibrating=false;}
+  }finally{this.calibrating=false;if(this.calibrationPending&&!this.stopped&&this.ready&&this.idle())void this.calibrate().catch((e:Error)=>this.error(e as Error));}
  }
  /** The coordinator stopped: forget the active pairing so the next launch shows the pairing screen. History stays for knownDeviceIds. */
  private async coordinatorGone():Promise<void>{
