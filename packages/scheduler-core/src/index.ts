@@ -13,3 +13,4 @@ export * from './micro-queue';
 export * from './trace-analysis';
 export * from './trace-causality';
 export * from './network-state';
+export * from './gpu-pipeline';

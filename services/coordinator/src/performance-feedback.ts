@@ -29,6 +29,17 @@ export async function observeExecution(tx:Prisma.TransactionClient,group:string,
 }
 type SplitReceipt={id:string;overheadMs:number|null;startup:string|null};
 
+// Pixel-scaled inference changes quickly as workers warm up or become busy.
+// Weight recent successful executions, not the fastest ones: a new slowdown
+// raises P90 immediately and repeated slow executions also raise P50.
+function recentQuantile(values:number[],q:number):number{
+  const recent=values.slice(-8),weighted=recent.map((value,i)=>({value,weight:Math.pow(.65,recent.length-1-i)}));
+  const threshold=weighted.reduce((sum,s)=>sum+s.weight,0)*q;
+  weighted.sort((a,b)=>a.value-b.value);let accumulated=0;
+  for(const sample of weighted){accumulated+=sample.weight;if(accumulated>=threshold)return sample.value;}
+  return weighted[weighted.length-1].value;
+}
+
 function summarize(samples:Observation[],receipts:Map<string,SplitReceipt>,policy:CostEstimatePolicy):ComputeSample[]{
   const groups=new Map<string,{workKey:string;configId:string;startup:string;executionTotal:boolean;times:number[];overheads:number[];oldest:number}>();
   for(const sample of samples){
@@ -43,8 +54,9 @@ function summarize(samples:Observation[],receipts:Map<string,SplitReceipt>,polic
   }
   const rank=(values:number[],q:number)=>values[Math.ceil(values.length*q)-1];
   return [...groups.values()].filter(g=>g.times.length>=(scaledWorkKey(g.workKey)?1:policy.minSamples)).slice(-16).map(g=>{
-    g.times.sort((a,b)=>a-b);g.overheads.sort((a,b)=>a-b);
-    return {workKey:g.workKey,configId:g.configId,startup:g.startup,count:g.times.length,p50Ms:rank(g.times,.5),p90Ms:rank(g.times,.9),coldP50Ms:rank(g.overheads,.5),observedAt:g.oldest,ttlMs:policy.sampleTtlMs,...(g.executionTotal?{executionTotal:true}:{})};
+    const scaled=scaledWorkKey(g.workKey);
+    const quantile=(values:number[],q:number)=>scaled?recentQuantile(values,q):rank([...values].sort((a,b)=>a-b),q);
+    return {workKey:g.workKey,configId:g.configId,startup:g.startup,count:scaled?Math.min(8,g.times.length):g.times.length,p50Ms:quantile(g.times,.5),p90Ms:quantile(g.times,.9),coldP50Ms:quantile(g.overheads,.5),observedAt:g.oldest,ttlMs:policy.sampleTtlMs,...(g.executionTotal?{executionTotal:true}:{})};
   });
 }
 

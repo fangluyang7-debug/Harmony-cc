@@ -5,6 +5,7 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { enhancePhotoLocally, text, monotonic, LocalPhotoProgress } from 'scheduler';
 import { photoSession } from '../PhotoSession';
 import { PhotoBatch, BatchProgress } from '../PhotoBatch';
+import { PhotoReadiness, ReadinessView } from '../PhotoReadiness';
 import { PhotoInput, PhotoResult, pickLocalPhotos, readPhoto, storePhotoResult, savePhotoToAlbum } from '../PhotoFiles';
 @Entry
 @Component
@@ -19,6 +20,14 @@ struct Index {
  @State private connecting:boolean=false;
  @State private connectionStatus:string='未连接协作空间 · 当前为手机本机处理';
  @State private connectionFailed:boolean=false;
+ @State private ready:boolean=false;
+ @State private readinessMessage:string='等待能力检查';
+ @State private readinessSeconds:string='0';
+ private pageVisible:boolean=true;
+ private readiness:PhotoReadiness=new PhotoReadiness(()=>photoSession.pendingReady(),(view:ReadinessView)=>{
+  const notify=view.ready&&!this.ready;this.ready=view.ready;this.readinessMessage=view.message;this.readinessSeconds=(view.elapsedMs/1000).toFixed(1);
+  if(notify&&this.pageVisible)this.getUIContext().getPromptAction().showToast({message:'协作能力已就绪，可以开始处理',duration:2500});
+ });
  @State private picking:boolean=false;
  @State private busy:boolean=false;
  @State private saving:boolean=false;
@@ -34,8 +43,8 @@ struct Index {
  private context():common.UIAbilityContext{return this.getUIContext().getHostContext() as common.UIAbilityContext;}
  private async restoreDisplay():Promise<void>{this.displayBusy=true;try{this.displayCode=await this.display.restore(this.context());}catch(e){this.displayStatus='展示连接未恢复：'+(e as Error).message;}finally{this.displayConnected=this.display.connected();this.displayBusy=false;}}
  private async connect(force:boolean=false):Promise<void>{
-  if(this.busy||this.connecting)return;this.connecting=true;this.connectionFailed=false;this.connectionStatus='正在连接协作空间…';
-  try{await photoSession.connect(force,(message:string)=>{this.connectionStatus=message;});const c=photoSession.connection();if(c){this.cooperative=true;this.status='已连接，选图后直接开始处理。';this.connectionStatus='已连接协作空间 · 自动规划设备分工';}}
+  if(this.busy||this.connecting)return;this.readiness.stop();this.ready=false;this.connecting=true;this.connectionFailed=false;this.connectionStatus='正在连接协作空间…';
+  try{await photoSession.connect(force,(message:string)=>{this.connectionStatus=message;});const c=photoSession.connection();if(c){this.cooperative=true;this.status='可以先选择照片，绿色就绪提示出现后开始处理。';this.connectionStatus='已连接协作空间 · 自动规划设备分工';this.readiness.start();}}
   catch(e){this.connectionFailed=true;this.connectionStatus='协作连接未完成：'+(e as Error).message;this.status='本机处理仍可使用。请检查调度连接 App 的当前空间，或点击重新授权。';}
   finally{this.connecting=false;}
  }
@@ -89,22 +98,25 @@ struct Index {
   }
  }
  private async useLocal():Promise<void>{
-  if(this.busy||this.connecting)return;this.connecting=true;
+  if(this.busy||this.connecting)return;this.readiness.stop();this.ready=false;this.connecting=true;
   try{await photoSession.prepareLocal();this.cooperative=false;this.connectionFailed=false;this.connectionStatus='手机独立处理 · 不使用协作算力';}
-  catch(e){this.connectionStatus='暂不能切换：'+(e as Error).message;}finally{this.connecting=false;}
+  catch(e){this.connectionStatus='暂不能切换：'+(e as Error).message;if(this.cooperative)this.readiness.start();}finally{this.connecting=false;}
  }
  private async run():Promise<void>{
   if(this.busy||this.connecting||this.picking||this.displayBusy||!this.inputs.length)return;
   if(!this.cooperative){await this.runLocal();return;}
-  this.busy=true;this.cancelled=false;this.results=[];this.elapsed='';this.progress=0;this.phase='正在准备协同任务';const began=monotonic();
-  try{await this.batch.run(this.context(),this.inputs,{cancelled:()=>this.cancelled,progress:(p:BatchProgress)=>{this.phase=p.phase;this.progress=Math.round(p.completed/p.total*100);},result:(index:number,result:PhotoResult)=>{this.results=[...this.results,result].sort((a:PhotoResult,b:PhotoResult)=>this.inputs.findIndex(i=>i.name===a.name)-this.inputs.findIndex(i=>i.name===b.name));}});this.status='处理完成。成品尚未保存到相册，可逐张点击保存。';}
-  catch(e){this.status='本轮未完成：'+(e as Error).message+'。已完成的成品仍可保存。';}
-  finally{this.elapsed=((monotonic()-began)/1000).toFixed(2)+' 秒';this.busy=false;this.phase='';}
+  if(!this.ready){this.status='请等待协作能力就绪后再开始。';return;}
+  this.readiness.stop();this.busy=true;this.cancelled=false;this.phase='开始前检查就绪状态';let started=false;
+  try{await this.batch.run(this.context(),this.inputs,{cancelled:()=>this.cancelled,started:()=>{started=true;this.results=[];this.elapsed='';this.progress=0;},duration:(ms:number)=>{this.elapsed=(ms/1000).toFixed(2)+' 秒';},progress:(p:BatchProgress)=>{this.phase=p.phase;this.progress=Math.round(p.completed/p.total*100);},result:(index:number,result:PhotoResult)=>{this.results=[...this.results,result].sort((a:PhotoResult,b:PhotoResult)=>this.inputs.findIndex(i=>i.name===a.name)-this.inputs.findIndex(i=>i.name===b.name));}});this.status='处理完成。成品尚未保存到相册，可逐张点击保存。';}
+  catch(e){this.status=started?'本轮未完成：'+(e as Error).message+'。已完成的成品仍可保存。':'尚未开始处理：'+(e as Error).message;}
+  finally{this.busy=false;this.phase='';if(this.cooperative&&this.pageVisible)this.readiness.start();}
  }
  private stop():void{this.cancelled=true;this.phase='正在停止任务，请等待执行器结算';if(this.cooperative)void this.batch.cancel();}
  private removeInput(id:string):void{this.inputs=this.inputs.filter(i=>i.id!==id);if(!this.cooperative)void this.display.select(this.inputs);}
- aboutToAppear():void{void this.restoreDisplay();}
- aboutToDisappear():void{if(this.busy)this.stop();}
+ aboutToAppear():void{this.pageVisible=true;void this.restoreDisplay();}
+ aboutToDisappear():void{this.pageVisible=false;this.readiness.stop();this.ready=false;if(this.busy)this.stop();}
+ onPageShow():void{this.pageVisible=true;if(this.cooperative&&!this.busy&&!this.connecting)this.readiness.start();}
+ onPageHide():void{this.pageVisible=false;this.readiness.stop();this.ready=false;}
  onBackPress():boolean{if(this.busy){this.stop();return true;}return false;}
  build(){Column(){
   Column({space:4}){
@@ -121,6 +133,11 @@ struct Index {
     }.width('100%');
     Text(this.connectionStatus).fontSize(14).fontColor(this.connectionFailed?'#B42318':'#2457EB').lineHeight(22).width('100%');
     if(this.connectionFailed){Button('重新授权当前协作空间').fontSize(14).enabled(!this.busy&&!this.connecting).onClick(()=>{void this.connect(true);});}
+    if(this.cooperative&&!this.connecting&&!this.busy){Column({space:6}){
+     Text(this.readinessMessage).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.ready?'#16815D':'#A65B16').width('100%');
+     Text(this.ready?'本次接入检查用时 '+this.readinessSeconds+' 秒':'已等待 '+this.readinessSeconds+' 秒 · 请保持图片 App 前台').fontSize(13).fontColor('#64748B').width('100%');
+     Text('接入准备单独显示；开始后的传输、调度、计算和结果接收均计入处理耗时。').fontSize(12).fontColor('#64748B').lineHeight(19).width('100%');
+    }.padding(12).backgroundColor(this.ready?'#EAF7F0':'#FFF7E8').borderRadius(12).width('100%');}
    }.padding(18).backgroundColor(Color.White).borderRadius(20).width('100%');
    Column({space:8}){
     Text(this.cooperative?'电脑实时展示':'仅展示连接').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#172B49').width('100%');
@@ -142,7 +159,7 @@ struct Index {
    Button(this.picking?'正在选择…':'＋ 从相册选择照片').width('100%').height(48).enabled(!this.busy&&!this.picking&&!this.connecting&&this.inputs.length<8).onClick(()=>{void this.pick();});
    if(this.inputs.length){
     if(!this.cooperative){Text(this.displayBusy?'正在检查电脑展示连接…':this.displayStatus).fontSize(13).fontColor(this.displayConnected?'#16815D':'#A65B16').lineHeight(21).width('100%');}
-    Button(this.busy?'正在处理…':'开始高清增强').width('100%').height(50).backgroundColor('#2457EB').enabled(!this.busy&&!this.picking&&!this.connecting&&!this.saving&&!this.displayBusy).onClick(()=>{void this.run();});
+    Button(this.busy?'正在处理…':this.cooperative&&!this.ready?'等待协作能力就绪…':'开始高清增强').width('100%').height(50).backgroundColor('#2457EB').enabled(!this.busy&&!this.picking&&!this.connecting&&!this.saving&&!this.displayBusy&&(!this.cooperative||this.ready)).onClick(()=>{void this.run();});
    }
    if(this.busy){Column({space:10}){Progress({value:this.progress,total:100,type:ProgressType.Linear}).width('100%');Text(this.phase).fontSize(14).fontColor('#2457EB').width('100%');Button('停止处理').fontSize(13).enabled(!this.cancelled).onClick(()=>{this.stop();});}.width('100%');}
    Text(this.status).fontSize(14).fontColor('#64748B').lineHeight(22).width('100%');

@@ -1,0 +1,99 @@
+{
+  "measurement": "Previous real user runs before R7; parallel spans cannot be summed into wall time; GPU hardware utilization not measured",
+  "runs": [
+    {
+      "runId": "f9e80b51-ee1a-46dd-a72c-fad3aaf2b094",
+      "durationMs": 31723,
+      "inputCount": 6,
+      "sameOriginalHashesAndOrderAsLatest": true,
+      "budgetMs": 180000,
+      "state": "SUCCEEDED",
+      "enhancement": {
+        "PHONE": {
+          "count": 9,
+          "executeSumMs": 37529
+        },
+        "WINDOWS_CPU": {
+          "count": 15,
+          "executeSumMs": 28716.905
+        }
+      },
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 169,
+        "NO_LEGAL_PLAN": 27
+      },
+      "gpuRejectionReasons": {
+        "CONTROL_OFFLINE": 24
+      },
+      "gpuFirstStartToLastEndMs": null,
+      "gpuLargestComputeGapMs": null
+    },
+    {
+      "runId": "46e6f372-c470-4c05-8936-b723a7b26270",
+      "durationMs": 23375,
+      "inputCount": 6,
+      "sameOriginalHashesAndOrderAsLatest": true,
+      "budgetMs": 180000,
+      "state": "SUCCEEDED",
+      "enhancement": {
+        "WINDOWS_CPU": {
+          "count": 11,
+          "executeSumMs": 18878.965
+        },
+        "GPU": {
+          "count": 9,
+          "executeSumMs": 2353.639
+        },
+        "PHONE": {
+          "count": 4,
+          "executeSumMs": 16047
+        }
+      },
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 124,
+        "DISPATCH_ADMISSION_PENDING": 11
+      },
+      "gpuRejectionReasons": {
+        "RESOURCE_WAIT_UNKNOWN": 6,
+        "RECOVERY_PRIMARY_DEVICE": 2
+      },
+      "gpuFirstStartToLastEndMs": 16216.358,
+      "gpuLargestComputeGapMs": 5347.283
+    },
+    {
+      "runId": "034da66f-ee56-4e25-ad1a-31b189cae1f5",
+      "durationMs": 21705,
+      "inputCount": 6,
+      "sameOriginalHashesAndOrderAsLatest": true,
+      "budgetMs": 180000,
+      "state": "SUCCEEDED",
+      "enhancement": {
+        "GPU": {
+          "count": 13,
+          "executeSumMs": 2602.4
+        },
+        "PHONE": {
+          "count": 3,
+          "executeSumMs": 9255
+        },
+        "WINDOWS_CPU": {
+          "count": 8,
+          "executeSumMs": 12589.134
+        }
+      },
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 110,
+        "NO_LEGAL_PLAN": 6,
+        "DISPATCH_ADMISSION_PENDING": 18,
+        "ALLOTMENT_ACK_PENDING": 2
+      },
+      "gpuRejectionReasons": {
+        "RESOURCE_WAIT_UNKNOWN": 4,
+        "RECOVERY_PRIMARY_DEVICE": 2
+      },
+      "gpuFirstStartToLastEndMs": 14375.505,
+      "gpuLargestComputeGapMs": 2941.088
+    }
+  ],
+  "postPatchHardwareRetest": false
+}

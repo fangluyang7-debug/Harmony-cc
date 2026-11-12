@@ -1,0 +1,144 @@
+{
+  "measurement": "REAL historical runs, before R9; overlapping spans are not additive wall time or hardware GPU utilization",
+  "runs": [
+    {
+      "id": "19176e53-16e1-42f8-ad89-77151281ade7",
+      "sourceDurationMs": 17687,
+      "state": "SUCCEEDED",
+      "inputs": 6,
+      "delivered": 6,
+      "inputHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "enhance": {
+        "B_GPU": {
+          "blocks": 23,
+          "executeMs": 7699.437399999937
+        },
+        "phone": {
+          "blocks": 1,
+          "executeMs": 1167
+        }
+      },
+      "gpuExecuteUnionMs": 3700.242799999978,
+      "gpuExecuteWindowMs": 11277.365300000005,
+      "gpuLargestGapMs": 3617.312900000019,
+      "gpuPeakOverlappingExecute": 4,
+      "phaseSumsMs": {
+        "PLAN": 8.061899999913294,
+        "OFFER": 4193.66399999999,
+        "QUEUE": 3442.3359999997774,
+        "ADMIT": 3638.977100000164,
+        "LOAD": 2836.200899999967,
+        "EXECUTE": 11288.437399999937,
+        "PUBLISH": 7525.393999999913,
+        "TRANSFER_SEND": 3947.5185000000056,
+        "TRANSFER_RECV": 2677.2934999999416,
+        "DELIVER": 49248.0
+      },
+      "deliveriesMs": [
+        {
+          "imageIndex": 0,
+          "offset": 8021
+        },
+        {
+          "imageIndex": 2,
+          "offset": 9156
+        },
+        {
+          "imageIndex": 1,
+          "offset": 9222
+        },
+        {
+          "imageIndex": 3,
+          "offset": 16569
+        },
+        {
+          "imageIndex": 5,
+          "offset": 17535
+        },
+        {
+          "imageIndex": 4,
+          "offset": 17582
+        }
+      ]
+    },
+    {
+      "id": "96a9586a-e804-4b00-bd63-75ac02049264",
+      "sourceDurationMs": 21437,
+      "state": "SUCCEEDED",
+      "inputs": 6,
+      "delivered": 6,
+      "inputHashes": [
+        "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+        "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+        "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+        "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+        "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+        "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a"
+      ],
+      "enhance": {
+        "B_GPU": {
+          "blocks": 19,
+          "executeMs": 7859.3863999999885
+        },
+        "phone": {
+          "blocks": 3,
+          "executeMs": 9718
+        },
+        "Windows_CPU": {
+          "blocks": 2,
+          "executeMs": 2764.9061999999976
+        }
+      },
+      "gpuExecuteUnionMs": 3709.9814999999944,
+      "gpuExecuteWindowMs": 16000.125499999995,
+      "gpuLargestGapMs": 7931.570200000002,
+      "gpuPeakOverlappingExecute": 4,
+      "phaseSumsMs": {
+        "PLAN": 9.034699999872828,
+        "OFFER": 4445.877099999867,
+        "QUEUE": 6201.730099999986,
+        "ADMIT": 3658.965699999986,
+        "LOAD": 2702.691400000025,
+        "EXECUTE": 23254.292599999986,
+        "PUBLISH": 6612.556500000021,
+        "TRANSFER_RECV": 2553.310700000002,
+        "TRANSFER_SEND": 3036.80799999999,
+        "DELIVER": 70019.0
+      },
+      "deliveriesMs": [
+        {
+          "imageIndex": 0,
+          "offset": 14528
+        },
+        {
+          "imageIndex": 2,
+          "offset": 14666
+        },
+        {
+          "imageIndex": 1,
+          "offset": 15224
+        },
+        {
+          "imageIndex": 3,
+          "offset": 15285
+        },
+        {
+          "imageIndex": 4,
+          "offset": 20724
+        },
+        {
+          "imageIndex": 5,
+          "offset": 21328
+        }
+      ]
+    }
+  ],
+  "sameInputsInOrder": true
+}

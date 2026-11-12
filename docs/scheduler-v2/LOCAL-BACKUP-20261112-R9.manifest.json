@@ -1,0 +1,75 @@
+{
+  "branch": "codex/main-gpu-integration-20261112",
+  "sourceCommit": "540cb71309eddf81f618463ecbecf67ca301383b",
+  "tag": "local-photo-backup-20261112-r9",
+  "createdAt": "2026-11-12T12:31:32.187577+00:00",
+  "assets": [
+    {
+      "name": "01-Coordinator-Windows-x64.zip",
+      "path": "01-Coordinator-Windows-x64/01-Coordinator-Windows-x64.zip",
+      "role": "coordinator",
+      "bytes": 299564716,
+      "sha256": "e49d15b48ffe22a7d00d5c5bdb6e648f6e018c9497c9c0ce1503125b2c12534f",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-photo-backup-20261112-r9/01-Coordinator-Windows-x64.zip",
+      "provenance": "fresh package from source commit",
+      "photoGpuRuntimeIncluded": false
+    },
+    {
+      "name": "02-Device-Agent-Windows-x64.zip",
+      "path": "02-Device-Agent-Windows-x64/02-Device-Agent-Windows-x64.zip",
+      "role": "windows-and-device-b",
+      "bytes": 255701063,
+      "sha256": "808615d51ba24c4e85b30466c1a5ad264b9f0c1339a566c8eaded476b5371c83",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-photo-backup-20261112-r9/02-Device-Agent-Windows-x64.zip",
+      "provenance": "fresh package from source commit",
+      "photoGpuRuntimeIncluded": true
+    },
+    {
+      "name": "Harmony-Device-Agent-API24-unsigned.hap",
+      "path": "03-Device-Agent-HarmonyOS/Harmony-Device-Agent-API24-unsigned.hap",
+      "role": "harmony-device-agent",
+      "bytes": 75030945,
+      "sha256": "49bffcb14355f2159c467179b701d83c42ed4505297659e55f53b261efc2bfdd",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-photo-backup-20261112-r9/Harmony-Device-Agent-API24-unsigned.hap",
+      "api": 24,
+      "signed": false,
+      "provenance": "unsigned counterpart of existing installed device build; not rebuilt for backup"
+    },
+    {
+      "name": "SoleAI-Cooperative-API24-unsigned.hap",
+      "path": "04-SoleAI-HarmonyOS/SoleAI-Cooperative-API24-unsigned.hap",
+      "role": "soleai",
+      "bytes": 87358685,
+      "sha256": "adc1f739acddefba737874559e9dc5ceccc62c70fc9bf9f90b68aa2e146435a4",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-photo-backup-20261112-r9/SoleAI-Cooperative-API24-unsigned.hap",
+      "api": 24,
+      "signed": false,
+      "provenance": "unsigned counterpart of existing installed device build; not rebuilt for backup"
+    },
+    {
+      "name": "Harmony-Photo-API24-unsigned.hap",
+      "path": "05-Photo-HarmonyOS/Harmony-Photo-API24-unsigned.hap",
+      "role": "photo-app",
+      "bytes": 74854415,
+      "sha256": "9352bb06ffe12e58a656b2c2aab01506852e6363cafde49f512aceef98e837fd",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-photo-backup-20261112-r9/Harmony-Photo-API24-unsigned.hap",
+      "api": 24,
+      "signed": false,
+      "provenance": "unsigned counterpart of existing installed device build; not rebuilt for backup"
+    }
+  ],
+  "verification": {
+    "archiveCrc": "passed",
+    "privateRuntimeFileScreen": "passed",
+    "criticalSourceFiles": "13 matched",
+    "isolatedShortCodePairing": "passed",
+    "photoCpuCapability": "ACTIVE",
+    "newNvidiaBenchmark": false
+  },
+  "notes": [
+    "Windows and device B share one node ZIP.",
+    "API24 HAPs require the recipient to sign in DevEco.",
+    "Photo App stage sources match current PhotoBatch/PhotoSession/PhotoReadiness/Index; agent and SoleAI binaries retain earlier tested builds.",
+    "Model files are included; user photos, results, identities and private signing keys are excluded."
+  ]
+}

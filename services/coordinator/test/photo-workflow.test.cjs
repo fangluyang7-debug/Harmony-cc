@@ -15,6 +15,21 @@ test('ready sibling submissions proceed while another sibling is blocked, withou
  await work;assert.deepEqual(started.sort(),['a','b']);assert.ok(persisted.nodes.every(n=>n.state==='SUBMITTED'));
  await g.progress('g',data);assert.equal(submitted.length,2);assert.equal(started.length,2);
 });
+test('resource-blocked graph yields immediately and resumes without waiting for UI polling',async()=>{
+ const {WorkflowJobs}=require('../dist/workflow-jobs');let available=false,started=0,waitModes=[];
+ const initial={peer:{groupId:'g'},deadlineAt:Date.now()+10000,workflow:{nodes:[{id:'a',capability:'photo.analyze.v1',dependsOn:[],parameters:'{}'}]},inputs:{a:{ref:{contentHash:'a'},bytes:1}},nodes:[{id:'a',jobId:'ja',state:'PENDING'}]};
+ let saved=JSON.stringify(initial),state='ACTIVE';
+ const db={sdkWorkflowJob:{findUniqueOrThrow:async()=>({state}),findUnique:async()=>({state,metadataJson:saved}),update:async v=>{saved=v.data.metadataJson;},updateMany:async v=>{state=v.data.state;return {count:1};}},cpuJob:{findUnique:async()=>null}};
+ const jobs={submit:async()=>{},graphInput:async()=>null,start:async(_p,_id,wait)=>{waitModes.push(wait);if(!available)throw Error('ALLOTMENT_UNAVAILABLE');started++;},winnerFor:async()=> 'ja',status:async()=>({state:started?'RUNNING':'WAITING_INPUT'}),graphOutput:async()=>null};
+ const graph=new WorkflowJobs(db,frontierMock(jobs),{context:async()=>({})},null,[]);
+ try{
+  await graph.progress('g',initial);assert.deepEqual(waitModes,[false]);available=true;
+  const until=Date.now()+2000;while(!started&&Date.now()<until)await new Promise(r=>setTimeout(r,20));
+  assert.equal(started,1,'the fallback wake progresses the existing attempt without a status poll');
+  assert.deepEqual(waitModes,[false,false]);assert.equal(JSON.parse(saved).nodes[0].jobId,'ja');
+ }finally{await graph.close();}
+});
+
 test('bundle rejects tampered, duplicate and oversized materialization',()=>{
  const b=encodeBundle([{nodeId:'a',schemaId:'photo.tile',data:Buffer.from('abc')}]);assert.equal(Buffer.from(decodeBundle(b)[0].data,'base64').toString(),'abc');
  const v=JSON.parse(b);v.parts[0].data=Buffer.from('xyz').toString('base64');assert.throws(()=>decodeBundle(Buffer.from(JSON.stringify(v))));
@@ -28,6 +43,7 @@ for(const refusal of ['ALLOTMENT_ACK_PENDING','P1008'])test('graph preserves the
  const jobs={submit:async()=>{submitted++;},graphInput:async()=>null,start:async()=>{if(++started===1){const e=Error(refusal);if(refusal==='P1008')e.code=refusal;throw e;}},winnerFor:async()=> 'ja',status:async()=>({state:started>=2?'ACCEPTED':'WAITING_INPUT'}),graphOutput:async()=>null};
  const graph=new WorkflowJobs(db,frontierMock(jobs),{context:async()=>({})},null,[]);
  await graph.progress('g',data);assert.equal(state,'ACTIVE');assert.equal(data.failure,undefined);assert.equal(data.nodes[0].state,'SUBMITTED');
+ assert.ok(data.nodes[0].scheduling.readyAt>0);assert.equal(data.nodes[0].scheduling.blocks[refusal],1);
  await graph.progress('g',data);assert.equal(submitted,1);assert.equal(started,2);assert.equal(state,'ACTIVE');await graph.progress('g',data);assert.equal(started,2,'an admitted task is never restarted by polling');
 });
 test('actual CPU neural photo graph plans, fans out, fans in and returns a verified product through SDK',{skip:!fs.existsSync(settings),timeout:300000},async()=>{

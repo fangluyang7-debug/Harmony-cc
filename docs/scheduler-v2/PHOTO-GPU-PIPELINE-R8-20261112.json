@@ -1,0 +1,100 @@
+{
+  "scope": "user-runs-before-R8-not-hardware-utilization",
+  "runs": [
+    {
+      "run": "b70b19ff-cca2-4861-97d1-6251d5793fac",
+      "sourceDurationMs": 33023,
+      "inputCount": 6,
+      "deliveryCount": 6,
+      "sameInputHashesAndOrder": true,
+      "enhanceCounts": [
+        {
+          "device": "64bda4f3-38ef-4f00-a08f-1c7f3602a8e4",
+          "backend": "CPU",
+          "count": 19
+        },
+        {
+          "device": "6e5d8675-329f-4e8b-90aa-22dbf8709b00",
+          "backend": "CPU",
+          "count": 5
+        }
+      ],
+      "gpuExecuteSumMs": 0,
+      "gpuWindowMs": null,
+      "gpuMaxGapMs": 0,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 159
+      },
+      "gpuCandidateRejections": {
+        "CONTROL_OFFLINE": 24
+      }
+    },
+    {
+      "run": "6afc1430-5bd1-4816-a7db-e3605e240d81",
+      "sourceDurationMs": 26839,
+      "inputCount": 6,
+      "deliveryCount": 6,
+      "sameInputHashesAndOrder": true,
+      "enhanceCounts": [
+        {
+          "device": "29d1892f-1325-4f11-8332-4ff7b7a87592",
+          "backend": "VULKAN",
+          "count": 17
+        },
+        {
+          "device": "6e5d8675-329f-4e8b-90aa-22dbf8709b00",
+          "backend": "CPU",
+          "count": 3
+        },
+        {
+          "device": "64bda4f3-38ef-4f00-a08f-1c7f3602a8e4",
+          "backend": "CPU",
+          "count": 4
+        }
+      ],
+      "gpuExecuteSumMs": 2796.08,
+      "gpuWindowMs": 19647.4,
+      "gpuMaxGapMs": 8280.86,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 159
+      },
+      "gpuCandidateRejections": {
+        "RESOURCE_WAIT_UNKNOWN": 5,
+        "RECOVERY_PRIMARY_DEVICE": 2
+      }
+    },
+    {
+      "run": "f485c3fe-76be-44e4-9435-cf332849b667",
+      "sourceDurationMs": 21318,
+      "inputCount": 6,
+      "deliveryCount": 6,
+      "sameInputHashesAndOrder": true,
+      "enhanceCounts": [
+        {
+          "device": "29d1892f-1325-4f11-8332-4ff7b7a87592",
+          "backend": "VULKAN",
+          "count": 16
+        },
+        {
+          "device": "64bda4f3-38ef-4f00-a08f-1c7f3602a8e4",
+          "backend": "CPU",
+          "count": 6
+        },
+        {
+          "device": "6e5d8675-329f-4e8b-90aa-22dbf8709b00",
+          "backend": "CPU",
+          "count": 2
+        }
+      ],
+      "gpuExecuteSumMs": 2707.04,
+      "gpuWindowMs": 14866.44,
+      "gpuMaxGapMs": 2412.54,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 88
+      },
+      "gpuCandidateRejections": {
+        "RECOVERY_PRIMARY_DEVICE": 2
+      }
+    }
+  ]
+}

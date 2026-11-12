@@ -1,0 +1,300 @@
+{
+  "kind": "HISTORICAL_REAL_AUDIT_NOT_R3_RETEST",
+  "batch": "426508ea-67e2-40e8-b26e-2974dd89994f",
+  "gpuBackend": "VULKAN",
+  "sameModel": "RealESRGAN 4x",
+  "deviceComputes": [
+    {
+      "device": "Windows B GPU (Vulkan)",
+      "workPixels": 12544,
+      "samples": [
+        284.51190000004135,
+        962.5206999999937,
+        298.7542000000831,
+        136.18900000001304,
+        238.87750000017695,
+        373.39830000000075
+      ],
+      "n": 6,
+      "medianMs": 291.6330500000622
+    },
+    {
+      "device": "Harmony PC CPU",
+      "workPixels": 5376,
+      "samples": [
+        820,
+        714,
+        707,
+        904
+      ],
+      "n": 4,
+      "medianMs": 767.0
+    },
+    {
+      "device": "Windows B GPU (Vulkan)",
+      "workPixels": 5376,
+      "samples": [
+        74.68850000016391,
+        60.887099999934435,
+        138.84149999986403,
+        238.34129999997094,
+        277.1300999999512,
+        121.4069999998901,
+        62.119399999966845
+      ],
+      "n": 7,
+      "medianMs": 121.4069999998901
+    },
+    {
+      "device": "Harmony PC CPU",
+      "workPixels": 12544,
+      "samples": [
+        2009,
+        1977
+      ],
+      "n": 2,
+      "medianMs": 1993.0
+    },
+    {
+      "device": "Windows local CPU",
+      "workPixels": 12544,
+      "samples": [
+        1992.5550000000512,
+        2164.190100000007,
+        2267.382200000109,
+        2037.596300000092
+      ],
+      "n": 4,
+      "medianMs": 2100.8932000000495
+    },
+    {
+      "device": "Windows local CPU",
+      "workPixels": 5376,
+      "samples": [
+        1044.8958999998868
+      ],
+      "n": 1,
+      "medianMs": 1044.8958999998868
+    }
+  ],
+  "nodeWaits": [
+    {
+      "jobId": "29d92c6f-19c3-4652-8fe4-f7a89798e10d",
+      "node": "enhance-0",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 5321,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 8
+      }
+    },
+    {
+      "jobId": "6f2d6fef-1057-446c-9dd5-c8abf2152745",
+      "node": "enhance-1",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 832,
+      "blocks": {}
+    },
+    {
+      "jobId": "b3d54574-f64b-42f5-9acd-6a9d8471bc3e",
+      "node": "enhance-2",
+      "device": "Harmony PC CPU",
+      "readyToLastAttemptMs": 20355,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 37
+      }
+    },
+    {
+      "jobId": "ae7d4b15-c40a-450b-bfff-4cf3c7d4225f",
+      "node": "enhance-3",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 11132,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 20
+      }
+    },
+    {
+      "jobId": "cd400305-8360-4ddf-a03a-aa1c0cd8bb20",
+      "node": "enhance-0",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 9264,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 16
+      }
+    },
+    {
+      "jobId": "2fe64408-7a17-4171-8197-2baa3ba183c9",
+      "node": "enhance-1",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 3066,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 4
+      }
+    },
+    {
+      "jobId": "087df3cc-c0cb-4fd6-8b02-6489044e12a2",
+      "node": "enhance-2",
+      "device": "Harmony PC CPU",
+      "readyToLastAttemptMs": 13560,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 27
+      }
+    },
+    {
+      "jobId": "b28c032d-a4ec-4a95-b7b9-ec3342007c9c",
+      "node": "enhance-3",
+      "device": "Harmony PC CPU",
+      "readyToLastAttemptMs": 13560,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 27
+      }
+    },
+    {
+      "jobId": "312c264c-07c8-478c-9ba1-c637d3ff96cb",
+      "node": "enhance-0",
+      "device": "Harmony PC CPU",
+      "readyToLastAttemptMs": 3543,
+      "blocks": {
+        "APP_QUOTA_EXCEEDED": 10
+      }
+    },
+    {
+      "jobId": "3274b208-57ae-48a9-8862-a16f0746c9bf",
+      "node": "enhance-1",
+      "device": "Harmony PC CPU",
+      "readyToLastAttemptMs": 3543,
+      "blocks": {
+        "APP_QUOTA_EXCEEDED": 10
+      }
+    },
+    {
+      "jobId": "ff904af4-8c56-4c95-8a4e-c5d3a4d5812e",
+      "node": "enhance-2",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 6274,
+      "blocks": {
+        "APP_QUOTA_EXCEEDED": 15,
+        "ALLOTMENT_UNAVAILABLE": 3
+      }
+    },
+    {
+      "jobId": "244ad2d1-10b8-4ee6-98ae-256ac649d032",
+      "node": "enhance-3",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 8145,
+      "blocks": {
+        "APP_QUOTA_EXCEEDED": 18,
+        "ALLOTMENT_UNAVAILABLE": 3
+      }
+    },
+    {
+      "jobId": "b9c5646e-0367-4e10-962d-13ed9fbe18de",
+      "node": "enhance-0",
+      "device": "Windows local CPU",
+      "readyToLastAttemptMs": 12982,
+      "blocks": {
+        "APP_QUOTA_EXCEEDED": 7,
+        "ALLOTMENT_UNAVAILABLE": 20
+      }
+    },
+    {
+      "jobId": "f378a932-b1c3-47d9-8dea-d44ae0715cce",
+      "node": "enhance-1",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 11548,
+      "blocks": {
+        "APP_QUOTA_EXCEEDED": 9,
+        "ALLOTMENT_UNAVAILABLE": 16
+      }
+    },
+    {
+      "jobId": "6cdeb535-2a02-4776-bfe1-7358469ffc70",
+      "node": "enhance-2",
+      "device": "Windows local CPU",
+      "readyToLastAttemptMs": 15699,
+      "blocks": {
+        "APP_QUOTA_EXCEEDED": 16,
+        "ALLOTMENT_UNAVAILABLE": 17
+      }
+    },
+    {
+      "jobId": "b04d4c20-9e4e-4b4d-8451-b1e3c3e1ff58",
+      "node": "enhance-3",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 13466,
+      "blocks": {
+        "APP_QUOTA_EXCEEDED": 19,
+        "ALLOTMENT_UNAVAILABLE": 11
+      }
+    },
+    {
+      "jobId": "124d61f0-d80f-45b2-9519-a1692feb79b8",
+      "node": "enhance-0",
+      "device": "Windows local CPU",
+      "readyToLastAttemptMs": 2636,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 3
+      }
+    },
+    {
+      "jobId": "0a4c43a0-cc63-4df6-9c02-d7c7b939ca2d",
+      "node": "enhance-1",
+      "device": "Windows local CPU",
+      "readyToLastAttemptMs": 6016,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 8
+      }
+    },
+    {
+      "jobId": "e6eb96b8-b9ad-4474-b005-302b2a00f01b",
+      "node": "enhance-2",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 3124,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 4
+      }
+    },
+    {
+      "jobId": "3ed8b951-4d5b-49e4-9177-98830a7da847",
+      "node": "enhance-3",
+      "device": "Harmony PC CPU",
+      "readyToLastAttemptMs": 6016,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 8
+      }
+    },
+    {
+      "jobId": "223edc28-f01a-4236-b095-a5740abf3325",
+      "node": "enhance-0",
+      "device": "Windows local CPU",
+      "readyToLastAttemptMs": 1961,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 3
+      }
+    },
+    {
+      "jobId": "ecc13459-69c5-435f-aec9-7b962073ea78",
+      "node": "enhance-1",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 763,
+      "blocks": {}
+    },
+    {
+      "jobId": "55deefd6-66cb-4c56-9ee8-8b7c723f9afc",
+      "node": "enhance-2",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 3239,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 6
+      }
+    },
+    {
+      "jobId": "f52970d0-54a2-4b81-bf0f-af2bf86cbeca",
+      "node": "enhance-3",
+      "device": "Windows B GPU (Vulkan)",
+      "readyToLastAttemptMs": 1961,
+      "blocks": {
+        "ALLOTMENT_UNAVAILABLE": 3
+      }
+    }
+  ]
+}

@@ -57,7 +57,15 @@ async function check(root, cpuOnly = false) {
       const result = await encoder.execute(offer, sample.input, AbortSignal.timeout(120000));
       const score = await encoder.pack.evaluate(sample, result.bytes);
       if (score < encoder.pack.manifest.qualityThreshold) throw Error('PHOTO_GPU_FUSED_QUALITY_FAILED');
-      report.gpu = {state: 'READY', backend: 'VULKAN', executorId: 'ncnn.photo.vulkan.v1',
+      const count=encoder.gpu.pipelineSlots||1,start=performance.now();
+      const parallel=await Promise.all(Array.from({length:count},()=>encoder.execute(offer,sample.input,AbortSignal.timeout(120000))));
+      const parallelMs=Math.round(performance.now()-start);
+      const scores=await Promise.all(parallel.map(r=>encoder.pack.evaluate(sample,r.bytes)));
+      if(scores.some(s=>s<encoder.pack.manifest.qualityThreshold))throw Error('PHOTO_GPU_PARALLEL_QUALITY_FAILED');
+      const warm=await encoder.execute(offer,sample.input,AbortSignal.timeout(120000));
+      if(await encoder.pack.evaluate(sample,warm.bytes)<encoder.pack.manifest.qualityThreshold)throw Error('PHOTO_GPU_WARM_QUALITY_FAILED');
+      report.gpu = {state: 'READY', device:encoder.gpu.name, pipelineSlots:count,
+        referencePipeline:{scope:'installation-reference-only-not-business-speedup',count,parallelMs,scores,timings:parallel.map(r=>r.timing??null),warm: warm.timing??null}, backend: 'VULKAN', executorId: 'ncnn.photo.vulkan.v1',
         index: Number(process.env.HARMONY_PHOTO_GPU_ID), vramBytes: encoder.gpu.totalBytes, score,
         runtime: process.env.HARMONY_PHOTO_VULKAN_RUNTIME || 'legacy-realesrgan-cli'};
     } catch (error) {

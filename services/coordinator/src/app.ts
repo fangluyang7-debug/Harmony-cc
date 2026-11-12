@@ -270,7 +270,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
         for(const groupId of new Set((await auth.activePeers()).map(p=>p.groupId)))await configureCpuGroup(groupId);
         const maxRuns=Math.max(8,...referencePacks.map(pack=>pack.cases.length+2)),caseTimeoutMs=15000;
         const maxBytes=Math.max(16777216,...referencePacks.map(pack=>pack.cases.reduce((sum,c)=>sum+c.input.length+c.maxOutputBytes,0)));
-        startCalibration({packs:referencePacks,policy:{maxRuns,maxDurationMs:maxRuns*caseTimeoutMs,maxBytes,maxConcurrent:1,caseTimeoutMs,canarySamples:1,activeSamples:2,evidenceTtlMs:3600000,cooldownMs:5000},
+        startCalibration({packs:referencePacks,policy:{maxRuns,maxDurationMs:maxRuns*caseTimeoutMs,maxBytes,maxConcurrent:4,caseTimeoutMs,canarySamples:1,activeSamples:2,evidenceTtlMs:3600000,cooldownMs:5000},
           gate:async()=>null,onError:()=>{},intervalMs:1000});
       }
       const stopping=await db.sdkWorkflowJob.findMany({where:{state:'CANCEL_REQUESTED'},select:{groupId:true},distinct:['groupId']});
@@ -299,7 +299,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
         const states=await db.capabilityState.findMany({where:{groupId},orderBy:{id:'asc'},select:{id:true,revision:true}});
         const revision=JSON.stringify(states);if(published.get(groupId)===revision)return;
         await profiles.refresh(groupId);published.set(groupId,revision);events.changed(groupId);
-      },onError:input.onError},input.intervalMs);
+      },onError:input.onError},input.intervalMs,8,input.policy.maxConcurrent);
       calibration.start();return service;
     };
     return {app,db,identity,store,retention,snapshots,planning,channel,auth,apps,sdk,directory,profiles,allotments,artifacts,traces,remoteEvaluation,jobs,spaces,directTransfers,startCalibration,get epoch(){return epoch;},get ready(){return ready;},restore,

@@ -191,14 +191,21 @@ test(isolateBC?'S5 relay isolation: committed B output crosses relay to C withou
    }
   }finally{restoreLink();raceRelease();for(const [ports,write] of held)ports.publish=write;if(quota)await r.db.registeredApp.update({where:{id:source.peer.app.appId},data:{maxConcurrent:2}});}
   }
-  for(const single of [false,true]){
-  const starvedId=randomUUID(),originalChoosers=new Map();let refusedId=null;
+  for(const reason of ['QUEUE_STARVED_NOT_STARTED','RESOURCE_UNAVAILABLE'])for(const single of [false,true]){
+  const starvedId=randomUUID(),originalChoosers=new Map(),originalAdmissions=new Map();let refusedId=null;
   try{
    for(const host of hosts){
+    const ledger=host.agent.ledger,admit=ledger.admit.bind(ledger);originalAdmissions.set(ledger,admit);
+    ledger.admit=(offer,...args)=>{
+     if(reason==='RESOURCE_UNAVAILABLE'&&offer.task.workflowId===starvedId&&offer.task.nodeId===(single?'compute':'encode')){
+      refusedId??=offer.task.attemptId;if(offer.task.attemptId===refusedId)throw Error('RESOURCE_UNAVAILABLE');
+     }
+     return admit(offer,...args);
+    };
     const queue=host.agent.scheduler.queue,choose=queue.choose.bind(queue);originalChoosers.set(queue,choose);
     queue.choose=(...args)=>{
      const offer=choose(...args);
-     if(offer?.task.workflowId===starvedId&&offer.task.nodeId===(single?'compute':'encode')){
+     if(reason==='QUEUE_STARVED_NOT_STARTED'&&offer?.task.workflowId===starvedId&&offer.task.nodeId===(single?'compute':'encode')){
       refusedId??=offer.task.attemptId;
       if(offer.task.attemptId===refusedId)return null;
      }
@@ -215,10 +222,10 @@ test(isolateBC?'S5 relay isolation: committed B output crosses relay to C withou
    assert.equal(attempts.length,single?2:3);assert.equal(refused.recordJson,null);
    if(single)assert.equal(result.status.targetId,JSON.parse(ran.offerJson).target.targetId);
    assert.deepEqual(result.status.nodes.find(n=>n.id===(single?'compute':'encode')).reassignedAttempts,[refusedId]);
-   assert.equal(JSON.parse(refused.rejectionJson).reply.reasonCode,'QUEUE_STARVED_NOT_STARTED');
+   assert.equal(JSON.parse(refused.rejectionJson).reply.reasonCode,reason);
    assert.notEqual(ran.holderInstanceId,refused.holderInstanceId);assert.equal(ran.state,'SUCCEEDED');
    assert.equal(await r.db.receipt.count({where:{id:refusedId}}),0);
-  }finally{for(const [queue,choose] of originalChoosers)queue.choose=choose;}
+  }finally{for(const [queue,choose] of originalChoosers)queue.choose=choose;for(const [ledger,admit] of originalAdmissions)ledger.admit=admit;}
   }
   const cancelId=randomUUID(),cancelWorkflow=structuredClone(workflow);cancelWorkflow.id=cancelId;
   const runtime=hosts[0].agent.runtime,read=runtime.ports.read;let release,entered;

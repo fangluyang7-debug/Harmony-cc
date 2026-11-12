@@ -6,6 +6,24 @@ const {qualifySimulated}=require('./fixtures.cjs');
 const fixture=()=>JSON.parse(fs.readFileSync('../../contracts/scheduling/v2/fixtures/t2/valid/DeviceProfile.json'));
 const peer={groupId:'g1',holderInstanceId:'h1',deviceId:'device1',principalId:'p1',credentialId:'c1'};
 const policy={minimumBattery:20,maximumTemperature:3,allowMetered:false,priority:'REMOTE_INTERACTIVE',requireForeground:true};
+test('durable offers are priced before heartbeat and are not counted twice after observation or settlement',async()=>{
+ const r=await runtime();try{
+  const dir=new DeviceDirectory(r.db,'SIMULATED',()=>100),p=fixture();p.inFlight=[];p.queued=[];p.pools.forEach(pool=>pool.occupied.value=0);await dir.ingest(peer,p);
+  const e=p.executors[0],offer={task:{attemptId:'pending',priority:'REMOTE_INTERACTIVE'},target:e.target,resources:e.resources};
+  const data={holderId:'h1',offer,deadlineAt:1000,plan:{decision:{suggestion:[{executionMs:500,policyQueueMs:100,uncertaintyMs:50}]}}};
+  await r.db.cpuJob.create({data:{id:'pending',groupId:'g1',principalId:'p1',sourceHolderId:'h1',state:'DISPATCHED',metadataJson:JSON.stringify(data)}});
+  await r.db.attempt.create({data:{id:'pending',groupId:'g1',workflowId:'w',nodeId:'n',holderInstanceId:'h1',executionDigest:'test',state:'OFFERED',taskJson:'{}',offerJson:JSON.stringify(offer)}});
+  let snap=await dir.snapshot('g1','p',1,policy);assert.equal(snap.queued.length,1);assert.equal(snap.queued[0].holdEstimate.value,400);assert.equal(snap.queued[0].holdEstimate.source,'PRIOR');
+  const ms=value=>({value,unit:'ms',source:'SIMULATED',sampledAt:100,ttlMs:1000});
+  p.sequence++;p.queued=[{attemptId:'pending',targetId:e.target.targetId,resources:e.resources,priority:'REMOTE_INTERACTIVE',reason:'LOCAL_QUEUE_POLICY',elapsed:ms(10)}];await dir.ingest(peer,p);
+  snap=await dir.snapshot('g1','p',2,policy);assert.equal(snap.queued.length,1);assert.equal(snap.queued[0].holdEstimate.value,400,'queue forecast must not shrink just because heartbeat caught up');p.queued=[];
+  p.sequence++;p.inFlight=[{attemptId:'pending',targetId:e.target.targetId,state:'RUNNING',resources:e.resources,elapsed:ms(10),remaining:ms(200)}];p.pools.forEach(pool=>pool.occupied.value=e.resources.find(r=>r.resourcePoolId===pool.resourcePoolId)?.amount??0);await dir.ingest(peer,p);
+  snap=await dir.snapshot('g1','p',2,policy);assert.equal(snap.queued.length,0);assert.equal(snap.inFlight.length,1);
+  p.sequence++;p.inFlight=[];p.pools.forEach(pool=>pool.occupied.value=0);await dir.ingest(peer,p);
+  await r.db.attempt.update({where:{id:'pending'},data:{recordJson:JSON.stringify({resourcesSettled:true})}});assert.equal((await dir.snapshot('g1','p',3,policy)).queued.length,0);
+  await r.db.attempt.update({where:{id:'pending'},data:{recordJson:null,state:'REJECTED'}});assert.equal((await dir.snapshot('g1','p',4,policy)).queued.length,0);
+ }finally{await r.close();}
+});
 test('recovered epoch replaces stale occupancy only after matching persisted ack and all receipts settle',async()=>{
  const r=await runtime();try{
   const dir=new DeviceDirectory(r.db,'SIMULATED',()=>100),p=fixture();p.pools[0].occupied.value=1;await dir.ingest(peer,p);
@@ -115,15 +133,27 @@ test('an overdue non-interruptible shared pool holder has no promised release ti
 
 test('fresh admitted cost forecasts unknown remaining time without freeing the physical ledger',async()=>{
  const r=await runtime();try{
-  const dir=new DeviceDirectory(r.db,'SIMULATED',()=>100),p=fixture(),pool=p.pools[0],target=p.executors[0].target.targetId;
+  const dir=new DeviceDirectory(r.db,'SIMULATED',()=>100),p=fixture(),pool=p.pools.find(p=>p.kind==='CPU_SLOTS'),target=p.executors[0].target.targetId;
   pool.occupied.value=1;pool.admissionLimit.value=1;pool.contributionLimit=1;
   const ms=value=>({value,unit:'ms',source:value===null?'UNKNOWN':'SIMULATED',sampledAt:100,ttlMs:1000});
   p.inFlight=[{attemptId:'forecast',targetId:target,state:'RUNNING',resources:[{resourcePoolId:pool.resourcePoolId,amount:1}],elapsed:ms(200),remaining:ms(null)}];
-  await dir.ingest(peer,p);
-  const data={holderId:'h1',deadlineAt:1000,offer:{target:{targetId:target}},plan:{decision:{suggestion:[{executionMs:500,uncertaintyMs:100}]}}};
+  await dir.ingest(peer,p);await qualifySimulated(r.db,p);
+  const data={holderId:'h1',deadlineAt:1000,offer:{target:{targetId:target}},plan:{decision:{suggestion:[{executionMs:600,policyQueueMs:100,uncertaintyMs:100}]}}};
   await r.db.cpuJob.create({data:{id:'forecast',groupId:'g1',principalId:'p1',sourceHolderId:'h1',state:'DISPATCHED',metadataJson:JSON.stringify(data)}});
   const snapshot=await dir.snapshot('g1','p1',1,policy);assert.equal(snapshot.inFlight[0].releaseAt.value,500);assert.equal(snapshot.inFlight[0].releaseAt.source,'PRIOR');
-  assert.equal((await dir.profiles('g1'))[0].pools[0].occupied.value,1);
+  assert.equal(snapshot.candidates[0].availability.resourceWait.value,400,'eligibility uses the same forecast as pool scheduling');
+  assert.equal(snapshot.candidates[0].categoryCapacity.find(c=>c.priority==='REMOTE_INTERACTIVE').availability.resourceWait.value,400);
+  const request={nodes:[{id:'next',capability:p.executors[0].contract.capability,modelManifest:p.executors[0].model,dependencies:[],inputs:[],output:{id:'next-output',bytes:0},baselineTargetId:'',memoryBytes:100,minimumQuality:0.99,candidates:[]}],
+   artifacts:[],links:[],deviceResources:[],domain:'SIMULATED',remainingBudgetMs:5000,networkAllowed:true,privacy:'AUTHORIZED_REMOTE',localDeviceId:p.deviceId,now:100,committedNodeIds:[],committedArtifacts:[]};
+  const planningPolicy={version:'p1',revoked:false,allowedTargetIds:[target],limits:{maxCandidates:8,lookahead:16,beamWidth:8,planningBudgetMs:20,switchCostMs:0,hysteresisMs:0}};
+  const decision=require('@harmony/scheduler-core').plan(snapshot,request,planningPolicy,{now:100,monotonic:()=>0}).decision;
+  assert.equal(decision.status,'ready',JSON.stringify(decision.rejections));assert.equal(decision.suggestion[0].startMs,400);
+  assert.equal((await dir.profiles('g1'))[0].inFlight[0].remaining.value,null,'forecast never modifies reported telemetry');
+  assert.equal((await dir.profiles('g1'))[0].pools.find(p=>p.kind==='CPU_SLOTS').occupied.value,1);
+  p.sequence++;p.inFlight[0].remaining={...ms(5),sampledAt:90};await dir.ingest(peer,p);
+  const expired=await dir.snapshot('g1','p1',2,policy);assert.equal(expired.inFlight[0].releaseAt.value,500,'passed release estimates must not become infinite reservations');
+  assert.equal(expired.candidates[0].availability.resourceWait.value,400);
+  p.sequence++;p.inFlight[0].remaining=ms(null);await dir.ingest(peer,p);
   data.holderId='other';await r.db.cpuJob.update({where:{id:'forecast'},data:{metadataJson:JSON.stringify(data)}});
   assert.equal((await dir.snapshot('g1','p1',1,policy)).inFlight[0].releaseAt.value,null);
   data.holderId='h1';data.deadlineAt=99;await r.db.cpuJob.update({where:{id:'forecast'},data:{metadataJson:JSON.stringify(data)}});

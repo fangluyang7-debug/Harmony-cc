@@ -25,6 +25,9 @@ export class PhotoSession {
  async close():Promise<void>{this.foreground=false;await this.host?.close();this.host=null;this.port=null;}
  async prepareLocal():Promise<void>{
   // Do not run unaccounted local inference alongside this App's unsettled v2 work.
+  if(this.host){await this.host.pauseForLocal();this.port=null;}
+ }
+ private async retireHost():Promise<void>{
   if(this.host){await this.host.closeForSwitch();this.host=null;this.port=null;}
  }
  connection():PhotoConnection|null{const i=this.installation;if(!i)return null;return {address:i.bootstrap.invitation.address,fingerprint:i.bootstrap.invitation.fingerprint,groupId:i.paired.peer.groupId,deviceId:i.paired.peer.deviceId,appInstanceId:i.appInstanceId??''};}
@@ -33,8 +36,8 @@ export class PhotoSession {
   const port=await HarmonySdkPort.open(this.context,i.bootstrap.invitation,i.paired.credential),info=JSON.parse(await port.request('/v2/apps/me',null)) as AppContext;
   if(info.identity.appInstanceId!==i.appInstanceId)throw Error('APP_HOST_IDENTITY_MISMATCH');
   if(this.host&&this.host.displayHolderId()!==i.paired.peer.holderInstanceId){await this.host.closeForSwitch();this.host=null;}
-  if(!this.host)this.host=await NativeAgent.start(this.context,null,()=>this.foreground,i);
-  await this.host.enablePerformance();
+  if(!this.host){this.host=await NativeAgent.start(this.context,null,()=>this.foreground,i);await this.host.enablePerformance();}
+  else await this.host.resumeContribution();
   this.installation=i;this.port=await this.host.sdkPort();
  }
  async restore():Promise<boolean>{
@@ -49,10 +52,10 @@ export class PhotoSession {
    if(raw&&!force){onStatus('正在检查上次的协作连接…');try{await this.activate(JSON.parse(raw) as Installation);onStatus('已连接协作空间');return;}catch(e){
     // A migrated center may no longer answer at the saved address. Settle any
     // previous work before asking the device app to authorize its current space.
-    await this.prepareLocal();await store.put('previousInstallation',raw);
+    await this.retireHost();await store.put('previousInstallation',raw);
     onStatus('上次连接已不可用，正在请求当前空间授权…');
    }}
-   if(force){await this.prepareLocal();if(raw)await store.put('previousInstallation',raw);}
+   if(force){await this.retireHost();if(raw)await store.put('previousInstallation',raw);}
    if(await store.get('exchangePending',false) as boolean)throw Error('上次授权结果待核对，请勿重复注册');
    onStatus('请在调度连接 App 中点击“允许并返回应用”');
    const result=await context.startAbilityForResult({bundleName:'org.harmonycc.agent',abilityName:'EnrollmentAbility',parameters:{declaration:JSON.stringify(manifest)}}),encoded=result.want?.parameters?.['registration'];
@@ -74,16 +77,23 @@ export class PhotoSession {
    return devices!==undefined&&Number.isInteger(devices)&&devices>0?Math.min(4,devices+1):2;
   }catch{return 2;} // Older coordinators retain the existing two-image window.
  }
- async waitReady(remaining:()=>number,cancelled:()=>boolean,progress:(message:string)=>void):Promise<void>{
+ async pendingReady():Promise<string[]>{
+  if(!this.host)throw Error('请先连接协作空间');
   const capabilities=['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'];
   const labels=['照片分析','图块准备','高清增强','图像合成','成品生成'];
+  const pending=await this.host.pendingCapabilities(capabilities);
+  return pending.map(c=>{const i=capabilities.indexOf(c);return i<0?c:labels[i];});
+ }
+ async requireReady():Promise<void>{
+  const pending=await this.pendingReady();if(pending.length)throw Error('协作尚未就绪：'+pending.join('、')+'。请等待绿色就绪提示后再开始。');
+ }
+ async waitReady(remaining:()=>number,cancelled:()=>boolean,progress:(message:string)=>void):Promise<void>{
   for(;;){
    if(cancelled())throw Error('已取消');if(remaining()<=0)throw Error('180 秒预算已用尽，设备能力尚未就绪');
-   if(!this.host)throw Error('请先连接协作空间');
-   const pending=await this.host.pendingCapabilities(capabilities);
+   const pending=await this.pendingReady();
    if(cancelled())throw Error('已取消');if(remaining()<=0)throw Error('180 秒预算已用尽，设备能力尚未就绪');
    if(pending.length===0)return;
-   progress('正在等待协作能力就绪：'+pending.map(c=>{const i=capabilities.indexOf(c);return i<0?c:labels[i];}).join('、'));
+   progress('正在等待协作能力就绪：'+pending.join('、'));
    await new Promise<void>(resolve=>{setTimeout(resolve,Math.min(1000,Math.max(1,remaining())));});
   }
  }

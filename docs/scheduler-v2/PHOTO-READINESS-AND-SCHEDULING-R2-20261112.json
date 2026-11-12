@@ -1,0 +1,5368 @@
+{
+  "session": "desktop-172.20.10.6-nvp2MJ",
+  "runs": [
+    {
+      "id": "426508ea-67e2-40e8-b26e-2974dd89994f",
+      "state": "SUCCEEDED",
+      "sourceDurationMs": 30158,
+      "error": null,
+      "budgetMs": 180000,
+      "startedAtBeijing": "2026-11-12T03:47:10.075000+08:00",
+      "delivered": 6,
+      "inputHashes": [
+        "cfdd54bb307d626777aba821a697b6cef75d3382c5544c109d47d76e452338eb",
+        "b12812ae3721470dadda34972b1cf41541eaf7355b9610266478bcc54a89ffab",
+        "db630125bd24352d7b14825eb346463b726ed59d2d96107ea973eeb872cb25e3",
+        "3aae213ebc8d9171c25fba8d00f455e05a853636ca5c0d0993c3f80d052cacb9",
+        "3e52acb9da6a5c597931ae1e5474e3a849c808c59f2a222578d0dd0840148fe9",
+        "04a521f0872d583a50dd65b075d1f7b48df4d595e2ee789c05359898aad7d459"
+      ],
+      "devices": [
+        {
+          "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+          "enhance": 0,
+          "nodes": 12,
+          "executionSumMs": 2986,
+          "executionMaxMs": 523
+        },
+        {
+          "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+          "enhance": 13,
+          "nodes": 13,
+          "executionSumMs": 3267.667,
+          "executionMaxMs": 962.521
+        },
+        {
+          "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+          "enhance": 6,
+          "nodes": 6,
+          "executionSumMs": 7131,
+          "executionMaxMs": 2009
+        },
+        {
+          "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+          "enhance": 5,
+          "nodes": 5,
+          "executionSumMs": 9506.62,
+          "executionMaxMs": 2267.382
+        }
+      ],
+      "phases": {
+        "ADMIT": {
+          "count": 36,
+          "sumMs": 4743.132,
+          "maxMs": 430
+        },
+        "DELIVER": {
+          "count": 6,
+          "sumMs": 106606,
+          "maxMs": 27037
+        },
+        "EXECUTE": {
+          "count": 36,
+          "sumMs": 22891.286,
+          "maxMs": 2267.382
+        },
+        "LOAD": {
+          "count": 36,
+          "sumMs": 1448.909,
+          "maxMs": 175
+        },
+        "OFFER": {
+          "count": 36,
+          "sumMs": 5990.812,
+          "maxMs": 352.816
+        },
+        "PLAN": {
+          "count": 36,
+          "sumMs": 9.162,
+          "maxMs": 0.356
+        },
+        "PUBLISH": {
+          "count": 36,
+          "sumMs": 6479.13,
+          "maxMs": 392
+        },
+        "QUEUE": {
+          "count": 36,
+          "sumMs": 914.422,
+          "maxMs": 240
+        },
+        "TRANSFER_RECV": {
+          "count": 25,
+          "sumMs": 1297.39,
+          "maxMs": 170
+        },
+        "TRANSFER_SEND": {
+          "count": 30,
+          "sumMs": 1723.306,
+          "maxMs": 203
+        }
+      },
+      "nodes": [
+        {
+          "attemptId": "4c6921fc-241c-4466-8366-22bfc70755ef",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426430456,
+            "lastAttemptAt": 1794426430456,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3437,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 564,
+            "profileSampledAt": 1794426429009,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 24,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 309,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "29d92c6f-19c3-4652-8fe4-f7a89798e10d",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426431603,
+            "lastAttemptAt": 1794426436924,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 8
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3489,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 722,
+            "profileSampledAt": 1794426433940,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 136.18900000001304,
+              "QUEUE": 0,
+              "PUBLISH": 27.509482204039756
+            },
+            "dispatchPreparationMs": 334,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "6f2d6fef-1057-446c-9dd5-c8abf2152745",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426431603,
+            "lastAttemptAt": 1794426432435,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3451,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 714,
+            "profileSampledAt": 1794426430065,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 440.2700999999943,
+              "QUEUE": 0,
+              "PUBLISH": 27.509482204039756
+            },
+            "dispatchPreparationMs": 508,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b3d54574-f64b-42f5-9acd-6a9d8471bc3e",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426431603,
+            "lastAttemptAt": 1794426451958,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 37
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3585,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 593,
+            "profileSampledAt": 1794426451022,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 26.334022550835435,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 707,
+              "QUEUE": 0,
+              "PUBLISH": 31.962962050756616
+            },
+            "dispatchPreparationMs": 331,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "ae7d4b15-c40a-450b-bfff-4cf3c7d4225f",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426431603,
+            "lastAttemptAt": 1794426442735,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 20
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3533,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 747,
+            "profileSampledAt": 1794426440511,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 60.887099999934435,
+              "QUEUE": 0,
+              "PUBLISH": 17.281311131677565
+            },
+            "dispatchPreparationMs": 294,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "fadc979f-92d5-4b3e-a3d6-d216b6e6e32e",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426454417,
+            "lastAttemptAt": 1794426454417,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3602,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 612,
+            "profileSampledAt": 1794426453037,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 412.37340277230453,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 29,
+              "QUEUE": 0,
+              "PUBLISH": 1777.9003389029006
+            },
+            "dispatchPreparationMs": 313,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "9395fcb9-3994-4173-9353-fe542cd2e637",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426430462,
+            "lastAttemptAt": 1794426430462,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3437,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 564,
+            "profileSampledAt": 1794426429009,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 24,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 316,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "cd400305-8360-4ddf-a03a-aa1c0cd8bb20",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426431811,
+            "lastAttemptAt": 1794426441075,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 16
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3520,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 741,
+            "profileSampledAt": 1794426438742,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 284.51190000004135,
+              "QUEUE": 0,
+              "PUBLISH": 27.509482204039756
+            },
+            "dispatchPreparationMs": 223,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "2fe64408-7a17-4171-8197-2baa3ba183c9",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426431811,
+            "lastAttemptAt": 1794426434877,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 4
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3471,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 715,
+            "profileSampledAt": 1794426432056,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 962.5206999999937,
+              "QUEUE": 0,
+              "PUBLISH": 27.509482204039756
+            },
+            "dispatchPreparationMs": 300,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "087df3cc-c0cb-4fd6-8b02-6489044e12a2",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426431811,
+            "lastAttemptAt": 1794426445371,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 27
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3552,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 581,
+            "profileSampledAt": 1794426443024,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 36.014856557377044,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 479.57142857142856,
+              "QUEUE": 0,
+              "PUBLISH": 47.657535663619164
+            },
+            "dispatchPreparationMs": 270,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b28c032d-a4ec-4a95-b7b9-ec3342007c9c",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426431811,
+            "lastAttemptAt": 1794426445371,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 27
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3552,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 581,
+            "profileSampledAt": 1794426443024,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 36.014856557377044,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 479.57142857142856,
+              "QUEUE": 0,
+              "PUBLISH": 47.657535663619164
+            },
+            "dispatchPreparationMs": 285,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "25044719-e42b-4243-b9a5-b0a118f34227",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426448069,
+            "lastAttemptAt": 1794426448069,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3566,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 597,
+            "profileSampledAt": 1794426447024,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 442.92104313623105,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 29,
+              "QUEUE": 0,
+              "PUBLISH": 1777.9003389029006
+            },
+            "dispatchPreparationMs": 313,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "3c3bdd8a-28ed-4f33-84e8-c41bcc7af456",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426430467,
+            "lastAttemptAt": 1794426430467,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3437,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 564,
+            "profileSampledAt": 1794426429009,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 24,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 314,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "312c264c-07c8-478c-9ba1-c637d3ff96cb",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426432014,
+            "lastAttemptAt": 1794426435557,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 10
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3479,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 568,
+            "profileSampledAt": 1794426433035,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.075281515999368,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 1119,
+              "QUEUE": 0,
+              "PUBLISH": 269.49282786885243
+            },
+            "dispatchPreparationMs": 570,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "3274b208-57ae-48a9-8862-a16f0746c9bf",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426432014,
+            "lastAttemptAt": 1794426435557,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 10
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3479,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 568,
+            "profileSampledAt": 1794426433035,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.075281515999368,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 1119,
+              "QUEUE": 0,
+              "PUBLISH": 269.49282786885243
+            },
+            "dispatchPreparationMs": 559,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "ff904af4-8c56-4c95-8a4e-c5d3a4d5812e",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426432014,
+            "lastAttemptAt": 1794426438288,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 15,
+              "ALLOTMENT_UNAVAILABLE": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3499,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 729,
+            "profileSampledAt": 1794426435417,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 15.234833031160727,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 188.68718571428326,
+              "QUEUE": 0,
+              "PUBLISH": 17.281311131677565
+            },
+            "dispatchPreparationMs": 383,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "244ad2d1-10b8-4ee6-98ae-256ac649d032",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426432014,
+            "lastAttemptAt": 1794426440159,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 18,
+              "ALLOTMENT_UNAVAILABLE": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3515,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 735,
+            "profileSampledAt": 1794426437585,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 15.234833031160727,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "phaseCosts": {
+              "EXECUTE": 60.887099999934435,
+              "QUEUE": 0,
+              "PUBLISH": 17.281311131677565
+            },
+            "costConfidence": "LOW",
+            "dispatchPreparationMs": 328,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "137518c5-1c6b-4d56-8e9e-d5b52ac5c3b3",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426441380,
+            "lastAttemptAt": 1794426441380,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3526,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 586,
+            "profileSampledAt": 1794426441043,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 193.67835380871688,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 29,
+              "QUEUE": 0,
+              "PUBLISH": 1463.5544067228875
+            },
+            "dispatchPreparationMs": 305,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "a852604e-257f-4aa9-b73d-31ed73bfdbe9",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426430504,
+            "lastAttemptAt": 1794426430504,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3439,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 564,
+            "profileSampledAt": 1794426429009,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 24,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 306,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b9c5646e-0367-4e10-962d-13ed9fbe18de",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cpu-cdde76155ad35aa78939117213062b19",
+            "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+            "executorId": "node.cpu.v1",
+            "executorVersion": "1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "node.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426432406,
+            "lastAttemptAt": 1794426445388,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 7,
+              "ALLOTMENT_UNAVAILABLE": 20
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3552,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 545,
+            "profileSampledAt": 1794426444012,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "8e6d857d412fd96f5feac2bba1befccf9abeeeac51f02af31f76857ef4f6f8fb",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 7.7873398492516905,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 2165.120299999995,
+              "QUEUE": 0,
+              "PUBLISH": 10.873215368160807
+            },
+            "dispatchPreparationMs": 286,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "f378a932-b1c3-47d9-8dea-d44ae0715cce",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426432406,
+            "lastAttemptAt": 1794426443954,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 9,
+              "ALLOTMENT_UNAVAILABLE": 16
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3539,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 754,
+            "profileSampledAt": 1794426441479,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.187589184830173,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 284.51190000004135,
+              "QUEUE": 0,
+              "PUBLISH": 27.509482204039756
+            },
+            "dispatchPreparationMs": 212,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "6cdeb535-2a02-4776-bfe1-7358469ffc70",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cpu-cdde76155ad35aa78939117213062b19",
+            "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+            "executorId": "node.cpu.v1",
+            "executorVersion": "1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "node.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426432406,
+            "lastAttemptAt": 1794426448105,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 16,
+              "ALLOTMENT_UNAVAILABLE": 17
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3564,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 550,
+            "profileSampledAt": 1794426446027,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "8e6d857d412fd96f5feac2bba1befccf9abeeeac51f02af31f76857ef4f6f8fb",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 7.7873398492516905,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 927.9086999999978,
+              "QUEUE": 0,
+              "PUBLISH": 5.592155771960494
+            },
+            "dispatchPreparationMs": 310,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b04d4c20-9e4e-4b4d-8451-b1e3c3e1ff58",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426432406,
+            "lastAttemptAt": 1794426445872,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 19,
+              "ALLOTMENT_UNAVAILABLE": 11
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3555,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 768,
+            "profileSampledAt": 1794426444760,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 13.437709612662402,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 74.68850000016391,
+              "QUEUE": 0,
+              "PUBLISH": 193.08993024969885
+            },
+            "dispatchPreparationMs": 338,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "693283b5-1bf9-4f5d-baa8-77718611dc42",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426451394,
+            "lastAttemptAt": 1794426451394,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3584,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 598,
+            "profileSampledAt": 1794426449062,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 561.7131658604586,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 29,
+              "QUEUE": 0,
+              "PUBLISH": 1777.9003389029006
+            },
+            "dispatchPreparationMs": 276,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "edc65453-7632-4259-bde2-4380bb0594e9",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426444480,
+            "lastAttemptAt": 1794426444480,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3547,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 591,
+            "profileSampledAt": 1794426443039,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 58,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 309,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "124d61f0-d80f-45b2-9519-a1692feb79b8",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cpu-cdde76155ad35aa78939117213062b19",
+            "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+            "executorId": "node.cpu.v1",
+            "executorVersion": "1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "node.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426445950,
+            "lastAttemptAt": 1794426448586,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3568,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 550,
+            "profileSampledAt": 1794426446027,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "8e6d857d412fd96f5feac2bba1befccf9abeeeac51f02af31f76857ef4f6f8fb",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 7.54714221665021,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 1992.5550000000512,
+              "QUEUE": 0,
+              "PUBLISH": 10.873215368160807
+            },
+            "dispatchPreparationMs": 363,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "0a4c43a0-cc63-4df6-9c02-d7c7b939ca2d",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cpu-cdde76155ad35aa78939117213062b19",
+            "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+            "executorId": "node.cpu.v1",
+            "executorVersion": "1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "node.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426445950,
+            "lastAttemptAt": 1794426451966,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 8
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3585,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 565,
+            "profileSampledAt": 1794426449568,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "8e6d857d412fd96f5feac2bba1befccf9abeeeac51f02af31f76857ef4f6f8fb",
+            "calibrationGeneration": 1,
+            "inFlightP90": [
+              {
+                "attemptId": "124d61f0-d80f-45b2-9519-a1692feb79b8",
+                "p90RemainingMs": 1080.8963000001386
+              }
+            ],
+            "plannedStartMs": 7.54714221665021,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 1992.5550000000512,
+              "QUEUE": 0,
+              "PUBLISH": 10.873215368160807
+            },
+            "dispatchPreparationMs": 312,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "e6eb96b8-b9ad-4474-b005-302b2a00f01b",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426445950,
+            "lastAttemptAt": 1794426449074,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 4
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3571,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 778,
+            "profileSampledAt": 1794426447499,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 13.233341513874457,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 74.68850000016391,
+              "QUEUE": 0,
+              "PUBLISH": 193.08993024969885
+            },
+            "dispatchPreparationMs": 389,
+            "dispatchReplans": 1
+          }
+        },
+        {
+          "attemptId": "3ed8b951-4d5b-49e4-9177-98830a7da847",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426445950,
+            "lastAttemptAt": 1794426451966,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 8
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3585,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 593,
+            "profileSampledAt": 1794426451022,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 26.96643112586696,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 707,
+              "QUEUE": 0,
+              "PUBLISH": 31.962962050756616
+            },
+            "dispatchPreparationMs": 298,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "d47d3aa3-0e6e-4921-8958-4332035ae4b6",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426455246,
+            "lastAttemptAt": 1794426455246,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3608,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 612,
+            "profileSampledAt": 1794426453037,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 445.478699731045,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 29,
+              "QUEUE": 0,
+              "PUBLISH": 1777.9003389029006
+            },
+            "dispatchPreparationMs": 311,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "f32633a0-1637-41aa-aeff-58a150d5bead",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426452752,
+            "lastAttemptAt": 1794426452752,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3593,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 603,
+            "profileSampledAt": 1794426451038,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 58,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 134,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "223edc28-f01a-4236-b095-a5740abf3325",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cpu-cdde76155ad35aa78939117213062b19",
+            "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+            "executorId": "node.cpu.v1",
+            "executorVersion": "1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "node.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426453458,
+            "lastAttemptAt": 1794426455419,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 2,
+            "snapshotVersion": 3608,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 577,
+            "profileSampledAt": 1794426454384,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "8e6d857d412fd96f5feac2bba1befccf9abeeeac51f02af31f76857ef4f6f8fb",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 7.95515360067732,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 2164.190100000007,
+              "QUEUE": 0,
+              "PUBLISH": 10.873215368160807
+            },
+            "dispatchPreparationMs": 332,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "ecc13459-69c5-435f-aec9-7b962073ea78",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426453458,
+            "lastAttemptAt": 1794426454221,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 3598,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 788,
+            "profileSampledAt": 1794426452054,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 13.580491108707495,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 284.51190000004135,
+              "QUEUE": 0,
+              "PUBLISH": 514.0112855487378
+            },
+            "dispatchPreparationMs": 153,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "55deefd6-66cb-4c56-9ee8-8b7c723f9afc",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426453458,
+            "lastAttemptAt": 1794426456697,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 6
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3616,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 796,
+            "profileSampledAt": 1794426454702,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 13.580491108707495,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 74.68850000016391,
+              "QUEUE": 0,
+              "PUBLISH": 193.08993024969885
+            },
+            "dispatchPreparationMs": 299,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "f52970d0-54a2-4b81-bf0f-af2bf86cbeca",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426453458,
+            "lastAttemptAt": 1794426455419,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 3611,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 796,
+            "profileSampledAt": 1794426454702,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 13.580491108707495,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 138.84149999986403,
+              "QUEUE": 0,
+              "PUBLISH": 193.08993024969885
+            },
+            "dispatchPreparationMs": 635,
+            "dispatchReplans": 2
+          }
+        },
+        {
+          "attemptId": "0bb9b72e-b668-4811-a83b-ae75ece62594",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794426458126,
+            "lastAttemptAt": 1794426458126,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 3627,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 622,
+            "profileSampledAt": 1794426457024,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 3,
+            "inFlightP90": [],
+            "plannedStartMs": 503.8088646752837,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 450,
+              "QUEUE": 0,
+              "PUBLISH": 406.2570933165195
+            },
+            "dispatchPreparationMs": 94,
+            "dispatchReplans": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "9435b0cb-7e9e-4b59-b1b1-51bd208b1400",
+      "state": "FAILED",
+      "sourceDurationMs": 30202,
+      "error": "照片 11：JOB_REJECTED",
+      "budgetMs": 180000,
+      "startedAtBeijing": "2026-11-12T03:34:31.572000+08:00",
+      "delivered": 5,
+      "inputHashes": [
+        "cfdd54bb307d626777aba821a697b6cef75d3382c5544c109d47d76e452338eb",
+        "b12812ae3721470dadda34972b1cf41541eaf7355b9610266478bcc54a89ffab",
+        "db630125bd24352d7b14825eb346463b726ed59d2d96107ea973eeb872cb25e3",
+        "3aae213ebc8d9171c25fba8d00f455e05a853636ca5c0d0993c3f80d052cacb9",
+        "3e52acb9da6a5c597931ae1e5474e3a849c808c59f2a222578d0dd0840148fe9",
+        "04a521f0872d583a50dd65b075d1f7b48df4d595e2ee789c05359898aad7d459"
+      ],
+      "devices": [
+        {
+          "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+          "enhance": 3,
+          "nodes": 14,
+          "executionSumMs": 19459,
+          "executionMaxMs": 6711
+        },
+        {
+          "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+          "enhance": 11,
+          "nodes": 11,
+          "executionSumMs": 2627.533,
+          "executionMaxMs": 952.668
+        },
+        {
+          "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+          "enhance": 5,
+          "nodes": 5,
+          "executionSumMs": 6125,
+          "executionMaxMs": 1927
+        },
+        {
+          "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+          "enhance": 2,
+          "nodes": 2,
+          "executionSumMs": 2639.437,
+          "executionMaxMs": 1330.238
+        },
+        {
+          "deviceId": "unexecuted",
+          "enhance": 3,
+          "nodes": 4,
+          "executionSumMs": 0,
+          "executionMaxMs": 0
+        }
+      ],
+      "phases": {
+        "ADMIT": {
+          "count": 33,
+          "sumMs": 3566.012,
+          "maxMs": 207
+        },
+        "DELIVER": {
+          "count": 5,
+          "sumMs": 92867,
+          "maxMs": 28862
+        },
+        "EXECUTE": {
+          "count": 32,
+          "sumMs": 30850.97,
+          "maxMs": 6711
+        },
+        "LOAD": {
+          "count": 32,
+          "sumMs": 949.929,
+          "maxMs": 151
+        },
+        "OFFER": {
+          "count": 33,
+          "sumMs": 4625.243,
+          "maxMs": 363.459
+        },
+        "PLAN": {
+          "count": 33,
+          "sumMs": 8.637,
+          "maxMs": 0.748
+        },
+        "PUBLISH": {
+          "count": 32,
+          "sumMs": 5397.323,
+          "maxMs": 395
+        },
+        "QUEUE": {
+          "count": 34,
+          "sumMs": 2825.193,
+          "maxMs": 1962.301
+        },
+        "TRANSFER_RECV": {
+          "count": 16,
+          "sumMs": 818.618,
+          "maxMs": 146
+        },
+        "TRANSFER_SEND": {
+          "count": 26,
+          "sumMs": 1544.181,
+          "maxMs": 140
+        }
+      },
+      "nodes": [
+        {
+          "attemptId": "4e32acb7-4d5c-49e9-acd2-7a91f8f311f4",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425672150,
+            "lastAttemptAt": 1794425672150,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1259,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 148,
+            "profileSampledAt": 1794425671010,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 49,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 143,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "80dc2324-2796-40eb-86a8-099ff28e832a",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425672876,
+            "lastAttemptAt": 1794425682604,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 11,
+              "APP_QUOTA_EXCEEDED": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1329,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 281,
+            "profileSampledAt": 1794425680231,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 256.5877000000037,
+              "QUEUE": 0,
+              "PUBLISH": 308.3339284830541
+            },
+            "dispatchPreparationMs": 308,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b2f771cf-33da-4ae4-9067-989c18652e86",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425672876,
+            "lastAttemptAt": 1794425673678,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1268,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 264,
+            "profileSampledAt": 1794425672068,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 256.5877000000037,
+              "QUEUE": 0,
+              "PUBLISH": 308.3339284830541
+            },
+            "dispatchPreparationMs": 324,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "a426c978-3878-472d-b3d9-e3df09043456",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425672876,
+            "lastAttemptAt": 1794425677105,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 4,
+              "APP_QUOTA_EXCEEDED": 1
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1297,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 272,
+            "profileSampledAt": 1794425675244,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 108.56386148607828
+            },
+            "dispatchPreparationMs": 1270,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "9bd67a08-aafc-456e-9bb5-cee9da2b6c12",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425672876,
+            "lastAttemptAt": 1794425683816,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 15,
+              "APP_QUOTA_EXCEEDED": 2
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1338,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 287,
+            "profileSampledAt": 1794425682585,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 108.56386148607828
+            },
+            "dispatchPreparationMs": 269,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "69f53346-6eef-4349-a477-14447d03a6f4",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425685086,
+            "lastAttemptAt": 1794425685086,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1351,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 170,
+            "profileSampledAt": 1794425683037,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 847.1318359374999,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 436,
+              "QUEUE": 0,
+              "PUBLISH": 1145.1743478089531
+            },
+            "dispatchPreparationMs": 389,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "9446e78e-5bf6-4522-89fe-b36bd800c526",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425672154,
+            "lastAttemptAt": 1794425672154,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1259,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 148,
+            "profileSampledAt": 1794425671010,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 49,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 166,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "87bb6f92-a303-4a39-b1ea-6f821ed57a63",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673711,
+            "lastAttemptAt": 1794425689494,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 8,
+              "ALLOTMENT_UNAVAILABLE": 27
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1386,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 188,
+            "profileSampledAt": 1794425689020,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 57.717193603515625,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 1113,
+              "QUEUE": 0,
+              "PUBLISH": 660.56640625
+            },
+            "dispatchPreparationMs": 424,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "889253cd-c93b-4ed9-9901-a04c49ce9967",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673711,
+            "lastAttemptAt": 1794425689494,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 8,
+              "ALLOTMENT_UNAVAILABLE": 27
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1386,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 188,
+            "profileSampledAt": 1794425689020,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 57.717193603515625,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 1113,
+              "QUEUE": 0,
+              "PUBLISH": 660.56640625
+            },
+            "dispatchPreparationMs": 450,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "2513ba93-d54d-47a5-af72-c505f26050c5",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673711,
+            "lastAttemptAt": 1794425679812,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 9,
+              "ALLOTMENT_UNAVAILABLE": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 2,
+            "snapshotVersion": 1313,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 175,
+            "profileSampledAt": 1794425679022,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 32.920530225409834,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 821,
+              "QUEUE": 0,
+              "PUBLISH": 179.91900811790669
+            },
+            "dispatchPreparationMs": 738,
+            "dispatchReplans": 1
+          }
+        },
+        {
+          "attemptId": "9f480224-17a3-4edf-bc03-9283e4f660d9",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673711,
+            "lastAttemptAt": 1794425688583,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 8,
+              "ALLOTMENT_UNAVAILABLE": 24
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1376,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 314,
+            "profileSampledAt": 1794425687102,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 29.465364199223195,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 108.56386148607828
+            },
+            "dispatchPreparationMs": 192,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "1b3277cf-831d-43e3-9219-8facc8ec63e0",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425692811,
+            "lastAttemptAt": 1794425698621,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 3,
+              "NO_LEGAL_PLAN": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1454,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 206,
+            "profileSampledAt": 1794425699014,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 2658.2586831553435,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 27,
+              "QUEUE": 0,
+              "PUBLISH": 1923.6397383354347
+            },
+            "dispatchPreparationMs": 858,
+            "dispatchReplans": 5
+          }
+        },
+        {
+          "attemptId": "246e7043-d116-453b-a573-72d689e88a34",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425672161,
+            "lastAttemptAt": 1794425672161,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1259,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 148,
+            "profileSampledAt": 1794425671010,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 49,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 175,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "d1be72db-24e1-4688-ae25-c81e8b42d4c9",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673071,
+            "lastAttemptAt": 1794425680914,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 7,
+              "APP_QUOTA_EXCEEDED": 4
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1321,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 281,
+            "profileSampledAt": 1794425680231,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 256.5877000000037,
+              "QUEUE": 0,
+              "PUBLISH": 308.3339284830541
+            },
+            "dispatchPreparationMs": 756,
+            "dispatchReplans": 1
+          }
+        },
+        {
+          "attemptId": "5b10fd1b-e0b3-43e8-be35-a8c0544d382d",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673071,
+            "lastAttemptAt": 1794425686235,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 19,
+              "APP_QUOTA_EXCEEDED": 4
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1358,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 300,
+            "profileSampledAt": 1794425684598,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 256.5877000000037,
+              "QUEUE": 0,
+              "PUBLISH": 308.3339284830541
+            },
+            "dispatchPreparationMs": 223,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "031f5fb0-32cb-4322-b707-8d9ec7bce17e",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673071,
+            "lastAttemptAt": 1794425687238,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 23,
+              "APP_QUOTA_EXCEEDED": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1363,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 307,
+            "profileSampledAt": 1794425685717,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 108.56386148607828
+            },
+            "dispatchPreparationMs": 226,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "7bfbb54c-93e3-4222-b878-4149b1879f57",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673071,
+            "lastAttemptAt": 1794425679944,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 7,
+              "APP_QUOTA_EXCEEDED": 2
+            }
+          },
+          "evidence": {
+            "candidateCount": 2,
+            "snapshotVersion": 1311,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 175,
+            "profileSampledAt": 1794425679022,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 30.984941480138716,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 821,
+              "QUEUE": 0,
+              "PUBLISH": 179.91900811790669
+            },
+            "dispatchPreparationMs": 373,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "4140568d-ced8-4299-bef4-1df24a8d8b11",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425688728,
+            "lastAttemptAt": 1794425688728,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1379,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 178,
+            "profileSampledAt": 1794425687011,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 719.4673227163461,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 27,
+              "QUEUE": 0,
+              "PUBLISH": 1145.1743478089531
+            },
+            "dispatchPreparationMs": 175,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "3e383908-f556-46de-9277-e6143f757968",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425672198,
+            "lastAttemptAt": 1794425672198,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1259,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 148,
+            "profileSampledAt": 1794425671010,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 49,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 149,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "9744ba31-1bd8-4797-bd89-76401f792d86",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673384,
+            "lastAttemptAt": 1794425684817,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 9,
+              "ALLOTMENT_UNAVAILABLE": 14
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1345,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 294,
+            "profileSampledAt": 1794425683472,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 30.58806905322253,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 256.5877000000037,
+              "QUEUE": 0,
+              "PUBLISH": 308.3339284830541
+            },
+            "dispatchPreparationMs": 181,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "4661444c-b431-4be1-a535-f79cb99bd1ae",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673384,
+            "lastAttemptAt": 1794425675678,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 8
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1291,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 169,
+            "profileSampledAt": 1794425675029,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 30.131347656249996,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 1557,
+              "QUEUE": 0,
+              "PUBLISH": 308.6813524590164
+            },
+            "dispatchPreparationMs": 382,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "910b5fd3-1193-473b-99bb-0064854459aa",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cpu-cdde76155ad35aa78939117213062b19",
+            "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+            "executorId": "node.cpu.v1",
+            "executorVersion": "1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "node.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673384,
+            "lastAttemptAt": 1794425675678,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 8
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1291,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 151,
+            "profileSampledAt": 1794425675014,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "8e6d857d412fd96f5feac2bba1befccf9abeeeac51f02af31f76857ef4f6f8fb",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 2.3855301797283355,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 927.9086999999978,
+              "QUEUE": 0,
+              "PUBLISH": 24.629582299727403
+            },
+            "dispatchPreparationMs": 408,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "63ff855b-5230-4ce1-9a04-70466a984dc1",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cpu-cdde76155ad35aa78939117213062b19",
+            "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+            "executorId": "node.cpu.v1",
+            "executorVersion": "1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "node.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425673384,
+            "lastAttemptAt": 1794425675678,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 8
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1291,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 151,
+            "profileSampledAt": 1794425675014,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "8e6d857d412fd96f5feac2bba1befccf9abeeeac51f02af31f76857ef4f6f8fb",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 2.3855301797283355,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 927.9086999999978,
+              "QUEUE": 0,
+              "PUBLISH": 24.629582299727403
+            },
+            "dispatchPreparationMs": 420,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "02792845-522e-4b88-8878-4e3f3018a4c7",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425686392,
+            "lastAttemptAt": 1794425686392,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1361,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 171,
+            "profileSampledAt": 1794425685021,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 1039.9205979567307,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 436,
+              "QUEUE": 0,
+              "PUBLISH": 1145.1743478089531
+            },
+            "dispatchPreparationMs": 237,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "299b0aec-22c9-4a54-86d7-48b326e8e3eb",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425688213,
+            "lastAttemptAt": 1794425688213,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1375,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 178,
+            "profileSampledAt": 1794425687011,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 63,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 179,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "2fb33e4d-522d-45f7-8cf3-871d70acde60",
+          "node": "enhance-0",
+          "state": "SUBMITTED",
+          "actualTarget": {},
+          "scheduling": {
+            "readyAt": 1794425689404,
+            "lastAttemptAt": 1794425691816,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 5
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1400,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 335,
+            "profileSampledAt": 1794425691135,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.895820487297254,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 244.45179999998072,
+              "QUEUE": 0,
+              "PUBLISH": 121.74480215281562
+            }
+          }
+        },
+        {
+          "attemptId": "8e3bedda-3677-4811-bf50-a252c1a4fe63",
+          "node": "enhance-1",
+          "state": "SUBMITTED",
+          "actualTarget": {},
+          "scheduling": {
+            "readyAt": 1794425689404,
+            "lastAttemptAt": 1794425691424,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1398,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 329,
+            "profileSampledAt": 1794425689766,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 29.522938807120596,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 244.45179999998072,
+              "QUEUE": 0,
+              "PUBLISH": 308.3339284830541
+            },
+            "dispatchPreparationMs": 224,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "a78228aa-9b10-413b-a70e-2f62163eefa4",
+          "node": "enhance-2",
+          "state": "SUBMITTED",
+          "actualTarget": {},
+          "scheduling": {
+            "readyAt": 1794425689404,
+            "lastAttemptAt": 1794425691816,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 5
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1400,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 335,
+            "profileSampledAt": 1794425691135,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.895820487297254,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 119.36259999999311,
+              "QUEUE": 0,
+              "PUBLISH": 50.15358301040759
+            }
+          }
+        },
+        {
+          "attemptId": "5138716d-a490-4ae3-9a23-72ad1624683f",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425689404,
+            "lastAttemptAt": 1794425690267,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1391,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 329,
+            "profileSampledAt": 1794425689766,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 29.522938807120596,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 119.36259999999311,
+              "QUEUE": 0,
+              "PUBLISH": 108.56386148607828
+            },
+            "dispatchPreparationMs": 293,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "928d3570-b332-49d4-b570-826ff7b0317c",
+          "node": "deliver",
+          "state": "PENDING",
+          "actualTarget": {},
+          "scheduling": {},
+          "evidence": null
+        },
+        {
+          "attemptId": "a4974cd7-2e10-492d-aa6b-e177674ba370",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425689393,
+            "lastAttemptAt": 1794425689393,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1386,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 185,
+            "profileSampledAt": 1794425689010,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 63,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 303,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b21352c2-e53f-409a-be17-5cee4cb88472",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-b60b06019717e89b5eefaeb7dcc8c968",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425690896,
+            "lastAttemptAt": 1794425692638,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 4
+            }
+          },
+          "evidence": {
+            "candidateCount": 2,
+            "snapshotVersion": 1406,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 194,
+            "profileSampledAt": 1794425691016,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "e8fefe4ab448866ad0bbdb8392f3825f5d589f8bdd5ec477b941057048d98e79",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 2823,
+              "QUEUE": 0,
+              "PUBLISH": 351.9308007566204
+            },
+            "dispatchPreparationMs": 287,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "82fb1672-57cc-4f98-8171-a61c4aee3e01",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-b60b06019717e89b5eefaeb7dcc8c968",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425690896,
+            "lastAttemptAt": 1794425692638,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 4
+            }
+          },
+          "evidence": {
+            "candidateCount": 2,
+            "snapshotVersion": 1406,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 194,
+            "profileSampledAt": 1794425691016,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "e8fefe4ab448866ad0bbdb8392f3825f5d589f8bdd5ec477b941057048d98e79",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 2823,
+              "QUEUE": 0,
+              "PUBLISH": 351.9308007566204
+            },
+            "dispatchPreparationMs": 316,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "d8a432d2-5547-4432-adf1-a02ba97fd9b3",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425690896,
+            "lastAttemptAt": 1794425691810,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 1
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 1400,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 335,
+            "profileSampledAt": 1794425691135,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 17.20149412233196,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 119.36259999999311,
+              "QUEUE": 0,
+              "PUBLISH": 50.15358301040759
+            },
+            "dispatchPreparationMs": 177,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "759508e6-b408-4bd3-ab3b-1286cba56890",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-b60b06019717e89b5eefaeb7dcc8c968",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425690896,
+            "lastAttemptAt": 1794425692638,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 4
+            }
+          },
+          "evidence": {
+            "candidateCount": 2,
+            "snapshotVersion": 1406,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 194,
+            "profileSampledAt": 1794425691016,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "e8fefe4ab448866ad0bbdb8392f3825f5d589f8bdd5ec477b941057048d98e79",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 1209.857142857143,
+              "QUEUE": 0,
+              "PUBLISH": 144.46544963745268
+            },
+            "dispatchPreparationMs": 303,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "9d6de773-048c-4e0e-bf50-c50171a7747f",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425700096,
+            "lastAttemptAt": 1794425700096,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1457,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 206,
+            "profileSampledAt": 1794425699014,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 2560.8471279456967,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 27,
+              "QUEUE": 0,
+              "PUBLISH": 1923.6397383354347
+            },
+            "dispatchPreparationMs": 79,
+            "dispatchReplans": 0
+          }
+        }
+      ]
+    },
+    {
+      "id": "f0f69908-c69f-43a4-81a3-a7167683a177",
+      "state": "SUCCEEDED",
+      "sourceDurationMs": 59331,
+      "error": null,
+      "budgetMs": 180000,
+      "startedAtBeijing": "2026-11-12T03:32:17.239000+08:00",
+      "delivered": 6,
+      "inputHashes": [
+        "cfdd54bb307d626777aba821a697b6cef75d3382c5544c109d47d76e452338eb",
+        "b12812ae3721470dadda34972b1cf41541eaf7355b9610266478bcc54a89ffab",
+        "db630125bd24352d7b14825eb346463b726ed59d2d96107ea973eeb872cb25e3",
+        "3aae213ebc8d9171c25fba8d00f455e05a853636ca5c0d0993c3f80d052cacb9",
+        "3e52acb9da6a5c597931ae1e5474e3a849c808c59f2a222578d0dd0840148fe9",
+        "04a521f0872d583a50dd65b075d1f7b48df4d595e2ee789c05359898aad7d459"
+      ],
+      "devices": [
+        {
+          "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+          "enhance": 0,
+          "nodes": 12,
+          "executionSumMs": 3176,
+          "executionMaxMs": 562
+        },
+        {
+          "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+          "enhance": 20,
+          "nodes": 20,
+          "executionSumMs": 4527.102,
+          "executionMaxMs": 968.269
+        },
+        {
+          "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+          "enhance": 2,
+          "nodes": 2,
+          "executionSumMs": 2378,
+          "executionMaxMs": 1557
+        },
+        {
+          "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+          "enhance": 2,
+          "nodes": 2,
+          "executionSumMs": 6134.132,
+          "executionMaxMs": 3125.694
+        }
+      ],
+      "phases": {
+        "ADMIT": {
+          "count": 36,
+          "sumMs": 3876.769,
+          "maxMs": 255
+        },
+        "DELIVER": {
+          "count": 6,
+          "sumMs": 146073,
+          "maxMs": 35376
+        },
+        "EXECUTE": {
+          "count": 36,
+          "sumMs": 16215.234,
+          "maxMs": 3125.694
+        },
+        "LOAD": {
+          "count": 36,
+          "sumMs": 1631.915,
+          "maxMs": 231
+        },
+        "OFFER": {
+          "count": 36,
+          "sumMs": 6262.746,
+          "maxMs": 480.444
+        },
+        "PLAN": {
+          "count": 36,
+          "sumMs": 12.901,
+          "maxMs": 1.457
+        },
+        "PUBLISH": {
+          "count": 36,
+          "sumMs": 7155.896,
+          "maxMs": 410.365
+        },
+        "QUEUE": {
+          "count": 36,
+          "sumMs": 791.532,
+          "maxMs": 237
+        },
+        "TRANSFER_RECV": {
+          "count": 26,
+          "sumMs": 1481.211,
+          "maxMs": 225
+        },
+        "TRANSFER_SEND": {
+          "count": 30,
+          "sumMs": 1693.846,
+          "maxMs": 175
+        }
+      },
+      "nodes": [
+        {
+          "attemptId": "677bf621-b22f-4ef7-b36b-f8838c80e84c",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425556284,
+            "lastAttemptAt": 1794425556284,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 811,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 42,
+            "profileSampledAt": 1794425554011,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 10,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 251,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "00bc17be-1873-4fc2-b6a9-bfcf4bcdd9ba",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425557212,
+            "lastAttemptAt": 1794425557698,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 815,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 81,
+            "profileSampledAt": 1794425556075,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 13.695252278669823,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 440.2700999999943,
+              "QUEUE": 0,
+              "PUBLISH": 44.220766898056326
+            },
+            "dispatchPreparationMs": 180,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "fc0bbf26-0468-405d-9d3c-563c7117c4e5",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425557212,
+            "lastAttemptAt": 1794425570265,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 21
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 892,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 113,
+            "profileSampledAt": 1794425566349,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.967116562500273,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 287.2456999999995,
+              "QUEUE": 0,
+              "PUBLISH": 270.093433203425
+            },
+            "dispatchPreparationMs": 307,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b9e24a76-25ca-4bc8-8a5b-f8badbb28fc5",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425557212,
+            "lastAttemptAt": 1794425586185,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 48
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 986,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 165,
+            "profileSampledAt": 1794425583834,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.967116562500273,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 102.8105881104539
+            },
+            "dispatchPreparationMs": 175,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b346f0b9-0623-4ade-a250-587e60bc6f91",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425557212,
+            "lastAttemptAt": 1794425577402,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 35
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 942,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 141,
+            "profileSampledAt": 1794425574607,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.967116562500273,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 68.92170000000624,
+              "QUEUE": 0,
+              "PUBLISH": 102.8105881104539
+            },
+            "dispatchPreparationMs": 515,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "f115af16-1454-4abd-877a-e54ed6abe224",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425587515,
+            "lastAttemptAt": 1794425587515,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1002,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 84,
+            "profileSampledAt": 1794425587006,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 1948.3966124487704,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 27,
+              "QUEUE": 0,
+              "PUBLISH": 3551.730498305485
+            },
+            "dispatchPreparationMs": 296,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "e84eeb78-f012-4e0f-bde1-eb21aadd5841",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425556288,
+            "lastAttemptAt": 1794425556288,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 811,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 42,
+            "profileSampledAt": 1794425554011,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 10,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 262,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "11ac194f-d138-4b70-b933-9fdf301effd5",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425557907,
+            "lastAttemptAt": 1794425558895,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 1
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 825,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 102,
+            "profileSampledAt": 1794425557025,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 44.37567423451292,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 1119,
+              "QUEUE": 0,
+              "PUBLISH": 785.3621532156366
+            },
+            "dispatchPreparationMs": 580,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "92d71b98-2843-4067-a7ac-d5685e813ef2",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425557907,
+            "lastAttemptAt": 1794425560535,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 835,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 89,
+            "profileSampledAt": 1794425559061,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 14.566714879162962,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 968.269100000005,
+              "QUEUE": 0,
+              "PUBLISH": 44.220766898056326
+            },
+            "dispatchPreparationMs": 424,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "24a0c13b-9c52-487c-96e6-1102595ad8bc",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-467375d29bc8102f9f915f9318aaaef1",
+            "deviceId": "c035669a-e094-43fe-b4ec-4125430e9175",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425557907,
+            "lastAttemptAt": 1794425558895,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 1
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 826,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 102,
+            "profileSampledAt": 1794425557025,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "289afccde2d47423f6da08f17e69283626b29ce4ab4dc11a46360d5e3b2c7e1d",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 44.37567423451292,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 479.57142857142856,
+              "QUEUE": 0,
+              "PUBLISH": 288.026989084174
+            },
+            "dispatchPreparationMs": 645,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "1ff57076-cde3-4084-adae-eb1b22b1d297",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425557907,
+            "lastAttemptAt": 1794425565339,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 10
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 864,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 97,
+            "profileSampledAt": 1794425561619,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 14.566714879162962,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 188.68718571428326,
+              "QUEUE": 0,
+              "PUBLISH": 21.69377836150226
+            },
+            "dispatchPreparationMs": 473,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "d6700f28-6d07-4de1-b968-9cc4c9e0433d",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425568168,
+            "lastAttemptAt": 1794425568168,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 883,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 64,
+            "profileSampledAt": 1794425567037,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 339.2104215104824,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 27,
+              "QUEUE": 0,
+              "PUBLISH": 1169.0120980453974
+            },
+            "dispatchPreparationMs": 355,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "78dbe667-e5b5-4711-a907-72052c8c0707",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425556297,
+            "lastAttemptAt": 1794425556297,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 811,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 42,
+            "profileSampledAt": 1794425554011,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 10,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 260,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "52f77a4a-6119-4aa5-89e0-98b2f5e53691",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425558509,
+            "lastAttemptAt": 1794425562634,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 2,
+              "ALLOTMENT_UNAVAILABLE": 4
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 845,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 89,
+            "profileSampledAt": 1794425559061,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 13.483506450179217,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 968.269100000005,
+              "QUEUE": 0,
+              "PUBLISH": 44.220766898056326
+            },
+            "dispatchPreparationMs": 409,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "47d77d72-9d19-498b-b3c7-d4c93a943817",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425558509,
+            "lastAttemptAt": 1794425584589,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 3,
+              "ALLOTMENT_UNAVAILABLE": 39
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 973,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 157,
+            "profileSampledAt": 1794425582082,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.75477902063068,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 287.2456999999995,
+              "QUEUE": 0,
+              "PUBLISH": 270.093433203425
+            },
+            "dispatchPreparationMs": 265,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "5afdedcf-d0b8-4a91-a99e-0cd2452a7e40",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425558509,
+            "lastAttemptAt": 1794425567816,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 2,
+              "ALLOTMENT_UNAVAILABLE": 12
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 878,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 105,
+            "profileSampledAt": 1794425563811,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 13.483506450179217,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 188.68718571428326,
+              "QUEUE": 0,
+              "PUBLISH": 21.69377836150226
+            },
+            "dispatchPreparationMs": 293,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b29a3e4f-374a-443c-8a0b-102900db0eb5",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425558509,
+            "lastAttemptAt": 1794425575574,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 3,
+              "ALLOTMENT_UNAVAILABLE": 26
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 928,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 134,
+            "profileSampledAt": 1794425572901,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 16.75477902063068,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 232.23139999998966,
+              "QUEUE": 0,
+              "PUBLISH": 102.8105881104539
+            },
+            "dispatchPreparationMs": 378,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "7eb5faee-217b-4805-8cab-b7a18e969954",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425586378,
+            "lastAttemptAt": 1794425586378,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 991,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 81,
+            "profileSampledAt": 1794425585014,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 281.5071795200189,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 27,
+              "QUEUE": 0,
+              "PUBLISH": 1076.8182337641865
+            },
+            "dispatchPreparationMs": 241,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "f80085fa-935c-4785-b054-017ce3ccd0e9",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425556346,
+            "lastAttemptAt": 1794425556346,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 811,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 42,
+            "profileSampledAt": 1794425554011,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 10,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 237,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "27f8a66d-8349-456d-8c65-8485eee67023",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425559164,
+            "lastAttemptAt": 1794425573923,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 3,
+              "ALLOTMENT_UNAVAILABLE": 22
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 917,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 128,
+            "profileSampledAt": 1794425571167,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 18.160134427802262,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 287.2456999999995,
+              "QUEUE": 0,
+              "PUBLISH": 270.093433203425
+            },
+            "dispatchPreparationMs": 345,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "1434ec48-c78b-4bdc-a5dd-a7b989083047",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425559164,
+            "lastAttemptAt": 1794425580949,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 3,
+              "ALLOTMENT_UNAVAILABLE": 35
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 964,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 156,
+            "profileSampledAt": 1794425579370,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 18.160134427802262,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 287.2456999999995,
+              "QUEUE": 0,
+              "PUBLISH": 270.093433203425
+            },
+            "dispatchPreparationMs": 1662,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b2ffa813-b69d-4926-928b-f786cd64ac07",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425559164,
+            "lastAttemptAt": 1794425587239,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 3,
+              "ALLOTMENT_UNAVAILABLE": 46
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 995,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 173,
+            "profileSampledAt": 1794425585045,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 18.160134427802262,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 102.8105881104539
+            },
+            "dispatchPreparationMs": 238,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "378cad5a-7e08-4f34-a9ad-1a253dcfedc1",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425559164,
+            "lastAttemptAt": 1794425572323,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 20
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 905,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 121,
+            "profileSampledAt": 1794425568764,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 18.160134427802262,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 232.23139999998966,
+              "QUEUE": 0,
+              "PUBLISH": 102.8105881104539
+            },
+            "dispatchPreparationMs": 319,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "5efefc63-c235-44f6-9ecf-5970919bad99",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425588640,
+            "lastAttemptAt": 1794425588640,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1008,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 84,
+            "profileSampledAt": 1794425587006,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 2609.5489512728564,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 27,
+              "QUEUE": 0,
+              "PUBLISH": 3551.730498305485
+            },
+            "dispatchPreparationMs": 404,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "923addaa-814c-4d94-a4bc-876d59e4a2f9",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425571956,
+            "lastAttemptAt": 1794425571956,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 905,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 70,
+            "profileSampledAt": 1794425571033,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 56,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 338,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "c0e58a07-05ab-4190-b52d-1213e59a3430",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cpu-cdde76155ad35aa78939117213062b19",
+            "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+            "executorId": "node.cpu.v1",
+            "executorVersion": "1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "node.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425574018,
+            "lastAttemptAt": 1794425579473,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 9
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 957,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 91,
+            "profileSampledAt": 1794425577018,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "8e6d857d412fd96f5feac2bba1befccf9abeeeac51f02af31f76857ef4f6f8fb",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 7.0847230236504135,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 2165.120299999995,
+              "QUEUE": 0,
+              "PUBLISH": 93.03060117193411
+            },
+            "dispatchPreparationMs": 423,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "c4a030bc-46a6-4137-b1a1-dab05f494cf0",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cpu-cdde76155ad35aa78939117213062b19",
+            "deviceId": "f9ec08d8-6071-4442-b993-053bc0e27fa0",
+            "executorId": "node.cpu.v1",
+            "executorVersion": "1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "node.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425574018,
+            "lastAttemptAt": 1794425579473,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 9
+            }
+          },
+          "evidence": {
+            "candidateCount": 3,
+            "snapshotVersion": 957,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 91,
+            "profileSampledAt": 1794425577018,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "8e6d857d412fd96f5feac2bba1befccf9abeeeac51f02af31f76857ef4f6f8fb",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 7.0847230236504135,
+            "plannedResourceWaitMs": 0,
+            "costSource": "PRIOR",
+            "phaseCosts": {
+              "EXECUTE": 2165.120299999995,
+              "QUEUE": 0,
+              "PUBLISH": 93.03060117193411
+            },
+            "dispatchPreparationMs": 408,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "ba7be42d-788a-4b70-a7d7-40f9e3cc51f5",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425574018,
+            "lastAttemptAt": 1794425589931,
+            "blocks": {
+              "APP_QUOTA_EXCEEDED": 8,
+              "ALLOTMENT_UNAVAILABLE": 22
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1014,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 186,
+            "profileSampledAt": 1794425587756,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 44.737814457248504,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 42.15825632855726
+            },
+            "dispatchPreparationMs": 128,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "8862ce66-1e0b-4627-8cf1-5c654d16b4b6",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425574018,
+            "lastAttemptAt": 1794425588552,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 25
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1005,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 179,
+            "profileSampledAt": 1794425586550,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 44.737814457248504,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 42.15825632855726
+            },
+            "dispatchPreparationMs": 293,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "a7d259df-6d02-479b-b8ff-8add35f93b6d",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425590538,
+            "lastAttemptAt": 1794425590538,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1019,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 89,
+            "profileSampledAt": 1794425589006,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 2150.002588567938,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 492,
+              "QUEUE": 0,
+              "PUBLISH": 3551.730498305485
+            },
+            "dispatchPreparationMs": 210,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "1fb8bae2-30cc-4875-9063-d604f6e1f2bc",
+          "node": "analyze",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-1e8bd4e86cf40796455193a9467e1b3d",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425589339,
+            "lastAttemptAt": 1794425589339,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1013,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 89,
+            "profileSampledAt": 1794425589006,
+            "resultDelivery": "ORIGIN_LOCAL",
+            "executionIdentity": "d7b1c92e846e5fb2b3f0311d26e1ea4832387beccce0347a2b12d38ab67a3785",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 56,
+              "QUEUE": 0,
+              "PUBLISH": 0
+            },
+            "dispatchPreparationMs": 303,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "6f939074-d826-43d9-a473-29462763008e",
+          "node": "enhance-0",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425590674,
+            "lastAttemptAt": 1794425592718,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 3
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1029,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 206,
+            "profileSampledAt": 1794425592047,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 287.2456999999995,
+              "QUEUE": 0,
+              "PUBLISH": 108.12871559811849
+            },
+            "dispatchPreparationMs": 223,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "0bdff42e-7538-49a9-945e-d051e56dd51c",
+          "node": "enhance-1",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425590674,
+            "lastAttemptAt": 1794425593356,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 5
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1034,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 207,
+            "profileSampledAt": 1794425592375,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 287.2456999999995,
+              "QUEUE": 0,
+              "PUBLISH": 108.12871559811849
+            },
+            "dispatchPreparationMs": 165,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "6ccd2e07-2bb7-43bd-acea-56f6c9833cf6",
+          "node": "enhance-2",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425590674,
+            "lastAttemptAt": 1794425591788,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1024,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 199,
+            "profileSampledAt": 1794425589920,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 42.15825632855726
+            },
+            "dispatchPreparationMs": 163,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "b668560b-20b4-4ead-808c-c8a7b8551804",
+          "node": "enhance-3",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "cuda-c26021e6a6ec53732110e939fcd42b6b",
+            "deviceId": "81efe29f-8b27-48be-8328-ac794b974b1d",
+            "executorId": "ncnn.photo.vulkan.v1",
+            "executorVersion": "2",
+            "backend": "VULKAN",
+            "resourcePoolIds": [
+              "cpu",
+              "ram",
+              "gpu",
+              "vram"
+            ],
+            "stableExecutionId": "ncnn.photo.vulkan.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425590674,
+            "lastAttemptAt": 1794425594012,
+            "blocks": {
+              "ALLOTMENT_UNAVAILABLE": 8
+            }
+          },
+          "evidence": {
+            "candidateCount": 4,
+            "snapshotVersion": 1040,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 213,
+            "profileSampledAt": 1794425592813,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "0a6957feaeac8939a9f178dd28238055a3401e6891fec0ad1e73b8d68fd6167f",
+            "calibrationGeneration": 1,
+            "inFlightP90": [],
+            "plannedStartMs": 0,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "NORMAL",
+            "phaseCosts": {
+              "EXECUTE": 145.64590000000317,
+              "QUEUE": 0,
+              "PUBLISH": 42.15825632855726
+            },
+            "dispatchPreparationMs": 163,
+            "dispatchReplans": 0
+          }
+        },
+        {
+          "attemptId": "40b92ea5-56b5-4731-b6da-e3c848bed1a4",
+          "node": "deliver",
+          "state": "COMMITTED",
+          "actualTarget": {
+            "targetId": "harmony-0d8a0f6dedc7986b65807e4abe8f1343",
+            "deviceId": "a0fa06c7-99d5-44ea-bd47-8d52791d8774",
+            "executorId": "harmony.cpu.v1",
+            "executorVersion": "photo-1",
+            "backend": "CPU",
+            "resourcePoolIds": [
+              "cpu",
+              "ram"
+            ],
+            "stableExecutionId": "harmony.cpu.v1"
+          },
+          "scheduling": {
+            "readyAt": 1794425594519,
+            "lastAttemptAt": 1794425594519,
+            "blocks": {}
+          },
+          "evidence": {
+            "candidateCount": 1,
+            "snapshotVersion": 1044,
+            "policyVersion": "cpu-host-v1",
+            "profileSequence": 105,
+            "profileSampledAt": 1794425593022,
+            "resultDelivery": "SOURCE_PULL_NOT_ESTIMATED",
+            "executionIdentity": "3cebf310c1b61b6c8ef8f0d35b4474db4bf3b5ac111d5c7778d0b95a9f29315d",
+            "calibrationGeneration": 2,
+            "inFlightP90": [],
+            "plannedStartMs": 2157.680660368064,
+            "plannedResourceWaitMs": 0,
+            "costSource": "MEASURED",
+            "costConfidence": "LOW",
+            "phaseCosts": {
+              "EXECUTE": 492,
+              "QUEUE": 0,
+              "PUBLISH": 3551.730498305485
+            },
+            "dispatchPreparationMs": 108,
+            "dispatchReplans": 0
+          }
+        }
+      ]
+    }
+  ],
+  "readiness": {
+    "observedMs": 60100,
+    "scope": "phone App ledger epoch 3",
+    "cases": [
+      {
+        "capability": "photo.analyze.v1",
+        "caseId": "known-image",
+        "createdAt": 1794426259912,
+        "durationMs": 61,
+        "errorCode": null
+      },
+      {
+        "capability": "photo.prepare.v1",
+        "caseId": "known-image",
+        "createdAt": 1794426260681,
+        "durationMs": 13,
+        "errorCode": null
+      },
+      {
+        "capability": "photo.enhance.v1",
+        "caseId": "known-image-threads-4",
+        "createdAt": 1794426261855,
+        "durationMs": 460,
+        "errorCode": null
+      },
+      {
+        "capability": "photo.assemble.v1",
+        "caseId": "known-image",
+        "createdAt": 1794426262822,
+        "durationMs": 17,
+        "errorCode": null
+      },
+      {
+        "capability": "photo.deliver.v1",
+        "caseId": "known-image",
+        "createdAt": 1794426263247,
+        "durationMs": 27,
+        "errorCode": null
+      },
+      {
+        "capability": "photo.analyze.v1",
+        "caseId": "empty",
+        "createdAt": 1794426267952,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.prepare.v1",
+        "caseId": "empty",
+        "createdAt": 1794426268894,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.enhance.v1",
+        "caseId": "empty-threads-4",
+        "createdAt": 1794426269528,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.assemble.v1",
+        "caseId": "empty",
+        "createdAt": 1794426270048,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.deliver.v1",
+        "caseId": "empty",
+        "createdAt": 1794426270737,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.analyze.v1",
+        "caseId": "oversize-invalid",
+        "createdAt": 1794426276927,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.prepare.v1",
+        "caseId": "oversize-invalid",
+        "createdAt": 1794426277457,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.enhance.v1",
+        "caseId": "oversize-invalid-threads-4",
+        "createdAt": 1794426277986,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.assemble.v1",
+        "caseId": "oversize-invalid",
+        "createdAt": 1794426278489,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.deliver.v1",
+        "caseId": "oversize-invalid",
+        "createdAt": 1794426279004,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.analyze.v1",
+        "caseId": "jpeg",
+        "createdAt": 1794426284982,
+        "durationMs": 24,
+        "errorCode": null
+      },
+      {
+        "capability": "photo.enhance.v1",
+        "caseId": "pixels-min-threads-4",
+        "createdAt": 1794426285813,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.deliver.v1",
+        "caseId": "jpeg",
+        "createdAt": 1794426286253,
+        "durationMs": 28,
+        "errorCode": null
+      },
+      {
+        "capability": "photo.enhance.v1",
+        "caseId": "pixels-max-threads-4",
+        "createdAt": 1794426292050,
+        "durationMs": 0,
+        "errorCode": "PHOTO_INVALID"
+      },
+      {
+        "capability": "photo.deliver.v1",
+        "caseId": "fused-assemble",
+        "createdAt": 1794426292871,
+        "durationMs": 29,
+        "errorCode": null
+      },
+      {
+        "capability": "photo.enhance.v1",
+        "caseId": "fused-prepare-threads-4",
+        "createdAt": 1794426299102,
+        "durationMs": 359,
+        "errorCode": null
+      },
+      {
+        "capability": "photo.enhance.v1",
+        "caseId": "representative-pixels-threads-4",
+        "createdAt": 1794426306157,
+        "durationMs": 2824,
+        "errorCode": null
+      }
+    ]
+  }
+}

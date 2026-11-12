@@ -15,7 +15,7 @@ interface NodeView {id:string;state:string;committed:boolean;}
 interface WorkflowView {imageIndex:number;nodes:NodeView[];}
 interface Run {id:string;revision:number;jobs:PhotoJob[];workflows?:WorkflowView[];}
 export interface BatchProgress {phase:string;completed:number;total:number;}
-export interface BatchOptions {cancelled:()=>boolean;progress:(value:BatchProgress)=>void;result:(index:number,value:PhotoResult)=>void;}
+export interface BatchOptions {cancelled:()=>boolean;progress:(value:BatchProgress)=>void;result:(index:number,value:PhotoResult)=>void;duration?:(milliseconds:number)=>void;started?:()=>void;}
 function label(id:string):string{switch(id.split('-')[0]){case 'analyze':return '分析照片';case 'prepare':return '准备图块';case 'enhance':return 'AI 高清增强';case 'assemble':return '合成并校验';case 'deliver':return '交付高清成品';default:return '正在处理';}}
 async function request(route:string,method:string='GET',body?:Mutation,data?:Uint8Array):Promise<Run>{
  const message:Message={route,method};if(body)message.body=body;if(data)message.data=base64.encodeToStringSync(data);
@@ -32,7 +32,11 @@ export class PhotoBatch {
  async cancel():Promise<void>{await Promise.allSettled(this.tasks.map(task=>task.cancel()));}
  async run(context:common.UIAbilityContext,inputs:PhotoInput[],options:BatchOptions):Promise<number>{
   if(inputs.length<1||inputs.length>8)throw Error('请选择 1～8 张照片');
+  // Recheck at click time before reading inputs, creating a run or starting its budget.
+  // If readiness was lost, return to setup instead of hiding a calibration wait in the task.
+  if(options.cancelled())throw Error('已取消');await photoSession.requireReady();if(options.cancelled())throw Error('已取消');
   const began=monotonic(),budget=180000,prepared:Prepared[]=[];let run:Run|null=null,queue:Promise<void>=Promise.resolve(),polling=false,active=true,planningReady=false;
+  options.started?.();
   const check=():void=>{if(options.cancelled())throw Error('已取消');if(monotonic()-began>=budget)throw Error('180 秒预算已用尽');};
   const remaining=():number=>budget-(monotonic()-began);
   const update=(changes:Mutation,job?:PhotoJob):Promise<void>=>{const next=queue.then(async()=>{
@@ -53,7 +57,6 @@ export class PhotoBatch {
    check();run=await request('/photo-runs','POST',{mode:'COOPERATIVE',budgetMs:budget,inputs:prepared.map(p=>p.meta)});
    for(let i=0;i<prepared.length;i++){check();await request('/photo-runs/'+run.id+'/input?image='+i,'PUT',undefined,prepared[i].data);}
    await update({state:'RUNNING'});
-   await photoSession.waitReady(()=>budget-(monotonic()-began),options.cancelled,(phase:string)=>options.progress({phase,completed:0,total}));
    const parallel=await photoSession.batchConcurrency();check();planningReady=true;let next=0;const failures:string[]=[];
    const worker=async():Promise<void>=>{
     while(next<prepared.length&&!options.cancelled()){
@@ -76,6 +79,6 @@ export class PhotoBatch {
    if(options.cancelled())throw Error('已取消');if(failures.length)throw Error(failures.join('；'));
    const duration=monotonic()-began;await update({state:'SUCCEEDED',sourceDurationMs:duration});options.progress({phase:'处理完成',completed:1,total:1});return duration;
   }catch(e){await this.cancel();if(run)try{await update({state:options.cancelled()?'CANCELLED':'FAILED',error:(e as Error).message,sourceDurationMs:monotonic()-began});}catch{}throw e as Error;}
-  finally{active=false;clearInterval(timer);}
+  finally{active=false;clearInterval(timer);options.duration?.(monotonic()-began);}
  }
 }

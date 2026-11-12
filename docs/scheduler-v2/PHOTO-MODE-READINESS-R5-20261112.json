@@ -1,0 +1,32 @@
+{
+  "baselineReadinessSeconds": 51.8,
+  "baselineReferenceCases": 22,
+  "baselineComputeMs": 3547,
+  "newFirstEnrollmentReadinessSeconds": 28.0,
+  "sameProcessSwitchReadinessSeconds": [
+    2.2,
+    1.2
+  ],
+  "referenceCasesAfterTwoSwitches": 22,
+  "ledgerEpochAfterTwoSwitches": [
+    1
+  ],
+  "qualificationStates": [
+    "ACTIVE",
+    "ACTIVE",
+    "ACTIVE",
+    "ACTIVE",
+    "ACTIVE"
+  ],
+  "businessWorkflowJobs": 0,
+  "tests": {
+    "sdkAndPhone": 21,
+    "qualification": 13,
+    "controlChannel": 11
+  },
+  "limitations": [
+    "Readiness only; no business photos processed this round",
+    "First enrollment includes full qualification; not equivalent to same-process mode switch",
+    "Other devices must pair to the new session; no GPU package change required"
+  ]
+}

@@ -1,3 +1,4 @@
+import {gpuPipelineSlots} from '@harmony/scheduler-core';
 import {PhotoRuns} from './photo-runs';
 import {recentJobs} from './dashboard-history';
 import {retryableJobError} from './job-errors';
@@ -31,7 +32,7 @@ export function contribution(v:any):Contribution{
   return {...(v.maxVramBytes?{maxVramBytes:v.maxVramBytes}:{}),...(v.capacityMode==='auto'?{capacityMode:'auto' as const}:{}),ownerMode:v.ownerMode,maxCpuThreads:v.maxCpuThreads,maxMemoryBytes:v.maxMemoryBytes,reserveMemoryBytes:v.reserveMemoryBytes};
 }
 export function capacityVector(settings:Contribution){
-  return [{resourcePoolId:'cpu',amount:settings.maxCpuThreads},{resourcePoolId:'ram',amount:settings.maxMemoryBytes},...(settings.maxVramBytes?[{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:settings.maxVramBytes}]:[])];
+  return [{resourcePoolId:'cpu',amount:settings.maxCpuThreads},{resourcePoolId:'ram',amount:settings.maxMemoryBytes},...(settings.maxVramBytes?[{resourcePoolId:'gpu',amount:gpuPipelineSlots(settings.maxVramBytes)},{resourcePoolId:'vram',amount:settings.maxVramBytes}]:[])];
 }
 /** What a paired device measured about itself. Either field may be unknown; neither is trusted beyond its own device. */
 export interface MeasuredCapacity {cpuThreads:number|null;totalMemoryBytes:number|null;vramBytes:number|null;}

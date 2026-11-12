@@ -1,5 +1,5 @@
 import { PrismaClient } from '../generated/client';
-import { canonical, ExecutorV2 } from '@harmony/scheduler-core';
+import { canonical, ExecutorV2, sampleUsableV2 } from '@harmony/scheduler-core';
 import { EvaluationWork, EvaluationReport, validEvaluationPermit, decodeEvaluationReport } from '@harmony/resource-transport';
 import { DeviceDirectory, executorIdentity } from './directory';
 import { Peer } from './channel';
@@ -22,13 +22,35 @@ export class RemoteEvaluationRunner implements EvaluationRunner {
       await tx.evaluationDispatch.create({data:{id:permit.id,groupId:permit.groupId,holderInstanceId:permit.holderInstanceId,deviceId:executor.target.deviceId,epoch:this.epoch(),state:'QUEUED',expiresAt:work.expiresAt,workJson:JSON.stringify(work)}});
     });
     this.changed(permit.groupId,permit.holderInstanceId);
+    let nextAvailabilityCheck=0;
     while(!this.closed&&!signal.aborted&&Date.now()<work.expiresAt){
       const result=await this.reconcile(permit);if(result)return result;
+      // A foreground App may take over while its device owner's reference case
+      // is still queued. The owner stops claiming in background; waiting out the
+      // whole case timeout otherwise blocks every App on this physical device.
+      if(Date.now()>=nextAvailabilityCheck){
+        await this.retireUnavailableQueued(work);nextAvailabilityCheck=Date.now()+250;
+      }
       await new Promise<void>(resolve=>setTimeout(resolve,50));
     }
     await this.cancel(permit.id);
     this.changed(permit.groupId,permit.holderInstanceId);
     throw Error('EVALUATION_SETTLEMENT_UNKNOWN');
+  }
+  private async retireUnavailableQueued(work:EvaluationWork){
+    await this.db.$transaction(async tx=>{
+      const row=await tx.evaluationDispatch.findUnique({where:{id:work.permit.id}});
+      if(!row||row.state!=='QUEUED')return;
+      const profile=(await this.directory.profiles(work.permit.groupId,tx)).find(p=>p.holderInstanceId===work.permit.holderInstanceId&&p.deviceId===work.executor.target.deviceId);
+      // Missing or stale telemetry is not proof of a foreground transition.
+      if(!profile||profile.ledgerEpoch!==work.ledgerEpoch||profile.deviceInstanceId!==work.deviceInstanceId)return;
+      const now=Date.now(),unavailable=
+        sampleUsableV2(profile.foreground,now,this.directory.domain)&&profile.foreground.value==='BACKGROUND'||
+        sampleUsableV2(profile.ownerActivity,now,this.directory.domain)&&profile.ownerActivity.value==='ACTIVE';
+      if(!unavailable)return;
+      // CAS with claim(): a claimed delivery must still reconcile its real engine.
+      await tx.evaluationDispatch.updateMany({where:{id:row.id,state:'QUEUED',resultJson:null},data:{state:'SETTLED',resultJson:JSON.stringify({notRun:true,settled:true,output:'',durationMs:0,permitId:work.permit.id,domain:work.permit.domain})}});
+    });
   }
   private async cancel(id:string){
     // An unclaimed row proves it never crossed the delivery boundary. Claimed work needs actual engine settlement.

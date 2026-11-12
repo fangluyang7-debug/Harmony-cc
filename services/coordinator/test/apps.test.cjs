@@ -92,6 +92,25 @@ test('logical App concurrency/resource quota is shared across installations and 
  }finally{await r.close();}
 });
 
+test('input-waiting GPU drafts bound concurrency without starving ready offers of resource quota',async()=>{
+ const r=await runtime();try{
+  const o=await owner(r),resources=[...capacity,{resourcePoolId:'gpu',amount:1}];
+  const a=await r.apps.register(o.peer,{...registration('GPU drafts'),maxConcurrent:4,resources},r.url),p=(await r.apps.exchange({registrationId:a.registrationId,code:a.code})).peer;
+  const demand=[{resourcePoolId:'gpu',amount:1}],deadline=Date.now()+30000;
+  const queue=id=>r.db.$transaction(async tx=>{await r.apps.reserveJob(tx,p,id,demand,deadline,true);await tx.cpuJob.create({data:{id,groupId:p.groupId,principalId:p.principalId,sourceHolderId:p.holderInstanceId,state:'WAITING_INPUT',metadataJson:'{}'}});});
+  for(const id of ['a','b','c','d'])await queue(id);
+  await assert.rejects(queue('overflow'),/APP_QUOTA_EXCEEDED/,'draft count is still bounded');
+  assert.deepEqual(JSON.parse((await r.db.appJobReservation.findUniqueOrThrow({where:{id:'b'}})).resourcesJson),[]);
+  await r.db.$transaction(tx=>r.apps.reserveJob(tx,p,'a',demand,deadline));
+  await r.db.attempt.create({data:{id:'a',groupId:p.groupId,workflowId:'w',nodeId:'a',holderInstanceId:p.holderInstanceId,executionDigest:'d',taskJson:'{}',state:'OFFERED'}});
+  await assert.rejects(r.db.$transaction(tx=>r.apps.reserveJob(tx,p,'b',demand,deadline)),/APP_QUOTA_EXCEEDED/,'real GPU capacity cannot be oversubscribed');
+  await assert.rejects(r.db.$transaction(tx=>r.apps.reserveJob(tx,p,'a',demand,deadline,true)),/JOB_RESERVATION_ALREADY_EXISTS/,'a retry cannot downgrade a live reservation');
+  await r.db.attempt.update({where:{id:'a'},data:{state:'SUCCEEDED',recordJson:JSON.stringify({resourcesSettled:true})}});
+  await r.db.$transaction(tx=>r.apps.reserveJob(tx,p,'b',demand,deadline));
+  await assert.rejects(r.db.$transaction(tx=>r.apps.reserveJob(tx,p,'too-large',[{resourcePoolId:'gpu',amount:2}],deadline,true)),/APP_QUOTA_EXCEEDED/);
+ }finally{await r.close();}
+});
+
 test('App admission ignores settled history without per-attempt reads and retains unsettled expired work',async()=>{
  const r=await runtime();try{
   const o=await owner(r),a=await r.apps.register(o.peer,registration('history quota'),r.url),p=(await r.apps.exchange({registrationId:a.registrationId,code:a.code})).peer;

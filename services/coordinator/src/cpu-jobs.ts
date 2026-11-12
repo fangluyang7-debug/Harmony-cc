@@ -18,11 +18,11 @@ import { TraceService } from './traces';
 import { AppRegistry } from './apps';
 import {DirectTransfers} from './direct-transfers';
 
-interface StartContext {until:number;jobId:string;stage?:string;retries?:number;}
-interface JobData {privacy?:string;sourcePeer?:Peer;backupOf?:string;duplicateBudgetMs?:number;resultReceivedAt?:number;delivery?:{id:string;senderHolderId:string;senderEndpointId:string;senderEpoch:string;relay?:boolean;preparation?:{at:number;remainingMs:number;uploadMs?:number;downloadMs?:number;estimatedMs:number|null;reservedTailMs:number;relaySlots:number;reason:string};failure?:{authorizationId:string;endpointId:string;at:number;reason:string}};retainOutput?:{id:string;epoch:string};sourceAttemptId?:string;sourceNodeId?:string;offer:DispatchOfferV2;holderId:string;input:ArtifactDescriptor;output:ArtifactDescriptor|null;traceId:string;
+interface StartContext {until:number;jobId:string;startedAt:number;stage?:string;retries?:number;waitForResources?:boolean;}
+interface JobData {dispatchReadyAt?:number;workflowSubmittedAt?:number;privacy?:string;sourcePeer?:Peer;backupOf?:string;duplicateBudgetMs?:number;resultReceivedAt?:number;delivery?:{id:string;senderHolderId:string;senderEndpointId:string;senderEpoch:string;relay?:boolean;preparation?:{at:number;remainingMs:number;uploadMs?:number;downloadMs?:number;estimatedMs:number|null;reservedTailMs:number;relaySlots:number;reason:string};failure?:{authorizationId:string;endpointId:string;at:number;reason:string}};retainOutput?:{id:string;epoch:string};sourceAttemptId?:string;sourceNodeId?:string;offer:DispatchOfferV2;holderId:string;input:ArtifactDescriptor;output:ArtifactDescriptor|null;traceId:string;
   budgetMs:number;deadlineAt:number;fingerprint?:string;choices?:{request:PlacementRequest;parameters:string}[];
   request:PlacementRequest;plan:SnapshotDecision;planTiming:{start:number;end:number;clockDomainId?:string};
-  decisionEvidence?:{candidateCount?:number;executionIdentity?:string;calibrationGeneration?:number;snapshotVersion:number;policyVersion:string;profileSequence:number;profileSampledAt:number;resultDelivery:string;inFlightP90?:{attemptId:string;p90RemainingMs:number|null}[];plannedStartMs?:number;plannedResourceWaitMs?:number;costSource?:string;costConfidence?:string;phaseCosts?:{EXECUTE:number|null;QUEUE:number|null;PUBLISH:number|null}};}
+  decisionEvidence?:{admissionMode?:'IMMEDIATE'|'GPU_QUEUE';dispatchPreparationMs?:number;dispatchReplans?:number;candidateCount?:number;executionIdentity?:string;calibrationGeneration?:number;snapshotVersion:number;policyVersion:string;profileSequence:number;profileSampledAt:number;resultDelivery:string;inFlightP90?:{attemptId:string;p90RemainingMs:number|null}[];plannedStartMs?:number;plannedResourceWaitMs?:number;costSource?:string;costConfidence?:string;phaseCosts?:{EXECUTE:number|null;QUEUE:number|null;PUBLISH:number|null}};}
 /** First usable single-node submission path. Uses qualified available targets, with an optional explicit target. */
 class ResourceRetry extends Error {
   constructor(readonly delayMs:number){super('NO_LEGAL_PLAN');}
@@ -71,7 +71,7 @@ export class CpuJobs {
     private readonly snapshots:SnapshotBuilder,private readonly allotments:AllotmentIssuer,private readonly artifacts:ArtifactChannel,
     private readonly store:CoordinatorStore,private readonly epoch:()=>number,private readonly flush:()=>Promise<void>,
     private readonly planning:PlanningService,private readonly traces:TraceService,private readonly apps:AppRegistry,private readonly packs:ReferencePack[]=builtinCpuPacks(),private readonly directTransfers?:DirectTransfers){this.batch=new BatchReadyQueue(db,(peer,id)=>this.dispatchReady(peer,id));}
-  async submit(peer:Peer,input:any,variants?:{parameters:string;targetId?:string}[],fingerprint?:string,graph?:{inputSchema?:string;forceRelay?:boolean;excludedDeviceId?:string;workflowId:string;nodeId:string;deadlineAt:number;dependencies:string[];retain?:boolean;source?:{descriptor:ArtifactDescriptor;attemptId:string;nodeId:string}}){
+  async submit(peer:Peer,input:any,variants?:{parameters:string;targetId?:string}[],fingerprint?:string,graph?:{submittedAt?:number;inputSchema?:string;forceRelay?:boolean;excludedDeviceId?:string;workflowId:string;nodeId:string;deadlineAt:number;dependencies:string[];retain?:boolean;source?:{descriptor:ArtifactDescriptor;attemptId:string;nodeId:string}}){
     const app=await this.apps.context(peer);
     if(!input||!protocolId(input.requestId)||input.requestId.length>100||typeof input.capability!=='string'||typeof input.contentHash!=='string'||!/^[a-f0-9]{64}$/.test(input.contentHash)||
       !Number.isSafeInteger(input.bytes)||input.bytes<1||input.bytes>8388608||input.targetId!==undefined&&!protocolId(input.targetId)||
@@ -125,11 +125,11 @@ export class CpuJobs {
       priority:request.priority!,parameters:selectedParameters,allowedConfigurations:executor.configurations.map(c=>c.id),businessIdempotencyKey:input.businessIdempotencyKey??null},target:executor.target,resources:executor.resources,allowedConfigs:executor.configurations,
       allotmentId:grant.allotmentId,allotmentVersion:grant.version,leaseMs:request.remainingBudgetMs,
       transferPlan:[{ref:artifact.ref,from:this.store.senderInstanceId,to:executor.target.deviceId,via:null}],dependencies:graph?.dependencies.map(nodeId=>({nodeId,planRevision:1,committed:true}))??[],reasonCode:decision.decision.reason};
-    const data:JobData={privacy:input.privacy??'SHARED',sourcePeer:peer,sourceAttemptId:graph?.source?.attemptId,sourceNodeId:graph?.source?.nodeId,offer,holderId:profile.holderInstanceId,input:artifact,output:null,traceId:graph?.workflowId??randomUUID(),budgetMs:request.remainingBudgetMs,deadlineAt:graph?.deadlineAt??now+request.remainingBudgetMs,request:selectedRequest,choices,fingerprint,plan:decision,planTiming,
+    const data:JobData={workflowSubmittedAt:graph?.submittedAt,privacy:input.privacy??'SHARED',sourcePeer:peer,sourceAttemptId:graph?.source?.attemptId,sourceNodeId:graph?.source?.nodeId,offer,holderId:profile.holderInstanceId,input:artifact,output:null,traceId:graph?.workflowId??randomUUID(),budgetMs:request.remainingBudgetMs,deadlineAt:graph?.deadlineAt??now+request.remainingBudgetMs,request:selectedRequest,choices,fingerprint,plan:decision,planTiming,
       decisionEvidence:this.evidence(planned)};
     if(parent?.retainOutput)data.delivery={id:randomUUID(),senderHolderId:parent.holderId,senderEndpointId:parent.retainOutput.id,senderEpoch:parent.retainOutput.epoch};
     if(this.localInput(peer,data)){data.offer.transferPlan=[];data.decisionEvidence!.resultDelivery='ORIGIN_LOCAL';}
-    await this.db.$transaction(async tx=>{if(offer.task.priority!=='REMOTE_BATCH')await this.apps.reserveJob(tx,peer,id,offer.resources,data.deadlineAt);await tx.cpuJob.create({data:{id,groupId:peer.groupId,principalId:peer.principalId,sourceHolderId:peer.holderInstanceId,state:'WAITING_INPUT',metadataJson:JSON.stringify(data)}});});
+    await this.db.$transaction(async tx=>{if(offer.task.priority!=='REMOTE_BATCH')await this.apps.reserveJob(tx,peer,id,offer.resources,data.deadlineAt,true);await tx.cpuJob.create({data:{id,groupId:peer.groupId,principalId:peer.principalId,sourceHolderId:peer.holderInstanceId,state:'WAITING_INPUT',metadataJson:JSON.stringify(data)}});});
     this.artifacts.register(artifact);return this.upload(peer,id,data);
   }
   private async choose(peer:Peer,request:PlacementRequest,alternatives?:PlacementRequest[],wait?:StartContext,diagnosticJobId?:string){
@@ -170,6 +170,7 @@ export class CpuJobs {
         if(!reservation||reservation.grant.coordinatorEpoch!==this.epoch())throw Error('ALLOTMENT_UNAVAILABLE');
         if(reservation.ack?.version===reservation.grant.version)return reservation.grant;
         if(!wait)throw Error('ALLOTMENT_UNAVAILABLE');
+        if(wait.waitForResources===false)throw Error('ALLOTMENT_ACK_PENDING');
         if(Date.now()>=wait.until)throw Error('ALLOTMENT_ACK_PENDING');
         await Promise.race([changed,new Promise<void>(resolve=>{timer=setTimeout(resolve,Math.min(100,wait.until-Date.now()));})]);
       }finally{unwatch();if(timer)clearTimeout(timer);}
@@ -422,7 +423,7 @@ export class CpuJobs {
       return (await tx.cpuJob.updateMany({where:{id,state:'DISPATCHING'},data:{state:'WAITING_INPUT'}})).count===1;
     });
   }
-  async start(peer:Peer,id:string):Promise<unknown>{
+  async start(peer:Peer,id:string,waitForResources=true):Promise<unknown>{
     const data=await this.owned(peer,id);
     if(data.offer.task.priority==='REMOTE_BATCH'||this.batch.hasBacklog(peer.groupId)){
       if(await this.db.attempt.findUnique({where:{id}}))return this.status(peer,id);
@@ -430,10 +431,11 @@ export class CpuJobs {
       await this.batch.enqueue(peer,id,data.deadlineAt,data.offer.task.priority);
       return this.status(peer,id);
     }
-    return this.dispatchReady(peer,id);
+    return this.dispatchReady(peer,id,waitForResources);
   }
-  private async dispatchReady(peer:Peer,id:string):Promise<unknown>{
-    const startedAt=Date.now(),deadline=startedAt+2500,previous=this.starts.get(id),context:StartContext={until:deadline,jobId:id,stage:"QUEUE",retries:0};
+  private async dispatchReady(peer:Peer,id:string,waitForResources=true):Promise<unknown>{
+    const startedAt=Date.now(),deadline=startedAt+2500,previous=this.starts.get(id),context:StartContext={until:deadline,jobId:id,startedAt,stage:"QUEUE",retries:0,waitForResources};
+    if(previous&&!waitForResources)throw Error('START_BUSY');
     let release!:()=>void;
     const slot=new Promise<void>(resolve=>{release=resolve;});
     const tail=(previous??Promise.resolve()).catch(()=>{}).then(()=>slot);
@@ -502,7 +504,7 @@ export class CpuJobs {
       let p:Awaited<ReturnType<CpuJobs['choose']>>;
       try{p=await this.choose(peer,data.request,data.choices?.map(c=>c.request),wait);}catch(error){
         const delay=error instanceof ResourceRetry?Math.max(100,error.delayMs):100;
-        if(error instanceof Error&&['ALLOTMENT_UNAVAILABLE','PLAN_STALE','NO_LEGAL_PLAN'].includes(error.message)&&replans<8&&Math.min(data.deadlineAt,wait?.until??Infinity)>Date.now()+delay&&data.request.remainingBudgetMs>delay){await new Promise(resolve=>setTimeout(resolve,delay));return this.startAttempt(peer,id,replans+1,wait);}throw error;
+        if(wait?.waitForResources!==false&&error instanceof Error&&['ALLOTMENT_UNAVAILABLE','PLAN_STALE','NO_LEGAL_PLAN'].includes(error.message)&&replans<8&&Math.min(data.deadlineAt,wait?.until??Infinity)>Date.now()+delay&&data.request.remainingBudgetMs>delay){await new Promise(resolve=>setTimeout(resolve,delay));return this.startAttempt(peer,id,replans+1,wait);}throw error;
       }if(data.choices){data.request=data.choices[p.selected].request;data.offer.task.parameters=data.choices[p.selected].parameters;}
       const placement=p.decision.decision.suggestion![0];
       data.retainOutput=placement.outputEndpointId&&placement.outputEndpointEpoch?{id:placement.outputEndpointId,epoch:placement.outputEndpointEpoch}:undefined;
@@ -519,12 +521,14 @@ export class CpuJobs {
       data.offer.transferPlan=this.localInput(peer,data)||directInput?[]:[{ref:data.input.ref,from:this.store.senderInstanceId,to:p.executor.target.deviceId,via:null}];
       if(!await this.inputReady(peer,data)){
         // Publish the new input destination so graph polling can prepare it.
+        data.dispatchReadyAt=undefined;
         await this.db.cpuJob.updateMany({where:{id,state:'WAITING_INPUT'},data:{metadataJson:JSON.stringify(data)}});
         throw Error('INPUT_NOT_UPLOADED');
       }
       data.offer.allotmentVersion=p.grant.version;data.offer.allotmentId=p.grant.allotmentId;data.offer.task.coordinatorEpoch=this.epoch();
       data.offer.task.budget={remainingMs:Math.max(0,data.deadlineAt-Date.now()),deadlineAt:data.deadlineAt};
       data.offer.leaseMs=Math.min(data.duplicateBudgetMs??Infinity,data.offer.task.budget.remainingMs);
+      data.dispatchReadyAt=Date.now();
       await this.db.cpuJob.updateMany({where:{id,state:'WAITING_INPUT'},data:{state:'DISPATCHING',metadataJson:JSON.stringify(data)}});
       row=await this.db.cpuJob.findUniqueOrThrow({where:{id}});data=JSON.parse(row.metadataJson);
     }
@@ -535,9 +539,13 @@ export class CpuJobs {
       }
       if(data.deadlineAt<=Date.now())throw Error('BUDGET_EXHAUSTED');
       if(wait)wait.stage="PREFLIGHT";
-      if(!data.plan||!await this.planning.preflight(peer.groupId,data.plan,data.request,{now:Date.now(),monotonic:()=>performance.now()},id)){
+      if(!data.plan||!await this.planning.preflight(peer.groupId,data.plan,data.request,()=>({now:Date.now(),monotonic:()=>performance.now()}),id,current=>{
+        data.plan=current;
+        const selected=current.decision.suggestion![0];
+        if(data.decisionEvidence)data.decisionEvidence={...data.decisionEvidence,snapshotVersion:current.snapshotVersion,plannedStartMs:selected.startMs,plannedResourceWaitMs:selected.dagResourceWaitMs,costSource:selected.costSource,costConfidence:selected.costConfidence,phaseCosts:selected.phaseCosts};
+      })){
         if(!await this.resetUndispatched(id))throw Error('JOB_RECOVERY_REQUIRED');
-        if(replans<8)return this.startAttempt(peer,id,replans+1,wait);throw Error('PLAN_STALE');
+        if(replans<(wait?.waitForResources===false?1:8))return this.startAttempt(peer,id,replans+1,wait);throw Error('PLAN_STALE');
       }
       if(wait)wait.stage="PERSIST_OFFER";
       const offerStart=performance.now();
@@ -567,7 +575,12 @@ export class CpuJobs {
             const parent=await tx.node.findUnique({where:{id:JSON.stringify([data.offer.task.workflowId,dependency.nodeId])}}),receipt=parent?.currentAttemptId?await tx.receipt.findUnique({where:{id:parent.currentAttemptId}}):null;
             if(parent?.state!=='COMMITTED'||!receipt?.committed)throw Error('GRAPH_DEPENDENCY_UNCOMMITTED');
           }
-          if(!await this.directory.hasDispatchCredit(tx,data.offer,data.holderId))throw Error('ALLOTMENT_UNAVAILABLE');
+          const placement=data.plan.decision.suggestion![0];
+          const admission=await this.directory.dispatchAdmission(tx,data.offer,data.holderId,data.decisionEvidence?.executionIdentity,
+            (placement.startMs??0)+(placement.uncertaintyMs??0));
+          if(!admission)throw Error('ALLOTMENT_UNAVAILABLE');
+          if(await this.earlierPhotoReady(tx,peer,id,data,admission))throw Error('DISPATCH_ADMISSION_PENDING');
+          if(data.decisionEvidence)data.decisionEvidence.admissionMode=admission;
           const queued=await tx.batchReadyJob.findUnique({where:{id}});
           if(queued)await tx.cpuJob.update({where:{id},data:{readyWaitJson:readyWait(queued,Date.now(),'OFFERED')}});
           const app=await this.apps.context(peer,tx);if(!app.identity.allowedContracts.includes(data.offer.task.contract.contractId))throw Error('APP_CONTRACT_FORBIDDEN');
@@ -579,10 +592,12 @@ export class CpuJobs {
             await chargeBatch(tx,id,app.identity.appId,data.offer.target.deviceId,data.offer.resources,
               Math.max(0,assignment.executionMs-(assignment.policyQueueMs??0)));
           }
+          if(wait&&data.decisionEvidence){data.decisionEvidence.dispatchPreparationMs=Date.now()-wait.startedAt;data.decisionEvidence.dispatchReplans=replans;}
+          await tx.cpuJob.update({where:{id},data:{metadataJson:JSON.stringify(data)}});
         },data.backupOf);}catch(error){
           if(error instanceof Error&&error.message==='ALLOTMENT_UNAVAILABLE'){
             const placement=data.plan?.decision.suggestion?.[0];
-            if(wait&&placement&&(placement.dagResourceWaitMs||placement.policyQueueMs)&&replans<8){
+            if(wait&&wait.waitForResources!==false&&placement&&(placement.dagResourceWaitMs||placement.policyQueueMs)&&replans<8){
               let wake!:()=>void;const changed=new Promise<void>(resolve=>{wake=resolve;});
               const unwatch=this.profiles.watch(peer.groupId,data.holderId,wake);let timer:ReturnType<typeof setTimeout>|undefined;
               try{
@@ -598,9 +613,10 @@ export class CpuJobs {
             }
             await this.resetUndispatched(id);throw error;
           }
+          if(error instanceof Error&&error.message==='DISPATCH_ADMISSION_PENDING'){await this.resetUndispatched(id);throw error;}
           if(error instanceof Error&&error.message==='PLAN_STALE'){
             if(!await this.resetUndispatched(id))throw Error('JOB_RECOVERY_REQUIRED');
-            if(replans<8)return this.startAttempt(peer,id,replans+1,wait);
+            if(replans<(wait?.waitForResources===false?1:8))return this.startAttempt(peer,id,replans+1,wait);
           }throw error;
         }
       await this.db.cpuJob.updateMany({where:{id,state:'DISPATCHING'},data:{state:'DISPATCHED'}});
@@ -609,6 +625,30 @@ export class CpuJobs {
         await this.traces.control(data.offer,data.traceId,data.plan.snapshotVersion,'OFFER',offerStart,performance.now(),null,null,'DURABLE_OFFER_QUEUED');}catch{} // Telemetry never changes settlement.
     }
     this.wakeDispatch();return this.status(peer,id);
+  }
+  /** Prefer finishing an earlier photo only when its same-GPU input is already ready.
+   * No batch barrier: absent/stale inputs and independent CPU work never hold the GPU. */
+  private async earlierPhotoReady(tx:Prisma.TransactionClient,peer:Peer,id:string,data:JobData,admission?:'IMMEDIATE'|'GPU_QUEUE'):Promise<boolean>{
+    // With a running GPU, filling an already budgeted queue slot is more useful
+    // than sending ready input back through planning for first-photo preference.
+    // Keep that preference for the next immediately available execution slot.
+    if(admission==='GPU_QUEUE'||!data.workflowSubmittedAt||data.offer.task.contract.capability!=='photo.enhance.v1'||
+      !['CUDA','VULKAN'].includes(data.offer.target.backend)||data.offer.task.priority==='REMOTE_BATCH')return false;
+    const now=Date.now();
+    const rows=await tx.$queryRaw<Array<{id:string}>>`SELECT j.id FROM CpuJob j
+      JOIN SdkWorkflowJob g ON g.id=json_extract(j.metadataJson,'$.offer.task.workflowId')
+      LEFT JOIN Attempt a ON a.id=j.id
+      WHERE j.groupId=${peer.groupId} AND j.id<>${id} AND j.state IN ('WAITING_INPUT','DISPATCHING')
+      AND a.id IS NULL AND g.state='ACTIVE'
+      AND json_extract(j.metadataJson,'$.offer.task.app.appId')=${data.offer.task.app.appId}
+      AND json_extract(j.metadataJson,'$.offer.task.priority')=${data.offer.task.priority}
+      AND json_extract(j.metadataJson,'$.offer.target.targetId')=${data.offer.target.targetId}
+      AND json_extract(j.metadataJson,'$.holderId')=${data.holderId}
+      AND json_extract(j.metadataJson,'$.workflowSubmittedAt')<${data.workflowSubmittedAt}
+      AND json_extract(j.metadataJson,'$.deadlineAt')>${now}
+      AND json_extract(j.metadataJson,'$.dispatchReadyAt') BETWEEN ${now-1000} AND ${now}
+      LIMIT 1`;
+    return rows.length>0;
   }
   async status(peer:Peer,id:string,withOutputTicket=true){
     await this.apps.context(peer);
