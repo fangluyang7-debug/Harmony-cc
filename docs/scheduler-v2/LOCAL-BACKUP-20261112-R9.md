@@ -2,6 +2,8 @@
 
 分支：`codex/main-gpu-integration-20261112`。这是用户完成本轮测试后的本地版本备份，不合并协作者后续修改，也不覆盖 main、imageprocessing 或旧 GPU 备份分支。
 
+源码提交：`540cb71309eddf81f618463ecbecf67ca301383b`，对应 [安装包清单](LOCAL-BACKUP-20261112-R9.manifest.json)。Windows 两包从该源码构建；图片 HAP 对应工程的 PhotoBatch、PhotoSession、PhotoReadiness、Index 与当前源码一致。协调中心/设备节点 13 个关键构建文件逐一核对一致，五个压缩包 CRC 校验通过；独立短码配对、上线和照片 CPU 能力 ACTIVE 检查通过，未接入用户空间。各包 SHA-256 和 GitHub 下载地址均在清单中。
+
 ## 必须保留的修改
 
 - 手机图片 App 的就绪状态、准备计时、本机/协作模式切换及同一宿主恢复；暂停本机贡献时等待已有工作真实结算。
