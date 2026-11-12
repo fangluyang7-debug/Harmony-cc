@@ -5,12 +5,12 @@ import { HarmonySdkPort, TrustedCoordinator, NativeAgent, Installation, Paired, 
 interface Registration extends TrustedCoordinator {registrationId:string;code:string;expiresAt:number;domain:string;}
 interface Exchange extends Paired {offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
 interface Identity {appInstanceId:string;}
-interface AppContext {identity:Identity;}
+interface AppContext {identity:Identity;deviceCapacity:ResourceAmountV2[];}
+interface Manifest {label:string;allowedContracts:string[];}
 interface CapabilityCount {capability:string;devices?:number;}
 interface CapabilityCounts {capabilities:CapabilityCount[];}
-interface Manifest {label:string;allowedContracts:string[];maxConcurrent:number;resources:ResourceAmountV2[];offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
 export interface PhotoConnection {address:string;fingerprint:string;groupId:string;deviceId:string;appInstanceId:string;}
-const manifest:Manifest={label:'Harmony 图片演示 v1',allowedContracts:['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'],maxConcurrent:4,resources:[{resourcePoolId:'cpu',amount:8},{resourcePoolId:'ram',amount:4294967296},{resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:8589934592}],offlineBase:[],onlineExtra:[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:1073741824}]};
+const manifest:Manifest={label:'Harmony 图片演示 v1',allowedContracts:['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1']};
 
 /** Independent application credentials and foreground executor, like SoleAI. */
 export class PhotoSession {
@@ -61,7 +61,7 @@ export class PhotoSession {
    const registration=JSON.parse(encoded) as Registration,port=await HarmonySdkPort.open(context,registration);
    await store.put('exchangePending',true);await store.flush();
    const paired=JSON.parse(await port.exchange(registration.registrationId,registration.code)) as Exchange,info=JSON.parse(await port.request('/v2/apps/me',null)) as AppContext;
-   const saved:Installation={appInstanceId:info.identity.appInstanceId,paired,bootstrap:{domain:registration.domain,holderInstanceId:paired.peer.holderInstanceId,invitation:{version:2,inviteId:registration.registrationId,groupId:paired.peer.groupId,address:registration.address,certificate:registration.certificate,fingerprint:registration.fingerprint,code:'',expiresAt:registration.expiresAt},contribution:{ownerMode:'dedicated',maxCpuThreads:2,maxMemoryBytes:1073741824,reserveMemoryBytes:0}}};
+   const saved:Installation={appInstanceId:info.identity.appInstanceId,paired,bootstrap:{domain:registration.domain,holderInstanceId:paired.peer.holderInstanceId,invitation:{version:2,inviteId:registration.registrationId,groupId:paired.peer.groupId,address:registration.address,certificate:registration.certificate,fingerprint:registration.fingerprint,code:'',expiresAt:registration.expiresAt},contribution:{ownerMode:'dedicated',maxCpuThreads:info.deviceCapacity.find(r=>r.resourcePoolId==='cpu')!.amount,maxMemoryBytes:info.deviceCapacity.find(r=>r.resourcePoolId==='ram')!.amount,reserveMemoryBytes:0}}};
    await store.put('installation',JSON.stringify(saved));await store.put('exchangePending',false);await store.flush();await this.activate(saved);onStatus('已连接协作空间');
   }finally{this.changing=false;}
  }

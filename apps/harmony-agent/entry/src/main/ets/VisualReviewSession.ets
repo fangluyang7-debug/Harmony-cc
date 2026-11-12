@@ -47,7 +47,7 @@ export class VisualReviewSession {
   if(saved){const installed=JSON.parse(saved) as SavedApp;this.port=await HarmonySdkPort.open(this.context,installed.trust,installed.credential);}
   else{
    if(await store.get('pending',false) as boolean)throw Error('应用注册待对账，请勿重复授权');
-   const invitation=JSON.parse(await agent.registerApplication({label:'SoleAI · 商品图像复核',allowedContracts:['image.visual-match.v1'],maxConcurrent:8,resources:[{resourcePoolId:'cpu',amount:8},{resourcePoolId:'ram',amount:1073741824}],offlineBase:[],onlineExtra:[]})) as Registration;
+   const invitation=JSON.parse(await agent.registerApplication({label:'SoleAI · 商品图像复核',allowedContracts:['image.visual-match.v1']})) as Registration;
    await store.put('pending',true);await store.flush();this.port=await HarmonySdkPort.open(this.context,invitation);
    const exchanged=JSON.parse(await this.port.exchange(invitation.registrationId,invitation.code)) as Exchange;
    const installation:SavedApp={trust:{address:invitation.address,certificate:invitation.certificate,fingerprint:invitation.fingerprint},credential:exchanged.credential};await store.put('installation',JSON.stringify(installation));await store.put('pending',false);await store.flush();

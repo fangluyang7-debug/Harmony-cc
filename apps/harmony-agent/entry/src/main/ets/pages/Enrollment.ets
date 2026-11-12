@@ -1,7 +1,7 @@
 import { common } from '@kit.AbilityKit';
 import { openAgent } from '../AgentRuntime';
 interface ResourceSummary {resourcePoolId:string;amount:number;}
-interface RequestSummary {label:string;allowedContracts:string[];resources:ResourceSummary[];}
+interface RequestSummary {label:string;allowedContracts:string[];}
 @Entry
 @Component
 struct Enrollment {
@@ -9,7 +9,7 @@ struct Enrollment {
  @State busy:boolean=false;
  @State status:string='仅授予当前请求独立的 App 身份，不共享设备凭据。';
  private summary():string {
-  try{const d=JSON.parse(this.request) as RequestSummary;return d.label+'\n请求能力：'+d.allowedContracts.join('、')+'\n任务额度：'+d.resources.map(r=>r.resourcePoolId+' = '+r.amount).join('，');}
+  try{const d=JSON.parse(this.request) as RequestSummary;return d.label+'\n请求能力：'+d.allowedContracts.join('、')+'\n资源由协调中心根据设备状态统一分配';}
   catch(e){return '无效的应用接入请求';}
  }
  private async approve():Promise<void>{

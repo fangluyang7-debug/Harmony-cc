@@ -7,7 +7,7 @@ async function main(){
  if(!ownerFile||!policyFile||!destination)throw Error('APP_REGISTER_ARGUMENTS');
  const owner=JSON.parse(fs.readFileSync(ownerFile,'utf8')),policy=JSON.parse(fs.readFileSync(policyFile,'utf8'));
  if(fs.existsSync(destination))throw Error('APP_CONFIG_ALREADY_EXISTS');
- const request=appRequest(owner.connection),invitation=JSON.parse(await request('/v2/apps/registrations',JSON.stringify(policy)));
+ const request=appRequest(owner.connection),invitation=JSON.parse(await request('/v2/apps/registrations',JSON.stringify({label:policy.label,allowedContracts:policy.allowedContracts,...(policy.declaration?{declaration:policy.declaration}:{}),...(policy.appId?{appId:policy.appId}:{})})));
  if(inviteOnly){fs.mkdirSync(path.dirname(path.resolve(destination)),{recursive:true});fs.writeFileSync(destination,JSON.stringify(invitation,null,2),{flag:'wx',mode:0o600});console.log('One-use App invitation saved; exchange it inside the intended App.');return;}
  const registration=JSON.parse(await request('/v2/apps/exchange',JSON.stringify({registrationId:invitation.registrationId,code:invitation.code})));
  const connection={...owner.connection,credential:registration.credential};

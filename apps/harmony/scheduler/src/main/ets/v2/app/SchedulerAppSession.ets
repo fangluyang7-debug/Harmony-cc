@@ -14,10 +14,6 @@ import { ResourceAmountV2 } from '../protocol/ResourcesV2';
 export interface SchedulerAppDeclaration {
  label:string;
  allowedContracts:string[];
- maxConcurrent:number;
- resources:ResourceAmountV2[];
- offlineBase:ResourceAmountV2[];
- onlineExtra:ResourceAmountV2[];
  /** Optional workflow declaration registered with the App (see SoleAI). */
  declaration?:Object;
 }
@@ -41,7 +37,7 @@ interface Registration extends TrustedCoordinator {registrationId:string;code:st
 interface Exchange extends Paired {offlineBase:ResourceAmountV2[];onlineExtra:ResourceAmountV2[];}
 interface AppIdentity {appInstanceId:string;}
 interface DeclarationRevision {revision?:string;}
-interface AppContext {identity:AppIdentity;declaration:DeclarationRevision|null;}
+interface AppContext {identity:AppIdentity;declaration:DeclarationRevision|null;deviceCapacity:ResourceAmountV2[];}
 
 const TERMINAL=['APP_CREDENTIAL_REVOKED','CREDENTIAL_REVOKED','DEVICE_LEFT_SPACE','APP_HOST_IDENTITY_MISMATCH'];
 
@@ -143,9 +139,12 @@ export class SchedulerAppSession {
    await store.put('exchangePending',true);await store.flush();
    const paired=JSON.parse(await port.exchange(registration.registrationId,registration.code)) as Exchange;
    const info=JSON.parse(await port.request('/v2/apps/me',null)) as AppContext;
+   const cpuCapacity=info.deviceCapacity.find(r=>r.resourcePoolId==='cpu')?.amount;
+   const ramCapacity=info.deviceCapacity.find(r=>r.resourcePoolId==='ram')?.amount;
+   if(cpuCapacity===undefined||ramCapacity===undefined)throw Error('DEVICE_CAPACITY_UNKNOWN');
    const saved:Installation={appInstanceId:info.identity.appInstanceId,paired,bootstrap:{domain:registration.domain,holderInstanceId:paired.peer.holderInstanceId,
     invitation:{version:2,inviteId:registration.registrationId,groupId:paired.peer.groupId,address:registration.address,certificate:registration.certificate,fingerprint:registration.fingerprint,code:'',expiresAt:registration.expiresAt},
-    contribution:{ownerMode:'dedicated',maxCpuThreads:2,maxMemoryBytes:268435456,reserveMemoryBytes:0}}};
+    contribution:{ownerMode:'dedicated',maxCpuThreads:cpuCapacity,maxMemoryBytes:ramCapacity,reserveMemoryBytes:0}}};
    await store.put('installation',JSON.stringify(saved));await store.put('exchangePending',false);await store.flush();
    await this.activate(saved);await store.put('enabled',true);await store.flush();
   }catch(e){this.set('UNAVAILABLE','协同调度暂不可用：'+(e as Error).message+' · 新任务使用本机原有路径');throw e as Error;}

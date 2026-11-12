@@ -23,7 +23,7 @@ export class AppRegistry {
   if(existing&&(existing.groupId!==owner.groupId||existing.principalId!==owner.principalId))throw Error('APP_OWNER_REQUIRED');
   if(existing&&input.declaration&&existing.declarationJson&&canonical(JSON.parse(existing.declarationJson))!==canonical(input.declaration))throw Error('APP_DECLARATION_CONFLICT');
   if(input.appId&&!existing)throw Error('APP_UNKNOWN');
-  if(existing&&(canonical(JSON.parse(existing.contractsJson))!==canonical(input.allowedContracts)||existing.maxConcurrent<input.maxConcurrent||input.batchWeight!==undefined&&existing.batchWeight!==input.batchWeight||!vectorFitsV2(input.resources,JSON.parse(existing.resourcesJson))))throw Error('APP_POLICY_CONFLICT');
+  if(existing&&(canonical(JSON.parse(existing.contractsJson))!==canonical(input.allowedContracts)||existing.maxConcurrent<input.maxConcurrent||input.batchWeight!==undefined&&existing.batchWeight!==input.batchWeight))throw Error('APP_POLICY_CONFLICT');
   const app=existing??await tx.registeredApp.create({data:{id:ids?.appId??randomUUID(),groupId:owner.groupId,principalId:owner.principalId,label:input.label.trim(),batchWeight:input.batchWeight??1,contractsJson:JSON.stringify(input.allowedContracts),resourcesJson:JSON.stringify(input.resources),maxConcurrent:input.maxConcurrent}});
   if(input.declaration&&!app.declarationJson)await tx.registeredApp.update({where:{id:app.id},data:{declarationJson:JSON.stringify(input.declaration)}});
   const appBases=(await tx.registeredInstallation.findMany({where:{appId:app.id}})).map(i=>JSON.parse(i.offlineJson) as ResourceAmountV2[]);
@@ -42,6 +42,18 @@ export class AppRegistry {
   }
   const installation=await tx.registeredInstallation.create({data:{id,appId:app.id,groupId:owner.groupId,principalId:owner.principalId,deviceId:owner.deviceId,holderInstanceId:holder,state:'INVITED',secretHash:hash(code),expiresAt:this.now()+600000,offlineJson:JSON.stringify(input.offlineBase),onlineJson:JSON.stringify(input.onlineExtra)}});
   return {app,installation,code};
+ }
+ /** Public application declarations contain capabilities, never resource quotas. */
+ async registerDeclaration(owner:Peer,input:any,address:string){
+  if(owner.app)throw Error('DEVICE_OWNER_CREDENTIAL_REQUIRED');
+  if(!exact(input,['label','allowedContracts'],['declaration','appId']))throw Error('APP_DECLARATION_FIELDS_INVALID');
+  const row=await this.db.device.findUnique({where:{id:JSON.stringify(['budget',owner.deviceId])}});
+  const budget=row?JSON.parse(row.metadataJson):null;
+  if(!budget||!budget.bindings.some((b:any)=>b.groupId===owner.groupId&&b.holderInstanceId===owner.holderInstanceId&&b.appInstanceId===null))throw Error('IDENTITY_UNRESOLVED');
+  const resources=budget.capacity as ResourceAmountV2[];
+  validate({...input,maxConcurrent:64,resources,offlineBase:[],onlineExtra:resources});
+  await this.db.registeredApp.updateMany({where:{groupId:owner.groupId,principalId:owner.principalId,...(input.appId?{id:input.appId}:{label:input.label})},data:{maxConcurrent:64}});
+  return this.register(owner,{...input,maxConcurrent:64,resources,offlineBase:[],onlineExtra:resources},address);
  }
  async register(owner:Peer,input:RegistrationInput,address:string){
   if(owner.app)throw Error('DEVICE_OWNER_CREDENTIAL_REQUIRED');validate(input);

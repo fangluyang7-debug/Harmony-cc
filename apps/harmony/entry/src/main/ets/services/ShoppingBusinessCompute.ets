@@ -11,6 +11,10 @@ import { numericPrice } from './CommercePresentation';
 import { cooperative, ShoppingCapacity } from './CooperativeSession';
 import { matchShoppingPhoto, ShoppingCostEvidence, ShoppingComputePort, ShoppingComputeJob } from './ShoppingComputeFlow';
 
+interface CatalogItem {id:string;price:string;currency:string;rank:number;}
+interface CatalogInput {currency:string;maxPriceMinor:number;items:CatalogItem[];}
+interface CatalogRank {id:string;priceMinor:number;rank:number;}
+interface CatalogResult {scanned:number;excluded:number;items:CatalogRank[];}
 interface CostSample {key:string;localMs:number;teamMs:number;observedAt:number;}
 export interface ShoppingAudit {taskId:string;runId:string;operation:string;state:string;elapsedMs:number|null;businessMs:number;imagePreparationMs:number;reason:string;actualDevices:string[];jobIds:string[];traceIds:string[];jobs:ShoppingComputeJob[];sourceHashes:string[];resultHash:string;error:string;}
 interface PendingShopping {id:string;began:number;}
@@ -20,7 +24,7 @@ class NativeShoppingPort implements ShoppingComputePort {
  private audit:ShoppingAudit;
  constructor(capacity:ShoppingCapacity,signal:CancellationSignal,deadline:number,audit:ShoppingAudit){this.sdk=capacity.sdk;this.originTarget=capacity.originTarget;this.originDevice=capacity.originDevice;this.signal=signal;this.deadline=deadline;this.audit=audit;}
  now():number{return monotonic();}
- id():string{return util.generateRandomUUID(true);}
+ id():string{return this.audit.taskId+'-'+util.generateRandomUUID(true);}
  encode(value:string):Uint8Array{return bytes(value);}
  decode(value:Uint8Array):string{return text(value);}
  pack(value:Uint8Array):Promise<Uint8Array>{return packVisualRaw(value);}
@@ -77,6 +81,25 @@ class ShoppingBusinessCompute {
   }};
   await Promise.all([worker(),worker(),worker()]);if(stopped)throw stopped as Error;return result;
  }
+ private async rankProducts(products:Product[],signal:CancellationSignal,deadline:number,audit:ShoppingAudit):Promise<void>{
+  const sdk=await cooperative.availableClient();if(!sdk||products.length===0)return;
+  const currency=products[0].currency||'CNY';
+  if(currency!=='CNY'||products.some(p=>(p.currency||'CNY')!==currency||!/^\d{1,9}(\.\d{1,2})?$/.test(p.price))){audit.reason='PRICE_FORMAT_REQUIRES_BUSINESS_HANDLING';return;}
+  const payload:CatalogInput={currency,maxPriceMinor:99999999999,items:products.map((p:Product,index:number):CatalogItem=>({id:String(index),price:p.price,currency,rank:index}))};
+  if(signal.isCancellationRequested||monotonic()>=deadline)throw Error('SHOPPING_CANCELLED_OR_BUDGET');
+  const input=await sdk.registerInput(bytes(JSON.stringify(payload)),'catalog.items'),id=audit.taskId+'-'+util.generateRandomUUID(true);
+  const job:ShoppingComputeJob={id,deviceId:'',traceId:'',state:'SUBMITTING'};audit.jobs.push(job);
+  try{
+   const task=await sdk.submit({version:3,id,outputContract:'catalog.ranked',qualityTarget:'reference',nodes:[{id:'price-ranking',capability:'catalog.filter.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:id,budgetMs:Math.max(1,Math.min(30000,Math.floor(deadline-monotonic()))),resultDestination:'ORIGIN'});
+   if(signal.isCancellationRequested){await task.cancel();throw Error('SHOPPING_CANCELLED');}
+   const result=await task.result(Math.max(1,Math.min(30000,deadline-monotonic()))),ranked=JSON.parse(text(result.output)) as CatalogResult;
+   if(ranked.scanned!==products.length||ranked.excluded!==0||ranked.items.length!==products.length||new Set<string>(ranked.items.map(r=>r.id)).size!==products.length||ranked.items.some(r=>!/^\d+$/.test(r.id)||Number(r.id)>=products.length))throw Error('CATALOG_RESULT_INVALID');
+   ranked.items.forEach((r:CatalogRank,index:number)=>{products[Number(r.id)].comparisonRank=index;});
+   job.deviceId=result.status.deviceId;job.traceId=result.status.traceId;job.state=result.status.state;
+   audit.jobIds.push(id);audit.traceIds.push(job.traceId);audit.actualDevices.push(job.deviceId);audit.reason='COORDINATOR_PRICE_RANKING';
+  }catch(e){job.state='FAILED_OR_UNCONFIRMED';job.error=(e as Error).message;throw e as Error;}
+  finally{sdk.releaseInput(input);}
+ }
  async complete(result:ShoppingResult,photoUri:string|undefined,signal:CancellationSignal,deadline:number):Promise<ShoppingResult>{
   await this.load;const started=monotonic(),audit:ShoppingAudit={taskId:result.taskId,runId:result.runtimeRunId,operation:result.operation,state:'SUCCEEDED',elapsedMs:null,businessMs:0,imagePreparationMs:0,reason:'LIGHT_PRICE_COMPARISON_LOCAL',actualDevices:[],jobIds:[],traceIds:[],jobs:[],sourceHashes:[],resultHash:'',error:''};
   const products=result.products;
@@ -86,6 +109,7 @@ class ShoppingBusinessCompute {
   if(photoUri&&(!products||products.length===0))audit.reason='NO_CANDIDATES_FROM_CLOUD';
   // The ordinary price-order button consumes these ranks for both text and photo results.
   if(products){const ranked=products.slice().sort((a:Product,b:Product)=>numericPrice(a)-numericPrice(b));ranked.forEach((p:Product,index:number)=>{p.comparisonRank=index;});}
+  try{if(products)await this.rankProducts(products,signal,deadline,audit);}catch(e){audit.state='PARTIAL';audit.error=(e as Error).message;audit.reason='PRICE_RANKING_UNAVAILABLE';}
   try{
    if(photoUri&&products&&products.length){
     if(signal.isCancellationRequested||monotonic()>=deadline)throw Error('SHOPPING_CANCELLED_OR_BUDGET');
@@ -108,7 +132,7 @@ class ShoppingBusinessCompute {
      const evidence:ShoppingCostEvidence={localMs:sample?.localMs??0,dispatchRoundTripMs:capacity.roundTripMs,remoteAvailable:capacity.remoteAvailable&&!(sample&&sample.teamMs>0&&sample.teamMs>=sample.localMs)};
      const port=new NativeShoppingPort(capacity,signal,deadline,audit);
      const matched=await matchShoppingPhoto(images,port,evidence);audit.reason=matched.decision.reason;
-     audit.actualDevices=Array.from(new Set<string>(matched.jobs.map(j=>j.deviceId).filter(id=>id.length>0)));audit.jobIds=matched.jobs.filter(j=>j.traceId.length>0).map(j=>j.id);audit.traceIds=matched.jobs.filter(j=>j.traceId.length>0).map(j=>j.traceId);
+     audit.actualDevices=Array.from(new Set<string>(audit.actualDevices.concat(matched.jobs.map(j=>j.deviceId).filter(id=>id.length>0))));audit.jobIds.push(...matched.jobs.filter(j=>j.traceId.length>0).map(j=>j.id));audit.traceIds.push(...matched.jobs.filter(j=>j.traceId.length>0).map(j=>j.traceId));
      for(const pair of matched.pairs){for(const product of selected[Number(pair.b.slice(1))])product.visualSimilarity=pair.scoreMillion/10000;}
      audit.resultHash=hash(bytes(JSON.stringify(matched.pairs)));
      // Visual evidence is a reference for the actual user's photo, never a same-product guarantee.

@@ -9,9 +9,8 @@ export interface DeclaredNode {id:string;capability:string;contractId?:string;pa
 export interface WorkflowDeclaration {id:string;capabilities:string[];inputSchema:string;outputContract:string;qualityTarget?:string;alternatives?:WorkflowDeclaration[];nodes:DeclaredNode[];}
 interface Declaration {version:number;revision:string;workflows:WorkflowDeclaration[];}
 interface DisplayMutation {version?:number;text?:string;}
-export interface RegistrationRequest {label:string;allowedContracts:string[];maxConcurrent:number;resources:Resource[];offlineBase:Resource[];onlineExtra:Resource[];declaration:Declaration;}
-const manifest:RegistrationRequest={label:'SoleAI 日常购物工作流 3',allowedContracts:['image.crop.contract','catalog.filter.v1','image.visual-match.v1'],maxConcurrent:4,
- resources:[{resourcePoolId:'cpu',amount:8},{resourcePoolId:'ram',amount:4294967296}],offlineBase:[],onlineExtra:[{resourcePoolId:'cpu',amount:2},{resourcePoolId:'ram',amount:268435456}],
+export interface RegistrationRequest {label:string;allowedContracts:string[];declaration:Declaration;}
+const manifest:RegistrationRequest={label:'SoleAI 日常购物工作流 3',allowedContracts:['image.crop.contract','catalog.filter.v1','image.visual-match.v1'],
  declaration:{version:1,revision:'soleai.shopping.3',workflows:[
   {id:'shopping.photo.prepare',capabilities:['image.crop.v1'],inputSchema:'image.raster',outputContract:'image.raster',nodes:[{id:'prepare',capability:'image.crop.v1',contractId:'image.crop.contract',dependsOn:[]}]},
   {id:'shopping.compare',capabilities:['catalog.filter.v1'],inputSchema:'catalog.items',outputContract:'catalog.ranked',nodes:[{id:'compare',capability:'catalog.filter.v1',dependsOn:[]}]},

@@ -57,8 +57,8 @@ async function owner(r){const invite=await r.auth.invite('g1','owner1','device1'
 test('owner-confirmed one-use registration derives App identity, reserves offline capacity before delivery and rejects self-grants',async()=>{
  const r=await runtime();try{
   const o=await owner(r),post=(route,body,token=o.credential)=>pinnedRequest(o.invite,route,body,token);
-  const a=await post('/v2/apps/registrations',registration('App A')),b=await post('/v2/apps/registrations',registration('App B'));
-  await assert.rejects(post('/v2/apps/registrations',registration('App C')),/APP_BASE_BUDGET_UNAVAILABLE|400/);
+  const a=await r.apps.register(o.peer,registration('App A'),r.url),b=await r.apps.register(o.peer,registration('App B'),r.url);
+  await assert.rejects(r.apps.register(o.peer,registration('App C'),r.url),/APP_BASE_BUDGET_UNAVAILABLE|400/);
   const app=await post('/v2/apps/exchange',{registrationId:a.registrationId,code:a.code});
   assert.equal(app.peer.deviceId,o.peer.deviceId);assert.equal(app.peer.principalId,o.peer.principalId);assert.equal(app.peer.app.appId,a.appId);assert.notEqual(app.credential,o.credential);
   assert.deepEqual((await r.auth.authenticate(app.credential)).app,app.peer.app);
@@ -73,7 +73,7 @@ test('owner-confirmed one-use registration derives App identity, reserves offlin
   await assert.rejects(r.allotments.issue(o.peer,{...req,base:[],extra:capacity}),/BUDGET_UNAVAILABLE/);
   await assert.rejects(r.allotments.confirmDevice('device1',[{resourcePoolId:'cpu',amount:1}],[]),/BUDGET_INVALID|RECONCILIATION/);
   await post('/v2/apps/registrations/'+a.appInstanceId+'/revoke',{});await assert.rejects(r.auth.authenticate(app.credential),/CREDENTIAL_REVOKED|APP_CREDENTIAL_REVOKED/);
-  await assert.rejects(post('/v2/apps/registrations',registration('App C')),/400/,'revocation cannot reclaim an offline grant without settlement');
+  await assert.rejects(r.apps.register(o.peer,registration('App C'),r.url),/APP_BASE_BUDGET_UNAVAILABLE/,'revocation cannot reclaim an offline grant without settlement');
   const current=await r.db.registeredInstallation.findUnique({where:{id:a.appInstanceId}});assert.equal(current.state,'REVOKED');assert.deepEqual(JSON.parse(current.offlineJson),base);
  }finally{await r.close();}
 });

@@ -2,13 +2,10 @@ import { SchedulerSdk, SdkInput, SdkTask, ReviewImage, ReviewPair, ReviewOutput,
 
 export interface ShoppingCostEvidence { localMs:number; dispatchRoundTripMs:number; remoteAvailable:boolean; }
 export interface ShoppingComputeDecision { collaborate:boolean; reason:string; }
-// Admission policy, not a performance measurement. Unknown cost remains local.
+// A connected SDK always submits work; the coordinator chooses local or remote.
+// Historical phone timings are observations, not a gate that hides first-run work.
 export function shoppingDecision(parts:number,evidence:ShoppingCostEvidence|null):ShoppingComputeDecision {
- if(parts<2)return {collaborate:false,reason:'SINGLE_PART'};
- if(!evidence||!evidence.remoteAvailable)return {collaborate:false,reason:'NO_REMOTE_CAPACITY'};
- if(!Number.isFinite(evidence.localMs)||evidence.localMs<=0||!Number.isFinite(evidence.dispatchRoundTripMs)||evidence.dispatchRoundTripMs<=0)return {collaborate:false,reason:'COST_UNKNOWN'};
- if(evidence.localMs<=Math.max(250,evidence.dispatchRoundTripMs*12))return {collaborate:false,reason:'OVERHEAD_DOMINATES'};
- return {collaborate:true,reason:'MEASURED_LOCAL_WORK_EXCEEDS_CONTROL_OVERHEAD'};
+ return {collaborate:true,reason:'COORDINATOR_PLACEMENT'};
 }
 export interface ShoppingComputeJob {id:string;deviceId:string;traceId:string;state:string;error?:string;}
 export interface ShoppingMatchResult {pairs:ReviewPair[];decision:ShoppingComputeDecision;executionMode:string;computeMs:number;preparationMs:number;jobs:ShoppingComputeJob[];}
@@ -28,7 +25,7 @@ export function shoppingPairs(count:number):number[][][]{
 }
 export async function matchShoppingPhoto(images:ReviewImage[],port:ShoppingComputePort,evidence:ShoppingCostEvidence|null):Promise<ShoppingMatchResult>{
  const parts=shoppingPairs(images.length),decision=shoppingDecision(parts.length,evidence);
- if(!port.sdk||!port.originTarget){decision.collaborate=false;decision.reason='LOCAL_HOST_NOT_READY';}
+ if(!port.sdk){decision.collaborate=false;decision.reason='LOCAL_HOST_NOT_READY';}
  const output:ReviewOutput[]=[],jobs:ShoppingComputeJob[]=[],tasks:SdkTask[]=[];let cursor=0,failed:Error|null=null,preparationMs=0;
  const started=port.now();
  const check=():void=>{if(port.cancelled())throw Error('SHOPPING_CANCELLED');if(port.now()>=port.deadline)throw Error('SHOPPING_BUDGET_EXHAUSTED');};
@@ -36,8 +33,7 @@ export async function matchShoppingPhoto(images:ReviewImage[],port:ShoppingCompu
   try{check();const prepare=port.now(),data=await port.pack(reviewRaw(images,parts[index],port.encode));preparationMs+=port.now()-prepare;check();
    let bytes:Uint8Array;
    if(decision.collaborate){const sdk=port.sdk!,id=port.id();job={id,deviceId:'',traceId:'',state:'SUBMITTING'};jobs.push(job);port.observe?.(job);input=await sdk.registerInput(data,'image.visual-bundle');check();
-    // User requires source-phone participation. Only this affinity is fixed; the planner selects all other targets.
-    const task=await sdk.submit({version:3,id,outputContract:'image.visual-evidence',qualityTarget:'reference',nodes:[{id:'photo-candidates',capability:'image.visual-match.v1',input,parameters:'{}',dependsOn:[],targetId:index===0?port.originTarget!:undefined}]},
+    const task=await sdk.submit({version:3,id,outputContract:'image.visual-evidence',qualityTarget:'reference',nodes:[{id:'photo-candidates',capability:'image.visual-match.v1',input,parameters:'{}',dependsOn:[]}]},
      {requestId:id,budgetMs:Math.min(30000,Math.max(1,Math.floor(port.deadline-port.now()))),resultDestination:'ORIGIN',inputLocation:'ORIGIN'});
     tasks.push(task);job.state='SUBMITTED';port.observe?.(job);
     const result=await task.result(Math.max(1,Math.min(30000,port.deadline-port.now())));bytes=result.output;job.deviceId=result.status.deviceId;job.traceId=result.status.traceId;job.state=result.status.state;

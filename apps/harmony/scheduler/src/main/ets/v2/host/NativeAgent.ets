@@ -289,7 +289,7 @@ export class NativeAgent {
  private async adoptCeiling(settings:Contribution):Promise<void>{
   const ceiling=this.installation.bootstrap.contribution;
   if(!validContribution(settings)||settings.maxCpuThreads===ceiling.maxCpuThreads&&settings.maxMemoryBytes===ceiling.maxMemoryBytes&&settings.reserveMemoryBytes===ceiling.reserveMemoryBytes)return;
-  const atCeiling=this.contribution.maxCpuThreads===ceiling.maxCpuThreads&&this.contribution.maxMemoryBytes===ceiling.maxMemoryBytes;
+  const atCeiling=this.policy!==null||this.contribution.maxCpuThreads===ceiling.maxCpuThreads&&this.contribution.maxMemoryBytes===ceiling.maxMemoryBytes;
   const next:Contribution={ownerMode:ceiling.ownerMode,maxCpuThreads:settings.maxCpuThreads,maxMemoryBytes:settings.maxMemoryBytes,reserveMemoryBytes:settings.reserveMemoryBytes};
   this.installation.bootstrap.contribution=next;
   await this.db.put('identity',JSON.stringify(this.installation));await this.db.put('identity:'+this.displayHolderId(),JSON.stringify(this.installation));
@@ -381,7 +381,7 @@ export class NativeAgent {
   // A background owner must not keep all discretionary capacity while the
   // foreground source App is trying to acquire its own grant. Occupied work
   // remains fenced by the coordinator's reservation/acknowledgment protocol.
-  const base=this.policy?.offlineBase??[],extra=this.idle()?(this.policy?.onlineExtra??[{resourcePoolId:'cpu',amount:this.contribution.maxCpuThreads},{resourcePoolId:'ram',amount:this.contribution.maxMemoryBytes}]):[];
+  const base=this.policy?.offlineBase??[],limits=this.limits(),extra=this.idle()?limits.map((r:ResourceAmountV2):ResourceAmountV2=>({resourcePoolId:r.resourcePoolId,amount:Math.min(Math.max(0,r.amount-(base.find(p=>p.resourcePoolId===r.resourcePoolId)?.amount??0)),this.policy?.onlineExtra.find(p=>p.resourcePoolId===r.resourcePoolId)?.amount??r.amount)})):[];
   const configuration=canonical(base)+'|'+canonical(extra);if(monotonic()<this.renewAt&&configuration===this.renewalConfig)return;
   this.grantBusy=true;const requestedAt=monotonic();
   try{

@@ -42,9 +42,9 @@ export function measuredCapacity(v:any):MeasuredCapacity{
   return {cpuThreads:cpu,totalMemoryBytes:ram,vramBytes:vram};
 }
 /**
- * Automatic ceiling, not a reservation of all that memory. Keep 1/16 of RAM free,
- * bounded to 256 MiB..1 GiB; the host additionally gates admission on CURRENT free RAM.
- * Dedicated devices contribute 3/4 of logical CPUs; idle-mode devices keep half. Storage capacity
+ * Automatic ceiling, not a reservation of all that memory. Keep 1/32 of RAM free,
+ * bounded to 128 MiB..512 MiB; the host additionally gates admission on CURRENT free RAM.
+ * Dedicated devices keep one logical CPU for interaction; idle-mode devices keep half. Storage capacity
  * is deliberately not part of this: only RAM backs task execution. Unknown measurements keep the current value.
  * VRAM is what the device's opened GPU backend reports (0 = no usable GPU backend): keep 256 MiB for the
  * desktop and offer the rest; a GPU with less than 512 MiB left is not offered at all. A device that
@@ -53,11 +53,11 @@ export function measuredCapacity(v:any):MeasuredCapacity{
 export function autoContribution(current:Contribution,measured:MeasuredCapacity):Contribution{
   const next:Contribution={...current,capacityMode:'auto'};
   if(measured.totalMemoryBytes!==null){
-    const reserve=Math.min(GiB,Math.max(256*MiB,Math.ceil(measured.totalMemoryBytes/16/MiB)*MiB));
+    const reserve=Math.min(512*MiB,Math.max(128*MiB,Math.ceil(measured.totalMemoryBytes/32/MiB)*MiB));
     next.reserveMemoryBytes=reserve;
     next.maxMemoryBytes=Math.min(TiB,Math.max(64*MiB,Math.floor((measured.totalMemoryBytes-reserve)/(64*MiB))*64*MiB));
   }
-  if(measured.cpuThreads!==null)next.maxCpuThreads=Math.min(64,Math.max(1,Math.floor(measured.cpuThreads*(current.ownerMode==='dedicated'?1:0.5))));
+  if(measured.cpuThreads!==null)next.maxCpuThreads=Math.min(64,Math.max(1,current.ownerMode==='dedicated'?measured.cpuThreads-1:Math.floor(measured.cpuThreads*0.5)));
   if(measured.vramBytes!==null){
     const usable=Math.floor((measured.vramBytes-256*MiB)/(64*MiB))*64*MiB;
     if(usable>=512*MiB)next.maxVramBytes=Math.min(TiB,usable);else delete next.maxVramBytes;
@@ -124,7 +124,25 @@ export class TeamSpaces {
   async deviceSettings(peer:Peer,measured?:MeasuredCapacity):Promise<Contribution|null>{
     const d=await this.db.spaceDevice.findUnique({where:{id:peer.deviceId}});
     if(!d||d.spaceId!==peer.groupId||d.userId!==peer.principalId)return null;
-    if(d.holderId!==peer.holderInstanceId){if(!peer.app)return null;await this.apps.context(peer);}
+    if(peer.app){
+      const context=await this.apps.context(peer);
+      const owner={...peer,holderInstanceId:d.holderId,app:undefined};
+      const settings=await this.deviceSettings(owner,measured);
+      if(!settings)return null;
+      // The coordinator owns the online contribution ceiling. Existing offline
+      // reservations remain intact and are subtracted rather than counted twice.
+      const ceiling=capacityVector(settings);
+      const online=ceiling.map(r=>({resourcePoolId:r.resourcePoolId,amount:Math.max(0,r.amount-(context.offlineBase.find(b=>b.resourcePoolId===r.resourcePoolId)?.amount??0))}));
+      const devices=await this.db.spaceDevice.findMany({where:{spaceId:peer.groupId}});
+      const resources=new Map<string,number>();
+      for(const device of devices)for(const r of capacityVector(JSON.parse(device.settingsJson)))resources.set(r.resourcePoolId,(resources.get(r.resourcePoolId)??0)+r.amount);
+      await this.db.$transaction([
+        this.db.registeredInstallation.update({where:{id:context.identity.appInstanceId},data:{onlineJson:JSON.stringify(online)}}),
+        this.db.registeredApp.update({where:{id:context.identity.appId},data:{maxConcurrent:64,resourcesJson:JSON.stringify([...resources].map(([resourcePoolId,amount])=>({resourcePoolId,amount})))}})
+      ]);
+      return settings;
+    }
+    if(d.holderId!==peer.holderInstanceId)return null;
     const settings=JSON.parse(d.settingsJson) as Contribution;
     if(!measured||settings.capacityMode!=='auto')return settings;
     const next=autoContribution(settings,measured);
