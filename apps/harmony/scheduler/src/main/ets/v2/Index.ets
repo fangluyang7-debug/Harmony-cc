@@ -19,3 +19,16 @@ export { enhancePhotoLocally, LocalPhotoProgress, LocalPhotoOptions } from './ho
 export * from './client/VisualReviewFlow';
 export { packVisualRaw, matchVisualLocal } from './client/VisualReviewNative';
 export { SchedulerAppSession, SchedulerAppDeclaration, SchedulerAppOptions, SchedulerAppState, SchedulerAppStatus } from './app/SchedulerAppSession';
+
+export { CoordinatorDatabase, CoordinatorOverview, CoordinatorOverviewRow } from './coordinator/CoordinatorDatabase';
+export { createCoordinatorCertificate, CoordinatorCertificate } from './coordinator/CoordinatorCertificate';
+export { CoordinatorTlsServer, CoordinatorHttpResponse } from './coordinator/CoordinatorTlsServer';
+export { CoordinatorCredentials } from './coordinator/CoordinatorCredentials';
+export { CoordinatorWebSocketParser, coordinatorWsFrame } from './coordinator/CoordinatorWebSocket';
+export { CoordinatorPairing, NativeCoordinatorInvitation } from './coordinator/CoordinatorPairing';
+export { CoordinatorDiscovery } from './coordinator/CoordinatorDiscovery';
+export { CoordinatorLocalAdmin, CoordinatorDeviceInvitation } from './coordinator/CoordinatorLocalAdmin';
+export { CoordinatorRoutes } from './coordinator/CoordinatorRoutes';
+export { CoordinatorAllotments } from './coordinator/CoordinatorAllotments';
+export { CoordinatorGrantCrypto } from './coordinator/CoordinatorGrantCrypto';
+export { CoordinatorDeviceSettings } from './coordinator/CoordinatorDeviceSettings';

@@ -2,7 +2,7 @@
 const fs=require('node:fs'),path=require('node:path'),{spawnSync}=require('node:child_process');
 async function main(){
 const root=path.resolve(__dirname,'..'),name=process.argv[2];
-if(!['harmony-agent','harmony-har-probe','harmony-indexer','harmony','harmony-photo'].includes(name))throw Error('APP_NAME_REQUIRED');
+if(!['harmony-agent','harmony-har-probe','harmony-indexer','harmony','harmony-photo','harmony-coordinator'].includes(name))throw Error('APP_NAME_REQUIRED');
 const studio=process.env.DEVECO_STUDIO_HOME||'E:/DevEco/DevEco Studio',sdk=process.env.DEVECO_SDK_HOME||path.join(studio,'sdk');
 const metadata=JSON.parse(fs.readFileSync(path.join(sdk,'default/sdk-pkg.json'))).data,sdkVersion=metadata.platformVersion+'('+metadata.apiVersion+')';
 const requestedApi=process.env.HARMONY_BUILD_API??'22';if(!['22','24'].includes(requestedApi)||String(metadata.apiVersion)!==requestedApi||metadata.platformVersion!==(requestedApi==='24'?'6.1.1':'6.0.2'))throw Error('SDK_BASELINE_MISMATCH: default API 22; explicit HARMONY_BUILD_API=24 supports the existing API 24 acceptance environment');
