@@ -1,0 +1,261 @@
+{
+  "runs": [
+    {
+      "id": "coop:af273668-e5cd-469d-91d8-9f6b7758a8e0",
+      "state": "FAILED",
+      "durationMs": 180081,
+      "inputs": 6,
+      "deliveredIndices": [
+        0,
+        3,
+        4,
+        5
+      ],
+      "deliveredAtMs": [
+        15232,
+        22311,
+        23706,
+        28859
+      ],
+      "error": "照片 15：JOB_FAILED；照片 14：SDK_RESULT_WAIT_TIMEOUT",
+      "nodes": [
+        {
+          "imageIndex": 1,
+          "node": "enhance-1",
+          "state": "CANCELLED_SETTLED",
+          "attemptId": "49722c7f-383b-40e5-b383-535a5de331d8.enhance-1",
+          "backend": "VULKAN"
+        },
+        {
+          "imageIndex": 1,
+          "node": "deliver",
+          "state": "PENDING",
+          "attemptId": "49722c7f-383b-40e5-b383-535a5de331d8.deliver"
+        },
+        {
+          "imageIndex": 2,
+          "node": "enhance-1",
+          "state": "ACCEPTED",
+          "attemptId": "9484c9c1-e69e-4595-a28c-a9c8ff35e854.enhance-1",
+          "backend": "CPU"
+        },
+        {
+          "imageIndex": 2,
+          "node": "enhance-3",
+          "state": "REJECTED",
+          "attemptId": "9484c9c1-e69e-4595-a28c-a9c8ff35e854.enhance-3",
+          "backend": "CPU"
+        },
+        {
+          "imageIndex": 2,
+          "node": "deliver",
+          "state": "PENDING",
+          "attemptId": "9484c9c1-e69e-4595-a28c-a9c8ff35e854.deliver"
+        }
+      ]
+    },
+    {
+      "id": "coop:cd8c3558-fc54-4d50-aef8-b1448f30f08f",
+      "state": "CANCELLED",
+      "durationMs": 47112,
+      "inputs": 6,
+      "deliveredIndices": [
+        0,
+        2,
+        3,
+        4,
+        5
+      ],
+      "deliveredAtMs": [
+        13679,
+        22899,
+        24193,
+        25882,
+        29251
+      ],
+      "error": "已取消",
+      "nodes": [
+        {
+          "imageIndex": 1,
+          "node": "enhance-1",
+          "state": "CANCELLED_SETTLED",
+          "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.enhance-1",
+          "backend": "VULKAN"
+        },
+        {
+          "imageIndex": 1,
+          "node": "enhance-2",
+          "state": "CANCELLED_SETTLED",
+          "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.enhance-2",
+          "backend": "CPU"
+        },
+        {
+          "imageIndex": 1,
+          "node": "enhance-3",
+          "state": "CANCELLED_SETTLED",
+          "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.enhance-3",
+          "backend": "VULKAN"
+        },
+        {
+          "imageIndex": 1,
+          "node": "deliver",
+          "state": "PENDING",
+          "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.deliver"
+        }
+      ]
+    },
+    {
+      "id": "coop:7d66120e-50f2-4894-ae14-16500834130a",
+      "state": "CANCELLED",
+      "durationMs": 49003,
+      "inputs": 6,
+      "deliveredIndices": [
+        0,
+        2,
+        3,
+        5
+      ],
+      "deliveredAtMs": [
+        13448,
+        20942,
+        21196,
+        27349
+      ],
+      "error": "已取消",
+      "nodes": [
+        {
+          "imageIndex": 1,
+          "node": "enhance-1",
+          "state": "CANCELLED_SETTLED",
+          "attemptId": "4fa7a2f0-ab89-434e-bf82-975206bf1111.enhance-1",
+          "backend": "VULKAN"
+        },
+        {
+          "imageIndex": 1,
+          "node": "deliver",
+          "state": "PENDING",
+          "attemptId": "4fa7a2f0-ab89-434e-bf82-975206bf1111.deliver"
+        },
+        {
+          "imageIndex": 4,
+          "node": "enhance-2",
+          "state": "CANCELLED_SETTLED",
+          "attemptId": "ac83d5b6-0e4e-4a7f-9d8e-db35bc1a3490.enhance-2",
+          "backend": "VULKAN"
+        },
+        {
+          "imageIndex": 4,
+          "node": "deliver",
+          "state": "PENDING",
+          "attemptId": "ac83d5b6-0e4e-4a7f-9d8e-db35bc1a3490.deliver"
+        }
+      ]
+    }
+  ],
+  "source": "native-perf-v3 real native-coordinator records; collected before R3 update",
+  "hardwareBenchmarkAfterFix": false,
+  "yieldNotices": [
+    {
+      "attemptId": "49722c7f-383b-40e5-b383-535a5de331d8.enhance-1",
+      "state": "CANCELLED_SETTLED",
+      "notice": {
+        "attemptId": "49722c7f-383b-40e5-b383-535a5de331d8.enhance-1",
+        "kind": "RESTART",
+        "releaseMs": {
+          "value": null,
+          "source": "UNKNOWN",
+          "sampledAt": 1794527388214,
+          "ttlMs": 1000,
+          "unit": "ms"
+        },
+        "checkpoint": null,
+        "reasonCode": "OWNER_ACTIVE"
+      }
+    },
+    {
+      "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.enhance-3",
+      "state": "CANCELLED_SETTLED",
+      "notice": {
+        "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.enhance-3",
+        "kind": "RESTART",
+        "releaseMs": {
+          "value": null,
+          "source": "UNKNOWN",
+          "sampledAt": 1794527323570,
+          "ttlMs": 1000,
+          "unit": "ms"
+        },
+        "checkpoint": null,
+        "reasonCode": "OWNER_ACTIVE"
+      }
+    },
+    {
+      "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.enhance-1",
+      "state": "CANCELLED_SETTLED",
+      "notice": {
+        "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.enhance-1",
+        "kind": "RESTART",
+        "releaseMs": {
+          "value": null,
+          "source": "UNKNOWN",
+          "sampledAt": 1794527323827,
+          "ttlMs": 1000,
+          "unit": "ms"
+        },
+        "checkpoint": null,
+        "reasonCode": "OWNER_ACTIVE"
+      }
+    },
+    {
+      "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.enhance-2",
+      "state": "CANCELLED_SETTLED",
+      "notice": {
+        "attemptId": "92a5a84a-0d52-44d2-aa54-eeebae29bcdf.enhance-2",
+        "kind": "RESTART",
+        "releaseMs": {
+          "value": null,
+          "source": "UNKNOWN",
+          "sampledAt": 1794527321717,
+          "ttlMs": 1000,
+          "unit": "ms"
+        },
+        "checkpoint": null,
+        "reasonCode": "OWNER_ACTIVE"
+      }
+    },
+    {
+      "attemptId": "ac83d5b6-0e4e-4a7f-9d8e-db35bc1a3490.enhance-2",
+      "state": "CANCELLED_SETTLED",
+      "notice": {
+        "attemptId": "ac83d5b6-0e4e-4a7f-9d8e-db35bc1a3490.enhance-2",
+        "kind": "RESTART",
+        "releaseMs": {
+          "value": null,
+          "source": "UNKNOWN",
+          "sampledAt": 1794527269483,
+          "ttlMs": 1000,
+          "unit": "ms"
+        },
+        "checkpoint": null,
+        "reasonCode": "OWNER_ACTIVE"
+      }
+    },
+    {
+      "attemptId": "4fa7a2f0-ab89-434e-bf82-975206bf1111.enhance-1",
+      "state": "CANCELLED_SETTLED",
+      "notice": {
+        "attemptId": "4fa7a2f0-ab89-434e-bf82-975206bf1111.enhance-1",
+        "kind": "RESTART",
+        "releaseMs": {
+          "value": null,
+          "source": "UNKNOWN",
+          "sampledAt": 1794527262090,
+          "ttlMs": 1000,
+          "unit": "ms"
+        },
+        "checkpoint": null,
+        "reasonCode": "OWNER_ACTIVE"
+      }
+    }
+  ]
+}

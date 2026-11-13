@@ -38,6 +38,7 @@ fs.mkdirSync(path.join(stage,'entry/src/main/resources/rawfile'),{recursive:true
 fs.copyFileSync(path.join(root,'tests/agent-conformance/fixtures/ledger-v2.json'),path.join(stage,'entry/src/main/resources/rawfile/ledger-v2.json'));
 const references=require('@harmony/reference-capabilities');
 const rawDir=path.join(stage,'entry/src/main/resources/rawfile');
+if(name==='harmony-coordinator')for(const file of ['photo-display.html','photo-display.js','photo-display.css','photo.css','photo-display-compare.mjs','qrcode.js','fonts/harmony-ui.woff']){const target=path.join(rawDir,'display',file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(root,'apps/team-space-web',file),target);}
 const packs=(await references.builtinReferencePacks()).map(p=>({manifest:p.manifest,digest:references.packDigest(p),cases:p.cases.map(c=>({...c,input:c.input.toString('base64')}))}));
 if(process.env.HARMONY_IMAGE_ENCODER_CONFIG){
  packs.push(await require('./package-harmony-image-encoder.cjs').packageImageEncoder(process.env.HARMONY_IMAGE_ENCODER_CONFIG,rawDir));
@@ -45,7 +46,7 @@ if(process.env.HARMONY_IMAGE_ENCODER_CONFIG){
  for(const file of ['image-encoder.json','image-encoder.ms'])fs.rmSync(path.join(rawDir,file),{force:true});
 }
 if(process.env.HARMONY_PHOTO_MODEL&&process.env.HARMONY_NCNN_DIR){for(const ext of ['param','bin'])fs.copyFileSync(path.join(process.env.HARMONY_PHOTO_MODEL,'realesrgan-x4plus.'+ext),path.join(rawDir,'realesrgan-x4plus.'+ext));}
-else{for(let i=packs.length-1;i>=0;i--)if(packs[i].manifest.contract.capability==='photo.enhance.v1')packs.splice(i,1);}
+else if(name!=='harmony-coordinator'){for(let i=packs.length-1;i>=0;i--)if(packs[i].manifest.contract.capability==='photo.enhance.v1')packs.splice(i,1);}
 fs.writeFileSync(path.join(rawDir,'reference-packs.json'),JSON.stringify(packs));
 const env={...process.env,DEVECO_SDK_HOME:sdk,JAVA_HOME:path.join(studio,'jbr'),PATH:path.join(studio,'tools/node')+path.delimiter+path.join(studio,'jbr/bin')+path.delimiter+process.env.PATH};
 const node=path.join(studio,'tools/node/node.exe');

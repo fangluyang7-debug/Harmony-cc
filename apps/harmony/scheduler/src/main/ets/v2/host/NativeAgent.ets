@@ -166,6 +166,7 @@ export class NativeAgent {
     saved=await db.get('identity:'+registered.paired.peer.holderInstanceId);
    }
   }
+  if(bootstrap!==null&&registered===null&&await db.get('left-holder:'+bootstrap.holderInstanceId)==='true')saved=null;
   if(saved===null&&registered!==null){if(!registered.appInstanceId)throw Error('APP_HOST_IDENTITY_REQUIRED');}
   if(saved===null&&registered!==null){installation=registered;}
   else if(saved!==null){installation=JSON.parse(saved) as Installation;if(registered!==null&&(installation.appInstanceId!==registered.appInstanceId||installation.paired.peer.holderInstanceId!==registered.paired.peer.holderInstanceId))throw Error('INSTALLATION_ALREADY_PAIRED');if(bootstrap!==null&&installation.bootstrap.holderInstanceId!==bootstrap.holderInstanceId)throw Error('INSTALLATION_ALREADY_PAIRED');}
@@ -193,7 +194,7 @@ export class NativeAgent {
     throw error as Error;
    }
    if(!/^[A-Za-z0-9_-]{43}$/.test(paired.credential)||paired.peer.groupId!==bootstrap.invitation.groupId||paired.peer.holderInstanceId!==bootstrap.holderInstanceId)throw Error('PAIR_RESPONSE_INVALID');
-   installation={bootstrap,paired};await db.put('identity:'+paired.peer.holderInstanceId,JSON.stringify(installation));await db.put(pendingKey,'');
+   installation={bootstrap,paired};await db.put('identity:'+paired.peer.holderInstanceId,JSON.stringify(installation));await db.put('left-holder:'+paired.peer.holderInstanceId,'false');await db.put(pendingKey,'');
   }
   if(registered===null){await db.put('scope-ready:'+installation.paired.peer.holderInstanceId,'true');await db.put('identity',JSON.stringify(installation));}
   const transport=new NativeTransport(installation.bootstrap.invitation,context);await transport.initialize();transport.credential=installation.paired.credential;
@@ -259,7 +260,7 @@ export class NativeAgent {
  }
  async leaveSpace():Promise<void>{
   this.switching=true;
-  try{const port=await HarmonySdkPort.open(this.context,this.installation.bootstrap.invitation,this.installation.paired.credential);await this.closeForSwitch();await port.request('/v2/devices/leave','{}');}
+  try{const port=await HarmonySdkPort.open(this.context,this.installation.bootstrap.invitation,this.installation.paired.credential);await this.closeForSwitch();await port.request('/v2/devices/leave','{}');await this.db.put('left-holder:'+this.displayHolderId(),'true');}
   catch(e){this.switching=false;throw e as Error;}
  }
  async registerApplication(declaration:Object):Promise<string>{

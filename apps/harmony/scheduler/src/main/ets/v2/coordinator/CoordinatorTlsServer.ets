@@ -59,7 +59,12 @@ export class CoordinatorTlsServer {
      const connection=new CoordinatorSocket(session.wire);await this.upgrade(request,connection);session.channel=connection;
      await session.wire.send('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+coordinatorWebSocketAccept(request.webSocketKey)+'\r\n\r\n');return;
     }
-    session.done=true;await this.reply(session.wire,await handle(request));nativeTls.closeClient(event.clientId);
+    const started=Date.now(),response=await handle(request);
+    await this.reply(session.wire,response,request.keepAlive===true,Date.now()-started);
+    if(request.keepAlive){
+     session.parser=new CoordinatorHttpParser();
+     session.timer=setTimeout(()=>{session.done=true;nativeTls.closeClient(event.clientId);},15000);
+    }else{session.done=true;nativeTls.closeClient(event.clientId);}
    }catch(e){
     hilog.error(0x0001,'HarmonyCoordinator','CONTROL_FAILED %{public}s',(e as Error).message);session.done=true;
     if(session.channel)await session.channel.close(1008,'CONTROL_REJECTED').catch(()=>{});
@@ -72,10 +77,10 @@ export class CoordinatorTlsServer {
   if(!this.running)return;this.running=false;nativeTls.stop();
   for(const id of Array.from(this.sessions.keys()))this.disconnected(id);
  }
- private async reply(client:CoordinatorWire,response:CoordinatorHttpResponse):Promise<void>{
+ private async reply(client:CoordinatorWire,response:CoordinatorHttpResponse,keepAlive:boolean=false,handlerMs:number=0):Promise<void>{
   const payload=response.binaryBody??(response.body.length===0?new Uint8Array(0):new util.TextEncoder().encodeInto(response.body)),length=payload.length;
   const contentType=response.contentType??'application/json; charset=utf-8';if(/[\r\n]/.test(contentType))throw Error('HTTP_RESPONSE_INVALID');
-  const header='HTTP/1.1 '+response.status+' '+(response.status===200?'OK':'Error')+'\r\nContent-Type: '+contentType+'\r\nDate: '+new Date().toUTCString()+'\r\nCache-Control: no-store\r\nContent-Length: '+length+'\r\nConnection: close\r\n\r\n';
+  const header='HTTP/1.1 '+response.status+' '+(response.status===200?'OK':'Error')+'\r\nContent-Type: '+contentType+'\r\nDate: '+new Date().toUTCString()+'\r\nCache-Control: no-store\r\nContent-Length: '+length+'\r\nServer-Timing: app;dur='+handlerMs+'\r\nConnection: '+(keepAlive?'keep-alive':'close')+'\r\n'+(keepAlive?'Keep-Alive: timeout=15\r\n':'')+'\r\n';
   const head=new util.TextEncoder().encodeInto(header),wire=new Uint8Array(head.length+payload.length);wire.set(head);wire.set(payload,head.length);
   await client.send(wire.buffer);
  }

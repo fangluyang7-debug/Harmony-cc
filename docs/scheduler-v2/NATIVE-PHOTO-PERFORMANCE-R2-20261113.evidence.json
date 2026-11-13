@@ -1,0 +1,1245 @@
+{
+  "version": 2,
+  "baseline": {
+    "runId": "19176e53-16e1-42f8-ad89-77151281ade7",
+    "ms": 17687,
+    "gpuBlocks": 23
+  },
+  "current": {
+    "runId": "coop:85c38d92-5e5e-436d-8025-3f74db4a7173",
+    "ms": 30950,
+    "gpuBlocks": 20,
+    "deliveryOffsets": [
+      11907,
+      16062,
+      16444,
+      22441,
+      25833,
+      30734
+    ]
+  },
+  "inputs": [
+    {
+      "hash": "cfdd54bb307d626777aba821a697b6cef75d3382c5544c109d47d76e452338eb",
+      "originalHash": "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "hash": "b12812ae3721470dadda34972b1cf41541eaf7355b9610266478bcc54a89ffab",
+      "originalHash": "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "hash": "db630125bd24352d7b14825eb346463b726ed59d2d96107ea973eeb872cb25e3",
+      "originalHash": "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "hash": "3aae213ebc8d9171c25fba8d00f455e05a853636ca5c0d0993c3f80d052cacb9",
+      "originalHash": "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "hash": "3e52acb9da6a5c597931ae1e5474e3a849c808c59f2a222578d0dd0840148fe9",
+      "originalHash": "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "hash": "04a521f0872d583a50dd65b075d1f7b48df4d595e2ee789c05359898aad7d459",
+      "originalHash": "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a",
+      "width": 192,
+      "height": 128
+    }
+  ],
+  "model": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+  "budgetMs": 180000,
+  "phaseGroups": {
+    "old": {
+      "photo.analyze.v1:CPU": {
+        "n": 6,
+        "phases": {
+          "PLAN": {
+            "n": 6,
+            "sum": 0.9887999999918975,
+            "max": 0.1900000000023283,
+            "mean": 0.16479999999864958
+          },
+          "OFFER": {
+            "n": 6,
+            "sum": 229.8713000000571,
+            "max": 53.475100000039674,
+            "mean": 38.31188333334285
+          },
+          "QUEUE": {
+            "n": 6,
+            "sum": 241,
+            "max": 139,
+            "mean": 40.166666666666664
+          },
+          "ADMIT": {
+            "n": 6,
+            "sum": 487,
+            "max": 123,
+            "mean": 81.16666666666667
+          },
+          "LOAD": {
+            "n": 6,
+            "sum": 46,
+            "max": 13,
+            "mean": 7.666666666666667
+          },
+          "EXECUTE": {
+            "n": 6,
+            "sum": 299,
+            "max": 73,
+            "mean": 49.833333333333336
+          },
+          "PUBLISH": {
+            "n": 6,
+            "sum": 682,
+            "max": 150,
+            "mean": 113.66666666666667
+          }
+        }
+      },
+      "photo.enhance.v1:VULKAN": {
+        "n": 23,
+        "phases": {
+          "PLAN": {
+            "n": 23,
+            "sum": 5.435200000007171,
+            "max": 0.38829999999143183,
+            "mean": 0.23631304347857265
+          },
+          "OFFER": {
+            "n": 23,
+            "sum": 3554.2887999999803,
+            "max": 328.27740000002086,
+            "mean": 154.53429565217306
+          },
+          "QUEUE": {
+            "n": 23,
+            "sum": 3038.3359999997774,
+            "max": 706.0944000000018,
+            "mean": 132.10156521738162
+          },
+          "ADMIT": {
+            "n": 23,
+            "sum": 2205.977100000164,
+            "max": 189.93590000001132,
+            "mean": 95.91204782609408
+          },
+          "LOAD": {
+            "n": 23,
+            "sum": 1212.200899999967,
+            "max": 182.75200000000768,
+            "mean": 52.70438695652031
+          },
+          "EXECUTE": {
+            "n": 23,
+            "sum": 7699.437399999937,
+            "max": 842.9876999999979,
+            "mean": 334.7581478260842
+          },
+          "TRANSFER_SEND": {
+            "n": 23,
+            "sum": 2523.5185000000056,
+            "max": 292.72870000000694,
+            "mean": 109.71819565217416
+          },
+          "PUBLISH": {
+            "n": 23,
+            "sum": 4866.393999999913,
+            "max": 403.91049999999814,
+            "mean": 211.58234782608318
+          },
+          "TRANSFER_RECV": {
+            "n": 19,
+            "sum": 1148.2934999999416,
+            "max": 180.12040000001434,
+            "mean": 60.436499999996926
+          }
+        }
+      },
+      "photo.deliver.v1:CPU": {
+        "n": 6,
+        "phases": {
+          "PLAN": {
+            "n": 6,
+            "sum": 1.342999999935273,
+            "max": 0.3102000000071712,
+            "mean": 0.2238333333225455
+          },
+          "OFFER": {
+            "n": 6,
+            "sum": 336.27759999997215,
+            "max": 93.85050000000047,
+            "mean": 56.04626666666203
+          },
+          "QUEUE": {
+            "n": 6,
+            "sum": 137,
+            "max": 86,
+            "mean": 22.833333333333332
+          },
+          "ADMIT": {
+            "n": 6,
+            "sum": 833,
+            "max": 229,
+            "mean": 138.83333333333334
+          },
+          "TRANSFER_RECV": {
+            "n": 6,
+            "sum": 1529,
+            "max": 383,
+            "mean": 254.83333333333334
+          },
+          "LOAD": {
+            "n": 6,
+            "sum": 1559,
+            "max": 384,
+            "mean": 259.8333333333333
+          },
+          "EXECUTE": {
+            "n": 6,
+            "sum": 2123,
+            "max": 406,
+            "mean": 353.8333333333333
+          },
+          "TRANSFER_SEND": {
+            "n": 6,
+            "sum": 1387,
+            "max": 645,
+            "mean": 231.16666666666666
+          },
+          "PUBLISH": {
+            "n": 6,
+            "sum": 1873,
+            "max": 712,
+            "mean": 312.1666666666667
+          },
+          "DELIVER": {
+            "n": 6,
+            "sum": 49248,
+            "max": 8674,
+            "mean": 8208
+          }
+        }
+      },
+      "photo.enhance.v1:CPU": {
+        "n": 1,
+        "phases": {
+          "PLAN": {
+            "n": 1,
+            "sum": 0.2948999999789521,
+            "max": 0.2948999999789521,
+            "mean": 0.2948999999789521
+          },
+          "OFFER": {
+            "n": 1,
+            "sum": 73.22629999998026,
+            "max": 73.22629999998026,
+            "mean": 73.22629999998026
+          },
+          "QUEUE": {
+            "n": 1,
+            "sum": 26,
+            "max": 26,
+            "mean": 26
+          },
+          "ADMIT": {
+            "n": 1,
+            "sum": 113,
+            "max": 113,
+            "mean": 113
+          },
+          "LOAD": {
+            "n": 1,
+            "sum": 19,
+            "max": 19,
+            "mean": 19
+          },
+          "EXECUTE": {
+            "n": 1,
+            "sum": 1167,
+            "max": 1167,
+            "mean": 1167
+          },
+          "TRANSFER_SEND": {
+            "n": 1,
+            "sum": 37,
+            "max": 37,
+            "mean": 37
+          },
+          "PUBLISH": {
+            "n": 1,
+            "sum": 104,
+            "max": 104,
+            "mean": 104
+          }
+        }
+      }
+    },
+    "new": {
+      "photo.deliver.v1:CPU": {
+        "n": 6,
+        "phases": {
+          "PUBLISH": {
+            "n": 6,
+            "sum": 4095,
+            "max": 949,
+            "mean": 682.5
+          },
+          "TRANSFER_SEND": {
+            "n": 6,
+            "sum": 2796,
+            "max": 694,
+            "mean": 466
+          },
+          "EXECUTE": {
+            "n": 6,
+            "sum": 2508,
+            "max": 540,
+            "mean": 418
+          },
+          "LOAD": {
+            "n": 6,
+            "sum": 3393,
+            "max": 704,
+            "mean": 565.5
+          },
+          "TRANSFER_RECV": {
+            "n": 6,
+            "sum": 3360,
+            "max": 692,
+            "mean": 560
+          },
+          "ADMIT": {
+            "n": 6,
+            "sum": 1733,
+            "max": 381,
+            "mean": 288.8333333333333
+          },
+          "QUEUE": {
+            "n": 6,
+            "sum": 59,
+            "max": 17,
+            "mean": 9.833333333333334
+          }
+        }
+      },
+      "photo.enhance.v1:VULKAN": {
+        "n": 20,
+        "phases": {
+          "PUBLISH": {
+            "n": 20,
+            "sum": 11266.306999999098,
+            "max": 852.5527999997139,
+            "mean": 563.315349999955
+          },
+          "TRANSFER_SEND": {
+            "n": 20,
+            "sum": 6661.088200000115,
+            "max": 537.7210999997333,
+            "mean": 333.05441000000576
+          },
+          "EXECUTE": {
+            "n": 20,
+            "sum": 6897.220200000331,
+            "max": 1198.6407999997027,
+            "mean": 344.86101000001656
+          },
+          "LOAD": {
+            "n": 20,
+            "sum": 5583.145100000314,
+            "max": 408.16009999997914,
+            "mean": 279.1572550000157
+          },
+          "TRANSFER_RECV": {
+            "n": 20,
+            "sum": 5524.8841999997385,
+            "max": 403.8556999997236,
+            "mean": 276.24420999998694
+          },
+          "ADMIT": {
+            "n": 20,
+            "sum": 4784.74570000032,
+            "max": 400.9851000001654,
+            "mean": 239.237285000016
+          },
+          "QUEUE": {
+            "n": 20,
+            "sum": 2240.3988000000827,
+            "max": 701.4138000002131,
+            "mean": 112.01994000000414
+          }
+        }
+      },
+      "photo.enhance.v1:CPU": {
+        "n": 4,
+        "phases": {
+          "PUBLISH": {
+            "n": 4,
+            "sum": 2136,
+            "max": 668,
+            "mean": 534
+          },
+          "TRANSFER_SEND": {
+            "n": 4,
+            "sum": 1220,
+            "max": 325,
+            "mean": 305
+          },
+          "EXECUTE": {
+            "n": 4,
+            "sum": 19534,
+            "max": 5165,
+            "mean": 4883.5
+          },
+          "LOAD": {
+            "n": 4,
+            "sum": 1190,
+            "max": 403,
+            "mean": 297.5
+          },
+          "TRANSFER_RECV": {
+            "n": 4,
+            "sum": 1186,
+            "max": 402,
+            "mean": 296.5
+          },
+          "ADMIT": {
+            "n": 4,
+            "sum": 1323,
+            "max": 422,
+            "mean": 330.75
+          },
+          "QUEUE": {
+            "n": 4,
+            "sum": 149,
+            "max": 103,
+            "mean": 37.25
+          }
+        }
+      },
+      "photo.analyze.v1:CPU": {
+        "n": 6,
+        "phases": {
+          "PUBLISH": {
+            "n": 6,
+            "sum": 2871,
+            "max": 582,
+            "mean": 478.5
+          },
+          "TRANSFER_SEND": {
+            "n": 6,
+            "sum": 1439,
+            "max": 289,
+            "mean": 239.83333333333334
+          },
+          "EXECUTE": {
+            "n": 6,
+            "sum": 409,
+            "max": 203,
+            "mean": 68.16666666666667
+          },
+          "LOAD": {
+            "n": 6,
+            "sum": 1665,
+            "max": 392,
+            "mean": 277.5
+          },
+          "TRANSFER_RECV": {
+            "n": 6,
+            "sum": 1662,
+            "max": 392,
+            "mean": 277
+          },
+          "ADMIT": {
+            "n": 6,
+            "sum": 1656,
+            "max": 361,
+            "mean": 276
+          },
+          "QUEUE": {
+            "n": 6,
+            "sum": 655,
+            "max": 381,
+            "mean": 109.16666666666667
+          }
+        }
+      }
+    }
+  },
+  "matchedGpu": [
+    {
+      "image": 0,
+      "node": "enhance-0",
+      "old": 842.9876999999979,
+      "new": 1095.8956999997608,
+      "sameParameters": true
+    },
+    {
+      "image": 0,
+      "node": "enhance-1",
+      "old": 786.6841999999888,
+      "new": 1198.6407999997027,
+      "sameParameters": true
+    },
+    {
+      "image": 0,
+      "node": "enhance-2",
+      "old": 306.2841999999946,
+      "new": 1102.55989999976,
+      "sameParameters": true
+    },
+    {
+      "image": 0,
+      "node": "enhance-3",
+      "old": 395.0982999999833,
+      "new": 1094.2952999998815,
+      "sameParameters": true
+    },
+    {
+      "image": 2,
+      "node": "enhance-0",
+      "old": 267.59309999999823,
+      "new": 247.6638000002131,
+      "sameParameters": true
+    },
+    {
+      "image": 2,
+      "node": "enhance-1",
+      "old": 159.32420000000275,
+      "new": 155.95849999971688,
+      "sameParameters": true
+    },
+    {
+      "image": 2,
+      "node": "enhance-2",
+      "old": 73.78500000000349,
+      "new": 68.2245999998413,
+      "sameParameters": true
+    },
+    {
+      "image": 2,
+      "node": "enhance-3",
+      "old": 75.7109000000055,
+      "new": 97.18270000023767,
+      "sameParameters": true
+    },
+    {
+      "image": 1,
+      "node": "enhance-3",
+      "old": 69.02900000000955,
+      "new": 63.31609999993816,
+      "sameParameters": true
+    },
+    {
+      "image": 3,
+      "node": "enhance-0",
+      "old": 657.2844000000041,
+      "new": 487.91130000026897,
+      "sameParameters": true
+    },
+    {
+      "image": 3,
+      "node": "enhance-1",
+      "old": 823.829700000002,
+      "new": 227.84159999992698,
+      "sameParameters": true
+    },
+    {
+      "image": 3,
+      "node": "enhance-2",
+      "old": 571.1460999999836,
+      "new": 59.2375000002794,
+      "sameParameters": true
+    },
+    {
+      "image": 3,
+      "node": "enhance-3",
+      "old": 525.4733000000124,
+      "new": 118.7929000002332,
+      "sameParameters": true
+    },
+    {
+      "image": 4,
+      "node": "enhance-0",
+      "old": 265.9686999999976,
+      "new": 270.5097000002861,
+      "sameParameters": true
+    },
+    {
+      "image": 4,
+      "node": "enhance-1",
+      "old": 348.48519999999553,
+      "new": 122.44160000002012,
+      "sameParameters": true
+    },
+    {
+      "image": 4,
+      "node": "enhance-2",
+      "old": 157.4323999999906,
+      "new": 54.13679999997839,
+      "sameParameters": true
+    },
+    {
+      "image": 4,
+      "node": "enhance-3",
+      "old": 145.11699999999837,
+      "new": 69.02609999990091,
+      "sameParameters": true
+    },
+    {
+      "image": 5,
+      "node": "enhance-2",
+      "old": 86.7099000000162,
+      "new": 147.81990000000224,
+      "sameParameters": true
+    },
+    {
+      "image": 5,
+      "node": "enhance-3",
+      "old": 112.37299999999232,
+      "new": 160.38349999999627,
+      "sameParameters": true
+    }
+  ],
+  "transportBefore": {
+    "wifiFresh": [
+      {
+        "ms": 127.6294,
+        "firstByte": 126.1933,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 74.9973,
+        "firstByte": 74.5643,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 119.2312,
+        "firstByte": 118.83070000000004,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 70.04379999999998,
+        "firstByte": 69.67839999999995,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 98.38030000000003,
+        "firstByte": 98.02350000000001,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 73.93149999999991,
+        "firstByte": 73.67059999999992,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 68.09440000000006,
+        "firstByte": 67.83820000000003,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 64.231,
+        "firstByte": 63.9375,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 67.05930000000001,
+        "firstByte": 66.56740000000002,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 96.88070000000005,
+        "firstByte": 96.58190000000002,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 83.06330000000003,
+        "firstByte": 82.8338,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 69.2949000000001,
+        "firstByte": 69.00170000000003,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 65.25319999999988,
+        "firstByte": 65.01600000000008,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 61.48659999999995,
+        "firstByte": 61.077800000000025,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 167.93920000000003,
+        "firstByte": 167.68500000000017,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 152.04510000000005,
+        "firstByte": 151.80629999999996,
+        "reused": false,
+        "connection": "close"
+      }
+    ],
+    "wifiKeep": [
+      {
+        "ms": 79.03410000000008,
+        "firstByte": 78.78210000000013,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 73.51560000000018,
+        "firstByte": 73.29079999999999,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 70.98849999999993,
+        "firstByte": 70.66229999999996,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 79.7817,
+        "firstByte": 79.52260000000001,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 109.7686000000001,
+        "firstByte": 109.52380000000016,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 71.48900000000003,
+        "firstByte": 71.28670000000011,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 162.37469999999985,
+        "firstByte": 162.14420000000018,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 86.8702000000003,
+        "firstByte": 86.6215000000002,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 98.42779999999993,
+        "firstByte": 98.20429999999988,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 120.66789999999992,
+        "firstByte": 120.40740000000005,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 76.28810000000021,
+        "firstByte": 76.07619999999997,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 65.09450000000015,
+        "firstByte": 64.87390000000005,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 66.21340000000009,
+        "firstByte": 65.99749999999995,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 66.87879999999996,
+        "firstByte": 66.61779999999999,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 75.4964,
+        "firstByte": 75.23549999999977,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 85.59270000000015,
+        "firstByte": 85.33539999999994,
+        "reused": false,
+        "connection": "close"
+      }
+    ],
+    "usbFresh": [
+      {
+        "ms": 57.4699999999998,
+        "firstByte": 57.27029999999968,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 77.30240000000003,
+        "firstByte": 77.10720000000038,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 80.24230000000034,
+        "firstByte": 79.8085000000001,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 77.86400000000003,
+        "firstByte": 77.67129999999997,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 79.60540000000037,
+        "firstByte": 79.42610000000013,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 77.5889000000002,
+        "firstByte": 77.4059000000002,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 77.28710000000001,
+        "firstByte": 77.096,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 80.61959999999999,
+        "firstByte": 80.41379999999981,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 77.80569999999989,
+        "firstByte": 77.61499999999978,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 81.20820000000003,
+        "firstByte": 81.01539999999977,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 80.29799999999977,
+        "firstByte": 80.0951,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 137.9762999999998,
+        "firstByte": 137.77059999999983,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 99.89080000000013,
+        "firstByte": 99.69090000000006,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 203.53759999999966,
+        "firstByte": 203.32240000000002,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 122.27829999999994,
+        "firstByte": 122.07740000000013,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 85.42989999999918,
+        "firstByte": 85.1848,
+        "reused": false,
+        "connection": "close"
+      }
+    ],
+    "usbKeep": [
+      {
+        "ms": 102.78700000000026,
+        "firstByte": 102.59020000000055,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 89.33429999999953,
+        "firstByte": 89.14040000000023,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 115.95839999999953,
+        "firstByte": 115.76040000000012,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 78.12079999999969,
+        "firstByte": 77.95170000000053,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 118.08069999999952,
+        "firstByte": 117.88400000000001,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 83.20119999999952,
+        "firstByte": 83.01569999999992,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 97.05210000000079,
+        "firstByte": 96.8744000000006,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 74.83730000000014,
+        "firstByte": 74.64600000000064,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 80.7457000000004,
+        "firstByte": 80.55079999999998,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 79.83759999999984,
+        "firstByte": 79.64779999999973,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 80.63799999999992,
+        "firstByte": 80.44900000000052,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 80.38299999999981,
+        "firstByte": 80.17320000000018,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 80.41359999999986,
+        "firstByte": 80.22969999999987,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 78.63959999999952,
+        "firstByte": 78.43499999999949,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 82.65000000000055,
+        "firstByte": 82.45020000000022,
+        "reused": false,
+        "connection": "close"
+      },
+      {
+        "ms": 79.73130000000037,
+        "firstByte": 79.54100000000017,
+        "reused": false,
+        "connection": "close"
+      }
+    ]
+  },
+  "transportAfterUsb": {
+    "usbFresh": [
+      {
+        "ms": 136.0838,
+        "firstByte": 134.7946,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 90.2516,
+        "firstByte": 89.9751,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 87.91319999999999,
+        "firstByte": 87.65650000000002,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 77.61520000000002,
+        "firstByte": 77.34469999999999,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 80.29909999999995,
+        "firstByte": 80.05439999999999,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 83.50199999999995,
+        "firstByte": 83.34469999999999,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 75.54040000000009,
+        "firstByte": 75.3741,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 75.67930000000001,
+        "firstByte": 75.52739999999994,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 76.75340000000006,
+        "firstByte": 76.41980000000001,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 78.13409999999999,
+        "firstByte": 77.97630000000004,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 77.27890000000002,
+        "firstByte": 77.03910000000008,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=1"
+      },
+      {
+        "ms": 73.24779999999998,
+        "firstByte": 73.12690000000009,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 76.32219999999984,
+        "firstByte": 76.19010000000003,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 73.68059999999991,
+        "firstByte": 73.56330000000003,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 74.55210000000011,
+        "firstByte": 74.4353000000001,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 80.16129999999998,
+        "firstByte": 80.0456999999999,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      }
+    ],
+    "usbKeep": [
+      {
+        "ms": 79.32240000000002,
+        "firstByte": 79.17689999999993,
+        "reused": false,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.45049999999992,
+        "firstByte": 10.336099999999988,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.792599999999993,
+        "firstByte": 10.680200000000013,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.41619999999989,
+        "firstByte": 10.307199999999966,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.460900000000038,
+        "firstByte": 10.345100000000002,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.59479999999985,
+        "firstByte": 10.492099999999937,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.99310000000014,
+        "firstByte": 10.87440000000015,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.259800000000041,
+        "firstByte": 10.145499999999856,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.476200000000063,
+        "firstByte": 10.369599999999991,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.90890000000013,
+        "firstByte": 10.78690000000006,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 11.426999999999907,
+        "firstByte": 11.306600000000117,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 11.116700000000037,
+        "firstByte": 10.983000000000175,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.847499999999854,
+        "firstByte": 10.724899999999934,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 11.05029999999988,
+        "firstByte": 10.926400000000058,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 10.63090000000011,
+        "firstByte": 10.516500000000178,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      },
+      {
+        "ms": 11.785900000000083,
+        "firstByte": 11.612700000000132,
+        "reused": true,
+        "connection": "keep-alive",
+        "serverTiming": "app;dur=0"
+      }
+    ]
+  },
+  "rawAuditSha256": "517f25512de731eed184d9263600318010e25fead2af4071885960d9591c86eb",
+  "notes": [
+    "All phase sums overlap; do not add as end-to-end elapsed time.",
+    "Matched GPU samples are same image index, node and parameters.",
+    "USB probes are read-only health requests, not photo task transfers.",
+    "Wi-Fi changed during work; no final Wi-Fi before/after claim or new photo speedup claim."
+  ]
+}

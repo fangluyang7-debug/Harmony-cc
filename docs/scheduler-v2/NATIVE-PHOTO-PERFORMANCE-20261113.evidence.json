@@ -1,0 +1,135 @@
+{
+  "version": 1,
+  "baselineBranch": "origin/codex/main-gpu-integration-20261112",
+  "baselineCommit": "e6db55d",
+  "inputs": [
+    {
+      "originalHash": "5c62e3301e88b70f63968d5e2a9b9aad2128c5346d106c26cee1e878eac5d1b8",
+      "hash": "cfdd54bb307d626777aba821a697b6cef75d3382c5544c109d47d76e452338eb",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "originalHash": "c495b02fddc5d835448941d3257e75ed13a7f551a38b2a1191783b3d50cf8d45",
+      "hash": "b12812ae3721470dadda34972b1cf41541eaf7355b9610266478bcc54a89ffab",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "originalHash": "3c14f7b70e93a2398ce10360d8dc5c882bcf929cf1611b01f4af7710bebee79a",
+      "hash": "db630125bd24352d7b14825eb346463b726ed59d2d96107ea973eeb872cb25e3",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "originalHash": "f34319545662cf0aeca3d44866834eb0a4762bd8883a00fbff48b78d653a0a34",
+      "hash": "3aae213ebc8d9171c25fba8d00f455e05a853636ca5c0d0993c3f80d052cacb9",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "originalHash": "f8c26a0974b3b887e8575be3a13c202334405f0392443c610c1c82e8220181ac",
+      "hash": "3e52acb9da6a5c597931ae1e5474e3a849c808c59f2a222578d0dd0840148fe9",
+      "width": 192,
+      "height": 128
+    },
+    {
+      "originalHash": "cac7929f5494ef0ab65eb27a56f29953fa75636c177ec4f65e19e003fb6c5c1a",
+      "hash": "04a521f0872d583a50dd65b075d1f7b48df4d595e2ee789c05359898aad7d459",
+      "width": 192,
+      "height": 128
+    }
+  ],
+  "budgetMs": 180000,
+  "modelWeightsHash": "713ee713b0353afaa27976f0563a64a5043bd70b9bd8936c2e26e25ebcdbcddf",
+  "native": {
+    "runId": "coop:fb05ef23-da87-4361-8038-f84146ff9891",
+    "durationMs": 30869,
+    "delivered": 6,
+    "deliveryOffsetsMs": [
+      13129,
+      14992,
+      15210,
+      29703,
+      30181,
+      30534
+    ],
+    "gpuBlocks": 19,
+    "totalEnhanceBlocks": 24,
+    "gpuLocalIntervals": {
+      "PUBLISH": {
+        "count": 19,
+        "sumMs": 10675.861299999757,
+        "maxMs": 700.5422999998555,
+        "meanMs": 561.8874368420925
+      },
+      "TRANSFER_SEND": {
+        "count": 19,
+        "sumMs": 6061.127300000051,
+        "maxMs": 484.9753999998793,
+        "meanMs": 319.0067000000027
+      },
+      "EXECUTE": {
+        "count": 19,
+        "sumMs": 3593.929799999576,
+        "maxMs": 635.7927999999374,
+        "meanMs": 189.1541999999777
+      },
+      "LOAD": {
+        "count": 19,
+        "sumMs": 5065.650799999945,
+        "maxMs": 357.92920000012964,
+        "meanMs": 266.6131999999971
+      },
+      "TRANSFER_RECV": {
+        "count": 19,
+        "sumMs": 5017.70579999988,
+        "maxMs": 356.1522999999579,
+        "meanMs": 264.0897789473621
+      },
+      "ADMIT": {
+        "count": 19,
+        "sumMs": 4220.265900000464,
+        "maxMs": 294.0417000001762,
+        "meanMs": 222.11925789476126
+      },
+      "QUEUE": {
+        "count": 19,
+        "sumMs": 1917.5803999998607,
+        "maxMs": 678.5227999999188,
+        "meanMs": 100.92528421051898
+      }
+    },
+    "gpuExecuteWindowMs": 19569.9871,
+    "gpuExecuteUnionMs": 2807.2989,
+    "longestExecuteGapMs": 8324.4446
+  },
+  "historic": [
+    {
+      "runId": "19176e53-16e1-42f8-ad89-77151281ade7",
+      "durationMs": 17687,
+      "sameInputOrder": true
+    },
+    {
+      "runId": "96a9586a-e804-4b00-bd63-75ac02049264",
+      "durationMs": 21437,
+      "sameInputOrder": true
+    }
+  ],
+  "failed": {
+    "runId": "93e84a85-6dd5-4c5a-8c3d-c99a2850257d",
+    "durationMs": 25808,
+    "delivered": 5,
+    "rejection": "RESOURCE_UNAVAILABLE"
+  },
+  "sourceSha256": {
+    "nativeAudit": "6a9ff14eae255c2f74160fc64b6a9a7d579d5ccbc07bf2cc6525b11a28cfc9f5",
+    "windowsAudit": "4ba4ebe448547a16aeec0dd7fcd2e08f230218d18e9dfb17972dd9d0627db6cf"
+  },
+  "notes": [
+    "Historical comparisons are not a controlled coordinator-only A/B test.",
+    "LOAD overlaps TRANSFER_RECV; PUBLISH overlaps TRANSFER_SEND. Do not sum them as wall time.",
+    "EXECUTE union is executor interval coverage, not measured hardware GPU utilization.",
+    "No full photo benchmark was run after this patch."
+  ]
+}

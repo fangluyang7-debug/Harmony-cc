@@ -41,6 +41,10 @@ test('native identity changes preserve old scoped ledgers and do not import old 
  assert.equal(lastPair.previousDeviceId,undefined);assert.ok(!lastPair.knownDeviceIds.includes('device-s4'),'device IDs are coordinator-scoped (pairingHistory)');
  // Legacy global marker no longer blocks pairing forever.
  saved.set('pairing-pending','legacy');assert.equal((await module.exports.create(context,bootstrap('legacy'),()=>true,null,[])).ledgerKey,'ledger:legacy');assert.equal(saved.get('pairing-pending'),'');
+ const beforeRejoin=pairs;saved.set('left-holder:legacy','true');
+ await module.exports.create(context,bootstrap('legacy'),()=>true,null,[]);
+ assert.equal(pairs,beforeRejoin+1,'explicit leave requires fresh credential instead of restoring revoked identity');
+ assert.equal(saved.get('left-holder:legacy'),'false');
 });
 
 test('application runtime switches the existing host instead of silently accepting a different invitation',async()=>{

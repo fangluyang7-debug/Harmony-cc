@@ -1,6 +1,19 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),{fixture}=require('./native-coordinator-fixture.cjs');
 function setup(){const f=fixture(),root='apps/harmony/scheduler/src/main/ets/v2/coordinator/';const identity={certificate:'certificate-fixture',fingerprint:'fingerprint-fixture'},address='https://192.168.1.2:7443';const pairing=new (f.load(root+'CoordinatorPairing.ets').CoordinatorPairing)(f.database,identity,'REAL');return {...f,pairing,admin:new (f.load(root+'CoordinatorLocalAdmin.ets').CoordinatorLocalAdmin)(f.database,pairing,'owner',address),routes:new (f.load(root+'CoordinatorRoutes.ets').CoordinatorRoutes)(pairing,identity,address,7)};}
 const request=(path,body,remoteAddress='192.168.1.3')=>({path,method:body===undefined?'GET':'POST',body:Buffer.from(body===undefined?'':JSON.stringify(body)),authorization:'',remoteAddress});
+
+test('native device leave endpoint revokes credential and supports same-code rejoin',async()=>{
+ const s=setup(),space=await s.admin.ensureDefaultSpace(),invite=await s.admin.inviteDevice(space,'phone');
+ const {CoordinatorCredentials}=s.load('apps/harmony/scheduler/src/main/ets/v2/coordinator/CoordinatorCredentials.ets');
+ s.routes.installAllotments(new CoordinatorCredentials(s.database,'REAL'),{});
+ const payload={inviteId:invite.bootstrap.invitation.inviteId,code:invite.bootstrap.invitation.code,holderInstanceId:invite.bootstrap.holderInstanceId,installationId:require('node:crypto').randomUUID()};
+ const first=JSON.parse((await s.routes.handle(request('/v2/pair',payload))).body);
+ const leave={...request('/v2/devices/leave',{}),authorization:'Bearer '+first.credential};
+ assert.equal((await s.routes.handle(leave)).status,200);
+ assert.notEqual((await s.routes.handle(leave)).status,200);
+ assert.equal((await s.routes.handle(request('/v2/pairing/code',{code:invite.pairing.pairingCode}))).status,200);
+ assert.equal((await s.routes.handle(request('/v2/pair',payload))).status,200);
+});
 test('native administration and existing client pairing HTTP contract work end to end',async()=>{
  const s=setup(),space=await s.admin.createSpace('演示空间'),invite=await s.admin.inviteDevice(space,'鸿蒙执行设备');
  assert.equal(invite.qrPayload,invite.bootstrap.invitation.address+'/#device='+invite.bootstrap.invitation.inviteId+'.'+invite.bootstrap.invitation.code+'&pin='+invite.bootstrap.invitation.fingerprint);

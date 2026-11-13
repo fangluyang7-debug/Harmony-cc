@@ -13,3 +13,10 @@ test('native TLS adapter preserves fragmented binary HTTP bodies above the platf
  assert.deepEqual(Buffer.from(request.body),data);assert.equal(request.remoteAddress,'192.168.1.2');assert.match(sent[0].toString(),/^HTTP\/1.1 200/);
  await server.close();assert.equal(stopped,true);
 });
+
+test('sequential HTTP requests reuse TLS but authenticate each request and honor Connection close',async()=>{
+ let callback;const sent=[],closed=[],requests=[];const native={start:(_c,_k,_p,cb)=>callback=cb,send:(clientId,data,requestId)=>{sent.push(Buffer.from(data));queueMicrotask(()=>callback({type:'sent',clientId,requestId}));},closeClient:id=>{closed.push(id);queueMicrotask(()=>callback({type:'close',clientId:id}));},stop(){}};
+ const server=new (load(native))();await server.start({certificate:'c',privateKey:'k'},7443,async r=>{requests.push([r.path,r.authorization]);return {status:200,body:r.path};});callback({type:'connect',clientId:1,remoteAddress:'127.0.0.1'});
+ const send=async(path,auth,close=false)=>{const wire=Buffer.from('GET '+path+' HTTP/1.1\r\nAuthorization: Bearer '+auth+'\r\n'+(close?'Connection: close\r\n':'')+'\r\n');callback({type:'data',clientId:1,data:Uint8Array.from(wire).buffer});for(let n=0;n<5;n++)await new Promise(r=>setImmediate(r));};
+ try{await send('/one','a');assert.equal(closed.length,0);assert.match(sent[0].toString(),/Connection: keep-alive/);await send('/two','b');assert.deepEqual(requests,[['/one','Bearer a'],['/two','Bearer b']]);await send('/last','c',true);assert.equal(closed.length,1);assert.match(sent[2].toString(),/Connection: close/);}finally{await server.close();}
+});

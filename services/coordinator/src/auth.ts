@@ -4,7 +4,7 @@ import { protocolId } from '@harmony/scheduler-core';
 import { Peer } from './channel';
 import {activateDeviceMembership,deviceMembershipActive,registerDeviceMembership,appReservationSettled} from './device-membership';
 export interface Invitation {version:2;inviteId:string;code:string;address:string;certificate:string;fingerprint:string;expiresAt:number;groupId:string;}
-interface InviteData {secretHash:string;expiresAt:number;used:boolean;principalId:string;deviceId:string;domain:string;}
+interface InviteData {secretHash:string;expiresAt:number;used:boolean;principalId:string;deviceId:string;domain:string;rejoinInstallationId?:string;rejoinHolderId?:string;}
 interface CredentialData {peer:Peer;expiresAt:number;domain:string;}
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 export const certificateFingerprint=(pem:string)=>new X509Certificate(pem).fingerprint256.replaceAll(':','').toLowerCase();
@@ -32,9 +32,8 @@ export class PairingService {
     if(typeof code!=='string'||!/^\d{6}$/.test(code))throw Error('PAIRING_REJECTED');
     const value=this.shortCodes.get(code);
     if(!value||value.expiresAt<=now)throw Error('PAIRING_REJECTED');
-    // Remove before awaiting: concurrent redeemers cannot obtain the same invitation.
-    this.shortCodes.delete(code);
-    return this.readDeviceInvite({inviteId:value.inviteId,code:value.code},address);
+    const result=await this.readDeviceInvite({inviteId:value.inviteId,code:value.code},address);
+    this.codeAttempts.delete(remote);return result;
   }
   private readonly revocations=new Set<(id:string)=>void>();
   constructor(private readonly db:PrismaClient,private readonly cert:string,private readonly domain:string,private readonly now:()=>number=Date.now){}
@@ -49,7 +48,7 @@ export class PairingService {
     return {version:2,inviteId:id,code,address:url.origin,certificate:this.cert,fingerprint:certificateFingerprint(this.cert),expiresAt,groupId};
   }
   private checkInvite(invite:InviteData,code:string){
-    if(invite.used||invite.expiresAt<=this.now()||invite.secretHash!==hash(code)||invite.domain!==this.domain)throw Error('INVITE_INVALID');
+    if((invite.used&&!invite.rejoinInstallationId)||invite.expiresAt<=this.now()||invite.secretHash!==hash(code)||invite.domain!==this.domain)throw Error('INVITE_INVALID');
   }
   async readDeviceInvite(request:{inviteId:string;code:string},address:string){
     if(!request||Object.keys(request).sort().join('|')!=='code|inviteId'||!protocolId(request.inviteId)||
@@ -74,10 +73,11 @@ export class PairingService {
       if(!row)throw Error('INVITE_INVALID');
       const invite=JSON.parse(row.metadataJson) as InviteData;
       this.checkInvite(invite,request.code);
+      if(invite.used&&(invite.rejoinInstallationId!==request.installationId||invite.rejoinHolderId!==request.holderInstanceId))throw Error('INVITE_INVALID');
       const history=await tx.credential.findMany({where:{groupId:row.groupId,holderInstanceId:request.holderInstanceId}});
       if(history.some(old=>{const binding=JSON.parse(old.metadataJson) as CredentialData;return binding.peer.deviceId!==invite.deviceId||binding.peer.principalId!==invite.principalId;}))throw Error('HOLDER_BINDING_CHANGED');
       if(await tx.credential.findFirst({where:{groupId:row.groupId,holderInstanceId:request.holderInstanceId,revoked:false}}))throw Error('HOLDER_ALREADY_REGISTERED');
-      const used=await tx.invite.updateMany({where:{id:row.id,revision:row.revision},data:{revision:{increment:1},metadataJson:JSON.stringify({...invite,used:true})}});
+      const used=await tx.invite.updateMany({where:{id:row.id,revision:row.revision},data:{revision:{increment:1},metadataJson:JSON.stringify({...invite,used:true,...(request.installationId?{rejoinInstallationId:request.installationId,rejoinHolderId:request.holderInstanceId}:{})})}});
       if(used.count!==1)throw Error('INVITE_USED');
       const peer:Peer={groupId:row.groupId,holderInstanceId:request.holderInstanceId,deviceId:invite.deviceId,principalId:invite.principalId,credentialId};
       if(request.installationId&&await tx.spaceDevice.findUnique({where:{id:invite.deviceId}}))await registerDeviceMembership(tx,request.installationId,invite.deviceId,request.previousDeviceId,invite.principalId,request.knownDeviceIds??[]);

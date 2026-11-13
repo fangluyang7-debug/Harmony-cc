@@ -1,6 +1,19 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),dgram=require('node:dgram');
 const os=require('node:os');
 const {advertiseCoordinator}=require('../dist/discovery');
+
+test('discovery recovers from bind failure and separate scanners on one IP do not suppress each other',async t=>{
+ const {EventEmitter}=require('node:events');const sockets=[];
+ t.mock.method(os,'networkInterfaces',()=>({lan:[{address:'192.168.1.4'}]}));
+ t.mock.method(dgram,'createSocket',()=>{const s=new EventEmitter();s.sent=[];s.closed=false;s.bind=()=>{};s.close=()=>{s.closed=true;};s.send=(b,p,a,cb)=>{s.sent.push({port:p,address:a});cb();};sockets.push(s);return s;});
+ let errors=0;const stop=advertiseCoordinator('https://192.168.1.4:7443',()=>errors++);
+ try{
+  sockets[0].emit('error',Error('NETWORK_CHANGED'));assert.equal(errors,1);assert.equal(sockets[0].closed,true);
+  await new Promise(r=>setTimeout(r,1100));assert.equal(sockets.length,2);
+  for(const port of [10001,10002])sockets[1].emit('message',Buffer.from('HARMONY_DISCOVER_V1\n'),{address:'192.168.1.8',port});
+  assert.equal(sockets[1].sent.length,2);
+ }finally{stop();}assert.equal(sockets[1].closed,true);
+});
 test('discovery ignores unknown probes and stops advertising an address removed from the host',async t=>{
  let interfaces=os.networkInterfaces();t.mock.method(os,'networkInterfaces',()=>interfaces);
  const reservation=dgram.createSocket('udp4');await new Promise(r=>reservation.bind(0,'127.0.0.1',r));const port=reservation.address().port;await new Promise(r=>reservation.close(r));

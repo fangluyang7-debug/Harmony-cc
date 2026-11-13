@@ -5,6 +5,7 @@ test('native overview uses live control and fresh foreground profiles, retaining
  const db=new CoordinatorDatabase({});db.transaction=f.database.transaction;
  f.device('device1','h1');
  assert.equal((await db.overview()).devices.length,0);
+ f.sql.prepare('INSERT INTO Credential (id,groupId,holderInstanceId,tokenHash,revoked,revision,metadataJson) VALUES (?,?,?,?,0,1,?)').run('c','g','h1','hash','{}');
  const p=JSON.parse(fs.readFileSync('contracts/scheduling/v2/fixtures/t2/valid/DeviceProfile.json'));
  p.domain='REAL';const now=Date.now();
  function measure(v){if(!v||typeof v!=='object')return;if('sampledAt' in v){v.sampledAt=now;v.ttlMs=60000;if(v.source==='SIMULATED')v.source='MEASURED';}else Object.values(v).forEach(measure);}
@@ -12,12 +13,13 @@ test('native overview uses live control and fresh foreground profiles, retaining
  const key=JSON.stringify(['profile','g',p.holderInstanceId]);
  f.sql.prepare('INSERT INTO DeviceInstance (id,groupId,revision,metadataJson) VALUES (?,?,?,?)').run(key,'g',1,JSON.stringify(p));
  const write=()=>f.sql.prepare('UPDATE DeviceInstance SET metadataJson=? WHERE id=?').run(JSON.stringify(p),key);
- assert.equal((await db.overview()).devices.length,0,'persisted profile alone is not a live connection');
+ assert.equal((await db.overview()).devices[0].state,'已接入 · 待就绪','paired devices remain visible without a live profile');
  db.controlState=()=> 'ONLINE';assert.equal((await db.overview()).devices.length,1);
- db.controlState=()=> 'OFFLINE';assert.equal((await db.overview()).devices.length,0);
+ db.controlState=()=> 'OFFLINE';assert.equal((await db.overview()).devices[0].state,'已接入 · 待就绪');
  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM SpaceDevice').get().n,1);
  db.controlState=()=> 'ONLINE';assert.equal((await db.overview()).devices.length,1);
- p.foreground.value='BACKGROUND';write();assert.equal((await db.overview()).devices.length,0);
- p.foreground.value='FOREGROUND';p.ownerActivity.sampledAt=now-60001;write();assert.equal((await db.overview()).devices.length,0);
+ p.foreground.value='BACKGROUND';write();assert.equal((await db.overview()).devices[0].state,'已接入 · 待就绪');
+ p.foreground.value='FOREGROUND';p.ownerActivity.sampledAt=now-60001;write();assert.equal((await db.overview()).devices[0].state,'已接入 · 待就绪');
  assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM DeviceInstance').get().n,1);
+ f.sql.prepare('UPDATE Credential SET revoked=1').run();assert.equal((await db.overview()).devices.length,0,'left devices are removed from active membership');
 });

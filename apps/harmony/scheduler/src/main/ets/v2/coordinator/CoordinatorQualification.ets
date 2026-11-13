@@ -30,7 +30,11 @@ export class CoordinatorQualification {
  private pack(executor:ExecutorV2):ReferencePack|undefined {
   // Reference metrics are reproduced with native byte and image decoders.
   const supported=['vector.normalize.v1','text.count.v1','render.fractal.v1','catalog.filter.v1','image.visual-match.v1','image.crop.v1','photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'];
-  return this.packs.find(p=>supported.includes(p.manifest.contract.capability)&&p.manifest.contract.contractId===executor.contract.contractId&&canonical(p.manifest.contract)===canonical(executor.contract)&&canonical(p.manifest.model)===canonical(executor.model)&&p.manifest.executorIds.includes(executor.target.executorId)&&p.cases.every(c=>c.expect.kind==='REJECT'||c.expected!==undefined));
+  const installed=this.packs.find(p=>supported.includes(p.manifest.contract.capability)&&p.manifest.contract.contractId===executor.contract.contractId&&canonical(p.manifest.contract)===canonical(executor.contract)&&canonical(p.manifest.model)===canonical(executor.model)&&p.manifest.executorIds.includes(executor.target.executorId)&&p.cases.every(c=>c.expect.kind==='REJECT'||c.expected!==undefined));
+  if(!installed)return undefined;
+  const cases=installed.cases.filter(c=>executor.configurations.some(config=>canonical(config)===canonical(c.config)));
+  if(!cases.length||executor.configurations.some(config=>!cases.some(c=>canonical(config)===canonical(c.config))))return undefined;
+  return {manifest:installed.manifest,digest:installed.digest,cases};
  }
  async profile(tx:CoordinatorTransaction,peer:CoordinatorPeer):Promise<DeviceProfileV2|null>{const rows=await tx.querySql('SELECT metadataJson FROM DeviceInstance WHERE id=?',[JSON.stringify(['profile',peer.groupId,peer.holderInstanceId])]);try{return rows.goToFirstRow()?JSON.parse(rows.getString(0)) as DeviceProfileV2:null;}finally{rows.close();}}
  private async state(tx:CoordinatorTransaction,peer:CoordinatorPeer,profile:DeviceProfileV2,executor:ExecutorV2):Promise<QualificationState>{
@@ -40,9 +44,9 @@ export class CoordinatorQualification {
   return {admission:{groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,targetId:executor.target.targetId,identity,domain:'REAL',revision:(old?.admission.revision??0)+1,state:pack?'CALIBRATING':'WAITING_MODEL',reasonCode:pack?'REFERENCE_EVALUATION_REQUIRED':'NATIVE_REFERENCE_VERIFIER_UNAVAILABLE',quality:{value:null,source:'UNKNOWN',sampledAt:Date.now(),ttlMs:3600000,unit:'score'}},ledgerEpoch:profile.ledgerEpoch,deviceInstanceId:profile.deviceInstanceId,packDigest:pack?.digest??'',next:0,durations:[]};
  }
  private async save(tx:CoordinatorTransaction,state:QualificationState):Promise<void>{const a=state.admission;await tx.executeSql('INSERT INTO CapabilityState (id,groupId,revision,metadataJson) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,metadataJson=excluded.metadataJson',[stateKey(a.groupId,a.holderInstanceId,a.targetId),a.groupId,a.revision,JSON.stringify(state)]);}
- async evidence(tx:CoordinatorTransaction,peer:CoordinatorPeer,target:string):Promise<CoordinatorQualificationEvidence>{
-  const profile=await this.profile(tx,peer),executor=profile?.executors.find(e=>e.target.targetId===target);if(!profile||!executor)throw Error('TARGET_UNKNOWN');
-  const state=await this.state(tx,peer,profile,executor);await this.save(tx,state);
+ async evidence(tx:CoordinatorTransaction,peer:CoordinatorPeer,target:string,knownProfile:DeviceProfileV2|null=null):Promise<CoordinatorQualificationEvidence>{
+  const profile=knownProfile??await this.profile(tx,peer),executor=profile?.executors.find(e=>e.target.targetId===target);if(!profile||!executor)throw Error('TARGET_UNKNOWN');
+  const state=await this.state(tx,peer,profile,executor);if(state.admission.state!=='ACTIVE')await this.save(tx,state);
   return {executor,admission:state.admission,computeMs:state.durations.length?state.durations.reduce((a,b)=>a+b,0)/state.durations.length:null};
  }
  async claim(peer:CoordinatorPeer):Promise<Object>{
@@ -56,7 +60,7 @@ export class CoordinatorQualification {
     const pack=this.pack(executor);if(!pack)continue;
     const state=await this.state(tx,peer,profile,executor);if(['ACTIVE','SUSPENDED'].includes(state.admission.state))continue;
     const test=pack.cases[state.next];if(!test)continue;
-    const permit:EvaluationPermit={id:util.generateRandomUUID(true),groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,targetId:executor.target.targetId,identity:state.admission.identity,packDigest:pack.digest,caseId:test.id,inputHash:hash(new util.Base64Helper().decodeSync(test.input)),config:test.config,maxOutputBytes:Math.min(65536,test.maxOutputBytes),timeoutMs:30000,domain:'REAL'};
+    const permit:EvaluationPermit={id:util.generateRandomUUID(true),groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,targetId:executor.target.targetId,identity:state.admission.identity,packDigest:pack.digest,caseId:test.id,inputHash:hash(test.input?new util.Base64Helper().decodeSync(test.input):new Uint8Array(0)),config:test.config,maxOutputBytes:test.maxOutputBytes,timeoutMs:30000,domain:'REAL'};
     work={permit,executor,coordinatorEpoch:this.epoch,ledgerEpoch:profile.ledgerEpoch,deviceInstanceId:profile.deviceInstanceId,expiresAt:now+30000,mode:'RUN'};
     await tx.executeSql('INSERT INTO EvaluationDispatch (id,groupId,holderInstanceId,deviceId,epoch,state,expiresAt,workJson) VALUES (?,?,?,?,?,?,?,?)',[permit.id,peer.groupId,peer.holderInstanceId,peer.deviceId,this.epoch,'CLAIMED',work.expiresAt,JSON.stringify(work)]);await this.save(tx,state);break;
    }

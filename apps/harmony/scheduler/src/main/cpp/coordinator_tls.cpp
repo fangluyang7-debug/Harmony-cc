@@ -8,6 +8,7 @@
 #include <mbedtls/error.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <netinet/tcp.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <atomic>
@@ -76,6 +77,7 @@ class Server {
   while(!closing){
    for(int count=0;count<8;count++){
     sockaddr_in remote{};socklen_t remoteSize=sizeof(remote);int fd=accept(listener,reinterpret_cast<sockaddr*>(&remote),&remoteSize);if(fd<0)break;if(clients.size()>=64){::close(fd);continue;}
+    int noDelay=1;setsockopt(fd,IPPROTO_TCP,TCP_NODELAY,&noDelay,sizeof(noDelay));
     fcntl(fd,F_SETFL,fcntl(fd,F_GETFL,0)|O_NONBLOCK);auto c=std::make_unique<Client>(++nextClientId,fd,std::string(inet_ntoa(remote.sin_addr)));
     if(mbedtls_ssl_setup(&c->ssl,&config)){continue;}mbedtls_ssl_set_bio(&c->ssl,&c->net,mbedtls_net_send,mbedtls_net_recv,nullptr);
     clients.emplace(c->id,std::move(c));

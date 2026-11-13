@@ -64,10 +64,10 @@ export class CoordinatorDatabase {
      const key=JSON.stringify([group,profile.deviceId]),list=profiles.get(key)??[];list.push(profile);profiles.set(key,list);
     }catch(e){continue;}
    }}finally{holders.close();}
-   const devices=await db.querySql('SELECT id,name,spaceId FROM SpaceDevice ORDER BY createdAt DESC');
+   const devices=await db.querySql('SELECT id,name,spaceId FROM SpaceDevice WHERE EXISTS (SELECT 1 FROM Credential c WHERE c.groupId=SpaceDevice.spaceId AND c.holderInstanceId=SpaceDevice.holderId AND c.revoked=0) ORDER BY createdAt DESC');
    try{while(devices.goToNextRow()){
     const active=profiles.get(JSON.stringify([devices.getString(2),devices.getString(0)]))??[];
-    if(active.length>0)result.devices.push({id:devices.getString(0),title:devices.getString(1),detail:String(active.length)+' 个在线宿主',state:'在线',profiles:active});
+    result.devices.push({id:devices.getString(0),title:devices.getString(1),detail:active.length?String(active.length)+' 个在线宿主':'已配对，等待有效控制连接与资源画像',state:active.length?'在线':'已接入 · 待就绪',profiles:active});
    }}finally{devices.close();}
    const qualificationRows=await db.querySql('SELECT metadataJson FROM CapabilityState');
    try{while(qualificationRows.goToNextRow()){

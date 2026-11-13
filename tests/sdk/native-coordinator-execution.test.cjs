@@ -58,4 +58,56 @@ test('native SDK chain selects remote worker, persists admission and validates o
  await f.database.transaction(tx=>handlers.get('ExecutionReceipt').handle(tx,f.worker,report));await f.database.transaction(tx=>handlers.get('ExecutionReceipt').handle(tx,f.worker,report));
  const status=await jobs.status(f.source,plan.jobId);assert.equal(status.state,'SUCCEEDED');assert.equal(status.outputTicket.ref.contentHash,hash(output));assert.equal(JSON.parse(f.sql.prepare('SELECT recordJson FROM Attempt').get().recordJson).resourcesSettled,true);
  await assert.rejects(jobs.status(f.worker,plan.jobId),/JOB_SCOPE/);
+ // The heartbeat still lists this settled attempt; its receipt must release scheduling credit immediately.
+ for(const pool of f.p.pools)pool.occupied.value=offer.resources.find(r=>r.resourcePoolId===pool.resourcePoolId)?.amount??0;
+ f.p.inFlight=[{attemptId:t.attemptId,targetId:offer.target.targetId,state:'RUNNING',resources:offer.resources,elapsed:{value:10,source:'MEASURED',sampledAt:Date.now(),ttlMs:60000,unit:'ms'},remaining:{value:null,source:'UNKNOWN',sampledAt:Date.now(),ttlMs:60000,unit:'ms'}}];f.p.credits[0].slots=0;
+ f.sql.prepare('UPDATE DeviceInstance SET metadataJson=?').run(JSON.stringify(f.p));
+ const next=await jobs.submit(f.source,{...body,options:{...body.options,requestId:'after-settlement'}});assert.equal(next.deviceId,f.p.deviceId,'settled receipt overrides only its exact stale in-flight reservation');
+
+});
+
+test('native dispatch pipelines multiple offers up to real credits without allowing unreported oversubscription',async()=>{
+ const f=await setup();await qualify(f);const grant={grant:{allotmentId:'a1',version:1,coordinatorEpoch:7,ledgerEpoch:1,appInstanceId:null},ack:{version:1,persisted:true}};f.sql.prepare('INSERT INTO Allotment (id,groupId,revision,metadataJson) VALUES (?,?,1,?)').run(JSON.stringify(['allotment','g',f.p.holderInstanceId]),'g',JSON.stringify(grant));
+ const messages=[],jobs=new (f.load(root+'CoordinatorJobs.ets').CoordinatorJobs)(f.database,{register(){},enqueue:async(...args)=>messages.push(args),pump:async()=>{}},f.artifacts,f.q,'center',7),content=Buffer.from('{}'),source={groupId:'g',ownerPrincipalId:'p',ref:{artifactId:'common-source',contentVersion:1,contentHash:hash(content),schemaId:'catalog.items',schemaVersion:1},bytes:content.length,expiresAt:Date.now()+60000};await f.database.transaction(tx=>f.artifacts.writeContent(tx,source,content.toString('base64')));
+ const submission=i=>({workflow:{version:3,id:'pipeline'+i,outputContract:'catalog.ranked',qualityTarget:'reference',nodes:[{id:'rank',capability:'catalog.filter.v1',input:{bytes:source.bytes,contentHash:source.ref.contentHash,schemaId:source.ref.schemaId,schemaVersion:1},parameters:'{}',dependsOn:[]}]},options:{requestId:'pipeline'+i,budgetMs:30000,resultDestination:'ORIGIN'}});
+ for(let i=0;i<4;i++){await jobs.submit(f.source,submission(i),source);await jobs.startJob(f.source,'pipeline'+i);}
+ assert.equal(messages.length,4,'no holder-wide one-offer barrier');await assert.rejects(jobs.submit(f.source,submission(4),source),/NO_LEGAL_PLAN/);
+ assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM Attempt').get().n,4);assert.equal(JSON.parse(await jobs.inspect(f.source,'pipeline0')).input.ref.artifactId,'common-source','stages retain existing immutable input without reupload');
+});
+
+test('zero-byte boundary cases do not stall the native evaluation queue; only advertised configs are evaluated',async()=>{
+ const f=await setup(),pack=structuredClone(f.pack),standard=pack.cases[0].config;pack.cases=[{id:'empty-bytes',input:'',config:standard,maxOutputBytes:65536,expect:{kind:'REJECT',errorCode:'CATALOG_INVALID'}},{id:'unsupported-threads',input:'',config:{...standard,id:'parallel-8',threads:8},maxOutputBytes:65536,expect:{kind:'REJECT',errorCode:'CATALOG_INVALID'}}];
+ const q=new (f.load(root+'CoordinatorQualification.ets').CoordinatorQualification)(f.database,JSON.stringify([pack]),7),{work}=await q.claim(f.worker);assert.equal(work.permit.inputHash,hash(Buffer.alloc(0)));assert.equal(work.permit.caseId,'empty-bytes');
+ await q.report(f.worker,work.permit.id,{settled:true,permitId:work.permit.id,domain:'REAL',durationMs:0,output:'',errorCode:'CATALOG_INVALID'});assert.equal((await q.claim(f.worker)).work,null);let evidence;await f.database.transaction(async tx=>{evidence=await q.evidence(tx,f.worker,f.e.target.targetId)});assert.equal(evidence.admission.state,'ACTIVE');
+});
+
+test('internal photo dispatch is atomic, plans once, avoids write tickets and remains idempotent across budget retry',async()=>{
+ const f=await setup();await qualify(f);const grant={grant:{allotmentId:'a1',version:1,coordinatorEpoch:7,ledgerEpoch:1,appInstanceId:null},ack:{version:1,persisted:true}};f.sql.prepare('INSERT INTO Allotment (id,groupId,revision,metadataJson) VALUES (?,?,1,?)').run(JSON.stringify(['allotment','g',f.p.holderInstanceId]),'g',JSON.stringify(grant));
+ let choices=0,issues=0;const messages=[],jobs=new (f.load(root+'CoordinatorJobs.ets').CoordinatorJobs)(f.database,{register(){},enqueue:async(...args)=>messages.push(args),pump:async()=>{}},f.artifacts,f.q,'center',7),content=Buffer.from('{}'),source={groupId:'g',ownerPrincipalId:'p',ref:{artifactId:'atomic-input',contentVersion:1,contentHash:hash(content),schemaId:'catalog.items',schemaVersion:1},bytes:content.length,expiresAt:Date.now()+60000};await f.database.transaction(tx=>f.artifacts.writeContent(tx,source,content.toString('base64')));
+ const choose=jobs.choose.bind(jobs);jobs.choose=async(...args)=>{choices++;return choose(...args);};const issue=f.artifacts.issue.bind(f.artifacts);f.artifacts.issue=async(...args)=>{issues++;return issue(...args);};
+ const body={workflow:{version:3,id:'atomic',outputContract:'catalog.ranked',qualityTarget:'reference',nodes:[{id:'rank',capability:'catalog.filter.v1',input:{bytes:source.bytes,contentHash:source.ref.contentHash,schemaId:source.ref.schemaId,schemaVersion:1},parameters:'{}',dependsOn:[]}]},options:{requestId:'atomic',budgetMs:30000,resultDestination:'ORIGIN'}};
+ const result=await jobs.submit(f.source,body,source,true);assert.equal(result.target.deviceId,f.p.deviceId);assert.equal(choices,1);assert.equal(issues,0);assert.equal(messages.length,1);assert.equal(JSON.parse(await jobs.inspect(f.source,'atomic')).state,'OFFERED');
+ await jobs.submit(f.source,{...body,options:{...body.options,budgetMs:29000}},source,true);assert.equal(choices,1);assert.equal(messages.length,1);
+});
+
+test('origin input stays on the authenticated app holder; no relay upload is required for a local root',async()=>{
+ const f=await setup();await qualify(f);const grant={grant:{allotmentId:'a1',version:1,coordinatorEpoch:7,ledgerEpoch:1,appInstanceId:null},ack:{version:1,persisted:true}};f.sql.prepare('INSERT INTO Allotment (id,groupId,revision,metadataJson) VALUES (?,?,1,?)').run(JSON.stringify(['allotment','g',f.p.holderInstanceId]),'g',JSON.stringify(grant));
+ const messages=[],jobs=new (f.load(root+'CoordinatorJobs.ets').CoordinatorJobs)(f.database,{register(){},enqueue:async(...args)=>messages.push(args),pump:async()=>{}},f.artifacts,f.q,'center',7),content=Buffer.from('{}'),peer={...f.source,deviceId:f.p.deviceId,holderInstanceId:f.p.holderInstanceId},source={groupId:'g',ownerPrincipalId:'p',ref:{artifactId:'origin-only',contentVersion:1,contentHash:hash(content),schemaId:'catalog.items',schemaVersion:1},bytes:content.length,expiresAt:Date.now()+60000};
+ await f.database.transaction(tx=>f.artifacts.register(tx,source));const body={workflow:{version:3,id:'local',outputContract:'catalog.ranked',qualityTarget:'reference',nodes:[{id:'rank',capability:'catalog.filter.v1',input:{bytes:source.bytes,contentHash:source.ref.contentHash,schemaId:source.ref.schemaId,schemaVersion:1},executionScope:'ORIGIN_DEVICE',parameters:'{}',dependsOn:[]}]},options:{requestId:'local',budgetMs:30000,resultDestination:'ORIGIN',inputLocation:'ORIGIN'}};
+ await jobs.submit(peer,body,source,true,true);const job=JSON.parse(await jobs.inspect(peer,'local'));assert.equal(job.holder,peer.holderInstanceId);assert.deepEqual(job.offer.transferPlan,[]);let available;await f.database.transaction(async tx=>available=await f.artifacts.available(tx,source));assert.equal(available,false,'input was not secretly uploaded or synthesized');
+ await assert.rejects(jobs.submit(peer,{...body,options:{...body.options,requestId:'relay'}},source,true,false),/INPUT_NOT_UPLOADED/);
+});
+
+test('native workflow restart proof requires a matching durable PURE yield and settled receipt',async()=>{
+ const f=await setup(),jobs=new (f.load(root+'CoordinatorJobs.ets').CoordinatorJobs)(f.database,{register(){}},f.artifacts,f.q,'center',7),id='settled-yield',job={owner:f.source,holder:f.worker.holderInstanceId,state:'CANCELLED_SETTLED',offer:{task:{contract:{sideEffectPolicy:'PURE',interruptibility:'CANCEL_RESTART'}}}};
+ f.sql.prepare('INSERT INTO CpuJob(id,groupId,principalId,sourceHolderId,state,metadataJson) VALUES(?,?,?,?,?,?)').run(id,'g','p',f.source.holderInstanceId,job.state,JSON.stringify(job));
+ const record={resourcesSettled:true,receipt:{attemptId:id,state:'CANCELLED_SETTLED',resourcesSettled:true}},notice={attemptId:id,kind:'RESTART'};
+ f.sql.prepare('INSERT INTO Workflow(id,groupId,planRevision,state) VALUES(?,?,?,?)').run(id,'g',1,'ACTIVE');
+ f.sql.prepare('INSERT INTO Node(id,workflowId,currentAttemptId,state) VALUES(?,?,?,?)').run(id,id,id,'CANCELLED_SETTLED');
+ f.sql.prepare('INSERT INTO Attempt(id,groupId,workflowId,nodeId,executionDigest,state,holderInstanceId,taskJson,offerJson,recordJson,yieldJson) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id,'g',id,id,'x','CANCELLED_SETTLED',f.worker.holderInstanceId,'{}','{}',JSON.stringify(record),JSON.stringify(notice));
+ const restart=async()=>JSON.parse(await jobs.inspectMany(f.source,[id]))[0].restartable;
+ assert.equal(await restart(),true);
+ for(const r of [{...record,resourcesSettled:false},{...record,receipt:{...record.receipt,attemptId:'other'}},{...record,receipt:null}]){f.sql.prepare('UPDATE Attempt SET recordJson=?').run(JSON.stringify(r));assert.equal(await restart(),false);}
+ f.sql.prepare('UPDATE Attempt SET recordJson=?,yieldJson=NULL').run(JSON.stringify(record));assert.equal(await restart(),false);
+ f.sql.prepare('UPDATE Attempt SET yieldJson=?').run(JSON.stringify(notice));job.offer.task.contract.sideEffectPolicy='COMMIT';f.sql.prepare('UPDATE CpuJob SET metadataJson=?').run(JSON.stringify(job));assert.equal(await restart(),false);
 });

@@ -10,3 +10,10 @@ test('ambiguous HTTP framing and oversized headers are rejected',()=>{
  assert.throws(()=>new Parser().push(Buffer.alloc(16385,65)),/HEADERS_TOO_LARGE/);
  assert.throws(()=>new Parser().push(Buffer.from('GET / HTTP/1.1\r\n\r\nextra')),/PIPELINING/);
 });
+
+ test('fragmented multi-megabyte uploads allocate the body once and reject trailing data',()=>{
+ const size=4*1024*1024,body=Buffer.alloc(size,173),header=Buffer.from('PUT /v2/artifacts/photo/1 HTTP/1.1\r\nContent-Length: '+size+'\r\n\r\n');
+ const Native=global.Uint8Array;let allocated=0;global.Uint8Array=new Proxy(Native,{construct(target,args){if(typeof args[0]==='number')allocated+=args[0];return new target(...args);}});
+ let parser,result;try{parser=new Parser();assert.equal(parser.push(header),null);for(let i=0;i<size;i+=1024)result=parser.push(body.subarray(i,i+1024));}finally{global.Uint8Array=Native;}
+ assert.deepEqual(Buffer.from(result.body),body);assert.ok(allocated<=size+20000,'allocation stays linear instead of copying each accumulated prefix');assert.throws(()=>parser.push(Buffer.from('x')),/PIPELINING/);
+ });

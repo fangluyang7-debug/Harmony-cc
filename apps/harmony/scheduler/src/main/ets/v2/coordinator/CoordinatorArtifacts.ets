@@ -34,6 +34,8 @@ export class CoordinatorArtifacts {
   const row:TicketRow={ticket,groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,credentialId:peer.credentialId};await put(tx,ticketKey(token),peer.groupId,row);return ticket;
  }
  async available(tx:CoordinatorTransaction,descriptor:CoordinatorArtifact):Promise<boolean>{const raw=await read(tx,artifactKey(descriptor.groupId,descriptor.ref));return raw!==null&&(JSON.parse(raw) as ArtifactRow).content!==null&&descriptor.expiresAt>Date.now();}
+ async readContent(tx:CoordinatorTransaction,descriptor:CoordinatorArtifact):Promise<string>{const raw=await read(tx,artifactKey(descriptor.groupId,descriptor.ref));if(!raw)throw Error('ARTIFACT_MISSING');const row=JSON.parse(raw) as ArtifactRow;if(canonical(row.descriptor)!==canonical(descriptor))throw Error('ARTIFACT_CONFLICT');if(row.content===null||descriptor.expiresAt<=Date.now())throw Error('ARTIFACT_NOT_UPLOADED');return row.content;}
+ async writeContent(tx:CoordinatorTransaction,descriptor:CoordinatorArtifact,content:string):Promise<void>{const data=new util.Base64Helper().decodeSync(content);if(data.length!==descriptor.bytes||hash(data)!==descriptor.ref.contentHash)throw Error('ARTIFACT_INTEGRITY');await this.register(tx,descriptor);await put(tx,artifactKey(descriptor.groupId,descriptor.ref),descriptor.groupId,{descriptor,content} as ArtifactRow);}
  async handle(request:CoordinatorHttpRequest):Promise<CoordinatorHttpResponse>{
   const peer=await this.credentials.authenticate(request.deviceCredential??'');
   if(!request.authorization.startsWith('Bearer '))throw Error('ARTIFACT_TICKET_REQUIRED');

@@ -42,3 +42,6 @@ export { CoordinatorPlanning } from './coordinator/CoordinatorPlanning';
 export { CoordinatorArtifacts } from './coordinator/CoordinatorArtifacts';
 export { CoordinatorQualification } from './coordinator/CoordinatorQualification';
 export { CoordinatorJobs } from './coordinator/CoordinatorJobs';
+export { coordinatorNetworks, ipv4Broadcast, CoordinatorNetwork } from './coordinator/CoordinatorNetwork';
+export { CoordinatorPhoto } from './coordinator/CoordinatorPhoto';
+export { CoordinatorHttpParser } from './coordinator/CoordinatorHttpParser';

@@ -5,6 +5,7 @@ const root=path.resolve(__dirname,'..'),directory=path.join(root,'apps/harmony/s
 fs.mkdirSync(directory,{recursive:true});
 const result=buildSync({stdin:{contents:`
 export {nativePlanJson} from './packages/scheduler-core/src/native-coordinator-planning';
+export {NativePhotoEngine} from './packages/scheduler-core/src/native-photo-engine';
 import {plan} from './packages/scheduler-core/src/planning-api';
 import {availability} from './packages/scheduler-core/src/availability';
 export function planJson(snapshot,request,policy,now,monotonic){
@@ -16,6 +17,8 @@ export function availabilityJson(profile,executor,priority,version,now){
 `,resolveDir:root,loader:'ts'},bundle:true,platform:'neutral',format:'esm',target:'es2020',write:false,legalComments:'none'});
 fs.writeFileSync(path.join(directory,'PlanningCore.js'),result.outputFiles[0].text);
 fs.writeFileSync(path.join(directory,'PlanningCore.d.ts'),
+ 'export interface NativePhotoPort {call(operation:string,payload:string):Promise<string>;id():string;now():number;}\n'+
+ 'export declare class NativePhotoEngine {constructor(port:NativePhotoPort);restore():Promise<void>;tick():Promise<void>;sdk(peer:string,path:string,body:string):Promise<string>;photo(peer:string,input:string):Promise<string>;graphs(id:string):Promise<boolean>;views():Promise<string>;record(key:string):Promise<string>;display(path:string,body:string,key:string,address:string,devices:string):Promise<string>;}\n'+
  'export declare function nativePlanJson(profiles:string,evidence:string,request:string,now:number,monotonic:()=>number):string;\n'+
  'export declare function planJson(snapshot:string,request:string,policy:string,now:number,monotonic:()=>number):string;\n'+
  'export declare function availabilityJson(profile:string,executor:string,priority:string,version:number,now:number):string;\n');

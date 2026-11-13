@@ -1,6 +1,7 @@
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { socket } from '@kit.NetworkKit';
 import { util } from '@kit.ArkTS';
+import { coordinatorNetworks, CoordinatorNetwork } from 'scheduler';
 interface CenterHint {version:number;service:string;address:string;}
 async function reachable(address:string):Promise<boolean> {
  const tcp=socket.constructTCPSocketInstance();
@@ -22,9 +23,13 @@ export async function discoverCenters():Promise<string[]> {
    }catch(e){/* Untrusted broadcast packets never establish trust. */}
   });
   await udp.bind({address:'0.0.0.0',port:0,family:1});await udp.setExtraOptions({broadcast:true});
-  await udp.send({data:'HARMONY_DISCOVER_V1\n',address:{address:'255.255.255.255',port:7444,family:1}});
-  await new Promise<void>(resolve=>{setTimeout(resolve,2000);});
+  const networks:CoordinatorNetwork[]=await coordinatorNetworks().catch(():CoordinatorNetwork[]=>[]);
+  const targets:string[]=Array.from(new Set<string>(['255.255.255.255',...networks.map((v:CoordinatorNetwork):string=>v.broadcast)]));
+  for(let round=0;round<3;round++){
+   for(const target of targets)await udp.send({data:'HARMONY_DISCOVER_V1\n',address:{address:target,port:7444,family:1}}).catch(()=>{});
+   await new Promise<void>(resolve=>{setTimeout(resolve,700);});
+  }
   const live:boolean[]=await Promise.all(found.map((address:string)=>reachable(address)));
   return found.filter((_address:string,index:number)=>live[index]);
- }finally{await udp.close();}
+ }finally{await udp.close().catch(()=>{});}
 }

@@ -9,7 +9,19 @@ async function session(){const s=await api('/session');generation=s.generation;$
 function gallery(r){
  const key=JSON.stringify([r?.id,r?.inputs.map(i=>i.url),r?.results.map(i=>[i.imageIndex,i.hash])]);if(signature===key)return;signature=key;
  const inputs=r?.inputs??[];$('source-gallery').dataset.count=$('preview').dataset.count=String(inputs.length);
- $('source-gallery').innerHTML=inputs.length?inputs.map(i=>`<figure class="source-photo"><div class="photo-frame">${i.url?`<img src="${esc(i.url)}" alt="${esc(i.name)}">`:'<span>等待手机传入照片</span>'}</div><figcaption>${esc(i.name)}</figcaption></figure>`).join(''):'<div class="gallery-empty">等待手机选图</div>';
+ // An input becomes visible when its own upload completes, independently of any result.
+ // Keep loaded originals mounted while other inputs/results arrive.
+ if(!inputs.length)$('source-gallery').innerHTML='<div class="gallery-empty">等待手机选图</div>';
+ else{
+  if($('source-gallery').querySelector('.gallery-empty'))$('source-gallery').innerHTML='';
+  for(let n=0;n<inputs.length;n++){
+   const i=inputs[n],key=r.id+':'+n+':'+(i.url??'pending'),old=$('source-gallery').children[n];if(old?.dataset.key===key)continue;
+   const card=document.createElement('figure');card.dataset.key=key;card.className='source-photo';card.innerHTML=`<div class="photo-frame">${i.url?`<img src="${esc(i.url)}" alt="${esc(i.name)}">`:'<span>正在接收原照片</span>'}</div><figcaption>${esc(i.name)}</figcaption>`;
+   const img=card.querySelector('img');if(img){let retries=0;img.onerror=()=>{if(retries++<3)setTimeout(()=>{if(card.isConnected)img.src=i.url;},1000);};}
+   if(old)old.replaceWith(card);else $('source-gallery').append(card);
+  }
+  while($('source-gallery').children.length>inputs.length)$('source-gallery').lastChild.remove();
+ }
  if(!inputs.length){$('preview').innerHTML='<div class="gallery-empty">每张照片完成后，成品将在这里出现</div>';return;}
  for(let n=0;n<inputs.length;n++){const result=r.results.find(i=>i.imageIndex===n),key=r.id+':'+n+':'+(result?.hash??result?.url??'pending'),old=$('preview').children[n];if(old?.dataset.key===key)continue;const card=document.createElement('figure');card.dataset.key=key;card.className=result?'result-photo':'result-placeholder';card.innerHTML=`<div class="photo-frame ${result?'':'waiting-photo'}">${result?`<img src="${esc(result.url)}" alt="已完成成品"><span class="stamp">已交付成品</span>`:'<span>等待实际处理完成</span>'}</div><figcaption>${esc(inputs[n].name)}</figcaption>`;if(old)old.replaceWith(card);else $('preview').append(card);}
  while($('preview').children.length>inputs.length)$('preview').lastChild.remove();
@@ -20,7 +32,7 @@ function render(r){const stamp=JSON.stringify([r,pinned]);if(stamp===renderSigna
  if(!r){$('state').textContent='连接手机或协调中心，等待下一轮任务';$('graph').innerHTML='';$('device-strip').innerHTML='';$('plan-reason').textContent='本机模式显示手机处理流程；协同模式显示协调中心的实际规划和设备分配。';$('plan-mode').textContent='等待流程';return;}
  const local=r.kind==='LOCAL';$('state').textContent=r.state==='SUCCEEDED'?'全部照片已完成并交付':r.state==='FAILED'?'本轮未完成：'+r.error:r.state==='SELECTED'?'照片已选择 · 等待手机开始':r.state==='RUNNING'?(local?`第 ${(r.imageIndex??0)+1} 张 · ${r.phase}`:'正在按实际计划执行，成品交付后逐张显示'):r.state==='PICKING'?'手机正在选择照片':'正在准备任务';
  $('connection').textContent=local?'手机本机 · 仅展示连接':'协同任务 · 实时执行回执';$('freshness').textContent='记录更新 · '+new Date(r.updatedAt).toLocaleTimeString();
- $('device-strip').innerHTML=r.devices.map(d=>'<span>'+esc(d.name)+'</span>').join('')+(local?'<span>Windows · 仅展示，不参与本轮计算</span>':'');
+ $('device-strip').innerHTML=r.devices.map(d=>'<span>'+esc(d.name)+'</span>').join('')+(local?'<span>展示端 · 仅展示，不参与本轮计算</span>':'');
  $('plan-mode').textContent=local?'本机处理事件':'协调中心实际计划';
  if(local){const phase=phases.findIndex(p=>r.phase?.startsWith(p));$('graph').innerHTML='<div class="flow-row">'+phases.map((p,n)=>`<div class="node ${r.state==='SUCCEEDED'||n<phase?'done':r.state==='RUNNING'&&n===phase?'running':''}"><strong>${p}</strong><small>手机 CPU</small><span class="status">${r.state==='SUCCEEDED'?'已完成':n===phase?'当前阶段':'本机阶段'}</span></div>`).join('')+'</div>';$('plan-reason').textContent='手机独立执行，流程来自 App 实际事件；本轮没有跨设备派发。';}
  else{const w=r.workflows.find(w=>w.state!=='SUCCEEDED')??r.workflows.at(-1);$('plan-reason').textContent=w?`照片 ${w.imageIndex+1} · ${w.nodes.length} 个阶段 · 按数据依赖从上向下执行，同一行图块可并行；设备与状态来自实际派发及回执。`:'等待协调中心生成计划';

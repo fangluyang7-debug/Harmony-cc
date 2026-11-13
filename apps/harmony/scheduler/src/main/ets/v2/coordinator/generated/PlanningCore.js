@@ -1,3 +1,26 @@
+// packages/scheduler-core/src/photo-size.ts
+function photoOutputBound(capability, parameters, fallback) {
+  if (!capability.startsWith("photo.")) return fallback;
+  try {
+    const p = JSON.parse(parameters);
+    let w = p.width, h = p.height;
+    if (!Number.isSafeInteger(w) || !Number.isSafeInteger(h) || w < 1 || h < 1 || w * h > 16777216) return fallback;
+    if (capability === "photo.prepare.v1") {
+      w += 32;
+      h += 32;
+    }
+    if (["photo.enhance.v1", "photo.assemble.v1"].includes(capability)) {
+      w *= 4;
+      h *= 4;
+    }
+    const raw = w * h * 4 + h, png = raw + Math.ceil(raw / 16384) * 6 + 4096;
+    const bound = capability === "photo.assemble.v1" ? png : Math.ceil(png / 3) * 4 + 2048 + (capability === "photo.deliver.v1" ? Math.min(w, 480) * Math.min(h, 360) * 4 + 4096 : 0);
+    return Math.min(8388608, bound);
+  } catch {
+    return fallback;
+  }
+}
+
 // packages/scheduler-core/src/protocol-v1.ts
 function compatibleModel(required, actual) {
   return required.modelId === actual.modelId && required.modelVersion === actual.modelVersion && required.embeddingKind === actual.embeddingKind && required.dimension > 0 && required.dimension === actual.dimension && required.dtype === actual.dtype && required.normalization === actual.normalization && required.preprocessVersion === actual.preprocessVersion && required.indexSpaceId === actual.indexSpaceId;
@@ -534,13 +557,46 @@ function availability(profile, e, priority, version, now) {
 // packages/scheduler-core/src/native-coordinator-planning.ts
 function nativePlanJson(profilesJson, evidenceJson, requestJson, now, monotonic) {
   const profiles = JSON.parse(profilesJson), evidence = JSON.parse(evidenceJson), input = JSON.parse(requestJson);
-  const version = now, priority = input.priority ?? "REMOTE_INTERACTIVE", candidates = [], resources = [], links = [];
+  const version = now, priority = input.priority ?? "REMOTE_INTERACTIVE", candidates = [], resources = [], links = [], inFlight = [], queued = [];
+  const backlog = (input.backlog ?? []).map((s) => JSON.parse(s));
   const usable = (s) => sampleUsableV2(s, now, "REAL");
   for (const p of profiles) {
+    if (input.originLocal && p.holderInstanceId !== input.originHolderId) continue;
     if (!usable(p.ownerActivity) || p.ownerActivity.value !== "IDLE" || !usable(p.foreground) || p.foreground.value !== "FOREGROUND" || !usable(p.powerSave) || p.powerSave.value === "ON" || p.energyGate && p.energyGate !== "NONE") continue;
+    const jobs = backlog.filter((j) => j.owner.groupId === input.groupId && j.holder === p.holderInstanceId && j.deadlineAt > now);
+    const selected = (id2, target) => {
+      const j = jobs.find((j2) => j2.offer?.task.attemptId === id2 && j2.offer.target.targetId === target);
+      return j ? JSON.parse(j.decision).decision.suggestion?.[0] : null;
+    };
+    const pending = jobs.filter((j) => !p.inFlight?.some((f) => f.attemptId === j.offer.task.attemptId) && !p.queued?.some((q) => q.attemptId === j.offer.task.attemptId));
+    for (const j of pending) {
+      if (p.queued === void 0) continue;
+      for (const r of j.offer.resources) {
+        const pool = p.pools.find((v) => v.resourcePoolId === r.resourcePoolId);
+        if (pool && usable(pool.occupied)) pool.occupied.value = Math.max(0, pool.occupied.value - r.amount);
+      }
+      if (p.queued) p.queued.push({ attemptId: j.offer.task.attemptId, targetId: j.offer.target.targetId, resources: j.offer.resources, priority: j.offer.task.priority, elapsed: { value: 0, source: "PRIOR", sampledAt: now, ttlMs: 1e3, unit: "ms" } });
+    }
+    for (const f of p.inFlight ?? []) {
+      if (usable(f.remaining) && f.remaining.sampledAt + f.remaining.value > now) continue;
+      const e = p.executors.find((e2) => e2.target.targetId === f.targetId), s = selected(f.attemptId, f.targetId), estimate = s ? s.executionMs - (s.policyQueueMs ?? 0) + (s.uncertaintyMs ?? 0) : null;
+      if (e?.contract.sideEffectPolicy === "PURE" && usable(f.elapsed) && Number.isFinite(estimate) && estimate > 0) {
+        const left = Math.max(100, estimate - f.elapsed.value, Math.min(estimate, Math.max(100, f.elapsed.value * 0.25)));
+        f.remaining = { value: left, source: "PRIOR", sampledAt: now, ttlMs: Math.min(1e3, f.elapsed.ttlMs), unit: "ms" };
+      }
+    }
+    const projects = p.inFlight !== void 0 && p.pools.every((pool) => !pool.draining && usable(pool.occupied) && usable(pool.admissionLimit) && p.inFlight.reduce((sum, f) => sum + (f.resources.find((r) => r.resourcePoolId === pool.resourcePoolId)?.amount ?? 0), 0) === pool.occupied.value);
+    if (projects) for (const f of p.inFlight) {
+      const c = p.executors.find((e) => e.target.targetId === f.targetId)?.contract, overdue = c?.interruptibility === "NON_INTERRUPTIBLE" && c.maxNonPreemptibleMs !== null && usable(f.elapsed) && f.elapsed.value > c.maxNonPreemptibleMs;
+      inFlight.push({ deviceId: p.deviceId, holderInstanceId: p.holderInstanceId, targetId: f.targetId, resources: f.resources, overdue, releaseAt: { ...f.remaining, value: f.remaining.value === null ? null : f.remaining.sampledAt + f.remaining.value } });
+    }
+    for (const q of p.queued ?? []) {
+      const s = selected(q.attemptId, q.targetId), duration = s ? s.executionMs - (s.policyQueueMs ?? 0) : null, value = typeof duration === "number" && Number.isFinite(duration) && duration >= 0 ? duration : null;
+      queued.push({ deviceId: p.deviceId, holderInstanceId: p.holderInstanceId, targetId: q.targetId, resources: q.resources, priority: q.priority, attemptId: q.attemptId, elapsedMs: q.elapsed.value ?? 0, holdEstimate: { value, source: value === null ? "UNKNOWN" : "PRIOR", sampledAt: q.elapsed.sampledAt, ttlMs: q.elapsed.ttlMs, unit: "ms" } });
+    }
     for (const pool of p.pools) {
       if (!usable(pool.admissionLimit) || !usable(pool.occupied) || pool.draining) continue;
-      const free = Math.max(0, pool.admissionLimit.value - pool.occupied.value), existing = resources.find((r) => r.deviceId === p.deviceId && r.resourcePoolId === pool.resourcePoolId);
+      const free = Math.max(0, pool.admissionLimit.value - (projects ? 0 : pool.occupied.value)), existing = resources.find((r) => r.deviceId === p.deviceId && r.resourcePoolId === pool.resourcePoolId);
       if (existing) existing.available += free;
       else resources.push({ deviceId: p.deviceId, resourcePoolId: pool.resourcePoolId, available: free, availableMemoryBytes: null, availableSlots: null, observedAt: now, ttlMs: 1e3 });
     }
@@ -549,14 +605,16 @@ function nativePlanJson(profilesJson, evidenceJson, requestJson, now, monotonic)
       if (!q || q.admission.state !== "ACTIVE" || !usable(q.admission.quality)) continue;
       const shares = e.resources.map((r) => {
         const pool = p.pools.find((v) => v.resourcePoolId === r.resourcePoolId);
-        return { resourcePoolId: r.resourcePoolId, amount: pool && usable(pool.admissionLimit) && usable(pool.occupied) && !pool.draining ? Math.max(0, pool.admissionLimit.value - pool.occupied.value) : 0 };
+        return { resourcePoolId: r.resourcePoolId, amount: pool && usable(pool.admissionLimit) && usable(pool.occupied) && !pool.draining ? Math.max(0, pool.admissionLimit.value - (projects ? 0 : pool.occupied.value)) : 0 };
       });
       if (e.resources.some((r) => shares.find((v) => v.resourcePoolId === r.resourcePoolId).amount < r.amount)) continue;
       const ram = e.resources.filter((r) => p.pools.some((v) => v.resourcePoolId === r.resourcePoolId && v.kind === "RAM_BYTES")).reduce((sum, r) => sum + r.amount, 0);
       const compute = usable(e.compute) ? e.compute.value : q.computeMs;
-      const idle = p.inFlight?.length === 0 && p.queued?.length === 0;
+      const idle = p.inFlight !== void 0 && p.queued?.length === 0;
       const projected = idle && !usable(e.queue) ? { ...e, queue: { value: 0, source: "MEASURED", sampledAt: now, ttlMs: 1e3, unit: "ms" } } : e;
+      const forecast = availability(p, projected, priority, version, now), slots = Math.min(...e.resources.filter((r) => r.amount > 0).map((r) => Math.floor(shares.find((v) => v.resourcePoolId === r.resourcePoolId).amount / r.amount)));
       candidates.push({
+        ...projects ? { projectedSlots: slots, categoryCapacity: [{ priority, slots: p.credits.find((v) => v.priority === priority)?.slots ?? 0, availability: forecast }] } : {},
         holderInstanceId: p.holderInstanceId,
         targetId: e.target.targetId,
         deviceId: p.deviceId,
@@ -573,13 +631,18 @@ function nativePlanJson(profilesJson, evidenceJson, requestJson, now, monotonic)
         ttlMs: 1e3,
         availableSlots: p.credits.find((v) => v.priority === priority)?.slots ?? 0,
         availableMemoryBytes: shares.filter((r) => p.pools.some((v) => v.resourcePoolId === r.resourcePoolId && v.kind === "RAM_BYTES")).reduce((sum, r) => sum + r.amount, 0),
+        queueObserved: p.queued !== void 0,
+        computeSamples: nativeComputeSamples(input.history ?? [], p, e, q, now),
+        costEvidence: { compute: usable(e.compute) ? e.compute : { value: q.computeMs, source: q.computeMs === null ? "UNKNOWN" : "PRIOR", sampledAt: now, ttlMs: 1e3, unit: "ms" }, cold: e.cold, publish: e.publish },
+        configId: e.configurations[0]?.id,
+        startup: e.startup,
         quality: q.admission.quality.value,
         computeMs: compute,
         queueMs: usable(projected.queue) ? projected.queue.value : null,
         coldMs: usable(e.cold) ? e.cold.value : null,
         publishMs: usable(e.publish) ? e.publish.value : null,
         uncertaintyMs: compute === null ? null : compute * 0.5,
-        availability: availability(p, projected, priority, version, now),
+        availability: forecast,
         ...e.contract.serviceId ? { serviceId: e.contract.serviceId } : {}
       });
     }
@@ -591,8 +654,8 @@ function nativePlanJson(profilesJson, evidenceJson, requestJson, now, monotonic)
   const contract = input.contract, node = input.node;
   const request = {
     priority,
-    nodes: [{ id: node.id, workKey: workKeyV2(contract, node.parameters, node.input.bytes), capability: node.capability, dependencies: [], inputs: [input.artifactId], output: { id: "out-" + input.id, bytes: Math.min(8388608, node.input.bytes * 64 + 4096) }, baselineTargetId: node.targetId ?? "", ...node.targetId ? { allowedTargetIds: [node.targetId] } : {}, ...node.executionScope === "ORIGIN_DEVICE" || node.privacy === "LOCAL_ONLY" ? { dataScope: "LOCAL_ONLY" } : {}, memoryBytes: 0, minimumQuality: 1, candidates: [] }],
-    artifacts: [{ id: input.artifactId, bytes: node.input.bytes, replicas: [{ deviceId: input.coordinatorId, readMs: 0 }] }],
+    nodes: [{ id: node.id, workKey: workKeyV2(contract, node.parameters, node.input.bytes), capability: node.capability, dependencies: [], inputs: [input.artifactId], output: { id: "out-" + input.id, bytes: photoOutputBound(node.capability, node.parameters, Math.min(8388608, node.input.bytes * 64 + 4096)) }, baselineTargetId: node.targetId ?? "", ...node.targetId ? { allowedTargetIds: [node.targetId] } : {}, ...node.executionScope === "ORIGIN_DEVICE" || node.privacy === "LOCAL_ONLY" ? { dataScope: "LOCAL_ONLY" } : {}, memoryBytes: 0, minimumQuality: 1, candidates: [] }],
+    artifacts: [{ id: input.artifactId, bytes: node.input.bytes, replicas: [input.originLocal ? { deviceId: input.originDeviceId, holderInstanceId: input.originHolderId, readMs: 0 } : { deviceId: input.coordinatorId, readMs: 0 }] }],
     links: [],
     deviceResources: [],
     remainingBudgetMs: input.budgetMs,
@@ -608,10 +671,431 @@ function nativePlanJson(profilesJson, evidenceJson, requestJson, now, monotonic)
     materializeOutputsAt: input.coordinatorId,
     finalDestination: input.coordinatorId
   };
-  const snapshot = { version, policyVersion: "native-main-v1", groupId: input.groupId, domain: "REAL", capturedAt: now, devices: profiles.map((p) => ({ deviceId: p.deviceId, holderInstanceId: p.holderInstanceId, deviceInstanceId: p.deviceInstanceId, ledgerEpoch: p.ledgerEpoch, sampledAt: p.ownerActivity.sampledAt, ttlMs: p.ownerActivity.ttlMs })), resources, candidates, links };
+  const snapshot = { version, policyVersion: "native-photo-perf-v3", groupId: input.groupId, domain: "REAL", capturedAt: now, devices: profiles.map((p) => ({ deviceId: p.deviceId, holderInstanceId: p.holderInstanceId, deviceInstanceId: p.deviceInstanceId, ledgerEpoch: p.ledgerEpoch, sampledAt: p.ownerActivity.sampledAt, ttlMs: p.ownerActivity.ttlMs })), resources, candidates, links, inFlight, queued };
   const policy = { version: snapshot.policyVersion, revoked: false, allowedTargetIds: candidates.map((c) => c.targetId), limits: { maxCandidates: 64, lookahead: 8, beamWidth: 16, planningBudgetMs: 50, switchCostMs: 0, hysteresisMs: 0 } };
   return JSON.stringify(plan(snapshot, request, policy, { now, monotonic }));
 }
+function nativeComputeSamples(rows, profile, executor, qualification, now) {
+  const groups = /* @__PURE__ */ new Map(), seen = /* @__PURE__ */ new Set();
+  for (const row of rows) {
+    const j = JSON.parse(row.job), s = JSON.parse(row.span), offer = j.offer;
+    if (j.state !== "SUCCEEDED" || j.owner.groupId !== qualification.admission.groupId || j.holder !== profile.holderInstanceId || !j.executionIdentity || j.executionIdentity !== qualification.admission.identity || j.startup !== executor.startup || offer?.target.targetId !== executor.target.targetId || canonical(offer.target) !== canonical(executor.target) || offer.allowedConfigs.length !== 1 || offer.allowedConfigs[0].id !== executor.configurations[0]?.id || canonical(offer.task.contract) !== canonical(executor.contract)) continue;
+    const at = j.settledAt ?? s.snapshotVersion;
+    if (s.phase !== "EXECUTE" || s.measurementScope !== "LOCAL_INTERVAL" || s.authoritativeSide !== "SELF" || s.attemptId !== offer.task.attemptId || s.traceId !== j.traceId || s.targetId !== executor.target.targetId || s.snapshotVersion !== JSON.parse(j.decision).snapshotVersion || !(s.durationMs > 0) || !Number.isFinite(s.durationMs) || at > now || now - at > 6e5 || seen.has(s.attemptId)) continue;
+    seen.add(s.attemptId);
+    const key = workKeyV2(offer.task.contract, offer.task.parameters, j.input.bytes), group = groups.get(key) ?? [];
+    group.push({ ms: s.durationMs, at });
+    groups.set(key, group);
+  }
+  const quantile = (values, q) => {
+    const weighted = values.map((s, i) => ({ ...s, w: Math.pow(0.65, values.length - 1 - i) })), threshold = weighted.reduce((n, s) => n + s.w, 0) * q;
+    let total = 0;
+    for (const s of weighted.sort((a, b) => a.ms - b.ms)) {
+      total += s.w;
+      if (total >= threshold) return s.ms;
+    }
+    return weighted[weighted.length - 1].ms;
+  };
+  return [...groups].map(([workKey, g]) => {
+    const recent = g.sort((a, b) => a.at - b.at).slice(-8);
+    return { workKey, configId: executor.configurations[0].id, startup: executor.startup, count: recent.length, p50Ms: quantile(recent, 0.5), p90Ms: quantile(recent, 0.9), coldP50Ms: 0, executionTotal: true, observedAt: recent[0].at, ttlMs: 6e5 };
+  });
+}
+
+// packages/scheduler-core/src/native-photo-engine.ts
+var NativePhotoEngine = class {
+  constructor(port) {
+    this.port = port;
+    this.summaries = /* @__PURE__ */ new Map();
+    this.active = /* @__PURE__ */ new Set();
+    this.locks = /* @__PURE__ */ new Map();
+  }
+  async call(op, data = {}) {
+    return JSON.parse(await this.port.call(op, JSON.stringify(data)));
+  }
+  async get(key) {
+    return this.call("get", { key });
+  }
+  async save(key, value) {
+    await this.call("put", { key, value });
+  }
+  async lock(key, work) {
+    const previous = this.locks.get(key) ?? Promise.resolve(), next = previous.catch(() => {
+    }).then(work);
+    this.locks.set(key, next);
+    try {
+      return await next;
+    } finally {
+      if (this.locks.get(key) === next) this.locks.delete(key);
+    }
+  }
+  owns(peer, g) {
+    if (!g || g.peer.groupId !== peer.groupId || g.peer.holderInstanceId !== peer.holderInstanceId || g.peer.app?.appInstanceId !== peer.app?.appInstanceId) throw Error("JOB_SCOPE");
+  }
+  async sdk(peerJson, path, bodyJson) {
+    const peer = JSON.parse(peerJson), body = bodyJson ? JSON.parse(bodyJson) : null;
+    return JSON.stringify(await this.sdkValue(peer, path, body));
+  }
+  async sdkValue(peer, path, body) {
+    if (path === "/v2/sdk/jobs") {
+      const w = body?.workflow, o = body?.options;
+      if (!peer.app || !w || w.version !== 3 || !Array.isArray(w.nodes) || w.nodes.length < 2 || w.nodes.length > 32 || !/^[A-Za-z0-9_.:-]{1,80}$/.test(o?.requestId) || !(o.budgetMs > 0 && o.budgetMs <= 3e5) || o.resultDestination !== "ORIGIN") throw Error("SDK_WORKFLOW_INVALID");
+      const key2 = "graph:" + o.requestId;
+      return this.lock(key2, async () => {
+        let g2 = await this.get(key2);
+        if (g2) {
+          this.owns(peer, g2);
+          if (JSON.stringify(g2.workflow) !== JSON.stringify(w)) throw Error("JOB_CONFLICT");
+          return g2.plan;
+        }
+        const known = /* @__PURE__ */ new Set();
+        for (const n of w.nodes) {
+          if (!/^[A-Za-z0-9_-]{1,40}$/.test(n.id) || known.has(n.id) || !Array.isArray(n.dependsOn) || n.dependsOn.some((x) => !known.has(x)) || !peer.app.allowedContracts.includes(n.capability) || typeof n.parameters !== "string") throw Error("SDK_GRAPH_NODE_INVALID");
+          JSON.parse(n.parameters);
+          if (n.inputFrom && !n.dependsOn.includes(n.inputFrom) || n.inputFroms?.some((x) => !n.dependsOn.includes(x))) throw Error("SDK_GRAPH_EDGE_INVALID");
+          known.add(n.id);
+        }
+        const roots = w.nodes.filter((n) => n.input);
+        if (roots.length !== 1 || roots[0].dependsOn.length || w.nodes.some((n) => [!!n.input, !!n.inputFrom, !!n.inputFroms].filter(Boolean).length !== 1)) throw Error("SDK_GRAPH_ROOT_INVALID");
+        const root = roots[0], input = await this.call("artifact", { peer, input: root.input, id: "in-" + o.requestId });
+        const originLocal = o.inputLocation === "ORIGIN" && root.executionScope === "ORIGIN_DEVICE";
+        const plan2 = { jobId: o.requestId, targetId: "", deviceId: peer.deviceId, reason: "NATIVE_DAG_PLANNING", inputDelivery: originLocal ? "LOCAL" : "RELAY", inputTicket: input.ticket };
+        g2 = { peer, originLocal, workflow: w, options: o, input: input.descriptor, plan: plan2, state: "WAITING_INPUT", deadlineAt: this.port.now() + o.budgetMs, createdAt: this.port.now(), nodes: w.nodes.map((n) => ({ id: n.id, jobId: o.requestId + "." + n.id, state: "PENDING" })) };
+        await this.save(key2, g2);
+        return plan2;
+      });
+    }
+    const match = /^\/v2\/sdk\/jobs\/([A-Za-z0-9_.:-]+)(?:\/(start|cancel|received))?$/.exec(path);
+    if (!match) throw Error("SDK_ROUTE_INVALID");
+    const key = "graph:" + match[1], action = match[2];
+    if (action === "start") return this.lock(key, async () => {
+      const g2 = await this.get(key);
+      this.owns(peer, g2);
+      if (g2.state === "WAITING_INPUT") {
+        if (!g2.originLocal && !await this.call("available", { descriptor: g2.input })) throw Error("INPUT_NOT_UPLOADED");
+        g2.state = "ACTIVE";
+        await this.save(key, g2);
+      }
+      this.active.add(match[1]);
+      setTimeout(() => {
+        void this.advance(match[1]).catch(() => {
+        });
+      }, 0);
+      return { jobId: match[1] };
+    });
+    if (action === "cancel") return this.lock(key, async () => {
+      const g2 = await this.get(key);
+      this.owns(peer, g2);
+      if (!["SUCCEEDED", "FAILED", "CANCELLED"].includes(g2.state)) {
+        g2.state = "CANCEL_REQUESTED";
+        await this.save(key, g2);
+        this.active.add(match[1]);
+      }
+      return { jobId: match[1], state: g2.state };
+    });
+    const g = await this.get(key);
+    this.owns(peer, g);
+    if (action === "received") {
+      if (g.state !== "SUCCEEDED" || body?.ref?.contentHash !== g.output?.ref.contentHash || body.bytes !== g.output?.bytes) throw Error("RESULT_ACK_INVALID");
+      return { acknowledged: true };
+    }
+    return { jobId: match[1], state: g.state === "ACTIVE" ? "RUNNING" : g.state, deviceId: g.nodes.at(-1)?.target?.deviceId ?? peer.deviceId, targetId: g.nodes.at(-1)?.target?.targetId ?? "", outputTicket: g.state === "SUCCEEDED" ? await this.call("ticket", { peer, descriptor: g.output }) : null, error: g.error ?? null };
+  }
+  async restore() {
+    for (const g of await this.call("list", { prefix: "graph:" })) if (["ACTIVE", "CANCEL_REQUESTED"].includes(g.state)) this.active.add(g.options.requestId);
+  }
+  async tick() {
+    await Promise.all([...this.active].map((id2) => this.advance(id2).catch(() => {
+    })));
+  }
+  async advance(id2) {
+    if (this.locks.has("graph:" + id2)) return;
+    await this.lock("graph:" + id2, async () => {
+      const g = await this.get("graph:" + id2);
+      if (!g) return;
+      const before = JSON.stringify(g), peer = g.peer, now = this.port.now();
+      if (now >= g.deadlineAt && g.state === "ACTIVE") {
+        g.state = "CANCEL_REQUESTED";
+        g.error = "BUDGET_EXHAUSTED";
+      }
+      if (g.state === "CANCEL_REQUESTED") {
+        await Promise.all(g.nodes.filter((s) => s.state === "SUBMITTED").map((s) => this.call("cancel", { peer, id: s.jobId }).catch(() => {
+        })));
+        g.state = g.error ? "FAILED" : "CANCELLED";
+        this.active.delete(id2);
+        await this.save("graph:" + id2, g);
+        return;
+      }
+      if (g.state !== "ACTIVE") {
+        this.active.delete(id2);
+        return;
+      }
+      const submitted = g.nodes.filter((s) => s.state === "SUBMITTED"), observed = submitted.length ? await this.call("inspectMany", { peer, ids: submitted.map((s) => s.jobId) }) : [];
+      await Promise.all(submitted.map(async (s, index) => {
+        const j = observed[index];
+        s.target = j.offer?.target;
+        s.reason = j.offer?.reasonCode;
+        s.decision = j.decision ? JSON.parse(j.decision) : null;
+        s.executionState = j.state;
+        if (j.state === "SUCCEEDED" && j.output) {
+          s.state = "COMMITTED";
+          s.output = j.output;
+          return;
+        }
+        const unstarted = j.state === "REJECTED" && j.rejection?.record === null && ["RESOURCE_UNAVAILABLE", "CREDIT_UNAVAILABLE", "QUEUE_STARVED_NOT_STARTED"].includes(j.rejection?.reasonCode);
+        const restart = ["CANCELLED_SETTLED", "YIELDED"].includes(j.state) && j.restartable === true;
+        if (g.state === "ACTIVE" && (unstarted || restart) && (s.retries ?? 0) < 8 && this.port.now() < g.deadlineAt) {
+          const reason = restart ? j.yieldNotice?.reasonCode ?? j.state : j.rejection.reasonCode;
+          s.attempts = [...s.attempts ?? [], { jobId: s.jobId, state: j.state, reason }];
+          s.retries = (s.retries ?? 0) + 1;
+          s.jobId = id2 + "." + s.id + ".r" + s.retries;
+          s.state = "PENDING";
+          s.executionState = "PENDING";
+          s.retryAt = this.port.now() + Math.min(1e3, 100 * s.retries);
+          s.waitReason = reason;
+          return;
+        }
+        if (["FAILED", "REJECTED", "CANCELLED", "CANCELLED_SETTLED", "YIELDED", "SIDE_EFFECT_UNKNOWN", "HOLDER_RECORD_MISSING"].includes(j.state)) {
+          g.state = "CANCEL_REQUESTED";
+          g.error = "NODE_" + s.id + "_" + j.state;
+        }
+      }));
+      if (g.state === "ACTIVE") for (const n of g.workflow.nodes) {
+        const s = g.nodes.find((x) => x.id === n.id);
+        if (s.state !== "PENDING" || (s.retryAt ?? 0) > this.port.now() || n.dependsOn.some((d) => g.nodes.find((v) => v.id === d).state !== "COMMITTED")) continue;
+        try {
+          let source = n.input ? g.input : n.inputFrom ? g.nodes.find((x) => x.id === n.inputFrom).output : s.input;
+          if (!source) {
+            source = await this.call("bundle", { peer, id: "bundle-" + s.jobId, parts: n.inputFroms.map((d) => ({ nodeId: d, descriptor: g.nodes.find((x) => x.id === d).output })) });
+            s.input = source;
+          }
+          const contract = await this.call("contract", { capability: n.capability });
+          const child = { ...n, input: { ...source.ref, bytes: source.bytes }, dependsOn: [] };
+          delete child.inputFrom;
+          delete child.inputFroms;
+          delete child.input.artifactId;
+          delete child.input.contentVersion;
+          const submission = { workflow: { version: 3, id: s.jobId, outputContract: contract.contract.outputSchemas[0], qualityTarget: "reference", nodes: [child] }, options: { ...g.options, requestId: s.jobId, budgetMs: Math.max(1, Math.floor(g.deadlineAt - this.port.now())) } };
+          const result = await this.call("dispatch", { peer, submission, source, sourceLocal: !!g.originLocal && !!n.input });
+          s.target = result.target;
+          s.state = "SUBMITTED";
+        } catch (e) {
+          const error = e.message;
+          if (!["NO_LEGAL_PLAN", "INPUT_NOT_UPLOADED", "BUDGET_UNAVAILABLE", "TARGET_UNAVAILABLE"].includes(error)) {
+            g.state = "CANCEL_REQUESTED";
+            g.error = error;
+          }
+          s.waitReason = error;
+        }
+      }
+      if (g.nodes.every((s) => s.state === "COMMITTED")) {
+        g.state = "SUCCEEDED";
+        g.output = g.nodes.at(-1).output;
+        this.active.delete(id2);
+      }
+      if (JSON.stringify(g) !== before) await this.save("graph:" + id2, g);
+    });
+  }
+  async photo(peerJson, inputJson) {
+    const peer = JSON.parse(peerJson), m = JSON.parse(inputJson);
+    if (!peer.app?.allowedContracts.includes("photo.enhance.v1")) throw Error("PHOTO_APP_REQUIRED");
+    const match = /^\/photo-runs(?:\/([A-Za-z0-9-]+)(?:\/(input|capture-result|result)\?image=(\d+))?)?$/.exec(m.route);
+    if (!match) throw Error("PHOTO_ROUTE_INVALID");
+    let id2 = match[1];
+    if (!id2) {
+      if (m.method === "POST") {
+        const b = m.body;
+        if (!Array.isArray(b.inputs) || !b.inputs.length || b.inputs.length > 8 || b.mode !== "COOPERATIVE" || !Number.isInteger(b.budgetMs) || b.budgetMs < 1 || b.budgetMs > 3e5) throw Error("PHOTO_RUN_INVALID");
+        for (const i of b.inputs) if (!/^[a-f0-9]{64}$/.test(i.hash) || !Number.isInteger(i.bytes) || i.bytes < 1 || i.bytes > 8388608) throw Error("PHOTO_INPUT_INVALID");
+        id2 = this.port.id();
+        const r = { ...b, id: id2, peer, sourceDeviceId: peer.deviceId, group: peer.groupId, createdAt: this.port.now(), updatedAt: this.port.now(), state: "PREPARING", revision: 0, inputReady: [], jobs: [], deliveries: [], scale: 4, model: (await this.call("contract", { capability: "photo.enhance.v1" })).model };
+        await this.save("photo:" + id2, r);
+        return JSON.stringify(r);
+      }
+      throw Error("PHOTO_ROUTE_INVALID");
+    }
+    return this.lock("photo:" + id2, async () => {
+      const r = await this.get("photo:" + id2);
+      this.owns(peer, r);
+      const index = Number(match[3]);
+      if (match[2]) {
+        if (!r.inputs[index]) throw Error("PHOTO_INPUT_INVALID");
+        if (match[2] === "input" && m.method === "PUT") {
+          await this.call("validateBytes", { data: m.data, hash: r.inputs[index].hash, bytes: r.inputs[index].bytes });
+          await this.save("photo-input:" + id2 + ":" + index, m.data);
+          r.inputReady = [.../* @__PURE__ */ new Set([...r.inputReady ?? [], index])];
+          r.updatedAt = this.port.now();
+          await this.save("photo:" + id2, r);
+          return "{}";
+        }
+        if (match[2] === "capture-result") {
+          const j = r.jobs.find((j2) => j2.imageIndex === index), g = j && await this.get("graph:" + j.id);
+          this.owns(peer, g);
+          if (g.state !== "SUCCEEDED") throw Error("PHOTO_RESULT_PENDING");
+          const product = await this.call("product", { descriptor: g.output });
+          await this.save("photo-result:" + id2 + ":" + index, product);
+          return '{"retained":true}';
+        }
+        throw Error("PHOTO_ROUTE_INVALID");
+      }
+      if (m.method === "GET") return JSON.stringify(await this.photoView(r));
+      const b = m.body;
+      if (b.revision !== r.revision) throw Error("PHOTO_RUN_REVISION");
+      if (b.jobs) {
+        if (b.jobs.length > r.inputs.length || new Set(b.jobs.map((j) => j.imageIndex)).size !== b.jobs.length) throw Error("PHOTO_JOB_SCOPE");
+        for (const j of b.jobs) {
+          const g = await this.get("graph:" + j.id);
+          this.owns(peer, g);
+          if (!r.inputs[j.imageIndex] || g.input.ref.contentHash !== r.inputs[j.imageIndex].hash) throw Error("PHOTO_JOB_SCOPE");
+        }
+        r.jobs = b.jobs;
+      }
+      if (b.deliveredImage) {
+        const i = b.deliveredImage.imageIndex, p = await this.get("photo-result:" + id2 + ":" + i);
+        if (!p || p.hash !== b.deliveredImage.hash) throw Error("PHOTO_RESULT_PENDING");
+        if (!r.deliveries.some((v) => v.imageIndex === i)) r.deliveries.push({ ...b.deliveredImage, receivedAt: this.port.now() });
+      }
+      if (b.sourceDurationMs !== void 0 && (!Number.isFinite(b.sourceDurationMs) || b.sourceDurationMs < 0)) throw Error("PHOTO_DURATION_INVALID");
+      if (b.state === "SUCCEEDED" && (!(await this.photoView(r)).allCommitted || r.deliveries.length !== r.inputs.length)) throw Error("PHOTO_RESULTS_NOT_COMMITTED");
+      if (b.state && !["RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"].includes(b.state)) throw Error("PHOTO_STATE_INVALID");
+      for (const k of ["state", "error", "sourceDurationMs"]) if (b[k] !== void 0) r[k] = b[k];
+      r.revision++;
+      r.updatedAt = this.port.now();
+      await this.save("photo:" + id2, r);
+      return JSON.stringify(r);
+    });
+  }
+  async photoView(r) {
+    const workflows = [];
+    for (const j of r.jobs) {
+      const g = await this.get("graph:" + j.id);
+      if (!g) continue;
+      workflows.push({ id: j.id, imageIndex: j.imageIndex, state: g.state, nodes: g.workflow.nodes.map((n) => {
+        const s = g.nodes.find((x) => x.id === n.id);
+        return { ...n, state: s.state === "COMMITTED" ? "SUCCEEDED" : s.executionState ?? s.state, committed: s.state === "COMMITTED", target: s.target, reason: s.reason ?? s.waitReason, decision: s.decision, attemptId: s.jobId, retries: s.retries ?? 0, attempts: s.attempts ?? [] };
+      }) });
+    }
+    return { ...r, workflows, allCommitted: workflows.length === r.inputs.length && workflows.every((w) => w.state === "SUCCEEDED"), images: r.inputs.map((_, imageIndex) => ({ imageIndex, delivered: r.deliveries.some((d) => d.imageIndex === imageIndex) })) };
+  }
+  async graphs(id2) {
+    return !!await this.get("graph:" + id2);
+  }
+  async views() {
+    const rows = await this.call("list", { prefix: "photo:" });
+    return JSON.stringify(await Promise.all(rows.map((r) => this.photoView(r))));
+  }
+  async record(key) {
+    return JSON.stringify(await this.get(key));
+  }
+  async display(path, bodyJson, key, address, devicesJson) {
+    return this.lock("display", async () => {
+      let session = await this.get("display-session");
+      if (!session) {
+        session = { key: (this.port.id() + this.port.id()).replace(/-/g, "").slice(0, 36), generation: 0, hiddenBefore: 0, seq: 0 };
+        await this.save("display-session", session);
+      }
+      const body = bodyJson ? JSON.parse(bodyJson) : {}, devices = JSON.parse(devicesJson);
+      const connection = () => ({ invitation: address + "/#display=" + session.key, generation: session.generation });
+      if (path === "/session") return JSON.stringify(connection());
+      if (path === "/reset") {
+        session = { key: (this.port.id() + this.port.id()).replace(/-/g, "").slice(0, 36), generation: session.generation + 1, hiddenBefore: this.port.now(), seq: 0 };
+        await this.save("display-session", session);
+        return JSON.stringify(connection());
+      }
+      if (path === "/connect" || path === "/event") {
+        if (key !== session.key) throw Error("DISPLAY_KEY_INVALID");
+        if (path === "/connect") return JSON.stringify({ displayOnly: true, nextSeq: session.seq + 1 });
+        const e = body;
+        if (!["PICKING", "SELECTED", "START", "PROGRESS", "RESULT", "FINISH", "FAILED"].includes(e.type) || typeof e.runId !== "string" || e.runId.length > 128) throw Error("INVALID_EVENT");
+        if (!Number.isInteger(e.seq) || e.seq < 1) throw Error("INVALID_SEQUENCE");
+        if (e.seq <= session.seq) return JSON.stringify({ seq: session.seq });
+        let r = await this.get("display-current");
+        const now = this.port.now();
+        if (e.type === "PICKING" || e.type === "SELECTED") {
+          if (e.type === "SELECTED" && (!Array.isArray(e.inputs) || e.inputs.length > 8 || e.inputs.some((i) => !/^data:image\/jpeg;base64,/.test(i.preview) || i.preview.length > 2e5))) throw Error("INVALID_INPUTS");
+          r = { id: "local:" + e.runId, runId: e.runId, kind: "LOCAL", label: "\u624B\u673A\u672C\u673A", state: e.type, createdAt: now, inputs: e.inputs ?? [], results: [], devices: [{ id: "phone", name: "\u624B\u673A CPU" }], workflows: [], revision: 0, evidence: "SOURCE_APP_REPORTED" };
+        } else if (!r || r.runId !== e.runId) throw Error("RUN_MISMATCH");
+        if (e.type === "START") {
+          r.state = "RUNNING";
+          r.createdAt = now;
+          r.results = [];
+        }
+        if (e.type === "PROGRESS") Object.assign(r, { phase: e.phase, imageIndex: e.imageIndex, completed: e.completed, total: e.total });
+        if (e.type === "RESULT") {
+          if (r.state !== "RUNNING" || !r.inputs[e.imageIndex] || e.product.width !== r.inputs[e.imageIndex].width * 4 || e.product.height !== r.inputs[e.imageIndex].height * 4) throw Error("RESULT_GEOMETRY");
+          await this.call("validateBytes", { data: e.product.image, hash: e.product.hash });
+          if (!r.results.some((p) => p.imageIndex === e.imageIndex)) r.results.push({ imageIndex: e.imageIndex, ...e.product });
+        }
+        if (e.type === "FINISH") {
+          if (r.results.length !== r.inputs.length || !Number.isFinite(e.durationMs) || e.durationMs < 0) throw Error("INCOMPLETE_RUN");
+          r.state = "SUCCEEDED";
+          r.durationMs = e.durationMs;
+        }
+        if (e.type === "FAILED") {
+          r.state = "FAILED";
+          r.error = e.error;
+          r.durationMs = e.durationMs;
+        }
+        r.revision++;
+        r.updatedAt = now;
+        await this.save("display-current", r);
+        await this.save("display-run:" + r.runId, r);
+        session.seq = e.seq;
+        await this.save("display-session", session);
+        return JSON.stringify({ seq: e.seq });
+      }
+      const imageUrl = (id2, i, k) => "/images/" + encodeURIComponent(id2) + "/" + i + "/" + k;
+      const localView = (r) => ({ ...r, inputs: r.inputs.map((i, n) => ({ ...i, preview: void 0, originalHash: i.hash, url: imageUrl(r.id, n, "input") })), results: r.results.map((p) => ({ ...p, image: void 0, url: imageUrl(r.id, p.imageIndex, "result") })) });
+      const coopView = (r) => {
+        const id2 = "coop:" + r.id, nodes = r.workflows.flatMap((w) => w.nodes), used = r.usedDeviceIds ?? [...new Set(nodes.filter((n) => n.target && ["SUCCEEDED", "ACCEPTED", "RUNNING"].includes(n.state)).map((n) => n.target.deviceId))];
+        return { ...r, peer: void 0, id: id2, kind: "COOPERATIVE", label: "\u591A\u8BBE\u5907\u534F\u540C", durationMs: ["SUCCEEDED", "FAILED", "CANCELLED"].includes(r.state) ? r.sourceDurationMs : null, inputs: r.inputs.map((i, n) => ({ ...i, url: r.inputReady === void 0 || r.inputReady.includes(n) ? imageUrl(id2, n, "input") : null })), results: r.deliveries.map((d) => ({ ...d, url: imageUrl(id2, d.imageIndex, "result") })), devices: used.map((id3) => ({ id: id3, name: devices.find((d) => d.id === id3)?.title ?? id3 })), directory: devices.map((d) => ({ id: d.id, name: d.title })), evidence: "COORDINATOR_RECEIPTS" };
+      };
+      if (path === "/runs") {
+        const local = await this.call("list", { prefix: "display-run:" }), cooperative = await this.call("list", { prefix: "photo:" });
+        const runs = [...local.map(localView), ...await Promise.all(cooperative.map(async (r) => {
+          let summary = this.summaries.get(r.id);
+          if (!summary || summary.revision !== r.revision || !["SUCCEEDED", "FAILED", "CANCELLED"].includes(r.state) && this.port.now() - summary.at > 2e3) {
+            const view = await this.photoView(r);
+            summary = { revision: r.revision, at: this.port.now(), devices: [...new Set(view.workflows.flatMap((w) => w.nodes).filter((n) => n.target && ["SUCCEEDED", "ACCEPTED", "RUNNING"].includes(n.state)).map((n) => n.target.deviceId))] };
+            if (this.summaries.size > 100) this.summaries.clear();
+            this.summaries.set(r.id, summary);
+          }
+          return coopView({ ...r, workflows: [], usedDeviceIds: summary.devices });
+        }))].filter((r) => r.createdAt >= session.hiddenBefore).sort((a, b) => b.createdAt - a.createdAt);
+        return JSON.stringify({ generation: session.generation, managed: true, coordinator: { connected: true, name: "\u9E3F\u8499\u534F\u8C03\u4E2D\u5FC3" }, runs: runs.map((r) => ({ ...r, results: void 0, workflows: void 0 })) });
+      }
+      if (path.startsWith("/runs/")) {
+        const id2 = decodeURIComponent(path.slice(6));
+        if (id2.startsWith("local:")) {
+          const r2 = await this.get("display-run:" + id2.slice(6));
+          if (!r2 || r2.createdAt < session.hiddenBefore) throw Error("RUN_NOT_FOUND");
+          return JSON.stringify(localView(r2));
+        }
+        const r = await this.get("photo:" + id2.slice(5));
+        if (!r || r.createdAt < session.hiddenBefore) throw Error("RUN_NOT_FOUND");
+        return JSON.stringify(coopView(await this.photoView(r)));
+      }
+      const m = /^\/images\/([^/]+)\/(\d+)\/(input|result)$/.exec(path);
+      if (m) {
+        const id2 = decodeURIComponent(m[1]), i = Number(m[2]);
+        if (id2.startsWith("local:")) {
+          const r2 = await this.get("display-run:" + id2.slice(6));
+          if (!r2 || r2.createdAt < session.hiddenBefore) throw Error("RUN_NOT_FOUND");
+          const data = m[3] === "input" ? r2.inputs[i]?.preview.split(",")[1] : r2.results.find((v) => v.imageIndex === i)?.image;
+          if (!data) throw Error("IMAGE_NOT_FOUND");
+          return JSON.stringify({ data, mime: m[3] === "input" ? "image/jpeg" : "image/png" });
+        }
+        const rid = id2.slice(5), r = await this.get("photo:" + rid);
+        if (!r || r.createdAt < session.hiddenBefore || !r.inputs[i]) throw Error("RUN_NOT_FOUND");
+        if (m[3] === "result" && !r.deliveries.some((v) => v.imageIndex === i)) throw Error("PHOTO_RESULT_PENDING");
+        const p = await this.get("photo-" + m[3] + ":" + rid + ":" + i);
+        if (!p) throw Error("IMAGE_NOT_FOUND");
+        return JSON.stringify({ data: typeof p === "string" ? p : p.image, mime: "image/png" });
+      }
+      throw Error("DISPLAY_ROUTE_NOT_FOUND");
+    });
+  }
+};
 
 // <stdin>
 function planJson(snapshot, request, policy, now, monotonic) {
@@ -621,6 +1105,7 @@ function availabilityJson(profile, executor, priority, version, now) {
   return JSON.stringify(availability(JSON.parse(profile), JSON.parse(executor), priority, version, now));
 }
 export {
+  NativePhotoEngine,
   availabilityJson,
   nativePlanJson,
   planJson

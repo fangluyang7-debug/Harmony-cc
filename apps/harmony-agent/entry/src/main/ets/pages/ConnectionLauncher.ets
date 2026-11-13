@@ -48,7 +48,7 @@ struct ConnectionLauncher {
     this.discoveryActive = true;
     if (!this.paired) void this.discover();
     this.discoveryTimer = setInterval(() => {
-      if (!this.paired && !this.scanning && !this.pairing) void this.discover(false);
+      if ((!this.paired || this.desktopSection === 'discover') && !this.scanning && !this.pairing) void this.discover(false);
     }, 5000);
   }
 
@@ -291,7 +291,7 @@ struct ConnectionLauncher {
     Scroll() {
       Column({ space: 12 }) {
         Text('设备配对').fontSize(20).fontWeight(FontWeight.Bold).fontColor(Color.White)
-        Text(this.details || this.selected || '使用协调中心生成的一次性设备邀请。')
+        Text(this.details || this.selected || '使用协调中心生成的设备邀请；有效期内原设备可退出后重新加入。')
           .fontSize(14).fontColor('#A1A1AA')
         if (!this.details) {
           TextInput({ placeholder: '协调中心地址（发现失败时填写）', text: this.selected })

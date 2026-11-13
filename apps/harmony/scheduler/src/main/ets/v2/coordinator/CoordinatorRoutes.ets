@@ -1,6 +1,8 @@
 import { CoordinatorArtifacts } from './CoordinatorArtifacts';
 import { CoordinatorQualification, EvaluationReport } from './CoordinatorQualification';
 import { CoordinatorJobs } from './CoordinatorJobs';
+import { CoordinatorPhoto } from './CoordinatorPhoto';
+import { SdkWorkflow } from '../client/SchedulerSdk';
 import { CoordinatorDatabase, CoordinatorTransaction } from './CoordinatorDatabase';
 import { SdkSubmission } from '../client/SchedulerSdk';
 import { util } from '@kit.ArkTS';
@@ -17,15 +19,19 @@ import { CoordinatorDirectory } from './CoordinatorDirectory';
 import { CoordinatorActivity, AppActivity } from './CoordinatorActivity';
 import { DeviceProfileV2 } from '../protocol/ResourcesV2';
 interface ProfilesResponse {profiles:DeviceProfileV2[];}
+interface NativeCapabilityCount {capability:string;devices:number;}
+interface NativeCapabilities {capabilities:NativeCapabilityCount[];}
 interface SettingsRequest {measured?:CoordinatorMeasuredCapacity;}
 interface SettingsResponse {settings:CoordinatorContribution|null;}
 interface SignedAck {ack:AllotmentAckV2;signature:string;}
 interface AcknowledgedResponse {acknowledged:boolean;}
 interface OkResponse {ok:boolean;}
+interface LeftResponse {left:boolean;}
 interface LiveResponse {live:boolean;}
 interface PairResponse {credential:string;peer:CoordinatorPeer;epoch:number;}
 interface ErrorResponse {message:string;}
 interface ReadyResponse {ready:boolean;error:string;}
+interface NativeReadyResponse {ready:boolean;epoch:number;}
 interface InviteRequest {inviteId:string;code:string;}
 interface CodeRequest {code:string;}
 interface IdentityResponse {version:number;coordinatorId:string;epoch:number;domain:string;}
@@ -38,6 +44,8 @@ function exact(body:Object,required:string[],optional:string[]=[]):void{
 }
 /** HTTP surface retains the desktop endpoint names and response shapes. */
 export class CoordinatorRoutes {
+ private photo:CoordinatorPhoto|null=null;
+ installPhoto(photo:CoordinatorPhoto):void{this.photo=photo;}
  private artifacts:CoordinatorArtifacts|null=null;
  private qualification:CoordinatorQualification|null=null;
  private jobs:CoordinatorJobs|null=null;
@@ -62,6 +70,31 @@ export class CoordinatorRoutes {
  installAllotments(credentials:CoordinatorCredentials,allotments:CoordinatorAllotments):void{this.credentials=credentials;this.allotments=allotments;}
  constructor(pairing:CoordinatorPairing,identity:CoordinatorCertificate,address:string,epoch:number){this.pairing=pairing;this.identity=identity;this.address=address;this.epoch=epoch;}
  async handle(request:CoordinatorHttpRequest):Promise<CoordinatorHttpResponse>{
+  if(request.path==='/v2/apps/me/capabilities'&&request.method==='GET'&&this.credentials&&this.directory&&this.database&&this.qualification){
+   try{
+    const peer=await this.credentials.authenticate(request.authorization.replace(/^Bearer /,''));if(!peer.app)throw Error('APP_REQUIRED');
+    const profiles=await this.directory.profiles(peer.groupId),result:NativeCapabilityCount[]=[];
+    for(const capability of peer.app.allowedContracts){const devices:string[]=[];
+     for(const p of profiles){if(this.database.controlState?.(peer.groupId,p.holderInstanceId,p.deviceInstanceId,p.ledgerEpoch)!=='ONLINE')continue;
+      for(const e of p.executors){if(e.contract.capability!==capability)continue;await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{
+       const owner:CoordinatorPeer={groupId:peer.groupId,principalId:peer.principalId,deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,credentialId:''};
+       const q=await this.qualification!.evidence(tx,owner,e.target.targetId);if(q.admission.state==='ACTIVE'&&!devices.includes(p.deviceId))devices.push(p.deviceId);
+      });}
+     }result.push({capability,devices:devices.length});
+    }return json(200,{capabilities:result} as NativeCapabilities);
+   }catch(e){return json(400,{message:(e as Error).message} as ErrorResponse);}
+  }
+  if(request.path==='/v2/health/ready'&&this.jobs&&this.coordinatorId)return json(200,{ready:true,epoch:this.epoch} as NativeReadyResponse);
+  if(this.photo&&this.credentials&&(request.path==='/v2/apps/photo'||request.path.startsWith('/v2/sdk/jobs'))){
+   try{
+    if(!request.authorization.startsWith('Bearer '))throw Error('CREDENTIAL_REQUIRED');const peer=await this.credentials.authenticate(request.authorization.slice(7));
+    const body=request.body.length?util.TextDecoder.create('utf-8').decodeToString(request.body):'';
+    if(request.path==='/v2/apps/photo')return {status:200,body:await this.photo.engine.photo(JSON.stringify(peer),body)};
+    const input=request.path==='/v2/sdk/jobs'?JSON.parse(body) as SdkSubmission:null;
+    const match=/^\/v2\/sdk\/jobs\/([A-Za-z0-9_.:-]+)/.exec(request.path);
+    if(input&&(input.workflow as SdkWorkflow).nodes?.length>1||match&&await this.photo.engine.graphs(match[1]))return {status:200,body:await this.photo.engine.sdk(JSON.stringify(peer),request.path,body)};
+   }catch(e){return json(400,{message:(e as Error).message} as ErrorResponse);}
+  }
   if(this.credentials&&this.artifacts&&this.qualification&&this.jobs&&this.database&&/^\/v2\/(artifacts|evaluations|qualification|sdk\/jobs|executions)(\/|$)/.test(request.path)){
    try{
     if(request.path.startsWith('/v2/artifacts/'))return await this.artifacts.handle(request);
@@ -82,6 +115,10 @@ export class CoordinatorRoutes {
    }catch(e){const message=(e as Error).message;return json(message.startsWith('CREDENTIAL_')?401:400,{message:/^[A-Z][A-Z0-9_]{0,99}$/.test(message)?message:'EXECUTION_REQUEST_INVALID'} as ErrorResponse);}
   }
   if(request.method==='GET'&&request.path==='/v2/health/live'){const response:LiveResponse={live:true};return json(200,response);}
+  if(request.method==='POST'&&request.path==='/v2/devices/leave'&&this.credentials!==null){
+   try{if(!request.authorization.startsWith('Bearer '))throw Error('CREDENTIAL_REQUIRED');const peer=await this.credentials.authenticateDevice(request.authorization.slice(7));await this.pairing.leave(peer);return json(200,{left:true} as LeftResponse);}
+   catch(e){return json(400,{message:(e as Error).message} as ErrorResponse);}
+  }
   if(request.method==='GET'&&request.path==='/v2/identity'&&this.coordinatorId){const response:IdentityResponse={version:2,coordinatorId:this.coordinatorId,epoch:this.epoch,domain:'REAL'};return json(200,response);}
   if(request.method==='GET'&&request.path==='/v2/pairing/certificate')return {status:200,body:this.identity.certificate,contentType:'application/x-pem-file'};
   if(request.method==='POST'&&request.path==='/v2/apps/me/activity'&&this.activity!==null&&this.credentials!==null){

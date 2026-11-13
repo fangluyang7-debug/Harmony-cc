@@ -3,12 +3,19 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { common } from '@kit.AbilityKit';
 import { preferences } from '@kit.ArkData';
 import { util } from '@kit.ArkTS';
+import { coordinatorNetworks, CoordinatorPhoto } from 'scheduler';
+import { webview } from '@kit.ArkWeb';
+import { PhotoDisplayServer } from '../PhotoDisplayServer';
 import { CoordinatorDatabase, CoordinatorOverview, CoordinatorOverviewRow, CoordinatorCertificate, createCoordinatorCertificate, CoordinatorTlsServer, CoordinatorDiscovery, CoordinatorPairing, CoordinatorRoutes, CoordinatorLocalAdmin, CoordinatorAllotments, CoordinatorGrantCrypto, CoordinatorCredentials, CoordinatorDeviceSettings, CoordinatorChannel, CoordinatorApps, CoordinatorDirectory, CoordinatorActivity, CoordinatorArtifacts, CoordinatorQualification, CoordinatorJobs } from 'scheduler';
 interface RowsInput {items:CoordinatorOverviewRow[];title:string;}
 @Entry
 @Component
 struct Index {
  @State wide:boolean=false;
+ @State home:boolean=true;
+ @State displayPage:boolean=false;
+ private displayController:webview.WebviewController=new webview.WebviewController();
+ private displayServer:PhotoDisplayServer|null=null;
  @State selected:number=0;
  @State detail:string='';
  @State snapshot:CoordinatorOverview={spaces:[],devices:[],tasks:[],apps:[]};
@@ -34,9 +41,10 @@ struct Index {
  private admin:CoordinatorLocalAdmin|null=null;
  private channel:CoordinatorChannel|null=null;
  private jobs:CoordinatorJobs|null=null;
+ private photo:CoordinatorPhoto|null=null;
  private server:CoordinatorTlsServer=new CoordinatorTlsServer();
  private discovery:CoordinatorDiscovery=new CoordinatorDiscovery();
- aboutToAppear():void{void this.refresh();this.refreshTimer=setInterval(()=>{void this.refresh();},2000);this.address=AppStorage.get<string>('coordinatorAddress')??'';if(AppStorage.get<boolean>('coordinatorAutoStart'))void this.start();}
+ aboutToAppear():void{void this.refresh();this.refreshTimer=setInterval(()=>{void this.refresh();},2000);if(AppStorage.get<boolean>('coordinatorAutoStart'))void this.start();}
  aboutToDisappear():void{if(this.refreshTimer!==-1)clearInterval(this.refreshTimer);this.refreshTimer=-1;}
  private async openDatabase():Promise<CoordinatorDatabase>{
   if(this.database)return this.database;
@@ -46,11 +54,14 @@ struct Index {
  private async start():Promise<void>{
   if(this.busy||this.running)return;this.busy=true;
   try{
+   this.status='正在识别局域网';const networks=await coordinatorNetworks();
+   if(networks.length===0)throw Error('未检测到可用局域网，请连接 Wi-Fi 或网线后重新启动');
+   this.address=networks.some(n=>n.address===this.address)?this.address:networks[0].address;
    const context=getContext(this) as common.UIAbilityContext;
    this.status='正在打开协调中心数据库';const db=await this.openDatabase();this.snapshot=await db.overview();
    const storage=await preferences.getPreferences(context,{name:'coordinator-identity'});
    let id=await storage.get('id','') as string;if(!id){id=util.generateRandomUUID(true);await storage.put('id',id);await storage.flush();}
-   this.status='正在生成设备证书';const raw=await storage.get('certificate','') as string,addresses=this.address.trim()?[this.address.trim()]:[];
+   this.status='正在生成设备证书';const raw=await storage.get('certificate','') as string,addresses=networks.map(n=>n.address);
    const previous:CoordinatorCertificate|null=raw?JSON.parse(raw) as CoordinatorCertificate:null;
    const renew=previous===null||previous.ipAddresses===undefined||addresses.some(address=>!previous.ipAddresses?.includes(address));
    const identity:CoordinatorCertificate=renew?await createCoordinatorCertificate(addresses):previous as CoordinatorCertificate;
@@ -65,14 +76,21 @@ struct Index {
    const artifacts=new CoordinatorArtifacts(db,credentials),packBytes=await context.resourceManager.getRawFileContent('reference-packs.json');
    const qualification=new CoordinatorQualification(db,util.TextDecoder.create('utf-8').decodeToString(packBytes),epoch);
    const jobs=new CoordinatorJobs(db,channel,artifacts,qualification,id,epoch);this.jobs=jobs;routes.installExecution(db,artifacts,qualification,jobs);
+   this.photo=new CoordinatorPhoto(db,artifacts,jobs,util.TextDecoder.create('utf-8').decodeToString(packBytes));routes.installPhoto(this.photo);
    qualification.onChanged=(group,holder)=>{void channel.evaluationChanged(group,holder).catch(()=>{});};channel.onProfile=qualification.onChanged;
    this.admin=new CoordinatorLocalAdmin(db,pairing,'local-'+id,address);
    this.activeSpace=await this.admin.ensureDefaultSpace();this.snapshot=await db.overview();
    await this.server.start(identity,7443,request=>routes.handle(request));
+   this.displayServer=new PhotoDisplayServer(context,this.photo,db,'http://'+this.address+':7460');await this.displayServer.start();
    if(this.address.trim())await this.discovery.start('https://'+this.address.trim()+':7443');
    hilog.info(0x0001,'HarmonyCoordinator','TLS_LISTENING epoch=%{public}d fingerprint=%{public}s',epoch,identity.fingerprint);
-   jobs.start();this.running=true;this.status='配对服务与数据库已启动 · epoch '+epoch+'\n任务派发与回执服务已启动';
-  }catch(e){this.jobs?.close();await this.discovery.close().catch(()=>{});await this.channel?.close().catch(()=>{});await this.server.close().catch(()=>{});this.status=(e as Error).message;hilog.error(0x0001,'HarmonyCoordinator','START_FAILED %{public}s',this.status);}finally{this.busy=false;}
+   jobs.start();await this.photo.start();this.running=true;this.status='配对服务与数据库已启动 · epoch '+epoch+'\n任务派发与回执服务已启动';
+  }catch(e){this.photo?.close();await this.displayServer?.close().catch(()=>{});this.jobs?.close();await this.discovery.close().catch(()=>{});await this.channel?.close().catch(()=>{});await this.server.close().catch(()=>{});this.status=(e as Error).message;hilog.error(0x0001,'HarmonyCoordinator','START_FAILED %{public}s',this.status);}finally{this.busy=false;}
+ }
+ private async stop():Promise<void>{
+  if(this.busy||!this.running)return;this.busy=true;
+  try{this.photo?.close();await this.displayServer?.close();this.jobs?.close();await this.discovery.close();await this.channel?.close();await this.server.close();this.running=false;this.admin=null;this.status='服务已停止';this.pairingQr='';this.pairingCode='';this.invitationText='';this.invitationExpiresAt=0;}
+  catch(e){this.status='停止未完成：'+(e as Error).message;}finally{this.busy=false;}
  }
  private async refresh():Promise<void>{
   if(this.invitationExpiresAt>0){this.invitationRemaining=Math.max(0,Math.ceil((this.invitationExpiresAt-Date.now())/1000));if(this.invitationRemaining===0){this.pairingQr='';this.pairingCode='';this.invitationText='';this.invitationExpiresAt=0;this.operationStatus='配对邀请已过期，请生成新的二维码或配对码';}}
@@ -81,7 +99,7 @@ struct Index {
  }
  private async inviteDevice():Promise<void>{
   if(!this.admin||!this.running||this.busy)return;this.busy=true;
-  try{const result=await this.admin.inviteDevice(this.activeSpace,this.deviceName);this.invitationExpiresAt=result.pairing.pairingCodeExpiresAt;this.invitationRemaining=Math.max(0,Math.ceil((this.invitationExpiresAt-Date.now())/1000));this.pairingCode=result.pairing.pairingCode;this.pairingQr=result.qrPayload;this.showInvitationDetails=false;this.invitationText=JSON.stringify(result.bootstrap);this.operationStatus='二维码与配对码五分钟内有效，配对完成后邀请失效';await this.refresh();}catch(e){this.operationStatus=(e as Error).message;}finally{this.busy=false;}
+  try{const result=await this.admin.inviteDevice(this.activeSpace,this.deviceName);this.invitationExpiresAt=result.pairing.pairingCodeExpiresAt;this.invitationRemaining=Math.max(0,Math.ceil((this.invitationExpiresAt-Date.now())/1000));this.pairingCode=result.pairing.pairingCode;this.pairingQr=result.qrPayload;this.showInvitationDetails=false;this.invitationText=JSON.stringify(result.bootstrap);this.operationStatus='五分钟内有效，原设备退出后可使用同一邀请重新加入';await this.refresh();}catch(e){this.operationStatus=(e as Error).message;}finally{this.busy=false;}
  }
  @Builder
  spaceControls(){
@@ -101,7 +119,7 @@ struct Index {
     Button(this.showInvitationDetails?'收起接入配置':'查看接入配置').fontSize(13).onClick(()=>{this.showInvitationDetails=!this.showInvitationDetails;})
     if(this.showInvitationDetails){Text(this.pairingQr).fontSize(12).copyOption(CopyOptions.LocalDevice);Text(this.invitationText).fontSize(12).copyOption(CopyOptions.LocalDevice)}
    }
-   Text(this.operationStatus||(this.running?'输入设备名称，生成配对码':'请先在中心设置中启动服务')).fontSize(14).fontColor('#64748B')
+   Text(this.operationStatus||(this.running?'输入设备名称，生成配对码':'请先返回首页启动协调中心')).fontSize(14).fontColor('#64748B')
   }.alignItems(HorizontalAlign.Start).padding(22).width('100%').backgroundColor('#FFFFFF').borderRadius(16)
  }
  @Builder
@@ -153,7 +171,7 @@ struct Index {
    }
    ForEach(profile.pools,(pool:PoolV2)=>{
     Column({space:8}){
-     Text(pool.kind==='RAM_BYTES'?'内存额度':pool.kind==='CPU_SLOTS'?'CPU 协同槽位':pool.kind).fontSize(17).fontColor('#173252')
+     Text(pool.kind==='RAM_BYTES'?'内存额度':pool.kind==='CPU_SLOTS'?'CPU 协同槽位':pool.kind==='GPU_SLOTS'?'GPU 协同槽位':pool.kind==='VRAM_BYTES'?'显存额度':pool.kind).fontSize(17).fontColor('#173252')
      Text(this.sampleText(pool.occupied)+' / '+this.sampleText(pool.admissionLimit)).fontSize(24).fontWeight(FontWeight.Medium).fontColor('#173252')
      Text('任务占用 / 准入上限 · 上报总量 '+this.sampleText(pool.total)).fontSize(13).fontColor('#64748B')
      Progress({value:this.utilization(pool),total:100,type:ProgressType.Linear}).width('100%')
@@ -223,27 +241,50 @@ struct Index {
    Text(this.running?'本地服务已启动 · 实时设备与任务观测':'本地协调中心 · 服务尚未启动').fontSize(13).fontColor('#94600C').padding(14).width('100%').backgroundColor('#FFF5DD').borderRadius(10)
    if(this.selected===0){
     GridRow({columns:this.wide?3:1,gutter:14}){
-     GridCol(){this.card('在线设备',String(this.snapshot.devices.length),'控制连接在线 · 前台画像有效')}
+     GridCol(){this.card('接入设备',String(this.snapshot.devices.length),'在线 '+this.snapshot.devices.filter(d=>d.state==='在线').length+' · 其余等待连接或资源画像')}
      GridCol(){this.card('任务记录',String(this.snapshot.tasks.length),'最近 100 条执行记录')}
      GridCol(){this.card('在线宿主',String(this.snapshot.devices.reduce((count:number,row:CoordinatorOverviewRow)=>count+(row.profiles?.length??0),0)),'离线与后台宿主暂不展示')}
     }
-    this.empty('设备协同拓扑','等待有效设备画像与控制链路；未知资源不计入可调度额度。')
+    Column({space:14}){
+     Text('设备协同拓扑').fontSize(20).fontWeight(FontWeight.Bold).fontColor('#173252')
+     Text('鸿蒙协调中心 · '+this.address).fontSize(16).fontColor('#2459A5')
+     if(!this.snapshot.devices.length){Text('等待设备配对加入').fontSize(14).fontColor('#64748B')}
+     ForEach(this.snapshot.devices,(device:CoordinatorOverviewRow)=>{
+      Column({space:6}){
+       Text('↳ '+device.title+' · '+device.state).fontSize(17).fontColor('#173252')
+       Text((device.profiles?.length??0)+' 个在线宿主 · '+(device.qualifications?.filter(q=>q.state==='ACTIVE').length??0)+' 项能力已就绪').fontSize(14).fontColor('#64748B')
+       ForEach(device.profiles??[],(profile:DeviceProfileV2)=>{
+        ForEach(profile.executors.filter(e=>e.target.backend!=='CPU'),(executor:ExecutorV2)=>{
+         Text(executor.target.backend+' · '+executor.contract.capability+' · '+this.qualificationText(profile.holderInstanceId,executor.target.targetId)).fontSize(13).fontColor('#2459A5')
+        },(executor:ExecutorV2)=>executor.target.targetId)
+       },(profile:DeviceProfileV2)=>profile.holderInstanceId)
+      }.alignItems(HorizontalAlign.Start).padding(14).width('100%').backgroundColor('#EEF4FC').borderRadius(12)
+     },(device:CoordinatorOverviewRow)=>JSON.stringify(device))
+    }.alignItems(HorizontalAlign.Start).padding(22).width('100%').backgroundColor('#FFFFFF').borderRadius(16)
     Text('最近执行').fontSize(20).fontWeight(FontWeight.Bold).fontColor('#173252').width('100%')
     this.rows({items:this.snapshot.tasks.slice(0,5),title:'暂无执行记录'})
    }else if(this.selected===1){
-    this.empty('物理设备与应用宿主','运行内存、实时可分配额度、任务占用分别展示。离线与后台宿主暂不展示，重新上线后自动恢复。')
+    this.empty('物理设备与应用宿主','已配对设备持续显示；连接、资源画像与计算资格分别判断，未就绪不代表尚未接入。')
     this.rows({items:this.snapshot.devices,title:'暂无在线前台设备'})
    }else if(this.selected===2){this.rows({items:this.snapshot.tasks,title:'暂无任务追踪'})}
-   else if(this.selected===3){this.empty('网络与数据传输','方向探测、端点和传输回执尚未接入本地服务。暂无数据不表示设备之间已经可达。')}
+   else if(this.selected===3){
+    this.empty('网络方向探测','显示在线设备上报的真实探测值；照片数据当前通过协调中心中转。')
+    ForEach(this.snapshot.devices,(device:CoordinatorOverviewRow)=>{
+     ForEach(device.profiles??[],(profile:DeviceProfileV2)=>{
+      Column({space:12}){
+       Text(device.title+' · '+profile.links.length+' 条方向记录').fontSize(19).fontColor('#173252')
+       ForEach(profile.links,(link:LinkV2)=>{Text(link.from+' → '+link.to+'\n固定延迟 '+this.sampleText(link.fixedMs)+' · 传输速率 '+this.sampleText(link.bytesPerSecond)).fontSize(14).fontColor('#173252')},(link:LinkV2)=>link.from+':'+link.to+':'+link.networkEpoch)
+      }.alignItems(HorizontalAlign.Start).padding(22).width('100%').backgroundColor('#FFFFFF').borderRadius(16)
+     },(profile:DeviceProfileV2)=>JSON.stringify(profile))
+    },(device:CoordinatorOverviewRow)=>JSON.stringify(device))
+   }
    else if(this.selected===4){this.rows({items:this.snapshot.tasks.filter(item=>['FAILED','REJECTED','CANCEL_REQUESTED','YIELDED'].includes(item.state)),title:'暂无已记录异常'})}
    else if(this.selected===5){this.spaceControls();this.rows({items:this.snapshot.devices,title:'暂无在线前台设备'})}
    else if(this.selected===6){this.rows({items:this.snapshot.apps,title:'暂无应用授权'});this.empty('资源由协调中心分配','应用声明能力与工作流，CPU 和内存额度由设备状态与统一资源账本确定。')}
    else{
     Column({space:16}){
      Text('本机服务').fontSize(20).fontWeight(FontWeight.Bold).fontColor('#173252')
-     TextInput({text:this.address,placeholder:'局域网 IPv4 地址'}).enabled(!this.running&&!this.busy).onChange(v=>{this.address=v;})
-     Button(this.busy?'正在启动…':'启动服务').enabled(!this.running&&!this.busy).width('100%').onClick(()=>{void this.start();})
-     Button('停止服务').enabled(this.running).width('100%').onClick(()=>{void this.discovery.close().then(()=>this.channel?.close()).then(()=>this.server.close()).then(()=>{this.running=false;this.status='服务已停止';});})
+     Text(this.address?'自动识别的局域网地址：'+this.address:'启动时自动识别局域网地址').fontSize(15).fontColor('#173252')
      Text(this.status).fontSize(14).fontColor('#64748B').width('100%')
      if(this.fingerprint){Text('证书指纹').fontSize(13).fontColor('#64748B');Text(this.fingerprint).fontSize(12).fontColor('#173252').copyOption(CopyOptions.LocalDevice)}
     }.alignItems(HorizontalAlign.Start).padding(22).width('100%').backgroundColor('#FFFFFF').borderRadius(16)
@@ -251,13 +292,33 @@ struct Index {
    if(this.detail){Column({space:12}){Text('记录详情').fontSize(20).fontWeight(FontWeight.Bold);Text(this.detail).fontSize(14).copyOption(CopyOptions.LocalDevice);Button('收起详情').onClick(()=>{this.detail='';})}.padding(20).width('100%').backgroundColor('#E3ECFA').borderRadius(16)}
   }.alignItems(HorizontalAlign.Start).padding(this.wide?32:18).width('100%')
  }
+ @Builder
+ launcher(){
+  Column({space:24}){
+   Row(){Column({space:8}){Text('智调鸿枢').fontSize(28).fontWeight(FontWeight.Bold).fontColor('#FFFFFF');Text('鸿蒙协调中心').fontSize(14).fontColor('#91A7C4')}.alignItems(HorizontalAlign.Start);Blank()}.width('100%')
+   Blank()
+   Button(this.busy?'…':'⏻',{type:ButtonType.Circle}).width(176).height(176).fontSize(74).fontColor(this.running?'#A9EED1':'#A8CEFF').backgroundColor(this.running?'#193C3D':'#142A48').border({width:2,color:this.running?'#52B995':'#35669F'}).enabled(!this.busy).onClick(()=>{if(this.running)void this.stop();else void this.start();})
+   Text(this.busy?'正在准备…':this.running?'协调中心运行中':'启动协调中心').fontSize(26).fontWeight(FontWeight.Bold).fontColor('#FFFFFF')
+   Text(this.running?'点击圆形按钮停止服务':'自动识别局域网，无需填写 IP 地址').fontSize(15).fontColor('#B9C9E0')
+   Text(this.running?'https://'+this.address+':7443':this.status).fontSize(16).fontColor('#B9C9E0').textAlign(TextAlign.Center)
+   Button('进入调度盘').width(260).height(52).backgroundColor('#2868C7').enabled(this.running&&!this.busy).onClick(()=>{this.home=false;this.selected=0;void this.refresh();})
+   Button('图片任务演示').width(260).height(52).backgroundColor('#193C3D').enabled(this.running&&!this.busy).onClick(()=>{this.home=false;this.displayPage=true;})
+   Blank()
+   Text('设备与协调中心连接同一局域网后，通过二维码或配对码加入。').fontSize(14).fontColor('#91A7C4').textAlign(TextAlign.Center)
+  }.padding(this.wide?40:24).width('100%').height('100%').backgroundColor('#0D1727')
+ }
  build(){
   Column(){
+   if(this.home){this.launcher()}else{
+   Row(){Button('‹ 返回首页').fontSize(14).backgroundColor('#E3ECFA').fontColor('#2459A5').onClick(()=>{this.home=true;this.displayPage=false;});Button(this.displayPage?'返回调度盘':'图片任务演示').enabled(this.running).onClick(()=>{this.displayPage=!this.displayPage;});Blank();Text(this.running?'服务运行中':'服务已停止').fontSize(13).fontColor('#64748B')}.padding(12).width('100%')
+   if(this.displayPage){Web({src:'http://127.0.0.1:7460/',controller:this.displayController}).javaScriptAccess(true).domStorageAccess(true).width('100%').layoutWeight(1)}else{
    Row(){
     if(this.wide){Column({space:10}){Text('智调鸿枢').fontSize(26).fontWeight(FontWeight.Bold).fontColor('#FFFFFF').margin({bottom:8});Text('调度观测 / OBSERVE').fontSize(12).fontColor('#91A7C4').margin({bottom:24});this.navigation();Blank();Text('多端资源 · 统一协调').fontSize(14).fontColor('#91A7C4')}.padding(22).width(232).height('100%').backgroundColor('#102139')}
     Scroll(){this.content()}.layoutWeight(1).height('100%').align(Alignment.Top)
    }.layoutWeight(1).width('100%')
    if(!this.wide){Scroll(){Row({space:8}){this.navigation()}.padding(10)}.scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).height(66).width('100%').backgroundColor('#102139')}
+   }
+   }
   }.width('100%').height('100%').backgroundColor('#F0F4FA').onAreaChange((oldArea:Area,newArea:Area)=>{this.wide=Number(newArea.width)>=900;})
  }
 }

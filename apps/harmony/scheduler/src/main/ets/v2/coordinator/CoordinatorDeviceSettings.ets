@@ -25,7 +25,9 @@ export class CoordinatorDeviceSettings {
   await this.database.transaction(async(db:CoordinatorTransaction):Promise<void>=>{const row=await db.querySql('SELECT spaceId,holderId,settingsJson,userId FROM SpaceDevice WHERE id=?',[peer.deviceId]);try{if(row.goToFirstRow()&&row.getString(0)===peer.groupId&&row.getString(3)===peer.principalId&&(row.getString(1)===peer.holderInstanceId||peer.app!==undefined))settings=JSON.parse(row.getString(2)) as CoordinatorContribution;}finally{row.close();}});
   if(settings===null||!measured)return settings;const current=settings as CoordinatorContribution;if(current.capacityMode!=='auto')return current;
   const next=coordinatorAutoContribution(current,measured),capacity:ResourceAmountV2[]=[{resourcePoolId:'cpu',amount:next.maxCpuThreads},{resourcePoolId:'ram',amount:next.maxMemoryBytes}];
-  if(next.maxVramBytes)capacity.push({resourcePoolId:'gpu',amount:1},{resourcePoolId:'vram',amount:next.maxVramBytes});
+  // Match the current Windows Vulkan host: one physical GPU supports four
+  // transfer/compute/publication lifecycles; the driver serializes actual kernels.
+  if(next.maxVramBytes)capacity.push({resourcePoolId:'gpu',amount:4},{resourcePoolId:'vram',amount:next.maxVramBytes});
   const budget=await this.allotments.budget(peer.deviceId);
   try{await this.allotments.confirmDevice(peer.deviceId,capacity,budget?.bindings??[{groupId:peer.groupId,holderInstanceId:peer.holderInstanceId,appInstanceId:null}]);}
   catch(e){if(['BUDGET_RECONCILIATION_REQUIRED','BINDING_HAS_UNSETTLED_RESERVATION'].includes((e as Error).message))return current;throw e as Error;}
