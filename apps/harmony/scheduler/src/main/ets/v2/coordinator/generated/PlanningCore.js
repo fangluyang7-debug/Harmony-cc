@@ -842,7 +842,7 @@ var NativePhotoEngine = class {
           s.output = j.output;
           return;
         }
-        const unstarted = j.state === "REJECTED" && j.rejection?.record === null && ["RESOURCE_UNAVAILABLE", "CREDIT_UNAVAILABLE", "QUEUE_STARVED_NOT_STARTED"].includes(j.rejection?.reasonCode);
+        const unstarted = j.state === "REJECTED" && j.rejection?.record === null && ["RESOURCE_UNAVAILABLE", "CREDIT_UNAVAILABLE", "QUEUE_STARVED_NOT_STARTED", "COORDINATOR_OFFLINE", "AGENT_NOT_READY", "CONTROL_UNAVAILABLE"].includes(j.rejection?.reasonCode);
         const restart = ["CANCELLED_SETTLED", "YIELDED"].includes(j.state) && j.restartable === true;
         if (g.state === "ACTIVE" && (unstarted || restart) && (s.retries ?? 0) < 8 && this.port.now() < g.deadlineAt) {
           const reason = restart ? j.yieldNotice?.reasonCode ?? j.state : j.rejection.reasonCode;

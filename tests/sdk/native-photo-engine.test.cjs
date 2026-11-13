@@ -79,8 +79,10 @@ test('queue-starved never-started block retries, but cancelled without restart p
  for(const state of ['CANCELLED_SETTLED','YIELDED','CANCELLED','SIDE_EFFECT_UNKNOWN','HOLDER_RECORD_MISSING']){
   const f=setup();await f.submit('terminal');f.jobs.get('terminal.analyze').state=state;await f.engine.tick();await f.engine.tick();assert.equal((await f.sdk('/v2/sdk/jobs/terminal')).state,'FAILED');assert.equal(f.dispatches.length,1);
  }
- const f=setup();await f.submit('starved');const j=f.jobs.get('starved.analyze');j.state='REJECTED';j.rejection={record:null,reasonCode:'QUEUE_STARVED_NOT_STARTED'};await f.engine.tick();f.engine.port.now=()=>Date.now()+500;await f.engine.tick();assert.equal(f.jobs.get('starved.analyze.r1').state,'ACCEPTED');
+ for(const reasonCode of ['QUEUE_STARVED_NOT_STARTED','COORDINATOR_OFFLINE','AGENT_NOT_READY','CONTROL_UNAVAILABLE']){
+ const f=setup();await f.submit('starved');const j=f.jobs.get('starved.analyze');j.state='REJECTED';j.rejection={record:null,reasonCode};await f.engine.tick();f.engine.port.now=()=>Date.now()+500;await f.engine.tick();assert.equal(f.jobs.get('starved.analyze.r1').state,'ACCEPTED',reasonCode);
  await f.sdk('/v2/sdk/jobs/starved/cancel');await f.engine.tick();assert.equal((await f.sdk('/v2/sdk/jobs/starved')).state,'CANCELLED');assert.equal(f.dispatches.length,2,'user cancellation must never trigger automatic restart');
+ }
 });
 
 test('original thumbnails become readable individually before any workflow or output exists',async()=>{

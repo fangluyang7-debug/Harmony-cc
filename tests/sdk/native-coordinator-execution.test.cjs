@@ -111,3 +111,17 @@ test('native workflow restart proof requires a matching durable PURE yield and s
  f.sql.prepare('UPDATE Attempt SET recordJson=?,yieldJson=NULL').run(JSON.stringify(record));assert.equal(await restart(),false);
  f.sql.prepare('UPDATE Attempt SET yieldJson=?').run(JSON.stringify(notice));job.offer.task.contract.sideEffectPolicy='COMMIT';f.sql.prepare('UPDATE CpuJob SET metadataJson=?').run(JSON.stringify(job));assert.equal(await restart(),false);
 });
+
+test('recovery redelivers an unadmitted immutable offer, but never replays a missing admitted execution',async()=>{
+ const f=await setup();await qualify(f);const grant={grant:{allotmentId:'a1',version:1,coordinatorEpoch:7,ledgerEpoch:1,appInstanceId:null},ack:{version:1,persisted:true}};f.sql.prepare('INSERT INTO Allotment (id,groupId,revision,metadataJson) VALUES (?,?,1,?)').run(JSON.stringify(['allotment','g',f.p.holderInstanceId]),'g',JSON.stringify(grant));
+ const handlers=new Map(),messages=[],jobs=new (f.load(root+'CoordinatorJobs.ets').CoordinatorJobs)(f.database,{register:(n,h)=>handlers.set(n,h),enqueue:async(...args)=>messages.push(args.slice(1)),pump:async()=>{}},f.artifacts,f.q,'center',7),content=Buffer.from('{}'),source={groupId:'g',ownerPrincipalId:'p',ref:{artifactId:'origin',contentVersion:1,contentHash:hash(content),schemaId:'catalog.items',schemaVersion:1},bytes:2,expiresAt:Date.now()+60000};await f.database.transaction(tx=>f.artifacts.writeContent(tx,source,content.toString('base64')));
+ const body={workflow:{version:3,id:'recover',outputContract:'catalog.ranked',qualityTarget:'reference',nodes:[{id:'rank',capability:'catalog.filter.v1',input:{bytes:2,contentHash:hash(content),schemaId:'catalog.items',schemaVersion:1},parameters:'{}',dependsOn:[]}]},options:{requestId:'recover',budgetMs:30000,resultDestination:'ORIGIN'}};
+ await jobs.submit(f.source,body,source,true);const first=messages[0][3];await f.database.transaction(tx=>handlers.get('AttemptStatusReply').handle(tx,f.worker,{attemptId:'recover',record:null}));
+ assert.equal(messages.length,2);assert.deepEqual(messages[1][3],first);assert.equal((await jobs.status(f.source,'recover')).state,'OFFERED');
+ f.sql.prepare('UPDATE Attempt SET recordJson=?').run(JSON.stringify({resourcesSettled:false}));await f.database.transaction(tx=>handlers.get('AttemptStatusReply').handle(tx,f.worker,{attemptId:'recover',record:null}));assert.equal(messages.length,2);assert.equal((await jobs.status(f.source,'recover')).state,'HOLDER_RECORD_MISSING');
+ assert.equal(f.sql.prepare('SELECT state FROM Attempt WHERE id=?').get('recover').state,'HOLDER_RECORD_MISSING','missing attempts must no longer block every future grant as admission-pending');
+ const old=JSON.parse(f.sql.prepare('SELECT metadataJson FROM CpuJob WHERE id=?').get('recover').metadataJson);old.state='OFFERED';old.offer.task.coordinatorEpoch=6;
+ f.sql.prepare("UPDATE Attempt SET recordJson=NULL,state='OFFERED' WHERE id=?").run('recover');f.sql.prepare('UPDATE CpuJob SET state=?,metadataJson=? WHERE id=?').run(old.state,JSON.stringify(old),'recover');
+ await f.database.transaction(tx=>handlers.get('AttemptStatusReply').handle(tx,f.worker,{attemptId:'recover',record:null}));assert.equal(messages.length,2,'retired-epoch offer cannot be redelivered');
+ assert.equal(f.sql.prepare("SELECT COUNT(*) AS n FROM Attempt WHERE holderInstanceId=? AND state='OFFERED'").get(f.worker.holderInstanceId).n,0,'old unadmitted attempt cannot permanently block renewal');
+});

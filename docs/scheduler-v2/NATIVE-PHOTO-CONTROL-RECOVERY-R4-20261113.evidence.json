@@ -1,0 +1,86 @@
+{
+  "date": "2026-11-13",
+  "baselinePushedToMain": "4af0cf5c35d516cc5b95655e369d52b102396e1a",
+  "recordsBeforeFix": [
+    {
+      "id": "coop:f66b9487-e65f-4587-aa42-24ad797dcd21",
+      "state": "FAILED",
+      "sourceDurationMs": 8180,
+      "inputs": 6,
+      "delivered": 0,
+      "error": "照片 26：手机正在连接或校准，请稍后重试；照片 29：手机正在连接或校准，请稍后重试；照片 30：手机正在连接或校准，请稍后重试；照片 25：手机正在连接或校准，请稍后重试；照片 27：手机正在连接或校准，请稍后重试；照片 28：手机正在连接或校准，请稍后重试",
+      "successfulNodesAtInspection": {
+        "phone:CPU": 6,
+        "Windows:CPU": 6,
+        "B:VULKAN": 6
+      }
+    },
+    {
+      "id": "coop:2fbe5062-6248-47c0-a24d-42e47ccb1902",
+      "state": "FAILED",
+      "sourceDurationMs": 6662,
+      "inputs": 6,
+      "delivered": 0,
+      "error": "照片 19：手机正在连接或校准，请稍后重试；照片 22：手机正在连接或校准，请稍后重试；照片 23：手机正在连接或校准，请稍后重试；照片 24：手机正在连接或校准，请稍后重试；照片 21：手机正在连接或校准，请稍后重试；照片 20：手机正在连接或校准，请稍后重试",
+      "successfulNodesAtInspection": {
+        "phone:CPU": 10,
+        "B:VULKAN": 8,
+        "Windows:CPU": 4
+      }
+    },
+    {
+      "id": "coop:4060218a-850e-407f-8c37-6c0296a16fc3",
+      "state": "SUCCEEDED",
+      "sourceDurationMs": 40180,
+      "inputs": 6,
+      "delivered": 6,
+      "error": null,
+      "successfulNodesAtInspection": {
+        "phone:CPU": 17,
+        "B:VULKAN": 19
+      }
+    },
+    {
+      "id": "coop:aedd1634-999c-49a2-8cfa-667bf76a6032",
+      "state": "SUCCEEDED",
+      "sourceDurationMs": 35124,
+      "inputs": 6,
+      "delivered": 6,
+      "error": null,
+      "successfulNodesAtInspection": {
+        "phone:CPU": 19,
+        "B:VULKAN": 17
+      }
+    }
+  ],
+  "validation": {
+    "localTestsPassed": 156,
+    "followupEngineTestsPassed": 9,
+    "harBuilt": true,
+    "hapBuilds": [
+      {
+        "app": "harmony-coordinator",
+        "bytes": 79391163,
+        "sha256": "3e06bc80e6ee93bfb1a27cdb1ebd9c8b9aee85b19c58aa73ad7668e06a432bb8",
+        "api": 24,
+        "installed": true
+      },
+      {
+        "app": "harmony-photo",
+        "bytes": 79180596,
+        "sha256": "dce4bbf0224ede11a6096511b95c19cfe65277aa3b3d42f1031982f22eef1693",
+        "api": 24,
+        "installed": true
+      }
+    ],
+    "centerWifiHealth": {
+      "live": true
+    },
+    "retainedRuns": 24,
+    "photoWorkloadAfterFix": "Not run; user will retest",
+    "usbUsedFor": "Install and read-only diagnostics only",
+    "phoneReadyObserved": true,
+    "executionRegressionPassed": 9,
+    "realPhotoRunPerformed": false
+  }
+}

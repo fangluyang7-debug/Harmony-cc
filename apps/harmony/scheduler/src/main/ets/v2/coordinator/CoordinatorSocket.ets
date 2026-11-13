@@ -15,6 +15,10 @@ export class CoordinatorSocket {
  private parser:CoordinatorWebSocketParser=new CoordinatorWebSocketParser();
  private ended:boolean=false;
  private output:Promise<void>=Promise.resolve();
+ private input:Promise<void>=Promise.resolve();
+ private queued:number=0;
+ private failed:boolean=false;
+ onError:((error:Error)=>void)|null=null;
  private buffered:number=0;
  onText:((value:string)=>Promise<void>)|null=null;
  onPong:((value:string)=>void)|null=null;
@@ -28,7 +32,12 @@ export class CoordinatorSocket {
    if(frame.opcode===9){await this.sendFrame(10,frame.payload);continue;}
    if(frame.opcode===10){if(this.onPong)this.onPong(util.TextDecoder.create('utf-8',{fatal:true}).decodeToString(frame.payload));continue;}
    if(frame.opcode!==1)throw Error('TEXT_REQUIRED');
-   if(this.onText)await this.onText(util.TextDecoder.create('utf-8',{fatal:true}).decodeToString(frame.payload));
+   const value=util.TextDecoder.create('utf-8',{fatal:true}).decodeToString(frame.payload);
+   if(this.queued>=64)throw Error('BACKPRESSURE');this.queued++;
+   // Keep durable messages ordered, but never queue transport Pong behind database work.
+   this.input=this.input.then(async():Promise<void>=>{if(!this.ended&&!this.failed&&this.onText)await this.onText(value);}).catch((e:Error)=>{
+    this.failed=true;this.onError?.(e);void this.close(1008,'CONTROL_REJECTED').catch(()=>{this.disconnected();});
+   }).finally(()=>{this.queued--;});
   }
  }
  private sendFrame(opcode:number,data:Uint8Array):Promise<void>{

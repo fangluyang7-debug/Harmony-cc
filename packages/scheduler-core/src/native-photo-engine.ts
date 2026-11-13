@@ -41,7 +41,7 @@ export class NativePhotoEngine {
   await Promise.all(submitted.map(async(s:any,index:number)=>{
    const j=observed[index];s.target=j.offer?.target;s.reason=j.offer?.reasonCode;s.decision=j.decision?JSON.parse(j.decision):null;s.executionState=j.state;
    if(j.state==='SUCCEEDED'&&j.output){s.state='COMMITTED';s.output=j.output;return;}
-   const unstarted=j.state==='REJECTED'&&j.rejection?.record===null&&['RESOURCE_UNAVAILABLE','CREDIT_UNAVAILABLE','QUEUE_STARVED_NOT_STARTED'].includes(j.rejection?.reasonCode);
+   const unstarted=j.state==='REJECTED'&&j.rejection?.record===null&&['RESOURCE_UNAVAILABLE','CREDIT_UNAVAILABLE','QUEUE_STARVED_NOT_STARTED','COORDINATOR_OFFLINE','AGENT_NOT_READY','CONTROL_UNAVAILABLE'].includes(j.rejection?.reasonCode);
    const restart=['CANCELLED_SETTLED','YIELDED'].includes(j.state)&&j.restartable===true;
    if(g.state==='ACTIVE'&&(unstarted||restart)&&(s.retries??0)<8&&this.port.now()<g.deadlineAt){
     const reason=restart?j.yieldNotice?.reasonCode??j.state:j.rejection.reasonCode;

@@ -6,6 +6,7 @@ exports.fixture=()=>{
  let tail=Promise.resolve();const database={transaction:work=>{const run=tail.then(async()=>{sql.exec('BEGIN');try{await work(transaction);sql.exec('COMMIT');}catch(e){sql.exec('ROLLBACK');throw e;}});tail=run.catch(()=>{});return run;}};
  const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const m={exports:{}};cache.set(file,m);new Function('require','module','exports',transformSync(fs.readFileSync(file,'utf8'),{loader:'ts',format:'cjs'}).code)(name=>{
   if(name==='@kit.ArkData'||name==='@kit.AbilityKit'||name==='@kit.ImageKit')return {};
+  if(name==='@kit.PerformanceAnalysisKit')return {hilog:{warn(){},error(){},info(){}}};
   if(name.includes('NativeTransport'))return {monotonic:()=>performance.now(),hash:b=>crypto.createHash('sha256').update(b).digest('hex'),bytes:s=>Buffer.from(s)};
   if(name.includes('CryptoArchitecture'))return {cryptoFramework:{createRandom:()=>({generateRandomSync:n=>({data:crypto.randomBytes(n)})})}};
   if(name.includes('ArkTS'))return {util:{generateRandomUUID:()=>crypto.randomUUID(),Base64Helper:class{encodeToStringSync(b){if(!b.length)throw Error('BASE64_EMPTY_INPUT');return Buffer.from(b).toString('base64')} decodeSync(s){if(!s.length)throw Error('BASE64_EMPTY_INPUT');return new Uint8Array(Buffer.from(s,'base64'))}},TextDecoder:{create:()=>({decodeToString:b=>Buffer.from(b).toString()})}}};

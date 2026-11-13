@@ -56,7 +56,7 @@ export class CoordinatorTlsServer {
     request.remoteAddress=session.remoteAddress;
     if(request.webSocketKey!==undefined){
      if(request.path!=='/v2/channel'||this.upgrade===null)throw Error('CHANNEL_UNAVAILABLE');
-     const connection=new CoordinatorSocket(session.wire);await this.upgrade(request,connection);session.channel=connection;
+     const connection=new CoordinatorSocket(session.wire);connection.onError=(e:Error):void=>{hilog.error(0x0001,'HarmonyCoordinator','CHANNEL_FAILED %{public}s',e.message);};await this.upgrade(request,connection);session.channel=connection;
      await session.wire.send('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+coordinatorWebSocketAccept(request.webSocketKey)+'\r\n\r\n');return;
     }
     const started=Date.now(),response=await handle(request);

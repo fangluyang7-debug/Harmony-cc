@@ -70,3 +70,11 @@ test('photo SDK stages actual inputs in the same app host used for execution',as
  session.port={stageInput:async(i,b)=>staged.push([i,b])};const port=session.workflowPort(()=>false,async()=>{});
  assert.equal(staged.length,0);await port.stageInput(input,data);assert.deepEqual(staged,[[input,data]]);
 });
+
+test('photo status, cancellation and receipt remain available during control reconnect; new work waits',async()=>{
+ const {session}=readinessSession(),calls=[];session.host={isConnected:()=>false};session.request=async(r,b)=>{calls.push(r);return '{}';};
+ for(const r of ['/v2/sdk/jobs/existing','/v2/sdk/jobs/existing/cancel','/v2/sdk/jobs/existing/received'])await session.sdkRequest(r,r.endsWith('existing')?null:'{}');
+ assert.equal(calls.length,3);
+ for(const r of ['/v2/sdk/jobs','/v2/sdk/jobs/existing/start'])await assert.rejects(session.sdkRequest(r,'{}'),/SDK_COORDINATOR_OFFLINE/);
+ session.host.isConnected=()=>true;await session.sdkRequest('/v2/sdk/jobs','{}');assert.equal(calls.length,4);
+});

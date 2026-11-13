@@ -117,7 +117,10 @@ export class PhotoSession {
  }
  async sdkRequest(route:string,body:string|null):Promise<string>{
   if(!/^\/v2\/sdk\/jobs(?:\/[A-Za-z0-9_.:-]+(?:\/(?:start|received|cancel))?)?$/.test(route))throw Error('PHOTO_SDK_ROUTE');
-  if(!this.host?.isConnected())throw Error('手机正在连接或校准，请稍后重试');return this.request(route,body);
+  // A control-channel reconnect is not loss of an already accepted SDK job.
+  // Status, receipts and cancellation still use authenticated HTTPS during recovery.
+  if((route==='/v2/sdk/jobs'||route.endsWith('/start'))&&!this.host?.isConnected())throw Error('SDK_COORDINATOR_OFFLINE');
+  return this.request(route,body);
  }
  async write(encoded:string,data:string):Promise<void>{if(!this.port)throw Error('PHOTO_APP_NOT_CONNECTED');await this.port.write(JSON.parse(encoded) as SdkTicket,base64.decodeSync(data));}
  async read(encoded:string):Promise<string>{if(!this.port)throw Error('PHOTO_APP_NOT_CONNECTED');return base64.encodeToStringSync(await this.port.read(JSON.parse(encoded) as SdkTicket));}

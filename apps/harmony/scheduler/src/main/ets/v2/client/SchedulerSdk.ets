@@ -101,7 +101,10 @@ export class SchedulerSdk {
    try{await this.port.request('/v2/sdk/jobs/'+jobId+'/start','{}');return;}
    catch(error){
     const code=(error as Error).message;
-    if(!['ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','PLAN_STALE','START_BUSY','NO_LEGAL_PLAN','SDK_REQUEST_TIMEOUT'].includes(code)||this.port.now()>=deadline)throw error as Error;
+    // The plan already exists. Wait for control recovery here instead of asking
+    // the caller to plan/stage the workflow again (possibly with a new budget).
+    if(code==='SDK_COORDINATOR_OFFLINE'&&this.port.now()>=deadline)throw Error('SDK_START_WAIT_TIMEOUT');
+    if(!['ALLOTMENT_UNAVAILABLE','ALLOTMENT_ACK_PENDING','PLAN_STALE','START_BUSY','NO_LEGAL_PLAN','SDK_REQUEST_TIMEOUT','SDK_COORDINATOR_OFFLINE'].includes(code)||this.port.now()>=deadline)throw error as Error;
     await this.port.wait(Math.min(250,Math.max(0,deadline-this.port.now())));
    }
   }

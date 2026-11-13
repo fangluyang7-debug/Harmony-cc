@@ -1,4 +1,5 @@
 import { CoordinatorArtifacts } from './CoordinatorArtifacts';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 import { CoordinatorQualification, EvaluationReport } from './CoordinatorQualification';
 import { CoordinatorJobs } from './CoordinatorJobs';
 import { CoordinatorPhoto } from './CoordinatorPhoto';
@@ -165,7 +166,7 @@ export class CoordinatorRoutes {
     const body=JSON.parse(util.TextDecoder.create('utf-8').decodeToString(request.body)) as Object;
     if(request.path==='/v2/allotments/request'){exact(body,['ledgerEpoch','leaseRequestId','leaseMs','base','extra']);return json(200,await this.allotments.issue(peer,body as CoordinatorGrantRequest));}
     exact(body,['ack','signature']);const signed=body as SignedAck;await this.allotments.acknowledge(peer,signed.ack,signed.signature);const response:AcknowledgedResponse={acknowledged:true};return json(200,response);
-   }catch(e){const response:ErrorResponse={message:'ALLOTMENT_REJECTED'};return json(401,response);}
+   }catch(e){const code=(e as Error).message;hilog.warn(0x0001,'HarmonyCoordinator','ALLOTMENT_REJECTED %{public}s',/^[A-Z][A-Z0-9_]{0,99}$/.test(code)?code:'INTERNAL_ERROR');const response:ErrorResponse={message:'ALLOTMENT_REJECTED'};return json(401,response);}
   }
   if(request.method==='POST'&&['/v2/pairing/bootstrap','/v2/pairing/code','/v2/pair'].includes(request.path)){
    try{
@@ -177,6 +178,7 @@ export class CoordinatorRoutes {
     const response:PairResponse={credential:paired.credential,peer:paired.peer,epoch:this.epoch};return json(200,response);
    }catch(e){const message=(e as Error).message;const response:ErrorResponse={message:message==='SPACE_SWITCH_BUSY'?message:'PAIRING_REJECTED'};return json(message==='SPACE_SWITCH_BUSY'?409:401,response);}
   }
+  hilog.warn(0x0001,'HarmonyCoordinator','UNHANDLED_ROUTE %{public}s %{public}s',request.method,request.path.slice(0,160));
   const response:ReadyResponse={ready:false,error:'COORDINATOR_MIGRATION_IN_PROGRESS'};return json(503,response);
  }
 }
