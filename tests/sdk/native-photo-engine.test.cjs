@@ -96,3 +96,27 @@ test('original thumbnails become readable individually before any workflow or ou
  v=await view();assert.ok(v.inputs[1].url);assert.equal(v.inputs[2].url,null);assert.equal(f.dispatches.length,0);
  await f.api({route:'/photo-runs/'+r.id,method:'POST',body:{revision:0,state:'RUNNING'}});
 });
+
+test('draft previews stay live but never become execution history; legacy phantom records are hidden',async()=>{
+ const f=setup(),call=(p,b,k='')=>f.engine.display(p,JSON.stringify(b??{}),k,'http://172.20.10.2:7460','[]').then(JSON.parse),key=(await call('/session')).invitation.split('=')[1];
+ const input={name:'p',width:1,height:1,preview:'data:image/jpeg;base64,YQ=='};
+ await call('/event',{seq:1,type:'PICKING',runId:'picking'},key);
+ await call('/event',{seq:2,type:'SELECTED',runId:'selected',inputs:[input]},key);
+ let listing=await call('/runs');assert.equal(listing.runs.length,0);assert.equal(listing.preview.id,'local:selected');
+ assert.equal((await call('/runs/local:selected')).inputs.length,1);assert.equal((await call('/images/local:selected/0/input')).data,'YQ==');
+ assert.equal(f.sql.prepare("SELECT COUNT(*) n FROM Device WHERE id LIKE 'native-photo:display-run:%'").get().n,0);
+ await call('/event',{seq:3,type:'START',runId:'selected'},key);listing=await call('/runs');assert.equal(listing.runs.length,1);assert.equal(listing.preview,null);
+ await call('/event',{seq:4,type:'FAILED',runId:'selected',error:'test',durationMs:3},key);
+ const old={id:'local:old',runId:'old',kind:'LOCAL',state:'SELECTED',createdAt:Date.now(),inputs:[input],results:[]};f.sql.prepare("INSERT INTO Device(id,groupId,revision,metadataJson) VALUES('native-photo:display-run:old','native-photo',1,?)").run(JSON.stringify(old));
+ listing=await call('/runs');assert.equal(listing.runs.length,1);assert.equal(listing.runs[0].state,'FAILED');assert.equal(f.dispatches.length,0);
+});
+
+test('full-resolution photo history requires owned successful SDK tiles before final preview',async()=>{
+ const f=setup(),api=async(route,body)=>f.api({route,method:'POST',body}),input={name:'camera',width:257,height:1,hash:'a'.repeat(64),preview:'data:image/jpeg;base64,YQ=='},r=await api('/photo-large-runs',{inputs:[input]});
+ const product=Buffer.from('preview'),result={imageIndex:0,width:1028,height:4,previewOnly:true,image:product.toString('base64'),hash:hash(product)};
+ await assert.rejects(api('/photo-large-runs/'+r.id,{result}),/PENDING/);
+ for(let tileIndex=0;tileIndex<2;tileIndex++){const id='large'+tileIndex;await f.submit(id);await api('/photo-large-runs/'+r.id,{job:{id,imageIndex:0,tileIndex}});await f.finish(id+'.analyze');await f.engine.tick();await f.finish(id+'.enhance-0');await f.finish(id+'.enhance-1');await f.engine.tick();await f.finish(id+'.deliver');await f.engine.tick();await api('/photo-large-runs/'+r.id,{job:{id,imageIndex:0,tileIndex}});}
+ await api('/photo-large-runs/'+r.id,{result});await api('/photo-large-runs/'+r.id,{state:'SUCCEEDED',durationMs:1234});
+ const view=JSON.parse(await f.engine.display('/runs/large:'+r.id,'','','http://center','[]'));assert.equal(view.inputs[0].width,257);assert.equal(view.results[0].width,1028);assert.equal(view.results[0].previewOnly,true);assert.deepEqual(new Set(view.devices.map(d=>d.id)),new Set(['phone','B']));assert.equal(view.state,'SUCCEEDED');assert.equal(view.jobs,undefined);
+ await assert.rejects(f.engine.photo(JSON.stringify({...f.peer,holderInstanceId:'other'}),JSON.stringify({route:'/photo-large-runs/'+r.id,method:'POST',body:{state:'FAILED',durationMs:1}})),/SCOPE/);
+});

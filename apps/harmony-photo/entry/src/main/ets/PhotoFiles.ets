@@ -5,11 +5,12 @@ import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { base64, hash, factory } from 'scheduler';
 
 export interface PhotoResult { id:string; name:string; path:string; width:number; height:number; saved:boolean; }
-export interface PhotoInput { id:string; name:string; path:string; width:number; height:number; }
+export interface PhotoInput { id:string; name:string; path:string; width:number; height:number; large?:boolean; }
+export function needsPhotoTiles(p:PhotoInput):boolean{return p.large===true||p.width*p.height>1048576||Math.max(p.width,p.height)>1920;}
 interface Product { version:number; image:string; hash:string; width:number; height:number; format:string; }
 export function readPhoto(path:string):Uint8Array{
  const f=fileIo.openSync(path,fileIo.OpenMode.READ_ONLY);
- try{const size=fileIo.statSync(f.fd).size;if(size<1||size>8388608)throw Error('图片文件不能超过 8 MiB');const b=new ArrayBuffer(size);if(fileIo.readSync(f.fd,b)!==size)throw Error('PHOTO_READ_INCOMPLETE');return new Uint8Array(b);}finally{fileIo.closeSync(f);}
+ try{const size=fileIo.statSync(f.fd).size;if(size<1||!Number.isSafeInteger(size))throw Error('图片文件无效');const b=new ArrayBuffer(size);if(fileIo.readSync(f.fd,b)!==size)throw Error('PHOTO_READ_INCOMPLETE');return new Uint8Array(b);}finally{fileIo.closeSync(f);}
 }
 function writePhoto(path:string,data:Uint8Array):void{
  const f=fileIo.openSync(path,fileIo.OpenMode.CREATE|fileIo.OpenMode.TRUNC|fileIo.OpenMode.WRITE_ONLY);
@@ -19,10 +20,13 @@ async function dimensions(data:Uint8Array):Promise<image.ImageInfo>{const source
 export async function pickLocalPhotos(context:common.UIAbilityContext,remaining:number):Promise<PhotoInput[]>{
  const picked=await new photoAccessHelper.PhotoViewPicker().select({MIMEType:photoAccessHelper.PhotoViewMIMETypes.IMAGE_TYPE,maxSelectNumber:remaining});
  const inputs:PhotoInput[]=[];
- for(const uri of picked.photoUris){const data=readPhoto(uri),info=await dimensions(data),w=info.size.width,h=info.size.height;
-  if(w*h>1048576||Math.max(w,h)>1920)throw Error('请选择不超过 100 万像素、长边不超过 1920 像素的照片；不会自动缩小输入。');
-  const id=factory.id(),path=context.filesDir+'/photo-input-'+id;
-  writePhoto(path,data);inputs.push({id,name:'照片 '+(inputs.length+1),path,width:w,height:h});
+ for(const uri of picked.photoUris){const file=fileIo.openSync(uri,fileIo.OpenMode.READ_ONLY),source=image.createImageSource(file.fd);
+  try{const info=await source.getImageInfo(),w=info.size.width,h=info.size.height,size=fileIo.statSync(file.fd).size;
+   if(!Number.isSafeInteger(w)||!Number.isSafeInteger(h)||w<1||h<1||size<1)throw Error('图片尺寸或文件无效');
+   const id=factory.id(),path=context.filesDir+'/photo-input-'+id,target=fileIo.openSync(path,fileIo.OpenMode.CREATE|fileIo.OpenMode.TRUNC|fileIo.OpenMode.WRITE_ONLY);
+   try{fileIo.copyFileSync(file.fd,target.fd);}finally{fileIo.closeSync(target);}
+   inputs.push({id,name:'照片 '+(inputs.length+1),path,width:w,height:h,large:size>8388608||w*h>1048576||Math.max(w,h)>1920});
+  }finally{await source.release();fileIo.closeSync(file);}
  }return inputs;
 }
 export async function storePhotoResult(context:common.UIAbilityContext,encoded:string,name:string):Promise<PhotoResult>{

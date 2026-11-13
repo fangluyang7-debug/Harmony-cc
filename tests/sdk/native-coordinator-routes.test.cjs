@@ -2,6 +2,19 @@ const {test}=require('node:test'),assert=require('node:assert/strict'),{fixture}
 function setup(){const f=fixture(),root='apps/harmony/scheduler/src/main/ets/v2/coordinator/';const identity={certificate:'certificate-fixture',fingerprint:'fingerprint-fixture'},address='https://192.168.1.2:7443';const pairing=new (f.load(root+'CoordinatorPairing.ets').CoordinatorPairing)(f.database,identity,'REAL');return {...f,pairing,admin:new (f.load(root+'CoordinatorLocalAdmin.ets').CoordinatorLocalAdmin)(f.database,pairing,'owner',address),routes:new (f.load(root+'CoordinatorRoutes.ets').CoordinatorRoutes)(pairing,identity,address,7)};}
 const request=(path,body,remoteAddress='192.168.1.3')=>({path,method:body===undefined?'GET':'POST',body:Buffer.from(body===undefined?'':JSON.stringify(body)),authorization:'',remoteAddress});
 
+test('photo capacity counts each qualified online GPU once and never promotes stale or CPU capacity',async()=>{
+ const s=setup(),sample=value=>({value,unit:'slots',source:'MEASURED',sampledAt:Date.now(),ttlMs:60000});
+ const profile={deviceId:'gpu-device',holderInstanceId:'gpu-holder',deviceInstanceId:'instance',ledgerEpoch:1,pools:[{resourcePoolId:'gpu',kind:'GPU_SLOTS',admissionLimit:sample(4),draining:false}],executors:[0,1].map(i=>({target:{targetId:'gpu'+i,backend:'VULKAN'},contract:{capability:'photo.enhance.v1'},resources:[{resourcePoolId:'gpu',amount:1}]}))};
+ let online=true,active=true;const peer={groupId:'g',principalId:'p',app:{allowedContracts:['photo.enhance.v1']}};
+ s.database.controlState=()=>online?'ONLINE':'OFFLINE';
+ s.routes.installAllotments({authenticate:async()=>peer},{});s.routes.installDirectory({profiles:async()=>[profile]});s.routes.installExecution(s.database,{}, {evidence:async()=>({admission:{state:active?'ACTIVE':'PENDING'}})},{});
+ const count=async()=>{const r=await s.routes.handle(request('/v2/apps/me/capabilities'));assert.equal(r.status,200);return JSON.parse(r.body).capabilities[0];};
+ assert.deepEqual(await count(),{capability:'photo.enhance.v1',devices:1,acceleratorSlots:4});
+ online=false;assert.equal((await count()).acceleratorSlots,0);online=true;active=false;assert.equal((await count()).acceleratorSlots,0);active=true;
+ profile.pools[0].admissionLimit.sampledAt=1;assert.equal((await count()).acceleratorSlots,0);profile.pools[0].admissionLimit=sample(4);
+ profile.executors.forEach(e=>e.target.backend='CPU');assert.equal((await count()).acceleratorSlots,0);
+});
+
 test('native device leave endpoint revokes credential and supports same-code rejoin',async()=>{
  const s=setup(),space=await s.admin.ensureDefaultSpace(),invite=await s.admin.inviteDevice(space,'phone');
  const {CoordinatorCredentials}=s.load('apps/harmony/scheduler/src/main/ets/v2/coordinator/CoordinatorCredentials.ets');

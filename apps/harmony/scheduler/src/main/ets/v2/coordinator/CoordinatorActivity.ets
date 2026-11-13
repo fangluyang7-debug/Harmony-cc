@@ -3,10 +3,23 @@ import { CoordinatorPeer } from './CoordinatorCredentials';
 export interface AppTaskActivity {taskId:string;operation:string;phase:string;state:string;startedAt:number;updatedAt:number;error:string;}
 export interface AppActivity {sampledAt:number;processMemoryBytes:number|null;processCpuUsage?:number|null;tasks:AppTaskActivity[];}
 export interface StoredAppActivity {holderInstanceId:string;deviceId:string;appId:string;receivedAt:number;activity:AppActivity;}
+export interface DeviceTelemetry {sampledAt:number;cpuPercent:number|null;memoryUsedBytes:number;memoryTotalBytes:number;batteryPercent:number|null;powerStatus:string;gpuPercent:number|null;gpuTemperatureC:number|null;gpuName:string;sensorSampledAt:number;}
+export interface StoredDeviceTelemetry {holderInstanceId:string;deviceId:string;receivedAt:number;sample:DeviceTelemetry;}
 /** Application observations never reserve resources or manufacture dispatch attempts. */
 export class CoordinatorActivity {
  private database:CoordinatorDatabase;
  constructor(database:CoordinatorDatabase){this.database=database;}
+ async device(peer:CoordinatorPeer,input:DeviceTelemetry):Promise<void>{
+  const now=Date.now();
+  if(peer.app||!input||Object.keys(input).sort().join('|')!=='batteryPercent|cpuPercent|gpuName|gpuPercent|gpuTemperatureC|memoryTotalBytes|memoryUsedBytes|powerStatus|sampledAt|sensorSampledAt'||
+   !Number.isSafeInteger(input.sampledAt)||Math.abs(input.sampledAt-now)>60000||!Number.isSafeInteger(input.sensorSampledAt)||input.sensorSampledAt<0||input.sensorSampledAt>now+60000||
+   !Number.isSafeInteger(input.memoryTotalBytes)||input.memoryTotalBytes<=0||!Number.isSafeInteger(input.memoryUsedBytes)||input.memoryUsedBytes<0||input.memoryUsedBytes>input.memoryTotalBytes||
+   ![input.cpuPercent,input.batteryPercent,input.gpuPercent].every(v=>v===null||typeof v==='number'&&Number.isFinite(v)&&v>=0&&v<=100)||
+   input.gpuTemperatureC!==null&&(!Number.isFinite(input.gpuTemperatureC)||input.gpuTemperatureC<0||input.gpuTemperatureC>150)||
+   typeof input.gpuName!=='string'||input.gpuName.length>200||!['UNKNOWN','NO_BATTERY','CHARGING','DISCHARGING','AC_POWER'].includes(input.powerStatus))throw Error('DEVICE_TELEMETRY_INVALID');
+  const value:StoredDeviceTelemetry={holderInstanceId:peer.holderInstanceId,deviceId:peer.deviceId,receivedAt:now,sample:input};
+  await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{await tx.executeSql('INSERT INTO Device (id,groupId,revision,metadataJson) VALUES (?,?,1,?) ON CONFLICT(id) DO UPDATE SET revision=revision+1,metadataJson=excluded.metadataJson',[JSON.stringify(['device-telemetry',peer.groupId,peer.holderInstanceId]),peer.groupId,JSON.stringify(value)]);});
+ }
  async report(peer:CoordinatorPeer,input:AppActivity):Promise<void>{
   if(!peer.app)throw Error('APP_REGISTRATION_REQUIRED');
   const now=Date.now();

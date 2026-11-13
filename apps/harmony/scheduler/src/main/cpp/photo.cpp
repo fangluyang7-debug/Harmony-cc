@@ -3,6 +3,7 @@
 #include <vector>
 #include <unistd.h>
 #include <algorithm>
+#include "photo-png-napi.h"
 #ifdef HARMONY_PHOTO_NCNN
 #include "photo-core.h"
 #endif
@@ -25,6 +26,6 @@ static napi_value Run(napi_env env,napi_callback_info info){
 #endif
  },[](napi_env env,napi_status,void* data){auto* w=static_cast<Work*>(data);napi_value result;if(w->code==0){napi_get_undefined(env,&result);napi_resolve_deferred(env,w->promise,result);}else{napi_value message;napi_create_string_utf8(env,"PHOTO_INFERENCE_FAILED",NAPI_AUTO_LENGTH,&message);napi_create_error(env,nullptr,message,&result);napi_reject_deferred(env,w->promise,result);}napi_delete_async_work(env,w->work);delete w;},w,&w->work);napi_queue_async_work(env,w->work);return promise;
 }
-static napi_value Init(napi_env env,napi_value exports){napi_property_descriptor p[]={{"cpuCount",nullptr,CpuCount,nullptr,nullptr,nullptr,napi_default,nullptr},{"available",nullptr,Available,nullptr,nullptr,nullptr,napi_default,nullptr},{"run",nullptr,Run,nullptr,nullptr,nullptr,napi_default,nullptr}};napi_define_properties(env,exports,3,p);return exports;}
+static napi_value Init(napi_env env,napi_value exports){napi_property_descriptor p[]={{"cpuCount",nullptr,CpuCount,nullptr,nullptr,nullptr,napi_default,nullptr},{"available",nullptr,Available,nullptr,nullptr,nullptr,napi_default,nullptr},{"run",nullptr,Run,nullptr,nullptr,nullptr,napi_default,nullptr},{"encodeRgbFile",nullptr,EncodeRgb,nullptr,nullptr,nullptr,napi_default,nullptr}};napi_define_properties(env,exports,4,p);return exports;}
 static napi_module module={1,0,nullptr,Init,"harmony_photo",nullptr,{0}};
 extern "C" __attribute__((constructor)) void RegisterPhoto(){napi_module_register(&module);}

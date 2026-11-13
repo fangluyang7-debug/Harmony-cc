@@ -13,6 +13,12 @@ test('batch concurrency follows physical device counts with a bounded legacy fal
  }
  session.request=async()=>{throw Error('offline');};assert.equal(await session.batchConcurrency(),2);
 });
+
+test('qualified accelerator slots feed the next images before earlier delivery completes',async()=>{
+ const {session}=readinessSession();for(const [slots,expected] of [[4,6],[1,3],[16,8],[0,3],[-1,3],[1.5,3],[undefined,3]]){
+  session.request=async()=>JSON.stringify({capabilities:[{capability:'photo.enhance.v1',devices:2,acceleratorSlots:slots}]});assert.equal(await session.batchConcurrency(),expected);
+ }
+});
 test('photo readiness can exceed SDK 15 second planning wait without resetting the batch budget',async()=>{
  const {session,now}=readinessSession(),messages=[];let calls=0;
  session.host={pendingCapabilities:async capabilities=>{calls++;assert.ok(capabilities.includes('photo.deliver.v1'));return now()<17000?['photo.deliver.v1']:[];}};

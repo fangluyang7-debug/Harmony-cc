@@ -17,10 +17,10 @@ import { AllotmentAckV2 } from '../protocol/ResourcesV2';
 import { CoordinatorDeviceSettings, CoordinatorMeasuredCapacity, CoordinatorContribution } from './CoordinatorDeviceSettings';
 import { CoordinatorApps, CoordinatorAppInput } from './CoordinatorApps';
 import { CoordinatorDirectory } from './CoordinatorDirectory';
-import { CoordinatorActivity, AppActivity } from './CoordinatorActivity';
-import { DeviceProfileV2 } from '../protocol/ResourcesV2';
+import { CoordinatorActivity, AppActivity, DeviceTelemetry } from './CoordinatorActivity';
+import { DeviceProfileV2, sampleUsableV2 } from '../protocol/ResourcesV2';
 interface ProfilesResponse {profiles:DeviceProfileV2[];}
-interface NativeCapabilityCount {capability:string;devices:number;}
+interface NativeCapabilityCount {capability:string;devices:number;acceleratorSlots:number;}
 interface NativeCapabilities {capabilities:NativeCapabilityCount[];}
 interface SettingsRequest {measured?:CoordinatorMeasuredCapacity;}
 interface SettingsResponse {settings:CoordinatorContribution|null;}
@@ -75,13 +75,18 @@ export class CoordinatorRoutes {
    try{
     const peer=await this.credentials.authenticate(request.authorization.replace(/^Bearer /,''));if(!peer.app)throw Error('APP_REQUIRED');
     const profiles=await this.directory.profiles(peer.groupId),result:NativeCapabilityCount[]=[];
-    for(const capability of peer.app.allowedContracts){const devices:string[]=[];
+    for(const capability of peer.app.allowedContracts){const devices:string[]=[],accelerators=new Map<string,number>();
      for(const p of profiles){if(this.database.controlState?.(peer.groupId,p.holderInstanceId,p.deviceInstanceId,p.ledgerEpoch)!=='ONLINE')continue;
       for(const e of p.executors){if(e.contract.capability!==capability)continue;await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{
        const owner:CoordinatorPeer={groupId:peer.groupId,principalId:peer.principalId,deviceId:p.deviceId,holderInstanceId:p.holderInstanceId,credentialId:''};
-       const q=await this.qualification!.evidence(tx,owner,e.target.targetId);if(q.admission.state==='ACTIVE'&&!devices.includes(p.deviceId))devices.push(p.deviceId);
+       const q=await this.qualification!.evidence(tx,owner,e.target.targetId);if(q.admission.state==='ACTIVE'){
+        if(!devices.includes(p.deviceId))devices.push(p.deviceId);
+        if(['CUDA','VULKAN'].includes(e.target.backend))for(const pool of p.pools){const demand=e.resources.find(r=>r.resourcePoolId===pool.resourcePoolId)?.amount??0;
+         if(pool.kind==='GPU_SLOTS'&&!pool.draining&&sampleUsableV2(pool.admissionLimit,Date.now(),'REAL')&&pool.admissionLimit.value!==null&&demand>0)accelerators.set(p.deviceId,Math.max(accelerators.get(p.deviceId)??0,Math.floor(pool.admissionLimit.value/demand)));
+        }
+       }
       });}
-     }result.push({capability,devices:devices.length});
+     }result.push({capability,devices:devices.length,acceleratorSlots:Array.from(accelerators.values()).reduce((total:number,slots:number)=>total+slots,0)});
     }return json(200,{capabilities:result} as NativeCapabilities);
    }catch(e){return json(400,{message:(e as Error).message} as ErrorResponse);}
   }
@@ -122,6 +127,10 @@ export class CoordinatorRoutes {
   }
   if(request.method==='GET'&&request.path==='/v2/identity'&&this.coordinatorId){const response:IdentityResponse={version:2,coordinatorId:this.coordinatorId,epoch:this.epoch,domain:'REAL'};return json(200,response);}
   if(request.method==='GET'&&request.path==='/v2/pairing/certificate')return {status:200,body:this.identity.certificate,contentType:'application/x-pem-file'};
+  if(request.method==='POST'&&request.path==='/v2/devices/me/telemetry'&&this.activity!==null&&this.credentials!==null){
+   try{if(!request.authorization.startsWith('Bearer '))throw Error('CREDENTIAL_REQUIRED');const peer=await this.credentials.authenticateDevice(request.authorization.slice(7));await this.activity.device(peer,JSON.parse(util.TextDecoder.create('utf-8').decodeToString(request.body)) as DeviceTelemetry);return json(200,{ok:true} as OkResponse);}
+   catch(e){return json(400,{message:'DEVICE_TELEMETRY_REJECTED'} as ErrorResponse);}
+  }
   if(request.method==='POST'&&request.path==='/v2/apps/me/activity'&&this.activity!==null&&this.credentials!==null){
    try{
     if(!request.authorization.startsWith('Bearer '))throw Error('CREDENTIAL_REQUIRED');

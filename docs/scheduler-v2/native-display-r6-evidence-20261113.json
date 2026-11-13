@@ -1,0 +1,93 @@
+{
+  "runs": [
+    {
+      "id": "4346d73b-4464-4212-99c1-c247b9b8b4a2",
+      "durationMs": 11961,
+      "photoCount": 1,
+      "participants": [
+        {
+          "id": "ba4f342a-310f-4349-80d5-0e13f806f9cf",
+          "name": "2"
+        },
+        {
+          "id": "9c3b7866-6c9c-4a66-91eb-0df60cfb8832",
+          "name": "3"
+        },
+        {
+          "id": "193157f9-a814-4c81-ae56-d0c764f3a082",
+          "name": "1"
+        }
+      ],
+      "firstJobMs": 255,
+      "firstAdmissionMs": 975,
+      "firstSettlementMs": 1247,
+      "firstDeliveryMs": 11703
+    },
+    {
+      "id": "3463c3fe-d484-4d16-a2ca-fdffa81bd95f",
+      "durationMs": 38896,
+      "photoCount": 6,
+      "participants": [
+        {
+          "id": "ba4f342a-310f-4349-80d5-0e13f806f9cf",
+          "name": "2"
+        },
+        {
+          "id": "9c3b7866-6c9c-4a66-91eb-0df60cfb8832",
+          "name": "3"
+        }
+      ],
+      "firstJobMs": 1347,
+      "firstAdmissionMs": 1965,
+      "firstSettlementMs": 2162,
+      "firstDeliveryMs": 17152
+    },
+    {
+      "id": "112bd4cd-5775-45ce-aed2-45a80ecc04da",
+      "durationMs": 24452,
+      "photoCount": 6,
+      "participants": [
+        {
+          "id": "ba4f342a-310f-4349-80d5-0e13f806f9cf",
+          "name": "2"
+        },
+        {
+          "id": "193157f9-a814-4c81-ae56-d0c764f3a082",
+          "name": "1"
+        }
+      ],
+      "firstJobMs": 1082,
+      "firstAdmissionMs": 1693,
+      "firstSettlementMs": 2734,
+      "firstDeliveryMs": 12036
+    },
+    {
+      "id": "84fc4505-ecfe-4e95-a292-0cc73aee3a49",
+      "durationMs": 27205,
+      "photoCount": 6,
+      "participants": [
+        {
+          "id": "ba4f342a-310f-4349-80d5-0e13f806f9cf",
+          "name": "2"
+        },
+        {
+          "id": "193157f9-a814-4c81-ae56-d0c764f3a082",
+          "name": "1"
+        },
+        {
+          "id": "9c3b7866-6c9c-4a66-91eb-0df60cfb8832",
+          "name": "3"
+        }
+      ],
+      "firstJobMs": 1013,
+      "firstAdmissionMs": 1950,
+      "firstSettlementMs": 3865,
+      "firstDeliveryMs": 15072
+    }
+  ],
+  "notes": [
+    "Offsets use coordinator clock from run creation; phone duration uses its own clock.",
+    "Latest 11.961-second run has one photo and is not comparable to six-photo runs.",
+    "No new performance run was started during this repair."
+  ]
+}

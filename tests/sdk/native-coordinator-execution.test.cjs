@@ -18,6 +18,23 @@ async function setup(){
  return {...f,p,e,pack,q,worker,source,artifacts};
 }
 async function qualify(f){for(const c of f.pack.cases){const {work}=await f.q.claim(f.worker);assert.equal(work.permit.caseId,c.id);const report={settled:true,permitId:work.permit.id,domain:'REAL',durationMs:3,output:c.expect.kind==='REJECT'?'':Buffer.from(JSON.stringify(c.expected)).toString('base64'),...(c.expect.kind==='REJECT'?{errorCode:c.expect.errorCode}:{})};await f.q.report(f.worker,work.permit.id,report);}}
+
+test('native winning GPU dispatches four executing plus three queued offers through the actual planner',async()=>{
+ const f=await setup(),sample=(value,unit)=>({value,unit,source:'MEASURED',sampledAt:Date.now(),ttlMs:60000});
+ f.e.target.backend='VULKAN';f.e.target.executorId='fixture.vulkan';f.pack.manifest.executorIds.push('fixture.vulkan');f.q=new (f.load(root+'CoordinatorQualification.ets').CoordinatorQualification)(f.database,JSON.stringify([f.pack]),7);f.e.target.resourcePoolIds.push('gpu');
+ f.e.resources=[{resourcePoolId:'cpu',amount:1},{resourcePoolId:'ram',amount:1024},{resourcePoolId:'gpu',amount:1}];
+ f.p.pools.push({resourcePoolId:'gpu',kind:'GPU_SLOTS',total:sample(4,'slots'),admissionLimit:sample(4,'slots'),occupied:sample(0,'slots'),draining:false});
+ f.sql.prepare('UPDATE DeviceInstance SET metadataJson=?').run(JSON.stringify(f.p));await qualify(f);
+ const grant={grant:{allotmentId:'a1',version:1,coordinatorEpoch:7,ledgerEpoch:1,appInstanceId:null},ack:{version:1,persisted:true}};
+ f.sql.prepare('INSERT INTO Allotment (id,groupId,revision,metadataJson) VALUES (?,?,1,?)').run(JSON.stringify(['allotment','g',f.p.holderInstanceId]),'g',JSON.stringify(grant));
+ const messages=[],jobs=new (f.load(root+'CoordinatorJobs.ets').CoordinatorJobs)(f.database,{register(){},enqueue:async(...args)=>messages.push(args),pump:async()=>{}},f.artifacts,f.q,'center',7),content=Buffer.from('{}'),source={groupId:'g',ownerPrincipalId:'p',ref:{artifactId:'gpu-input',contentVersion:1,contentHash:hash(content),schemaId:'catalog.items',schemaVersion:1},bytes:2,expiresAt:Date.now()+60000};
+ await f.database.transaction(tx=>f.artifacts.writeContent(tx,source,content.toString('base64')));
+ const body=i=>({workflow:{version:3,id:'gpu'+i,outputContract:'catalog.ranked',qualityTarget:'reference',nodes:[{id:'rank',capability:'catalog.filter.v1',input:{bytes:2,contentHash:hash(content),schemaId:'catalog.items',schemaVersion:1},parameters:'{}',dependsOn:[]}]},options:{requestId:'gpu'+i,budgetMs:30000,resultDestination:'ORIGIN'}});
+ for(let i=0;i<7;i++)await jobs.submit(f.source,body(i),source,true);
+ assert.equal(messages.length,7);assert.equal(f.sql.prepare('SELECT COUNT(*) n FROM Attempt').get().n,7);
+ await assert.rejects(jobs.submit(f.source,body(7),source,true),/NO_LEGAL_PLAN/);
+ assert.equal(f.p.pools.find(p=>p.kind==='GPU_SLOTS').occupied.value,0,'fixture heartbeat is not mutated to invent capacity');
+});
 test('native qualification verifies full reference suite and reconciles claims without rerunning',async()=>{
  const f=await setup();const first=await f.q.claim(f.worker),again=await f.q.claim(f.worker);assert.equal(again.work.permit.id,first.work.permit.id);assert.equal(again.work.mode,'RECONCILE');
  await assert.rejects(f.q.report({...f.worker,holderInstanceId:'other'},first.work.permit.id,{}),/SCOPE/);

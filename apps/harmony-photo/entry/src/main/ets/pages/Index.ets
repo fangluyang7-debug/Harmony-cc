@@ -5,6 +5,8 @@ import { hilog } from '@kit.PerformanceAnalysisKit';
 import { enhancePhotoLocally, text, monotonic, LocalPhotoProgress } from 'scheduler';
 import { photoSession } from '../PhotoSession';
 import { PhotoBatch, BatchProgress } from '../PhotoBatch';
+import { PhotoLarge } from '../PhotoLarge';
+import { needsPhotoTiles } from '../PhotoFiles';
 import { PhotoReadiness, ReadinessView } from '../PhotoReadiness';
 import { PhotoInput, PhotoResult, pickLocalPhotos, readPhoto, storePhotoResult, savePhotoToAlbum } from '../PhotoFiles';
 @Entry
@@ -17,6 +19,7 @@ struct Index {
  @State private displayConnected:boolean=false;
  @State private displayBusy:boolean=false;
  private display:PhotoDisplay=new PhotoDisplay((message:string)=>{this.displayStatus=message;this.displayConnected=this.display.connected();});
+ private large:PhotoLarge=new PhotoLarge();
  @State private connecting:boolean=false;
  @State private connectionStatus:string='未连接协作空间 · 当前为手机本机处理';
  @State private connectionFailed:boolean=false;
@@ -104,6 +107,7 @@ struct Index {
  }
  private async run():Promise<void>{
   if(this.busy||this.connecting||this.picking||this.displayBusy||!this.inputs.length)return;
+  if(this.inputs.some(needsPhotoTiles)){await this.runLarge();return;}
   if(!this.cooperative){await this.runLocal();return;}
   if(!this.ready){this.status='请等待协作能力就绪后再开始。';return;}
   this.readiness.stop();this.busy=true;this.cancelled=false;this.phase='开始前检查就绪状态';let started=false;
@@ -111,7 +115,15 @@ struct Index {
   catch(e){this.status=started?'本轮未完成：'+(e as Error).message+'。已完成的成品仍可保存。':'尚未开始处理：'+(e as Error).message;}
   finally{this.busy=false;this.phase='';if(this.cooperative&&this.pageVisible)this.readiness.start();}
  }
- private stop():void{this.cancelled=true;this.phase='正在停止任务，请等待执行器结算';if(this.cooperative)void this.batch.cancel();}
+ private async runLarge():Promise<void>{
+  if(this.cooperative&&!this.ready){this.status='请等待协作能力就绪后再开始。';return;}
+  this.readiness.stop();this.busy=true;this.cancelled=false;this.results=[];this.elapsed='';this.progress=0;
+  const began=monotonic();
+  try{await this.large.run(this.context(),this.inputs,this.cooperative,this.display,{cancelled:()=>this.cancelled,progress:(done:number,total:number,phase:string)=>{this.progress=Math.round(done/total*100);this.phase=phase;},result:(r:PhotoResult)=>{this.results=[...this.results,r];}});this.status='原分辨率处理完成。完整成品在手机中，点击保存至图库；电脑显示成品预览。';}
+  catch(e){this.status='处理未完成：'+(e as Error).message+'。已完成的照片仍可保存。';}
+  finally{this.elapsed=((monotonic()-began)/1000).toFixed(2)+' 秒';this.busy=false;this.phase='';if(this.cooperative&&this.pageVisible)this.readiness.start();}
+ }
+ private stop():void{this.cancelled=true;this.phase='正在停止任务，请等待执行器结算';if(this.cooperative){void this.batch.cancel();void this.large.cancel();}}
  private removeInput(id:string):void{this.inputs=this.inputs.filter(i=>i.id!==id);if(!this.cooperative)void this.display.select(this.inputs);}
  aboutToAppear():void{this.pageVisible=true;void this.restoreDisplay();}
  aboutToDisappear():void{this.pageVisible=false;this.readiness.stop();this.ready=false;if(this.busy)this.stop();}
@@ -153,7 +165,7 @@ struct Index {
    }.width('100%');
    ForEach(this.inputs,(item:PhotoInput)=>{Row({space:12}){
     Image('file://'+item.path).width(72).height(60).objectFit(ImageFit.Contain).borderRadius(8);
-    Column({space:4}){Text(item.name).fontSize(15).fontColor('#172B49').width('100%');Text(item.width+' × '+item.height).fontSize(12).fontColor('#64748B').width('100%');}.layoutWeight(1);
+    Column({space:4}){Text(item.name).fontSize(15).fontColor('#172B49').width('100%');Text(item.width+' × '+item.height).fontSize(12).fontColor('#64748B').width('100%');if(needsPhotoTiles(item)){Text('原像素分块增强 · 输出 '+(item.width*4)+' × '+(item.height*4)+' · 大图耗时较长').fontSize(12).fontColor('#2457EB').width('100%');}}.layoutWeight(1);
     Button('移除').fontSize(12).backgroundColor('#EAF0FF').fontColor('#2457EB').enabled(!this.busy&&!this.picking&&!this.connecting).onClick(()=>{this.removeInput(item.id);});
    }.padding(12).width('100%').backgroundColor(Color.White).borderRadius(12);},(item:PhotoInput)=>item.id);
    Button(this.picking?'正在选择…':'＋ 从相册选择照片').width('100%').height(48).enabled(!this.busy&&!this.picking&&!this.connecting&&this.inputs.length<8).onClick(()=>{void this.pick();});

@@ -48,27 +48,33 @@ export class PhotoBatch {
     changes.revision=run.revision;run=await request('/photo-runs/'+run.id,'POST',changes);
    },()=>changes.state==='FAILED'||changes.state==='CANCELLED'?10000:remaining(),()=>false,()=>{},(error:Error):boolean=>transientPhotoTransport(error)||error.message==='PHOTO_RUN_REVISION');
   });queue=next.catch(()=>{});return next;};
-  const total=inputs.reduce((count:number,i:PhotoInput)=>{const edge=Math.max(64,Math.ceil(Math.max(i.width,i.height)/2));return count+2+Math.ceil(i.width/edge)*Math.ceil(i.height/edge);},0);
-  const watch=async():Promise<void>=>{if(polling||!run||!active||!planningReady)return;polling=true;try{const view=await request('/photo-runs/'+run.id);if(!active)return;let done=0,current='等待任务规划';for(const w of view.workflows??[]){for(const n of w.nodes){if(n.committed)done++;else if(['RUNNING','ACCEPTED'].includes(n.state))current='照片 '+(w.imageIndex+1)+' · '+label(n.id);}}options.progress({phase:current,completed:done,total});}catch{/* Display polling cannot abort computation. */}finally{polling=false;}};
+  let uploaded=0,stagesDone=0;
+  const total=inputs.length*2+inputs.reduce((count:number,i:PhotoInput)=>{const edge=Math.max(64,Math.ceil(Math.max(i.width,i.height)/2));return count+2+Math.ceil(i.width/edge)*Math.ceil(i.height/edge);},0);
+  const report=(phase:string):void=>options.progress({phase,completed:prepared.length+uploaded+stagesDone,total});
+  const watch=async():Promise<void>=>{if(polling||!run||!active||!planningReady)return;polling=true;try{const view=await request('/photo-runs/'+run.id);if(!active)return;let done=0,current='等待任务规划';for(const w of view.workflows??[]){for(const n of w.nodes){if(n.committed)done++;else if(['RUNNING','ACCEPTED'].includes(n.state))current='照片 '+(w.imageIndex+1)+' · '+label(n.id);}}stagesDone=Math.max(stagesDone,done);report(current);}catch{/* Display polling cannot abort computation. */}finally{polling=false;}};
   const timer=setInterval(()=>{void watch();},750);
   try{
-   options.progress({phase:'正在准备原始照片',completed:0,total:1});
-   for(const input of inputs){check();prepared.push(await prepare(input));}
+   report('正在准备原始照片');
+   for(const input of inputs){check();prepared.push(await prepare(input));report('准备原始照片 '+prepared.length+' / '+inputs.length);}
    check();run=await request('/photo-runs','POST',{mode:'COOPERATIVE',budgetMs:budget,inputs:prepared.map(p=>p.meta)});
-   for(let i=0;i<prepared.length;i++){check();await request('/photo-runs/'+run.id+'/input?image='+i,'PUT',undefined,prepared[i].data);}
    await update({state:'RUNNING'});
    const parallel=await photoSession.batchConcurrency();check();planningReady=true;let next=0;const failures:string[]=[];
+   // Keep all preview uploads advancing, without making the first task wait for the last.
+   const uploads:Promise<void>[]=[];let uploading:Promise<void>=Promise.resolve();
+   for(let i=0;i<prepared.length;i++){uploading=uploading.then(async()=>{check();await request('/photo-runs/'+run!.id+'/input?image='+i,'PUT',undefined,prepared[i].data);uploaded++;report('照片 '+(i+1)+' · 原图已同步，正在规划');});uploads.push(uploading);void uploading.catch(()=>{});}
    const worker=async():Promise<void>=>{
     while(next<prepared.length&&!options.cancelled()){
      const i=next++,src=prepared[i],id=factory.id();let task:SdkTask|null=null;
+     // Each image can start computing while other images are still uploading.
+     check();await uploads[i];check();
      const port=photoSession.workflowPort(options.cancelled,async()=>{if(!run)throw Error('PHOTO_RUN_REQUIRED');await request('/photo-runs/'+run.id+'/capture-result?image='+i,'POST',{});});
      const sdk=new SchedulerSdk(port),input=await sdk.registerInput(src.data,'image.raster');
      try{
-      check();const submissionBudget=Math.max(1,Math.floor(remaining()));task=await recoverPhotoDelivery(async()=>sdk.submit(photoWorkflow(id,input,src.meta.width,src.meta.height),{requestId:id,budgetMs:submissionBudget,inputLocation:'ORIGIN',resultDestination:'ORIGIN'}),remaining,options.cancelled,()=>options.progress({phase:'控制连接恢复中 · 保留原任务',completed:0,total}),(e:Error):boolean=>e.message==='SDK_COORDINATOR_OFFLINE');this.tasks.push(task);
+      check();const submissionBudget=Math.max(1,Math.floor(remaining()));task=await recoverPhotoDelivery(async()=>sdk.submit(photoWorkflow(id,input,src.meta.width,src.meta.height),{requestId:id,budgetMs:submissionBudget,inputLocation:'ORIGIN',resultDestination:'ORIGIN'}),remaining,options.cancelled,()=>report('控制连接恢复中 · 保留原任务'),(e:Error):boolean=>e.message==='SDK_COORDINATOR_OFFLINE');this.tasks.push(task);
       // The capture hook must know this job before read/received can release output.
       await update({},{id:task.id,imageIndex:i});
       if(options.cancelled()){await task.cancel();throw Error('已取消');}
-      const current=task;const result=await recoverPhotoDelivery(async()=>current.result(Math.max(1,Math.min(300000,remaining()))),remaining,options.cancelled,()=>options.progress({phase:'照片 '+(i+1)+' · 正在恢复结果接收，不重复计算',completed:0,total})),stored=await storePhotoResult(context,text(result.output),inputs[i].name);
+      const current=task;const result=await recoverPhotoDelivery(async()=>current.result(Math.max(1,Math.min(300000,remaining()))),remaining,options.cancelled,()=>report('照片 '+(i+1)+' · 正在恢复结果接收，不重复计算')),stored=await storePhotoResult(context,text(result.output),inputs[i].name);
       if(stored.width!==src.meta.width*4||stored.height!==src.meta.height*4)throw Error('PHOTO_RESULT_GEOMETRY');
       await update({deliveredImage:{imageIndex:i,hash:stored.id}});options.result(i,stored);
      }catch(e){failures.push(inputs[i].name+'：'+(e as Error).message);try{await (task??sdk.resume(id)).cancel();}catch{} }

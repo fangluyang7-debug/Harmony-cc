@@ -20,6 +20,11 @@ struct Index {
  @State detail:string='';
  @State snapshot:CoordinatorOverview={spaces:[],devices:[],tasks:[],apps:[]};
  private labels:string[]=['运行总览','设备资源','任务追踪','网络链路','异常恢复','设备接入','应用授权','中心设置'];
+ private onlineDevices():CoordinatorOverviewRow[]{return this.snapshot.devices.filter(d=>d.state==='在线');}
+ private recentWork(device:string):CoordinatorOverviewRow[]{return this.snapshot.tasks.filter(t=>t.kind==='DISPATCH'&&t.deviceId===device).slice(0,5);}
+ private metric(value:number|null,unit:string):string{return value===null?'未提供':value.toFixed(1)+unit;}
+ private powerText(status:string):string{const labels:Record<string,string>={'NO_BATTERY':'无电池 · 不适用','CHARGING':'正在充电','DISCHARGING':'电池供电','AC_POWER':'外接电源','UNKNOWN':'系统未提供供电状态'};return labels[status]??status;}
+ private taskState(state:string):string{const labels:Record<string,string>={'WAITING_INPUT':'等待输入','OFFERED':'已派发','ACCEPTED':'已接单','RUNNING':'处理中','SUCCEEDED':'已完成','FAILED':'失败','CANCELLED_SETTLED':'已取消并结算','CANCEL_REQUESTED':'正在取消','TIMED_OUT':'超时'};return labels[state]??state;}
  private database:CoordinatorDatabase|null=null;
  private opening:Promise<CoordinatorDatabase>|null=null;
  private refreshTimer:number=-1;
@@ -166,8 +171,8 @@ struct Index {
    Text('HOLDER '+profile.holderInstanceId+' · seq '+profile.sequence+' / ledger '+profile.ledgerEpoch).fontSize(12).fontColor('#64748B')
    GridRow({columns:this.wide?3:1,gutter:12}){
     GridCol(){this.card('所有者活动',this.sampleText(profile.ownerActivity),'设备上报')}
-    GridCol(){this.card('电量',this.sampleText(profile.battery),'设备上报')}
-    GridCol(){this.card('温度 / 热等级',this.sampleText(profile.temperature),'设备上报')}
+    if(!this.snapshot.devices.find(d=>d.id===profile.deviceId)?.telemetry){GridCol(){this.card('电量',this.sampleText(profile.battery)==='UNKNOWN'?'未提供':this.sampleText(profile.battery),'设备未上报时不估算电量')}}
+    GridCol(){this.card('系统热等级',this.sampleText(profile.temperature)==='UNKNOWN'?'未提供':this.sampleText(profile.temperature),'系统热状态，不等于 CPU / GPU 温度；Windows 通常不提供此等级')}
    }
    ForEach(profile.pools,(pool:PoolV2)=>{
     Column({space:8}){
@@ -215,8 +220,26 @@ struct Index {
   else{
    ForEach($$.items,(item:CoordinatorOverviewRow)=>{
     Column({space:10}){
-     Row(){Text(item.title).fontSize(18).fontWeight(FontWeight.Medium).fontColor('#173252').layoutWeight(1);Text(item.state).fontSize(12).fontColor('#9A650B').margin({left:12})}.width('100%')
+     Row(){Text(item.title).fontSize(18).fontWeight(FontWeight.Medium).fontColor('#173252').layoutWeight(1);Text(this.taskState(item.state)).fontSize(14).fontColor('#9A650B').margin({left:12})}.width('100%')
      Text(item.detail).fontSize(13).fontColor('#64748B').width('100%')
+     if(item.telemetry){
+      GridRow({columns:this.wide?3:1,gutter:12}){
+       GridCol(){this.card('整机 CPU 实测',this.metric(item.telemetry.sample.cpuPercent,'%'),'系统时间差采样；与 CPU 协同槽位不同')}
+       GridCol(){this.card('整机内存使用',(item.telemetry.sample.memoryUsedBytes/1073741824).toFixed(1)+' GiB','总量 '+(item.telemetry.sample.memoryTotalBytes/1073741824).toFixed(1)+' GiB')}
+       GridCol(){this.card('电池 / 供电',item.telemetry.sample.powerStatus==='NO_BATTERY'?'无电池':this.metric(item.telemetry.sample.batteryPercent,'%'),this.powerText(item.telemetry.sample.powerStatus))}
+       if(item.telemetry.sample.gpuName){
+        GridCol(){this.card('GPU 实测利用率',this.metric(item.telemetry.sample.gpuPercent,'%'),item.telemetry.sample.gpuName+' · NVIDIA 驱动采样')}
+        GridCol(){this.card('GPU 温度',this.metric(item.telemetry.sample.gpuTemperatureC,'°C'),'显卡传感器；不代表整机热等级')}
+       }
+      }
+      Text('硬件采样 '+new Date(item.telemetry.sample.sampledAt).toLocaleTimeString()+' · 短任务可能落在采样间隔内，请同时看下方执行回执。').fontSize(13).fontColor('#64748B')
+     }else if(item.profiles){Text('设备未提供整机实时采样，以下为调度额度和执行回执；Windows 节点更新后显示 CPU、内存及可用硬件传感器。').fontSize(13).fontColor('#64748B')}
+     if(item.profiles){
+      Text('近期分配到本设备的任务 · '+this.recentWork(item.id).length).fontSize(19).fontWeight(FontWeight.Medium).fontColor('#173252')
+      ForEach(this.recentWork(item.id),(task:CoordinatorOverviewRow)=>{
+       Column({space:6}){Text(task.title+' · '+this.taskState(task.state)).fontSize(16).fontColor('#2459A5');Text(task.detail).fontSize(13).fontColor('#64748B');Text(task.id).fontSize(11).copyOption(CopyOptions.LocalDevice)}.alignItems(HorizontalAlign.Start).padding(12).width('100%').backgroundColor('#EEF4FC').borderRadius(10)
+      },(task:CoordinatorOverviewRow)=>JSON.stringify(task))
+     }
      if(item.activities){
       ForEach(item.activities,(activity:StoredAppActivity)=>{
        this.card('应用实测 CPU',activity.activity.processCpuUsage===undefined||activity.activity.processCpuUsage===null?'UNKNOWN':(activity.activity.processCpuUsage*100).toFixed(2)+'%','进程实测 CPU 使用率 · 不等于调度槽位占用')
@@ -241,15 +264,15 @@ struct Index {
    Text(this.running?'本地服务已启动 · 实时设备与任务观测':'本地协调中心 · 服务尚未启动').fontSize(13).fontColor('#94600C').padding(14).width('100%').backgroundColor('#FFF5DD').borderRadius(10)
    if(this.selected===0){
     GridRow({columns:this.wide?3:1,gutter:14}){
-     GridCol(){this.card('接入设备',String(this.snapshot.devices.length),'在线 '+this.snapshot.devices.filter(d=>d.state==='在线').length+' · 其余等待连接或资源画像')}
+     GridCol(){this.card('接入设备',String(this.snapshot.devices.length),'在线 '+this.onlineDevices().length+' · 按物理设备统计，与下方拓扑一致')}
      GridCol(){this.card('任务记录',String(this.snapshot.tasks.length),'最近 100 条执行记录')}
      GridCol(){this.card('在线宿主',String(this.snapshot.devices.reduce((count:number,row:CoordinatorOverviewRow)=>count+(row.profiles?.length??0),0)),'离线与后台宿主暂不展示')}
     }
     Column({space:14}){
-     Text('设备协同拓扑').fontSize(20).fontWeight(FontWeight.Bold).fontColor('#173252')
+     Text('设备协同拓扑 · '+this.onlineDevices().length+' 台在线设备').fontSize(20).fontWeight(FontWeight.Bold).fontColor('#173252')
      Text('鸿蒙协调中心 · '+this.address).fontSize(16).fontColor('#2459A5')
-     if(!this.snapshot.devices.length){Text('等待设备配对加入').fontSize(14).fontColor('#64748B')}
-     ForEach(this.snapshot.devices,(device:CoordinatorOverviewRow)=>{
+     if(!this.onlineDevices().length){Text('暂无在线设备；已接入但未就绪的设备可在“设备资源”中查看。').fontSize(14).fontColor('#64748B')}
+     ForEach(this.onlineDevices(),(device:CoordinatorOverviewRow)=>{
       Column({space:6}){
        Text('↳ '+device.title+' · '+device.state).fontSize(17).fontColor('#173252')
        Text((device.profiles?.length??0)+' 个在线宿主 · '+(device.qualifications?.filter(q=>q.state==='ACTIVE').length??0)+' 项能力已就绪').fontSize(14).fontColor('#64748B')
@@ -266,7 +289,10 @@ struct Index {
    }else if(this.selected===1){
     this.empty('物理设备与应用宿主','已配对设备持续显示；连接、资源画像与计算资格分别判断，未就绪不代表尚未接入。')
     this.rows({items:this.snapshot.devices,title:'暂无在线前台设备'})
-   }else if(this.selected===2){this.rows({items:this.snapshot.tasks,title:'暂无任务追踪'})}
+   }else if(this.selected===2){
+    Text('应用观测显示 SoleAI 的完整业务阶段；计算任务显示真实派发目标与回执。云端商品查询不代表本地设备计算，GPU 也不一定参与轻量比价任务。').fontSize(15).fontColor('#64748B')
+    this.rows({items:this.snapshot.tasks,title:'暂无任务追踪'})
+   }
    else if(this.selected===3){
     this.empty('网络方向探测','显示在线设备上报的真实探测值；照片数据当前通过协调中心中转。')
     ForEach(this.snapshot.devices,(device:CoordinatorOverviewRow)=>{

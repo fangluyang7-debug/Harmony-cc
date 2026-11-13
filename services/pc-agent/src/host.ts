@@ -1,4 +1,5 @@
 import {photoVulkanExecutorId} from './photo-accelerator';
+import {DeviceTelemetryPublisher} from './device-telemetry';
 import {ArtifactDescriptor,directTransfer,SignedTransfer,transfer} from '@harmony/resource-transport';
 import {ImageEncoder,imageExecutorId,cudaExecutorId} from './image-encoder';
 import fs from 'node:fs';
@@ -40,6 +41,7 @@ export interface CpuHostConfig {
 }
 /** Standalone CPU host assembled from paired identity, owner policy, installed packs and network services. */
 export class CpuHost {
+  private telemetry:DeviceTelemetryPublisher;
   private readonly packs:ReferencePack[];
   private stopped=false;private timer:NodeJS.Timeout|undefined;private pending:Promise<void>|undefined;
   private limits:ResourceAmountV2[]=[];private owner:'IDLE'|'ACTIVE'|'UNKNOWN'='UNKNOWN';
@@ -82,6 +84,7 @@ export class CpuHost {
       fs.renameSync(temporary,target);
   }
   private constructor(readonly ledger:DurableLedger,private readonly config:CpuHostConfig,private readonly onError:(e:unknown)=>void,builtins:ReferencePack[]){
+    this.telemetry=new DeviceTelemetryPublisher(body=>allotmentTransport(config.connection)('/v2/devices/me/telemetry',body),!!config.imageEncoder?.gpu);
     this.packs=[...builtins.filter(p=>p.manifest.contract.capability!==config.imageEncoder?.pack.manifest.contract.capability&&(!p.manifest.contract.capability.startsWith('photo.')||cpuRegistry.has(p.manifest.contract.capability))),...(config.imageEncoder?[config.imageEncoder.pack]:[]),...(config.services??[]).map(s=>s.pack)];
     if(new Set(this.packs.map(p=>p.manifest.contract.capability)).size!==this.packs.length)throw Error('SERVICE_CAPABILITY_CONFLICT');
     const request=allotmentTransport(config.connection),packs=this.packs,byDigest=new Map(packs.map(p=>[packDigest(p),p])),installed=new Map([...byDigest].flatMap(([hash,p])=>p.cases.map(c=>[hash+':'+c.id,c] as const)));
@@ -211,6 +214,7 @@ export class CpuHost {
   }
   private async sample(syncSettings=true){
     try{
+      if(this.agent.ready&&!this.appPolicy)this.telemetry.tick(this.clockOffset);
       // One line per transition so the desktop launcher can show "connected" instead of only "process running".
       if(this.agent.ready!==this.lastOnline){this.lastOnline=this.agent.ready;console.log(this.lastOnline?'CONTROL_ONLINE: control channel connected to the coordinator.':'CONTROL_OFFLINE: control channel disconnected; reconnecting.');}
       if(this.agent.ready&&syncSettings&&!this.appPolicy){

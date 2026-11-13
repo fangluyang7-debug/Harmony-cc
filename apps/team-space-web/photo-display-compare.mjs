@@ -1,3 +1,11 @@
+export const isPhotoDraft=r=>r?.kind==='LOCAL'&&['PICKING','SELECTED'].includes(r.state);
+export const roundDevices=r=>[...new Set((r.devices??[]).map(d=>d.name||d.id).filter(Boolean))].join(' · ')||(r.kind==='LOCAL'?'手机 CPU':'等待执行回执');
+export function displayRounds(data){
+ const runs=(data.runs??[]).filter(r=>!isPhotoDraft(r));
+ const drafts=[...(data.runs??[]).filter(isPhotoDraft),...(data.preview?[data.preview]:[])].sort((a,b)=>b.createdAt-a.createdAt);
+ const preview=drafts.find(r=>r.createdAt>(runs[0]?.createdAt??-1));
+ return {runs,preview};
+}
 export function comparison(a,b){
  if(!a||!b)return {reason:'完成两轮后，可在这里比较处理耗时。'};
  if(a.state!=='SUCCEEDED'||b.state!=='SUCCEEDED')return {reason:'未完成的轮次不参与速度比较。'};

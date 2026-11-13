@@ -12,7 +12,7 @@ import { hash, bytes, monotonic } from '../platform/NativeTransport';
 interface ChannelSession {
  socket:CoordinatorSocket;peer:CoordinatorPeer;token:string;hello:boolean;recovered:boolean;
  profileInstance:string;profileEpoch:number;lastProfileStamp:number;busy:boolean;heartbeat:ControlHeartbeat;
- timer:number;helloTimer:number;
+ timer:number;helloTimer:number;sent:Map<string,number>;
 }
 export interface CoordinatorMessageHandler {
  validate:(payload:Object)=>boolean;
@@ -29,6 +29,7 @@ export class CoordinatorChannel {
  private handlers:Map<string,CoordinatorMessageHandler>=new Map();
  private closing:boolean=false;
  private pumping:boolean=false;
+ private repump:boolean=false;
  onProfile:((group:string,holder:string)=>void)|null=null;
  async enqueue(tx:CoordinatorTransaction,group:string,attemptId:string,type:string,payload:Object,traceId:string):Promise<void>{
   await tx.executeSql('INSERT OR IGNORE INTO DispatchSequence (id,value) VALUES (?,0)',[this.coordinatorId]);
@@ -38,12 +39,12 @@ export class CoordinatorChannel {
   await tx.executeSql('INSERT INTO Outbox (id,sequence,groupId,attemptId,kind,epoch,messageJson) VALUES (?,?,?,?,?,?,?)',[id,seq,group,attemptId,type,this.epoch,JSON.stringify(message)]);
  }
  async pump():Promise<void>{
-  if(this.closing||this.pumping)return;this.pumping=true;
+  if(this.closing)return;if(this.pumping){this.repump=true;return;}this.pumping=true;
   try{
    const messages:MessageEnvelopeV2[]=[],holders:string[]=[];
    await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{const rows=await tx.querySql('SELECT o.messageJson,a.holderInstanceId FROM Outbox o JOIN Attempt a ON a.id=o.attemptId WHERE o.acked=0 AND o.superseded=0 AND o.epoch=? ORDER BY o.sequence LIMIT 64',[this.epoch]);try{while(rows.goToNextRow()){messages.push(JSON.parse(rows.getString(0)) as MessageEnvelopeV2);holders.push(rows.getString(1));}}finally{rows.close();}});
-   for(let i=0;i<messages.length;i++){const m=messages[i],s=Array.from(this.sessions).find(s=>s.hello&&s.recovered&&!s.heartbeat.suspect&&s.peer.groupId===m.groupId&&s.peer.holderInstanceId===holders[i]&&s.socket.isOpen());if(s)await s.socket.send(JSON.stringify(m));}
-  }finally{this.pumping=false;}
+   for(let i=0;i<messages.length;i++){const m=messages[i],s=Array.from(this.sessions).find(s=>s.hello&&s.recovered&&!s.heartbeat.suspect&&s.peer.groupId===m.groupId&&s.peer.holderInstanceId===holders[i]&&s.socket.isOpen());if(s&&!s.sent.has(m.messageId)){await s.socket.send(JSON.stringify(m));s.sent.set(m.messageId,monotonic());}}
+  }finally{this.pumping=false;if(this.repump){this.repump=false;void this.pump().catch(()=>{});}}
  }
  async evaluationChanged(group:string,holder:string):Promise<void>{
   const session=Array.from(this.sessions).find(s=>s.hello&&s.recovered&&s.peer.groupId===group&&s.peer.holderInstanceId===holder&&s.socket.isOpen());if(!session)return;
@@ -65,7 +66,7 @@ export class CoordinatorChannel {
   const token=request.authorization.slice(7),peer=await this.credentials.authenticate(token);
   if(this.closing)throw Error('UNAVAILABLE');
   for(const old of this.sessions)if(old.peer.groupId===peer.groupId&&old.peer.holderInstanceId===peer.holderInstanceId)await old.socket.close(1008,'REPLACED');
-  const session:ChannelSession={socket,peer,token,hello:false,recovered:false,profileInstance:'',profileEpoch:0,lastProfileStamp:-1,busy:false,heartbeat:new ControlHeartbeat(util.generateRandomUUID(true)),timer:-1,helloTimer:-1};
+  const session:ChannelSession={socket,peer,token,hello:false,recovered:false,profileInstance:'',profileEpoch:0,lastProfileStamp:-1,busy:false,heartbeat:new ControlHeartbeat(util.generateRandomUUID(true)),timer:-1,helloTimer:-1,sent:new Map<string,number>()};
   this.sessions.add(session);
   socket.onText=value=>this.receive(session,value);
   socket.onClosed=()=>{clearInterval(session.timer);clearTimeout(session.helloTimer);this.sessions.delete(session);};
@@ -97,11 +98,11 @@ export class CoordinatorChannel {
    const ack=payload as AckPayload;if(payload===null||Object.keys(payload).join('|')!=='messageId'||ack.messageId!==m.ackOf)throw Error('ACK_INVALID');
   }else if(!handler||!handler.validate(payload))throw Error('PAYLOAD_INVALID');
   const id=JSON.stringify([m.groupId,m.senderInstanceId,m.messageId]),scope=JSON.stringify([m.groupId,m.senderInstanceId]),digest=hash(bytes(canonical(m)));
-  let duplicate=false;
+  let duplicate=false,sequence=0;
   await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{
    const seen=await tx.querySql('SELECT digest,done FROM ChannelInbox WHERE id=?',[id]);let exists=false,done=false;
    try{if(seen.goToFirstRow()){exists=true;if(seen.getString(0)!==digest)throw Error('MESSAGE_CONFLICT');done=seen.getLong(1)!==0;}}finally{seen.close();}
-   if(done){duplicate=true;return;}
+   if(done){duplicate=true;if(m.type!=='Ack')sequence=await this.nextSequence(tx);return;}
    if(!exists){
     const cursor=await tx.querySql('SELECT sequence FROM ChannelCursor WHERE id=?',[scope]);
     try{if(m.type!=='Hello'&&cursor.goToFirstRow()&&m.seq<=cursor.getLong(0))throw Error('SEQUENCE_REORDERED');}finally{cursor.close();}
@@ -115,11 +116,12 @@ export class CoordinatorChannel {
     else{const rows=await tx.querySql("SELECT recordJson FROM Attempt WHERE groupId=? AND holderInstanceId=? AND state!='REJECTED'",[peer.groupId,peer.holderInstanceId]);
      try{while(rows.goToNextRow()){const record=rows.getString(0);if(!record||!(JSON.parse(record) as Record<string,boolean>)['resourcesSettled'])throw Error('RECOVERY_PENDING');}}finally{rows.close();}}
    }else if(m.type==='Ack'){
-    const rows=await tx.querySql('SELECT o.id,o.messageJson FROM Outbox o JOIN Attempt a ON a.id=o.attemptId WHERE o.groupId=? AND a.holderInstanceId=?',[peer.groupId,peer.holderInstanceId]);let match='';
-    try{while(rows.goToNextRow())if((JSON.parse(rows.getString(1)) as MessageEnvelopeV2).messageId===(payload as AckPayload).messageId)match=rows.getString(0);}finally{rows.close();}
+    const rows=await tx.querySql('SELECT o.id FROM Outbox o JOIN Attempt a ON a.id=o.attemptId WHERE o.id=? AND o.groupId=? AND a.holderInstanceId=?',[(payload as AckPayload).messageId,peer.groupId,peer.holderInstanceId]);let match='';
+    try{if(rows.goToFirstRow())match=rows.getString(0);}finally{rows.close();}
     if(!match)throw Error('ACK_UNAUTHORIZED');await tx.executeSql('UPDATE Outbox SET acked=1 WHERE id=?',[match]);
    }else if(m.type!=='Hello'&&handler)await handler.handle(tx,peer,payload,m);
    await tx.executeSql('UPDATE ChannelInbox SET done=1 WHERE id=?',[id]);
+   if(m.type!=='Ack')sequence=await this.nextSequence(tx);
   });
   if(m.type==='Hello')session.hello=true;
   if(m.type==='RecoveryRequest')session.recovered=true;
@@ -130,14 +132,14 @@ export class CoordinatorChannel {
    session.busy=(profile.inFlight?.length??0)>0;
   }
   if(m.type==='DeviceProfile'&&!duplicate)this.onProfile?.(peer.groupId,peer.holderInstanceId);
-  if(m.type==='Ack')return;
-  let sequence=0;await this.database.transaction(async(tx:CoordinatorTransaction):Promise<void>=>{
-   await tx.executeSql('INSERT OR IGNORE INTO DispatchSequence (id,value) VALUES (?,0)',[this.coordinatorId]);
-   await tx.executeSql('UPDATE DispatchSequence SET value=value+1 WHERE id=?',[this.coordinatorId]);
-   const rows=await tx.querySql('SELECT value FROM DispatchSequence WHERE id=?',[this.coordinatorId]);try{if(rows.goToFirstRow())sequence=rows.getLong(0);}finally{rows.close();}
-  });
+  if(m.type==='Ack'){session.sent.delete((payload as AckPayload).messageId);return;}
   const ack:MessageEnvelopeV2={protocolVersion:2,messageId:util.generateRandomUUID(true),type:'Ack',groupId:peer.groupId,senderInstanceId:this.coordinatorId,coordinatorEpoch:this.epoch,seq:sequence,ackOf:m.messageId,traceId:m.traceId,payload:JSON.stringify({messageId:m.messageId} as AckPayload),extensions:[]};
   if(!session.socket.isOpen())throw Error('CONTROL_DISCONNECTED');await session.socket.send(JSON.stringify(ack));
+ }
+ private async nextSequence(tx:CoordinatorTransaction):Promise<number>{
+  await tx.executeSql('INSERT OR IGNORE INTO DispatchSequence (id,value) VALUES (?,0)',[this.coordinatorId]);
+  await tx.executeSql('UPDATE DispatchSequence SET value=value+1 WHERE id=?',[this.coordinatorId]);
+  const rows=await tx.querySql('SELECT value FROM DispatchSequence WHERE id=?',[this.coordinatorId]);try{if(!rows.goToFirstRow())throw Error('SEQUENCE_MISSING');return rows.getLong(0);}finally{rows.close();}
  }
  private async profile(tx:CoordinatorTransaction,peer:CoordinatorPeer,profile:DeviceProfileV2):Promise<void>{
   if(peer.app&&profile.executors.some(e=>!peer.app!.allowedContracts.includes(e.contract.contractId)))throw Error('APP_CONTRACT_FORBIDDEN');

@@ -2,6 +2,7 @@ import { util } from '@kit.ArkTS';
 import { CoordinatorDatabase, CoordinatorTransaction } from './CoordinatorDatabase';
 import { CoordinatorPeer } from './CoordinatorCredentials';
 import { CoordinatorChannel } from './CoordinatorChannel';
+import { nativeGpuQueueAllowed } from './CoordinatorDispatchCapacity';
 import { CoordinatorArtifacts, CoordinatorArtifact } from './CoordinatorArtifacts';
 import { CoordinatorQualification, CoordinatorQualificationEvidence } from './CoordinatorQualification';
 import { CoordinatorReservation } from './CoordinatorAllotments';
@@ -22,7 +23,7 @@ interface PerformanceRow {job:string;span:string;}
 interface PlanInput {originLocal:boolean;backlog:string[];history:PerformanceRow[];id:string;groupId:string;originDeviceId:string;originHolderId:string;appInstanceId:string;coordinatorId:string;artifactId:string;priority:string;budgetMs:number;node:SdkNode;contract:TaskContractV2;}
 interface ExecutionIdentity {inputs:ArtifactRefV2[];contract:TaskContractV2;parameters:string;allowedTargetIds:string[];allowedConfigurations:string[];}
 interface NativeJob {restartable?:boolean;settlement?:ExecutionReceiptV2;yieldNotice?:YieldNoticeV2;originLocal?:boolean;owner:CoordinatorPeer;submission:SdkSubmission;digest:string;input:CoordinatorArtifact;output:CoordinatorArtifact|null;offer:DispatchOfferV2|null;holder:string;state:string;deadlineAt:number;traceId:string;decision:string;executionIdentity?:string;startup?:string;rejection?:AdmissionReplyV2;createdAt?:number;offeredAt?:number;acceptedAt?:number;settledAt?:number;}
-interface Choice {targetId:string;deviceId:string;}
+interface Choice {targetId:string;deviceId:string;finishMs:number;}
 interface DecisionBody {status:string;suggestion:Choice[]|null;reason:string;}
 interface NativeDecision {snapshotVersion:number;decision:DecisionBody;}
 interface NativeCandidate {profile:DeviceProfileV2;peer:CoordinatorPeer;grant:CoordinatorReservation;evidence:CoordinatorQualificationEvidence;}
@@ -99,8 +100,11 @@ export class CoordinatorJobs {
   const planned=nativePlanJson(JSON.stringify(profiles),JSON.stringify(candidates.map(c=>c.evidence)),JSON.stringify(request),Date.now(),monotonic),decision=JSON.parse(planned) as NativeDecision;
   const chosen=decision.decision.suggestion?.[0],candidate=candidates.find(c=>c.evidence.executor.target.targetId===chosen?.targetId);if(!chosen||!candidate)throw Error('NO_LEGAL_PLAN');
   const selectedExecutor=candidate.evidence.executor;
-  // A cheaper future GPU may win the plan, but dispatch waits for real capacity and credit.
-  if(!candidate.profile.credits.some(c=>c.priority===(job.submission.options.priority??'REMOTE_INTERACTIVE')&&c.slots>0)||selectedExecutor.resources.some(r=>{const pool=candidate.profile.pools.find(p=>p.resourcePoolId===r.resourcePoolId);return !pool||pool.admissionLimit.value===null||pool.occupied.value===null||pool.admissionLimit.value-pool.occupied.value<r.amount;}))throw Error('NO_LEGAL_PLAN');
+  // Keep a faster GPU supplied while its earlier work computes/uploads. This is
+  // a bounded queue offer, never a claim that occupied resources are free.
+  const immediate=candidate.profile.credits.some(c=>c.priority===(job.submission.options.priority??'REMOTE_INTERACTIVE')&&c.slots>0)&&!selectedExecutor.resources.some(r=>{const pool=candidate.profile.pools.find(p=>p.resourcePoolId===r.resourcePoolId);return !pool||pool.admissionLimit.value===null||pool.occupied.value===null||pool.admissionLimit.value-pool.occupied.value<r.amount;});
+  const outstanding=backlog.map(raw=>JSON.parse(raw) as NativeJob).filter(j=>j.holder===candidate.peer.holderInstanceId).map(j=>j.offer!.task.attemptId);
+  if(!immediate&&!nativeGpuQueueAllowed(candidate.profile,selectedExecutor,outstanding,chosen.finishMs,job.deadlineAt-Date.now(),Date.now()))throw Error('NO_LEGAL_PLAN');
   job.executionIdentity=candidate.evidence.admission.identity;job.startup=selectedExecutor.startup;
   const e=candidate.evidence.executor,g=candidate.grant.grant,remaining=Math.max(1,Math.floor(job.deadlineAt-Date.now()));
   const offer:DispatchOfferV2={task:{groupId:job.owner.groupId,sessionId:null,originDeviceId:job.owner.deviceId,resultDestination:job.owner.deviceId,workflowId:id,nodeId:node.id,attemptId:id,coordinatorEpoch:this.epoch,planRevision:1,app:job.owner.app!,contract:e.contract,budget:{remainingMs:remaining,deadlineAt:job.deadlineAt},inputs:[job.input.ref],allowedTargetIds:[e.target.targetId],qualityTarget:'reference',privacy:node.privacy==='LOCAL_ONLY'?'LOCAL_ONLY':'AUTHORIZED_REMOTE',priority:job.submission.options.priority??'REMOTE_INTERACTIVE',parameters:node.parameters,allowedConfigurations:e.configurations.map(c=>c.id),businessIdempotencyKey:null},target:e.target,resources:e.resources,allowedConfigs:e.configurations,allotmentId:g.allotmentId,allotmentVersion:g.version,leaseMs:remaining,transferPlan:job.originLocal?[]:[{ref:job.input.ref as ArtifactRefV2,from:this.coordinatorId,to:e.target.deviceId,via:null} as TransferHopV2],dependencies:[],reasonCode:decision.decision.reason};

@@ -41,7 +41,7 @@ export class PhotoDisplay {
   if(!this.connected())return;event.seq=++this.seq;const body=JSON.stringify(event);
   this.queue=this.queue.then(async()=>{if(this.failedConnection)return;try{await this.post('/event',body);}catch(e){try{await this.post('/event',body);}catch{this.failedConnection=true;this.report('展示同步中断，请重连；手机本机处理继续。');}}});
  }
- picking():void{this.send({seq:0,type:'PICKING',runId:this.runId});}
+ picking():void{this.runId=factory.id();this.send({seq:0,type:'PICKING',runId:this.runId});}
  async select(inputs:PhotoInput[]):Promise<void>{
   if(!this.connected()||this.failedConnection)return;const list:DisplayInput[]=[];
   try{

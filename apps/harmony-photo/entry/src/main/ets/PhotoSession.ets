@@ -7,7 +7,7 @@ interface Exchange extends Paired {offlineBase:ResourceAmountV2[];onlineExtra:Re
 interface Identity {appInstanceId:string;}
 interface AppContext {identity:Identity;deviceCapacity:ResourceAmountV2[];}
 interface Manifest {label:string;allowedContracts:string[];}
-interface CapabilityCount {capability:string;devices?:number;}
+interface CapabilityCount {capability:string;devices?:number;acceleratorSlots?:number;}
 interface CapabilityCounts {capabilities:CapabilityCount[];}
 export interface PhotoConnection {address:string;fingerprint:string;groupId:string;deviceId:string;appInstanceId:string;}
 const manifest:Manifest={label:'Harmony 图片演示 v1',allowedContracts:['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1']};
@@ -72,9 +72,12 @@ export class PhotoSession {
  async batchConcurrency():Promise<number>{
   try{
    const view=JSON.parse(await this.request('/v2/apps/me/capabilities',null)) as CapabilityCounts;
-   const devices=view.capabilities.find(c=>c.capability==='photo.enhance.v1')?.devices;
-   // A small window overlaps input/compute/delivery without submitting the whole batch.
-   return devices!==undefined&&Number.isInteger(devices)&&devices>0?Math.min(4,devices+1):2;
+   const capacity=view.capabilities.find(c=>c.capability==='photo.enhance.v1'),devices=capacity?.devices;
+   const base=devices!==undefined&&Number.isInteger(devices)&&devices>0?Math.min(4,devices+1):2;
+   const slots=capacity?.acceleratorSlots;
+   // Let later images feed the accelerator while earlier results are delivered.
+   // The coordinator still chooses targets and the device owns actual admission.
+   return slots!==undefined&&Number.isInteger(slots)&&slots>0?Math.min(8,Math.max(base,slots+2)):base;
   }catch{return 2;} // Older coordinators retain the existing two-image window.
  }
  async pendingReady():Promise<string[]>{

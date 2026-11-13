@@ -35,3 +35,11 @@ test('comparison rejects different inputs, unknown metadata, failures and simula
  assert.equal(comparison(a,{...a,durationMs:50}).ratio,2);
  for(const change of [{inputs:[]},{budgetMs:null},{model:null},{state:'FAILED'},{kind:'SIMULATED'},{scale:2}])assert.equal(comparison(a,{...a,...change}).ratio,undefined);
 });
+
+test('history excludes draft-only events and lists actual participating devices',async()=>{
+ const {displayRounds,roundDevices}=await import('../../apps/team-space-web/photo-display-compare.mjs');
+ const done={id:'a',kind:'COOPERATIVE',state:'SUCCEEDED',createdAt:10,devices:[{id:'phone',name:'手机'},{id:'B',name:'设备 B'}]},draft={id:'b',kind:'LOCAL',state:'SELECTED',createdAt:11};
+ assert.deepEqual(displayRounds({runs:[draft,done]}),{runs:[done],preview:draft});assert.equal(roundDevices(done),'手机 · 设备 B');
+ assert.equal(displayRounds({runs:[done],preview:{...draft,createdAt:9}}).preview,undefined);
+ assert.equal(roundDevices({kind:'COOPERATIVE',devices:[]}),'等待执行回执');assert.equal(roundDevices({kind:'LOCAL',devices:[]}),'手机 CPU');
+});

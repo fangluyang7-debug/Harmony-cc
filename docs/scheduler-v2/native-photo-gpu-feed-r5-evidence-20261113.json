@@ -1,0 +1,500 @@
+{
+  "baselineCommit": "52aedf1a6bdbf88dfa48883b95ac0e23ef2291c9",
+  "sameOrderedInputHashes": true,
+  "runs": [
+    {
+      "id": "073d8c7a-aafd-44f7-a6ce-a74a5cdc1db5",
+      "durationMs": 36576,
+      "counts": {
+        "phone:analyze": 6,
+        "Windows:enhance": 14,
+        "phone:enhance": 10,
+        "phone:deliver": 6
+      },
+      "orderedInputHashes": [
+        "cfdd54bb307d626777aba821a697b6cef75d3382c5544c109d47d76e452338eb",
+        "b12812ae3721470dadda34972b1cf41541eaf7355b9610266478bcc54a89ffab",
+        "db630125bd24352d7b14825eb346463b726ed59d2d96107ea973eeb872cb25e3",
+        "3aae213ebc8d9171c25fba8d00f455e05a853636ca5c0d0993c3f80d052cacb9",
+        "3e52acb9da6a5c597931ae1e5474e3a849c808c59f2a222578d0dd0840148fe9",
+        "04a521f0872d583a50dd65b075d1f7b48df4d595e2ee789c05359898aad7d459"
+      ],
+      "deliveryOffsetsMs": [
+        [
+          0,
+          16033
+        ],
+        [
+          1,
+          20161
+        ],
+        [
+          2,
+          22453
+        ],
+        [
+          3,
+          29099
+        ],
+        [
+          4,
+          33569
+        ],
+        [
+          5,
+          36499
+        ]
+      ],
+      "phaseSumsMs": {
+        "phone:PUBLISH": 9260,
+        "phone:TRANSFER_SEND": 5348,
+        "phone:EXECUTE": 23913,
+        "phone:LOAD": 5540,
+        "phone:ADMIT": 9375,
+        "phone:QUEUE": 4101,
+        "Windows:PUBLISH": 5943.117000000784,
+        "Windows:TRANSFER_SEND": 3614.97490000003,
+        "Windows:EXECUTE": 28923.116099999752,
+        "Windows:LOAD": 3435.9800999998115,
+        "Windows:TRANSFER_RECV": 3352.6962999997195,
+        "Windows:ADMIT": 2862.846399999922,
+        "Windows:QUEUE": 457.26299999980256,
+        "phone:TRANSFER_RECV": 5464
+      },
+      "dispatchToAdmissionMs": [
+        {
+          "image": 0,
+          "node": "enhance-0",
+          "device": "Windows",
+          "ms": 540,
+          "executeMs": 2719.8615999999456
+        },
+        {
+          "image": 0,
+          "node": "enhance-1",
+          "device": "Windows",
+          "ms": 1460,
+          "executeMs": 2913.0796000000555
+        },
+        {
+          "image": 0,
+          "node": "enhance-2",
+          "device": "phone",
+          "ms": 1458,
+          "executeMs": 2018
+        },
+        {
+          "image": 0,
+          "node": "enhance-3",
+          "device": "phone",
+          "ms": 2038,
+          "executeMs": 1828
+        },
+        {
+          "image": 1,
+          "node": "enhance-0",
+          "device": "phone",
+          "ms": 1916,
+          "executeMs": 3692
+        },
+        {
+          "image": 1,
+          "node": "enhance-1",
+          "device": "Windows",
+          "ms": 3014,
+          "executeMs": 1697.058199999854
+        },
+        {
+          "image": 1,
+          "node": "enhance-2",
+          "device": "Windows",
+          "ms": 2016,
+          "executeMs": 848.0552999998908
+        },
+        {
+          "image": 1,
+          "node": "enhance-3",
+          "device": "phone",
+          "ms": 1496,
+          "executeMs": 1646
+        },
+        {
+          "image": 2,
+          "node": "enhance-0",
+          "device": "Windows",
+          "ms": 2549,
+          "executeMs": 1692.6324000000022
+        },
+        {
+          "image": 2,
+          "node": "enhance-1",
+          "device": "Windows",
+          "ms": 1300,
+          "executeMs": 1737.600100000156
+        },
+        {
+          "image": 2,
+          "node": "enhance-2",
+          "device": "phone",
+          "ms": 392,
+          "executeMs": 1733
+        },
+        {
+          "image": 2,
+          "node": "enhance-3",
+          "device": "Windows",
+          "ms": 385,
+          "executeMs": 822.0190999999177
+        },
+        {
+          "image": 3,
+          "node": "enhance-0",
+          "device": "Windows",
+          "ms": 951,
+          "executeMs": 2887.812900000019
+        },
+        {
+          "image": 3,
+          "node": "enhance-1",
+          "device": "Windows",
+          "ms": 951,
+          "executeMs": 2857.7642999999225
+        },
+        {
+          "image": 3,
+          "node": "enhance-2",
+          "device": "phone",
+          "ms": 1207,
+          "executeMs": 2490
+        },
+        {
+          "image": 3,
+          "node": "enhance-3",
+          "device": "phone",
+          "ms": 820,
+          "executeMs": 2776
+        },
+        {
+          "image": 4,
+          "node": "enhance-0",
+          "device": "Windows",
+          "ms": 1497,
+          "executeMs": 2415.3887000000104
+        },
+        {
+          "image": 4,
+          "node": "enhance-1",
+          "device": "Windows",
+          "ms": 822,
+          "executeMs": 2164.9591999999247
+        },
+        {
+          "image": 4,
+          "node": "enhance-2",
+          "device": "Windows",
+          "ms": 1554,
+          "executeMs": 1247.9902999999467
+        },
+        {
+          "image": 4,
+          "node": "enhance-3",
+          "device": "phone",
+          "ms": 988,
+          "executeMs": 1351
+        },
+        {
+          "image": 5,
+          "node": "enhance-0",
+          "device": "Windows",
+          "ms": 892,
+          "executeMs": 2435.3286000001244
+        },
+        {
+          "image": 5,
+          "node": "enhance-1",
+          "device": "Windows",
+          "ms": 320,
+          "executeMs": 2483.565799999982
+        },
+        {
+          "image": 5,
+          "node": "enhance-2",
+          "device": "phone",
+          "ms": 1768,
+          "executeMs": 1487
+        },
+        {
+          "image": 5,
+          "node": "enhance-3",
+          "device": "phone",
+          "ms": 1076,
+          "executeMs": 2158
+        }
+      ]
+    },
+    {
+      "id": "b5546128-fd8f-4e8d-b75c-b8b1af9abb93",
+      "durationMs": 36707,
+      "counts": {
+        "phone:analyze": 6,
+        "B:enhance": 11,
+        "phone:deliver": 6,
+        "Windows:enhance": 8,
+        "phone:enhance": 5
+      },
+      "orderedInputHashes": [
+        "cfdd54bb307d626777aba821a697b6cef75d3382c5544c109d47d76e452338eb",
+        "b12812ae3721470dadda34972b1cf41541eaf7355b9610266478bcc54a89ffab",
+        "db630125bd24352d7b14825eb346463b726ed59d2d96107ea973eeb872cb25e3",
+        "3aae213ebc8d9171c25fba8d00f455e05a853636ca5c0d0993c3f80d052cacb9",
+        "3e52acb9da6a5c597931ae1e5474e3a849c808c59f2a222578d0dd0840148fe9",
+        "04a521f0872d583a50dd65b075d1f7b48df4d595e2ee789c05359898aad7d459"
+      ],
+      "deliveryOffsetsMs": [
+        [
+          0,
+          18752
+        ],
+        [
+          2,
+          25364
+        ],
+        [
+          3,
+          31959
+        ],
+        [
+          4,
+          33597
+        ],
+        [
+          1,
+          34565
+        ],
+        [
+          5,
+          36558
+        ]
+      ],
+      "phaseSumsMs": {
+        "phone:PUBLISH": 7695,
+        "phone:TRANSFER_SEND": 4319,
+        "phone:EXECUTE": 12580,
+        "phone:LOAD": 4765,
+        "phone:ADMIT": 7439,
+        "phone:QUEUE": 3074,
+        "B:PUBLISH": 5584.166900001001,
+        "B:TRANSFER_SEND": 2982.3729000003077,
+        "B:EXECUTE": 6536.791200000793,
+        "B:LOAD": 2716.8563999999315,
+        "B:TRANSFER_RECV": 2647.7401999998838,
+        "B:ADMIT": 2559.6769000017084,
+        "B:QUEUE": 901.5084999999963,
+        "phone:TRANSFER_RECV": 4679,
+        "Windows:PUBLISH": 3108.5579000003636,
+        "Windows:TRANSFER_SEND": 1650.8144000002649,
+        "Windows:EXECUTE": 18685.75530000031,
+        "Windows:LOAD": 1916.0407000000123,
+        "Windows:TRANSFER_RECV": 1853.4266000001226,
+        "Windows:ADMIT": 1590.4198000002652,
+        "Windows:QUEUE": 178.62589999986812
+      },
+      "dispatchToAdmissionMs": [
+        {
+          "image": 0,
+          "node": "enhance-0",
+          "device": "B",
+          "ms": 669,
+          "executeMs": 1346.3059000000358
+        },
+        {
+          "image": 0,
+          "node": "enhance-1",
+          "device": "B",
+          "ms": 727,
+          "executeMs": 1267.9812000002712
+        },
+        {
+          "image": 0,
+          "node": "enhance-2",
+          "device": "B",
+          "ms": 1007,
+          "executeMs": 1097.314900000114
+        },
+        {
+          "image": 0,
+          "node": "enhance-3",
+          "device": "B",
+          "ms": 1804,
+          "executeMs": 1077.1817000000738
+        },
+        {
+          "image": 1,
+          "node": "enhance-0",
+          "device": "Windows",
+          "ms": 307,
+          "executeMs": 2371.4884999999776
+        },
+        {
+          "image": 1,
+          "node": "enhance-1",
+          "device": "Windows",
+          "ms": 1180,
+          "executeMs": 2554.1404000001494
+        },
+        {
+          "image": 1,
+          "node": "enhance-2",
+          "device": "B",
+          "ms": 1502,
+          "executeMs": 429.45439999969676
+        },
+        {
+          "image": 1,
+          "node": "enhance-3",
+          "device": "Windows",
+          "ms": 1669,
+          "executeMs": 1312.6195000000298
+        },
+        {
+          "image": 2,
+          "node": "enhance-0",
+          "device": "Windows",
+          "ms": 966,
+          "executeMs": 3061.148999999976
+        },
+        {
+          "image": 2,
+          "node": "enhance-1",
+          "device": "Windows",
+          "ms": 2388,
+          "executeMs": 3306.1110000000335
+        },
+        {
+          "image": 2,
+          "node": "enhance-2",
+          "device": "phone",
+          "ms": 1660,
+          "executeMs": 1467
+        },
+        {
+          "image": 2,
+          "node": "enhance-3",
+          "device": "Windows",
+          "ms": 946,
+          "executeMs": 1100.192200000165
+        },
+        {
+          "image": 3,
+          "node": "enhance-0",
+          "device": "B",
+          "ms": 15429,
+          "executeMs": 323.83290000027046
+        },
+        {
+          "image": 3,
+          "node": "enhance-1",
+          "device": "B",
+          "ms": 14857,
+          "executeMs": 285.4556999998167
+        },
+        {
+          "image": 3,
+          "node": "enhance-2",
+          "device": "B",
+          "ms": 5298,
+          "executeMs": 284.6003999998793
+        },
+        {
+          "image": 3,
+          "node": "enhance-3",
+          "device": "phone",
+          "ms": 914,
+          "executeMs": 1491
+        },
+        {
+          "image": 4,
+          "node": "enhance-0",
+          "device": "Windows",
+          "ms": 389,
+          "executeMs": 2522.1375999997836
+        },
+        {
+          "image": 4,
+          "node": "enhance-1",
+          "device": "Windows",
+          "ms": 469,
+          "executeMs": 2457.917100000195
+        },
+        {
+          "image": 4,
+          "node": "enhance-2",
+          "device": "phone",
+          "ms": 960,
+          "executeMs": 2228
+        },
+        {
+          "image": 4,
+          "node": "enhance-3",
+          "device": "phone",
+          "ms": 1326,
+          "executeMs": 2090
+        },
+        {
+          "image": 5,
+          "node": "enhance-0",
+          "device": "B",
+          "ms": 1579,
+          "executeMs": 144.9091000002809
+        },
+        {
+          "image": 5,
+          "node": "enhance-1",
+          "device": "B",
+          "ms": 1514,
+          "executeMs": 210.21420000027865
+        },
+        {
+          "image": 5,
+          "node": "enhance-2",
+          "device": "B",
+          "ms": 1548,
+          "executeMs": 69.54080000007525
+        },
+        {
+          "image": 5,
+          "node": "enhance-3",
+          "device": "phone",
+          "ms": 819,
+          "executeMs": 1703
+        }
+      ]
+    }
+  ],
+  "gpu": {
+    "backend": "VULKAN",
+    "executor": "ncnn.photo.vulkan.v1",
+    "executeSpanCount": 11,
+    "clockDomains": [
+      "8dd41cd3-dbe6-4504-814b-b0273fc54663"
+    ],
+    "executeSumMs": 6536.791200000793,
+    "executeUnionMs": 3302.6734000002034,
+    "firstToLastExecuteSpanMs": 25786.678600000218,
+    "executeGapMs": [
+      5032.270800000057,
+      701.0583999999799,
+      532.8204000000842,
+      15920.709100000095,
+      175.30480000004172,
+      121.84169999975711
+    ],
+    "peakOverlappingExecuteSpans": 4
+  },
+  "limitations": [
+    "EXECUTE interval coverage is not hardware utilization.",
+    "Phase sums overlap and are not an additive wall-clock decomposition.",
+    "No B-local GPU timing log was captured; repeated model loading is not established.",
+    "R5 performance has not been retested on hardware."
+  ]
+}

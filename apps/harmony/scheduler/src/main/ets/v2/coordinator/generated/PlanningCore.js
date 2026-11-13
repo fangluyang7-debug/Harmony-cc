@@ -899,6 +899,7 @@ var NativePhotoEngine = class {
   async photo(peerJson, inputJson) {
     const peer = JSON.parse(peerJson), m = JSON.parse(inputJson);
     if (!peer.app?.allowedContracts.includes("photo.enhance.v1")) throw Error("PHOTO_APP_REQUIRED");
+    if (m.route.startsWith("/photo-large-runs")) return this.largePhoto(peer, m);
     const match = /^\/photo-runs(?:\/([A-Za-z0-9-]+)(?:\/(input|capture-result|result)\?image=(\d+))?)?$/.exec(m.route);
     if (!match) throw Error("PHOTO_ROUTE_INVALID");
     let id2 = match[1];
@@ -977,6 +978,61 @@ var NativePhotoEngine = class {
     }
     return { ...r, workflows, allCommitted: workflows.length === r.inputs.length && workflows.every((w) => w.state === "SUCCEEDED"), images: r.inputs.map((_, imageIndex) => ({ imageIndex, delivered: r.deliveries.some((d) => d.imageIndex === imageIndex) })) };
   }
+  largeView(r, devices) {
+    const id2 = "large:" + r.id, url = (i, k) => "/images/" + encodeURIComponent(id2) + "/" + i + "/" + k;
+    return { ...r, id: id2, peer: void 0, jobs: void 0, kind: "COOPERATIVE", label: "\u591A\u8BBE\u5907\u534F\u540C \xB7 \u539F\u5206\u8FA8\u7387", inputs: r.inputs.map((i, n) => ({ ...i, preview: void 0, url: url(n, "input") })), results: r.results.map((p) => ({ ...p, image: void 0, url: url(p.imageIndex, "result") })), devices: r.deviceIds.map((id3) => ({ id: id3, name: devices.find((d) => d.id === id3)?.title ?? id3 })), directory: devices.map((d) => ({ id: d.id, name: d.title })), workflows: r.jobs.filter((j) => j.state !== "SUCCEEDED").slice(0, 8).concat(r.jobs.filter((j) => j.state === "SUCCEEDED").slice(-1)).map((j) => ({ id: j.id, imageIndex: j.imageIndex, state: j.state, nodes: j.nodes ?? [] })), evidence: "TILED_SDK_RECEIPTS", allCommitted: r.state === "SUCCEEDED" };
+  }
+  async largePhoto(peer, m) {
+    const match = /^\/photo-large-runs(?:\/([A-Za-z0-9-]+))?$/.exec(m.route);
+    if (!match) throw Error("PHOTO_ROUTE_INVALID");
+    const b = m.body;
+    if (!match[1]) {
+      if (m.method !== "POST" || !Array.isArray(b?.inputs) || !b.inputs.length || b.inputs.length > 8) throw Error("PHOTO_INPUT_INVALID");
+      for (const i of b.inputs) if (![i.width, i.height].every((v) => Number.isSafeInteger(v) && v > 0 && v <= 32768) || !/^data:image\/jpeg;base64,/.test(i.preview) || i.preview.length > 2e5) throw Error("PHOTO_INPUT_INVALID");
+      const id2 = this.port.id(), r = { id: id2, peer, inputs: b.inputs, createdAt: this.port.now(), updatedAt: this.port.now(), state: "RUNNING", revision: 0, results: [], jobs: [], deviceIds: [], scale: 4, model: (await this.call("contract", { capability: "photo.enhance.v1" })).model, durationMs: null };
+      await this.save("large-photo:" + id2, r);
+      return JSON.stringify({ id: id2 });
+    }
+    return this.lock("large-photo:" + match[1], async () => {
+      const r = await this.get("large-photo:" + match[1]);
+      this.owns(peer, r);
+      if (m.method === "GET") return JSON.stringify(r);
+      if (m.method !== "POST") throw Error("PHOTO_ROUTE_INVALID");
+      if (b.job) {
+        const j = b.job, i = r.inputs[j.imageIndex];
+        if (!i || !Number.isInteger(j.tileIndex) || j.tileIndex < 0 || j.tileIndex >= Math.ceil(i.width / 256) * Math.ceil(i.height / 256)) throw Error("PHOTO_TILE_SCOPE");
+        const g = await this.get("graph:" + j.id);
+        this.owns(peer, g);
+        const old = r.jobs.find((v) => v.imageIndex === j.imageIndex && v.tileIndex === j.tileIndex);
+        if (old && old.id !== j.id) throw Error("PHOTO_TILE_CONFLICT");
+        const row = { id: j.id, imageIndex: j.imageIndex, tileIndex: j.tileIndex, state: g.state, nodes: g.workflow.nodes.map((n) => {
+          const v = g.nodes.find((s) => s.id === n.id);
+          return { ...n, state: v.state === "COMMITTED" ? "SUCCEEDED" : v.executionState ?? v.state, committed: v.state === "COMMITTED", target: v.target };
+        }) };
+        if (old) Object.assign(old, row);
+        else r.jobs.push(row);
+        for (const n of row.nodes) if (n.target && ["SUCCEEDED", "RUNNING", "ACCEPTED"].includes(n.state) && !r.deviceIds.includes(n.target.deviceId)) r.deviceIds.push(n.target.deviceId);
+      }
+      if (b.result) {
+        const p = b.result, i = r.inputs[p.imageIndex];
+        if (!i || p.width !== i.width * 4 || p.height !== i.height * 4 || p.previewOnly !== true) throw Error("PHOTO_RESULT_GEOMETRY");
+        if (r.jobs.filter((j) => j.imageIndex === p.imageIndex && j.state === "SUCCEEDED").length !== Math.ceil(i.width / 256) * Math.ceil(i.height / 256)) throw Error("PHOTO_RESULT_PENDING");
+        await this.call("validateBytes", { data: p.image, hash: p.hash });
+        if (!r.results.some((v) => v.imageIndex === p.imageIndex)) r.results.push(p);
+      }
+      if (b.state) {
+        if (!["SUCCEEDED", "FAILED", "CANCELLED"].includes(b.state) || !Number.isFinite(b.durationMs) || b.durationMs < 0) throw Error("PHOTO_STATE_INVALID");
+        if (b.state === "SUCCEEDED" && r.results.length !== r.inputs.length) throw Error("PHOTO_RESULTS_NOT_COMMITTED");
+        r.state = b.state;
+        r.durationMs = b.durationMs;
+        r.error = b.error;
+      }
+      r.revision++;
+      r.updatedAt = this.port.now();
+      await this.save("large-photo:" + r.id, r);
+      return JSON.stringify({ id: r.id });
+    });
+  }
   async graphs(id2) {
     return !!await this.get("graph:" + id2);
   }
@@ -1039,7 +1095,7 @@ var NativePhotoEngine = class {
         r.revision++;
         r.updatedAt = now;
         await this.save("display-current", r);
-        await this.save("display-run:" + r.runId, r);
+        if (!["PICKING", "SELECTED"].includes(r.state)) await this.save("display-run:" + r.runId, r);
         session.seq = e.seq;
         await this.save("display-session", session);
         return JSON.stringify({ seq: e.seq });
@@ -1052,7 +1108,8 @@ var NativePhotoEngine = class {
       };
       if (path === "/runs") {
         const local = await this.call("list", { prefix: "display-run:" }), cooperative = await this.call("list", { prefix: "photo:" });
-        const runs = [...local.map(localView), ...await Promise.all(cooperative.map(async (r) => {
+        const large = await this.call("list", { prefix: "large-photo:" });
+        const runs = [...large.map((r) => this.largeView(r, devices)), ...local.filter((r) => !["PICKING", "SELECTED"].includes(r.state)).map(localView), ...await Promise.all(cooperative.map(async (r) => {
           let summary = this.summaries.get(r.id);
           if (!summary || summary.revision !== r.revision || !["SUCCEEDED", "FAILED", "CANCELLED"].includes(r.state) && this.port.now() - summary.at > 2e3) {
             const view = await this.photoView(r);
@@ -1062,12 +1119,19 @@ var NativePhotoEngine = class {
           }
           return coopView({ ...r, workflows: [], usedDeviceIds: summary.devices });
         }))].filter((r) => r.createdAt >= session.hiddenBefore).sort((a, b) => b.createdAt - a.createdAt);
-        return JSON.stringify({ generation: session.generation, managed: true, coordinator: { connected: true, name: "\u9E3F\u8499\u534F\u8C03\u4E2D\u5FC3" }, runs: runs.map((r) => ({ ...r, results: void 0, workflows: void 0 })) });
+        const draft = await this.get("display-current");
+        const preview = draft && ["PICKING", "SELECTED"].includes(draft.state) && draft.createdAt >= session.hiddenBefore && draft.createdAt > (runs[0]?.createdAt ?? -1) ? localView(draft) : null;
+        return JSON.stringify({ generation: session.generation, preview, managed: true, coordinator: { connected: true, name: "\u9E3F\u8499\u534F\u8C03\u4E2D\u5FC3" }, runs: runs.map((r) => ({ ...r, results: void 0, workflows: void 0 })) });
       }
       if (path.startsWith("/runs/")) {
         const id2 = decodeURIComponent(path.slice(6));
+        if (id2.startsWith("large:")) {
+          const r2 = await this.get("large-photo:" + id2.slice(6));
+          if (!r2 || r2.createdAt < session.hiddenBefore) throw Error("RUN_NOT_FOUND");
+          return JSON.stringify(this.largeView(r2, devices));
+        }
         if (id2.startsWith("local:")) {
-          const r2 = await this.get("display-run:" + id2.slice(6));
+          const stored = await this.get("display-run:" + id2.slice(6)), draft = stored ? null : await this.get("display-current"), r2 = stored ?? (draft?.runId === id2.slice(6) ? draft : null);
           if (!r2 || r2.createdAt < session.hiddenBefore) throw Error("RUN_NOT_FOUND");
           return JSON.stringify(localView(r2));
         }
@@ -1078,8 +1142,15 @@ var NativePhotoEngine = class {
       const m = /^\/images\/([^/]+)\/(\d+)\/(input|result)$/.exec(path);
       if (m) {
         const id2 = decodeURIComponent(m[1]), i = Number(m[2]);
+        if (id2.startsWith("large:")) {
+          const r2 = await this.get("large-photo:" + id2.slice(6));
+          if (!r2 || r2.createdAt < session.hiddenBefore) throw Error("RUN_NOT_FOUND");
+          const data = m[3] === "input" ? r2.inputs[i]?.preview.split(",")[1] : r2.results.find((v) => v.imageIndex === i)?.image;
+          if (!data) throw Error("IMAGE_NOT_FOUND");
+          return JSON.stringify({ data, mime: m[3] === "input" ? "image/jpeg" : "image/png" });
+        }
         if (id2.startsWith("local:")) {
-          const r2 = await this.get("display-run:" + id2.slice(6));
+          const stored = await this.get("display-run:" + id2.slice(6)), draft = stored ? null : await this.get("display-current"), r2 = stored ?? (draft?.runId === id2.slice(6) ? draft : null);
           if (!r2 || r2.createdAt < session.hiddenBefore) throw Error("RUN_NOT_FOUND");
           const data = m[3] === "input" ? r2.inputs[i]?.preview.split(",")[1] : r2.results.find((v) => v.imageIndex === i)?.image;
           if (!data) throw Error("IMAGE_NOT_FOUND");

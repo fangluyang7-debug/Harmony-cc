@@ -3,7 +3,11 @@ import { common } from '@kit.AbilityKit';
 import { coordinatorMigrations } from './CoordinatorSchema';
 import { DeviceProfileV2, sampleUsableV2, validDeviceProfileV2 } from '../protocol/ResourcesV2';
 import { CapabilityAdmissionV2 } from '../protocol/ResourcesV2';
-import { StoredAppActivity } from './CoordinatorActivity';
+import { StoredAppActivity, StoredDeviceTelemetry } from './CoordinatorActivity';
+import { DispatchOfferV2 } from '../protocol/ResourcesV2';
+interface ObservedJob {offer:DispatchOfferV2|null;state:string;traceId:string;decision:string;createdAt?:number;offeredAt?:number;acceptedAt?:number;settledAt?:number;}
+interface ObservedReason {reason:string;}
+interface ObservedDecision {decision:ObservedReason;}
 
 export class CoordinatorTransaction {
  private native:relationalStore.Transaction;
@@ -11,7 +15,7 @@ export class CoordinatorTransaction {
  async executeSql(sql:string,args:relationalStore.ValueType[]=[]):Promise<void>{await this.native.execute(sql,args);}
  querySql(sql:string,args:relationalStore.ValueType[]=[]):Promise<relationalStore.ResultSet>{return this.native.querySql(sql,args);}
 }
-export interface CoordinatorOverviewRow {id:string;title:string;detail:string;state:string;profiles?:DeviceProfileV2[];activities?:StoredAppActivity[];qualifications?:CapabilityAdmissionV2[];}
+export interface CoordinatorOverviewRow {id:string;title:string;detail:string;state:string;kind?:string;deviceId?:string;updatedAt?:number;telemetry?:StoredDeviceTelemetry;profiles?:DeviceProfileV2[];activities?:StoredAppActivity[];qualifications?:CapabilityAdmissionV2[];}
 interface NativeQualificationRow {admission:CapabilityAdmissionV2;}
 export interface CoordinatorOverview {spaces:CoordinatorOverviewRow[];devices:CoordinatorOverviewRow[];tasks:CoordinatorOverviewRow[];apps:CoordinatorOverviewRow[];}
 /** Native persistence for the coordinator, separate from the execution-host ledger. */
@@ -76,6 +80,8 @@ export class CoordinatorDatabase {
     const device=result.devices.find(d=>d.profiles?.some(p=>p.holderInstanceId===value.admission.holderInstanceId));
     if(device){if(!device.qualifications)device.qualifications=[];device.qualifications.push(value.admission);}
    }}finally{qualificationRows.close();}
+   const telemetryRows=await db.querySql('SELECT metadataJson FROM Device WHERE id LIKE ?',['["device-telemetry",%']);
+   try{while(telemetryRows.goToNextRow()){const value=JSON.parse(telemetryRows.getString(0)) as StoredDeviceTelemetry;const device=result.devices.find(d=>d.id===value.deviceId&&d.profiles?.some(p=>p.holderInstanceId===value.holderInstanceId));if(device&&now>=value.receivedAt&&now-value.receivedAt<=15000&&now-value.sample.sampledAt<=15000)device.telemetry=value;}}finally{telemetryRows.close();}
    const activityRows=await db.querySql('SELECT id,metadataJson FROM Device WHERE id LIKE ?',['["app-activity",%']);
    try{while(activityRows.goToNextRow()){
     const value=JSON.parse(activityRows.getString(1)) as StoredAppActivity;
@@ -83,13 +89,25 @@ export class CoordinatorDatabase {
     const fresh=now>=value.receivedAt&&now-value.receivedAt<=10000;
     if(device&&fresh){if(!device.activities)device.activities=[];device.activities.push(value);}
     for(const task of value.activity.tasks){
-     result.tasks.push({id:value.holderInstanceId+':'+task.taskId,title:task.operation+' · '+task.taskId,
+     result.tasks.push({id:value.holderInstanceId+':'+task.taskId,title:'SoleAI · '+task.operation,kind:'APP',deviceId:value.deviceId,updatedAt:task.updatedAt,
       detail:'应用观测 · '+task.phase+' · 设备 '+value.deviceId+' · '+Math.max(0,task.updatedAt-task.startedAt)+' ms'+(task.error?' · '+task.error:''),
       state:task.state==='RUNNING'&&(!fresh||!device)?'状态待更新':task.state});
     }
    }}finally{activityRows.close();}
-   const tasks=await db.querySql('SELECT id,workflowId,state,holderInstanceId FROM Attempt ORDER BY rowid DESC LIMIT 100');
-   try{while(tasks.goToNextRow())result.tasks.push({id:tasks.getString(0),title:tasks.getString(1),detail:'宿主 '+tasks.getString(3),state:tasks.getString(2)});}finally{tasks.close();}
+   const tasks=await db.querySql('SELECT id,state,metadataJson FROM CpuJob ORDER BY rowid DESC LIMIT 100');
+   try{while(tasks.goToNextRow()){
+    const job=JSON.parse(tasks.getString(2)) as ObservedJob,offer=job.offer,id=tasks.getString(0);let reason='';try{reason=(JSON.parse(job.decision) as ObservedDecision).decision.reason;}catch(_){}
+    const name=(deviceId:string):string=>result.devices.find(d=>d.id===deviceId)?.title??deviceId;
+    const capability=offer?.task.contract.capability??'等待规划',labels:Record<string,string>={'catalog.filter.v1':'商品筛选 / 比价排序','image.crop.v1':'图片预处理','image.visual-match.v1':'商品图像相似度','photo.enhance.v1':'照片高清增强','photo.analyze.v1':'照片分析','photo.deliver.v1':'照片合成'};
+    let detail=offer?'发起 '+name(offer.task.originDeviceId)+' → 执行 '+name(offer.target.deviceId)+' · '+offer.target.backend+'\n'+(offer.task.originDeviceId===offer.target.deviceId?'调度选择源设备本地执行':'已派发到其他设备执行')+' · '+offer.task.nodeId:'尚无执行目标';
+    if(job.createdAt)detail+='\n提交 '+new Date(job.createdAt).toLocaleTimeString();
+    if(job.offeredAt&&job.createdAt)detail+=' · 派发前 '+Math.max(0,job.offeredAt-job.createdAt)+' ms';
+    if(job.acceptedAt&&job.offeredAt)detail+=' · 接单 '+Math.max(0,job.acceptedAt-job.offeredAt)+' ms';
+    if(job.settledAt&&job.acceptedAt)detail+=' · 接单至结算 '+Math.max(0,job.settledAt-job.acceptedAt)+' ms（含传输与计算）';
+    detail+='\n规划原因 '+(reason||'无记录')+' · Trace '+job.traceId;
+    result.tasks.push({id,title:labels[capability]??capability,detail,state:job.state,kind:'DISPATCH',deviceId:offer?.target.deviceId,updatedAt:job.createdAt??0});
+   }}finally{tasks.close();}
+   result.tasks.sort((a,b)=>(b.updatedAt??0)-(a.updatedAt??0));
    const apps=await db.querySql('SELECT i.id,a.label,i.state,i.deviceId FROM RegisteredInstallation i JOIN RegisteredApp a ON a.id=i.appId ORDER BY i.rowid DESC');
    try{while(apps.goToNextRow())result.apps.push({id:apps.getString(0),title:apps.getString(1),detail:'设备 '+apps.getString(3),state:apps.getString(2)});}finally{apps.close();}
   });return result;

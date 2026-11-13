@@ -35,3 +35,20 @@ test('native channel never acknowledges rejected state, unsettled recovery or re
   await f.c.revoke(f.identity.peer.credentialId);await assert.rejects(f.s.onText(JSON.stringify(envelope('next','Hello',4,{versions:[2],extensions:[]}))),/CREDENTIAL_REVOKED/);
  }finally{await f.channel.close();}
 });
+
+test('busy dispatch is sent once per live connection, and recovery can redeliver unacknowledged intent',async()=>{
+ const f=await setup();try{
+  await f.s.onText(JSON.stringify(envelope('hello','Hello',10,{versions:[2],extensions:[]})));
+  await f.s.onText(JSON.stringify(envelope('recover','RecoveryRequest',1,{})));
+  f.sql.prepare('INSERT INTO Attempt (id,groupId,workflowId,nodeId,executionDigest,state,holderInstanceId,taskJson,recordJson) VALUES (?,?,?,?,?,?,?,?,?)').run('offer-a','g','w','n','digest','SUCCEEDED','h1','{}',JSON.stringify({resourcesSettled:true}));
+  await f.database.transaction(tx=>f.channel.enqueue(tx,'g','offer-a','DispatchOffer',{test:'payload'},'trace'));
+  for(let i=0;i<100;i++)await f.channel.pump();
+  const offers=f.s.sent.filter(m=>m.type==='DispatchOffer');assert.equal(offers.length,1,'repeated scheduler wakeups must not flood the holder ledger');
+  await f.s.close();const s2=socket();await f.channel.upgrade({authorization:'Bearer '+f.identity.credential},s2);
+  await s2.onText(JSON.stringify(envelope('hello2','Hello',11,{versions:[2],extensions:[]})));
+  await s2.onText(JSON.stringify(envelope('recover2','RecoveryRequest',2,{})));await f.channel.pump();
+  assert.equal(s2.sent.filter(m=>m.type==='DispatchOffer').length,1);assert.equal(s2.sent.find(m=>m.type==='DispatchOffer').messageId,offers[0].messageId);
+  const ack={...envelope('ack','Ack',3,{messageId:offers[0].messageId}),ackOf:offers[0].messageId};await s2.onText(JSON.stringify(ack));await f.channel.pump();
+  assert.equal(f.sql.prepare('SELECT acked FROM Outbox').get().acked,1);assert.equal(s2.sent.filter(m=>m.type==='DispatchOffer').length,1);
+ }finally{await f.channel.close();}
+});

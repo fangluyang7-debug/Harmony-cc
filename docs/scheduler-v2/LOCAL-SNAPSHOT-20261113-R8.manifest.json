@@ -1,0 +1,49 @@
+{
+  "branch": "codex/local-snapshot-20261113-r8",
+  "sourceRef": "local-snapshot-20261113-r8",
+  "baseCommit": "52aedf1a6bdbf88dfa48883b95ac0e23ef2291c9",
+  "assets": [
+    {
+      "name": "01-Coordinator-Windows-x64.zip",
+      "bytes": 326377563,
+      "sha256": "5d01bb1e6703fc5f21602414e1b20babdda2cb90394cf69ee6296648a01310e1",
+      "provenance": "installed Windows snapshot",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-snapshot-20261113-r8/01-Coordinator-Windows-x64.zip"
+    },
+    {
+      "name": "02-Device-Agent-Windows-x64.zip",
+      "bytes": 272844477,
+      "sha256": "62227f0404f0bfc46623bd833d787d94fd6ace34f71ff0417eda56e38757b372",
+      "provenance": "installed Windows snapshot",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-snapshot-20261113-r8/02-Device-Agent-Windows-x64.zip"
+    },
+    {
+      "name": "03-Harmony-Device-Agent-API24-unsigned.hap",
+      "bytes": 78823429,
+      "sha256": "f878f8eb90b5980311c0425ba1233e73057752fcf0e7f1bdcc3ab9fe81ca12fe",
+      "provenance": "unsigned counterpart of installed build; not rebuilt",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-snapshot-20261113-r8/03-Harmony-Device-Agent-API24-unsigned.hap"
+    },
+    {
+      "name": "04-SoleAI-API24-unsigned.hap",
+      "bytes": 91366993,
+      "sha256": "b7237632189184ea3937a4af52c2fd9784298e2277aa471c8e7c30e70a97c416",
+      "provenance": "unsigned counterpart of installed build; not rebuilt",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-snapshot-20261113-r8/04-SoleAI-API24-unsigned.hap"
+    },
+    {
+      "name": "05-Harmony-Photo-API24-unsigned.hap",
+      "bytes": 78896928,
+      "sha256": "97e2538745e80578182817c9075a256bc58bd2663fa9d9319df60cfb9a4e2c68",
+      "provenance": "unsigned counterpart of installed build; not rebuilt",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-snapshot-20261113-r8/05-Harmony-Photo-API24-unsigned.hap"
+    },
+    {
+      "name": "06-Harmony-Coordinator-API24-unsigned.hap",
+      "bytes": 79090952,
+      "sha256": "a21b16467d409282c7245ce451f364464cae38ffb74b73523d420973742039c7",
+      "provenance": "unsigned counterpart of installed build; not rebuilt",
+      "downloadUrl": "https://github.com/fangluyang7-debug/Harmony-cc/releases/download/local-snapshot-20261113-r8/06-Harmony-Coordinator-API24-unsigned.hap"
+    }
+  ]
+}

@@ -10,6 +10,7 @@ interface LocalPart { nodeId:string; schemaId:string; contentHash:string; bytes:
 interface LocalBundle { version:number; parts:LocalPart[]; }
 export interface LocalPhotoProgress { completed:number; total:number; stage:string; }
 export interface LocalPhotoOptions { cancelled:()=>boolean; progress:(value:LocalPhotoProgress)=>void; }
+export async function encodePhotoRgbFile(source:string,destination:string,width:number,height:number):Promise<void>{await photoRuntime.encodeRgbFile(source,destination,width,height);}
 
 /** App-owned offline operation. Uses the same kernels, tiles and model as photo.*;
  * no coordinator, registration, SDK dispatch or input upload is involved. */
