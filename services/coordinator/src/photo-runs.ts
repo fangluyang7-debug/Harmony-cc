@@ -76,8 +76,11 @@ export class PhotoRuns {
   for(const job of r.jobs){const row=graphMap.get(job.id);if(!row)continue;const g=JSON.parse(row.metadataJson);
    const nodes=[];for(const n of g.workflow.nodes){const state=g.nodes.find((s:any)=>s.id===n.id),d=state?childMap.get(state.jobId):null;
     const attempt=state?attemptMap.get(state.jobId):null,receipt=state?receiptMap.get(state.jobId):null;
-    const timing=(spansByAttempt.get(state?.jobId)??[]).map(s=>({phase:s.phase,durationMs:s.durationMs,clockDomainId:s.clockDomainId,startMono:s.startMono,endMono:s.endMono}));
-    nodes.push({timing,id:n.id,capability:n.capability,dependsOn:n.dependsOn,inputFroms:n.inputFroms,state:state?.state==='COMMITTED'?'SUCCEEDED':attempt?.state??state?.state??'PENDING',attemptId:state?.jobId,target:d?.offer.target??null,reason:d?.offer.reasonCode??null,inputBytes:d?.input.bytes??null,inputHash:d?.input.ref.contentHash??null,outputBytes:d?.output?.bytes??null,outputHash:d?.output?.ref.contentHash??null,committed:receipt?.committed??false,decision:d?.decisionEvidence??null});
+    const timing=(spansByAttempt.get(state?.jobId)??[]).map(s=>({phase:s.phase,durationMs:s.durationMs,clockDomainId:s.clockDomainId,startMono:s.startMono,endMono:s.endMono,reasonCode:s.reasonCode??null}));
+    let parameters:any={};try{parameters=JSON.parse(n.parameters);}catch{}
+    const region=['x','y','width','height'].every(k=>Number.isFinite(parameters[k]))?{x:parameters.x,y:parameters.y,width:parameters.width,height:parameters.height}:null;
+    const record=attempt?.recordJson?JSON.parse(attempt.recordJson):null;
+    nodes.push({timing,region,id:n.id,capability:n.capability,dependsOn:n.dependsOn,inputFrom:n.inputFrom,inputFroms:n.inputFroms,state:state?.state==='COMMITTED'?'SUCCEEDED':attempt?.state??state?.state??'PENDING',attemptId:state?.jobId,target:record?.receipt?.actualTarget??d?.offer.target??null,reason:d?.offer.reasonCode??null,inputSchema:d?.input.ref.schemaId??null,outputSchema:record?.receipt?.outputs?.[0]?.schemaId??d?.output?.ref.schemaId??null,inputBytes:d?.input.bytes??null,inputHash:d?.input.ref.contentHash??null,outputBytes:d?.output?.bytes??null,outputHash:record?.receipt?.outputs?.[0]?.contentHash??d?.output?.ref.contentHash??null,committed:receipt?.committed??false,decision:d?.decisionEvidence??null,transferPlan:d?.offer.transferPlan?.map((p:any)=>({from:p.from,to:p.to,via:p.via}))??[],resourcesSettled:record?.resourcesSettled??false});
    }
    workflows.push({id:job.id,imageIndex:job.imageIndex,state:row.state,nodes,plan:g.plan.decision,deadlineAt:g.deadlineAt});
   }

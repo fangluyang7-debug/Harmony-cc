@@ -1,0 +1,41 @@
+{
+  "archive": "Harmony-最终参赛版-20261116.zip",
+  "archiveSha256": "3ee25d7885d4fe60dfa449131e830eed1fa6b60adf9ed93589a7e56d470fae50",
+  "packages": [
+    {
+      "path": "02-安装包/01-Windows-协调中心.zip",
+      "bytes": 334971364,
+      "sha256": "d3c8be8f1ea8c6833e6586e152468daccb4f353d5122f341cb4837fc575fd68f"
+    },
+    {
+      "path": "02-安装包/02-Windows-本机设备节点.zip",
+      "bytes": 285677911,
+      "sha256": "1668eded748aa362c09d6d4d0f50b8b67dc321246bbfa3fac2c6680966b22e9a"
+    },
+    {
+      "path": "02-安装包/03-Windows-设备B-GPU节点.zip",
+      "bytes": 255830288,
+      "sha256": "04d6108de975921c838a783e0a97cd762cfd4f4cbce6f207e92ec548f3dbc4d9"
+    },
+    {
+      "path": "02-安装包/04-Harmony-调度连接.hap",
+      "bytes": 79512663,
+      "sha256": "d938905ede7f4b50dc66da3d215470930b461f8a05bf4ce00eddef7b7ff21f4f"
+    },
+    {
+      "path": "02-安装包/05-SoleAI.hap",
+      "bytes": 91832991,
+      "sha256": "aa5dcd65c3e5cbfa6605bb0a42495ac621b04b7a96f538324f2770d5c0201958"
+    },
+    {
+      "path": "02-安装包/06-Harmony-图片处理.hap",
+      "bytes": 79349594,
+      "sha256": "40910deae9b24f24269e946835f8efd3963c81634ac4f3b8bd7835e545f58fe3"
+    },
+    {
+      "path": "02-安装包/07-Harmony-协调中心.hap",
+      "bytes": 79486451,
+      "sha256": "85a6abd0f673ded35e38493978b07bc816c0a8b573069c325fa619584f287e36"
+    }
+  ]
+}

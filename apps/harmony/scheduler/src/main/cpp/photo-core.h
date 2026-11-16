@@ -6,12 +6,20 @@
 #include <chrono>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <cstdlib>
 // Same RGB/float32 model input on Windows and HarmonyOS. No task cache.
-struct PhotoModelCache {std::unique_ptr<ncnn::Net> net;std::string key;};
-inline PhotoModelCache& photoModelCache(){thread_local PhotoModelCache cache;return cache;}
+struct PhotoModelCache {std::shared_ptr<ncnn::Net> net;std::string key;std::mutex mutex;};
+inline PhotoModelCache& photoModelCache(){
+#ifdef HARMONY_PHOTO_SHARED_MODEL
+ static PhotoModelCache cache;
+#else
+ thread_local PhotoModelCache cache;
+#endif
+ return cache;
+}
 // The desktop server invokes this before destroying its Vulkan instance.
-inline void resetPhotoModelCache(){auto& cache=photoModelCache();cache.net.reset();cache.key.clear();}
+inline void resetPhotoModelCache(){auto& cache=photoModelCache();std::lock_guard<std::mutex> lock(cache.mutex);cache.net.reset();cache.key.clear();}
 inline int photoInferFiles(int argc,char** argv) {
  if(argc!=7){std::cerr<<"PHOTO_ARGUMENTS";return 2;}
  try {
@@ -20,17 +28,20 @@ inline int photoInferFiles(int argc,char** argv) {
   if(!f||w<1||h<1||w>1024||h>1024)throw "PHOTO_INPUT_INVALID";
   std::vector<unsigned char> rgb(w*h*3);f.read(reinterpret_cast<char*>(rgb.data()),rgb.size());
   if(!f||f.peek()!=EOF)throw "PHOTO_INPUT_INVALID";
-  // Model-only, thread-local reuse: no image or result cache. NAPI workers and
-  // persistent Windows workers own separate networks and fresh extractors.
-  auto& cache=photoModelCache();auto& cached=cache.net;auto& cachedKey=cache.key;
+  // Harmony NAPI's shared worker pool can rotate a task through many threads.
+  // Keep one immutable model per process there, not a resident copy per worker.
+  // Windows keeps its existing per-worker cache. Inputs/extractors remain per task.
+  auto& cache=photoModelCache();std::unique_lock<std::mutex> lock(cache.mutex);
   const char* gpuChoice=std::getenv("HARMONY_PHOTO_GPU_ID");
   const std::string key=std::string(argv[1])+"|"+argv[2]+"|"+argv[5]+"|"+argv[6]+"|"+(gpuChoice?gpuChoice:"");
   const auto loadStart=std::chrono::steady_clock::now();
-  const bool load=!cached||cachedKey!=key;
-  if(load){cached.reset(new ncnn::Net());cachedKey.clear();}
-  ncnn::Net& net=*cached;net.opt.num_threads=std::max(1,std::min(16,std::atoi(argv[5])));
-  net.opt.use_fp16_storage=false;net.opt.use_fp16_arithmetic=false;net.opt.use_bf16_storage=false;
+  const bool load=!cache.net||cache.key!=key;
+  auto model=load?std::make_shared<ncnn::Net>():cache.net;
+  ncnn::Net& net=*model;
   const bool gpu=std::string(argv[6])=="VULKAN";
+  if(load){
+  net.opt.num_threads=std::max(1,std::min(16,std::atoi(argv[5])));
+  net.opt.use_fp16_storage=false;net.opt.use_fp16_arithmetic=false;net.opt.use_bf16_storage=false;
 #if NCNN_VULKAN
   if(gpu){
    const char* choice=std::getenv("HARMONY_PHOTO_GPU_ID");
@@ -43,7 +54,12 @@ inline int photoInferFiles(int argc,char** argv) {
 #else
   if(gpu)throw "PHOTO_GPU_UNAVAILABLE";
 #endif
-  if(load){if(net.load_param(argv[1])||net.load_model(argv[2])){cached.reset();throw "PHOTO_MODEL_INVALID";}cachedKey=key;}
+  if(net.load_param(argv[1])||net.load_model(argv[2]))throw "PHOTO_MODEL_INVALID";
+  cache.net=model;cache.key=key;
+  }
+  // Each in-flight task owns a shared_ptr, so changing configuration cannot free
+  // a network still in use. No model lock is held during inference.
+  lock.unlock();
   const auto inferStart=std::chrono::steady_clock::now();
   const float norms[3]={1.f/255,1.f/255,1.f/255};
   unsigned int ow=w*4,oh=h*4;

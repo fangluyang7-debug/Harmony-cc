@@ -8,7 +8,16 @@ export function cloudFailureText(reason?: string): string {
     case 'CLOUD_GUEST_FAILED':
     case 'CLOUD_HTTP_401': return '云端连接身份暂不可用，请重试';
     case 'POLICY_REJECTED': return '任务未通过执行条件检查，请稍后重试';
-    case 'REMOTE_UNAVAILABLE': return '云端检索依赖暂不可用，请稍后重试';
+    case 'REMOTE_UNAVAILABLE': return '云端模型暂不可用，请稍后重试';
+    case 'ROUTE_PROBE_NETWORK_2300028':
+    case 'ROUTE_PROBE_NETWORK_2300055':
+    case 'ROUTE_PROBE_NETWORK_2300056':
+    case 'ROUTE_PROBE_HTTP_502':
+    case 'ROUTE_PROBE_HTTP_503':
+    case 'ROUTE_PROBE_HTTP_504': return '云端连接失败，自动重连后仍未恢复，请检查网络';
+    case 'REMOTE_MODEL_RATE_LIMITED': return '云端模型请求过于频繁，请稍后重试';
+    case 'REMOTE_MODEL_CONFIGURATION': return '云端模型授权或配置异常，需要检查服务配置';
+    case 'REMOTE_CATALOG_UNAVAILABLE': return '云端商品索引暂不可用，请检查商品服务';
     case 'NETWORK_NOT_ALLOWED': return '当前任务未获网络访问授权';
     case 'NETWORK_CHANGED_DURING_PROBE':
     case 'REMOTE_ROUTE_CHANGED': return '网络连接已变化，请重试';

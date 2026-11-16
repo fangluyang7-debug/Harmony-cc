@@ -9,6 +9,7 @@ interface AppContext {identity:Identity;deviceCapacity:ResourceAmountV2[];}
 interface Manifest {label:string;allowedContracts:string[];}
 interface CapabilityCount {capability:string;devices?:number;acceleratorSlots?:number;}
 interface CapabilityCounts {capabilities:CapabilityCount[];}
+interface DisplayConnection {displayOnly:boolean;invitation:string;}
 export interface PhotoConnection {address:string;fingerprint:string;groupId:string;deviceId:string;appInstanceId:string;}
 const manifest:Manifest={label:'Harmony 图片演示 v1',allowedContracts:['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1']};
 
@@ -20,12 +21,22 @@ export class PhotoSession {
  private host:NativeAgent|null=null;
  private foreground=false;
  private changing=false;
+ private localPrepared=false;
+ private readinessProbeAt=0;
  initialize(context:common.UIAbilityContext):void{this.context=context;}
  lifecycle(value:boolean):void{this.foreground=value;this.host?.setForeground(value);}
  async close():Promise<void>{this.foreground=false;await this.host?.close();this.host=null;this.port=null;}
  async prepareLocal():Promise<void>{
   // Do not run unaccounted local inference alongside this App's unsettled v2 work.
-  if(this.host){await this.host.pauseForLocal();this.port=null;}
+  if(this.host&&!this.localPrepared){
+   try{await this.host.pauseForLocal();}catch(e){
+    if((e as Error).message!=='HOST_STOPPED')throw e as Error;
+    // A center shutdown must not strand an idle, already settled App in coop mode.
+    // closeForSwitch still checks the ledger and refuses unsettled work.
+    await this.host.closeForSwitch();this.host=null;
+   }
+  }
+  this.port=null;this.localPrepared=true;
  }
  private async retireHost():Promise<void>{
   if(this.host){await this.host.closeForSwitch();this.host=null;this.port=null;}
@@ -38,7 +49,7 @@ export class PhotoSession {
   if(this.host&&this.host.displayHolderId()!==i.paired.peer.holderInstanceId){await this.host.closeForSwitch();this.host=null;}
   if(!this.host){this.host=await NativeAgent.start(this.context,null,()=>this.foreground,i);await this.host.enablePerformance();}
   else await this.host.resumeContribution();
-  this.installation=i;this.port=await this.host.sdkPort();
+  this.installation=i;this.port=await this.host.sdkPort();this.localPrepared=false;this.readinessProbeAt=0;
  }
  async restore():Promise<boolean>{
   if(!this.context)return false;
@@ -69,6 +80,9 @@ export class PhotoSession {
   }finally{this.changing=false;}
  }
  async request(route:string,body:string|null):Promise<string>{if(!this.port)throw Error('PHOTO_APP_NOT_CONNECTED');return this.port.request(route,body);}
+ async displayInvitation():Promise<string>{
+  try{const reply=JSON.parse(await this.request('/v2/apps/me/photo-display',null)) as DisplayConnection;return reply.displayOnly&&typeof reply.invitation==='string'?reply.invitation:'';}catch{return '';}
+ }
  async batchConcurrency():Promise<number>{
   try{
    const view=JSON.parse(await this.request('/v2/apps/me/capabilities',null)) as CapabilityCounts;
@@ -82,6 +96,12 @@ export class PhotoSession {
  }
  async pendingReady():Promise<string[]>{
   if(!this.host)throw Error('请先连接协作空间');
+  // A public identity endpoint/control retry cannot detect a revoked App credential.
+  // Probe the authenticated App context periodically even while control is recovering.
+  if(this.port&&!this.host.isConnected()&&monotonic()>=this.readinessProbeAt){
+   this.readinessProbeAt=monotonic()+5000;
+   try{await this.request('/v2/apps/me',null);}catch(e){this.readinessProbeAt=0;throw e as Error;}
+  }
   const capabilities=['photo.analyze.v1','photo.prepare.v1','photo.enhance.v1','photo.assemble.v1','photo.deliver.v1'];
   const labels=['照片分析','图块准备','高清增强','图像合成','成品生成'];
   const pending=await this.host.pendingCapabilities(capabilities);

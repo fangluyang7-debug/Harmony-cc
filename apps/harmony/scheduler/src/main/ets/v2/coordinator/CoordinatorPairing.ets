@@ -1,3 +1,4 @@
+import { assertCoordinatorDeviceSettled } from './CoordinatorUnadmitted';
 import { relationalStore } from '@kit.ArkData';
 import { cryptoFramework } from '@kit.CryptoArchitectureKit';
 import { util } from '@kit.ArkTS';
@@ -86,10 +87,7 @@ export class CoordinatorPairing {
  async leave(peer:CoordinatorPeer):Promise<void>{
   if(peer.app)throw Error('DEVICE_OWNER_REQUIRED');const revoked:string[]=[];
   await this.database.transaction(async(db:CoordinatorTransaction):Promise<void>=>{
-   const pending=await db.querySql('SELECT state,recordJson FROM Attempt WHERE groupId=? AND (holderInstanceId=? OR holderInstanceId IN (SELECT holderInstanceId FROM RegisteredInstallation WHERE deviceId=? AND groupId=?))',[peer.groupId,peer.holderInstanceId,peer.deviceId,peer.groupId]);
-   try{while(pending.goToNextRow())if(pending.getString(0)!=='REJECTED'&&(pending.isColumnNull(1)||(JSON.parse(pending.getString(1)) as Settlement).resourcesSettled!==true))throw Error('SPACE_SWITCH_BUSY');}finally{pending.close();}
-   const reservations=await db.querySql('SELECT a.state,a.recordJson FROM AppJobReservation r JOIN RegisteredInstallation i ON i.id=r.appInstanceId LEFT JOIN Attempt a ON a.id=r.id WHERE i.deviceId=? AND i.groupId=?',[peer.deviceId,peer.groupId]);
-   try{while(reservations.goToNextRow())if(reservations.getString(0)!=='REJECTED'&&(reservations.isColumnNull(1)||(JSON.parse(reservations.getString(1)) as Settlement).resourcesSettled!==true))throw Error('SPACE_SWITCH_BUSY');}finally{reservations.close();}
+   await assertCoordinatorDeviceSettled(db,peer.deviceId,peer.groupId,peer.holderInstanceId);
    const rows=await db.querySql('SELECT id,metadataJson FROM Credential WHERE groupId=? AND revoked=0',[peer.groupId]);
    try{while(rows.goToNextRow())if((JSON.parse(rows.getString(1)) as CredentialData).peer.deviceId===peer.deviceId)revoked.push(rows.getString(0));}finally{rows.close();}
    for(const id of revoked)await db.executeSql('UPDATE Credential SET revoked=1,revision=revision+1 WHERE id=?',[id]);
@@ -101,5 +99,4 @@ export class CoordinatorPairing {
   for(const id of revoked)for(const listener of this.revocations)listener(id);
  }
 }
-interface Settlement {resourcesSettled?:boolean;}
 interface DeviceInstallation {installationId:string;}

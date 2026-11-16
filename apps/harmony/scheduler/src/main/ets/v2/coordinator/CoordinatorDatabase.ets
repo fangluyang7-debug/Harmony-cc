@@ -1,3 +1,4 @@
+import { closeRetiredUnadmitted } from './CoordinatorUnadmitted';
 import { relationalStore } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
 import { coordinatorMigrations } from './CoordinatorSchema';
@@ -121,6 +122,7 @@ export class CoordinatorDatabase {
    const rows=await db.querySql('SELECT epoch FROM CoordinatorState WHERE id=?',[coordinatorId]);
    try{if(!rows.goToFirstRow())throw Error('COORDINATOR_EPOCH_MISSING');epoch=rows.getLong(0);}finally{rows.close();}
    if(!Number.isSafeInteger(epoch)||epoch<1)throw Error('COORDINATOR_EPOCH_INVALID');
+   await closeRetiredUnadmitted(db,epoch);
   });
   return epoch;
  }

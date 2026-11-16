@@ -26,10 +26,14 @@ struct Index {
  @State private ready:boolean=false;
  @State private readinessMessage:string='等待能力检查';
  @State private readinessSeconds:string='0';
+ @State private readinessRecovery:string='NONE';
+ private lastReadinessMessage:string='';
  private pageVisible:boolean=true;
  private readiness:PhotoReadiness=new PhotoReadiness(()=>photoSession.pendingReady(),(view:ReadinessView)=>{
+  this.readinessRecovery=view.recovery??'NONE';
+  if(view.message!==this.lastReadinessMessage){this.lastReadinessMessage=view.message;hilog.info(0x0001,'HarmonyPhoto','READINESS_STATE ready=%{public}s elapsedMs=%{public}d message=%{public}s',String(view.ready),view.elapsedMs,view.message);}
   const notify=view.ready&&!this.ready;this.ready=view.ready;this.readinessMessage=view.message;this.readinessSeconds=(view.elapsedMs/1000).toFixed(1);
-  if(notify&&this.pageVisible)this.getUIContext().getPromptAction().showToast({message:'协作能力已就绪，可以开始处理',duration:2500});
+  if(notify&&this.pageVisible){try{this.getUIContext().getPromptAction().showToast({message:'协作能力已就绪，可以开始处理',duration:2500});}catch(e){}}
  });
  @State private picking:boolean=false;
  @State private busy:boolean=false;
@@ -45,9 +49,14 @@ struct Index {
  private batch:PhotoBatch=new PhotoBatch();
  private context():common.UIAbilityContext{return this.getUIContext().getHostContext() as common.UIAbilityContext;}
  private async restoreDisplay():Promise<void>{this.displayBusy=true;try{this.displayCode=await this.display.restore(this.context());}catch(e){this.displayStatus='展示连接未恢复：'+(e as Error).message;}finally{this.displayConnected=this.display.connected();this.displayBusy=false;}}
+ private async resumeDisplay(fromCenter:boolean=false):Promise<void>{
+  if(this.displayBusy)return;this.displayBusy=true;
+  try{const invitation=fromCenter&&!this.display.connected()&&this.display.canAutoConnect()?await photoSession.displayInvitation():'';this.displayCode=await this.display.resume(invitation);}
+  finally{this.displayConnected=this.display.connected();this.displayBusy=false;}
+ }
  private async connect(force:boolean=false):Promise<void>{
   if(this.busy||this.connecting)return;this.readiness.stop();this.ready=false;this.connecting=true;this.connectionFailed=false;this.connectionStatus='正在连接协作空间…';
-  try{await photoSession.connect(force,(message:string)=>{this.connectionStatus=message;});const c=photoSession.connection();if(c){this.cooperative=true;this.status='可以先选择照片，绿色就绪提示出现后开始处理。';this.connectionStatus='已连接协作空间 · 自动规划设备分工';this.readiness.start();}}
+  try{await photoSession.connect(force,(message:string)=>{this.connectionStatus=message;});const c=photoSession.connection();if(c){this.cooperative=true;this.status='可以先选择照片，绿色就绪提示出现后开始处理。';this.connectionStatus='已连接协作空间 · 自动规划设备分工';this.readiness.start();await this.resumeDisplay(true);}}
   catch(e){this.connectionFailed=true;this.connectionStatus='协作连接未完成：'+(e as Error).message;this.status='本机处理仍可使用。请检查调度连接 App 的当前空间，或点击重新授权。';}
   finally{this.connecting=false;}
  }
@@ -55,7 +64,7 @@ struct Index {
   this.displayBusy=true;try{if(scan){const result=await scanBarcode.startScanForResult(this.context(),{scanTypes:[scanCore.ScanType.QR_CODE],enableMultiMode:false,enableAlbum:true});this.displayCode=result.originalValue;}await this.display.connect(this.displayCode);await this.display.select(this.inputs);}catch(e){this.displayStatus=(e as Error).message;}finally{this.displayConnected=this.display.connected();this.displayBusy=false;}
  }
  private async pick():Promise<void>{
-  if(this.inputs.length>=8){this.status='每批最多 8 张照片，可先清空选择再添加。';return;}this.picking=true;if(!this.cooperative)this.display.picking();
+  if(this.inputs.length>=8){this.status='每批最多 8 张照片，可先清空选择再添加。';return;}this.picking=true;if(!this.cooperative){await this.resumeDisplay();this.display.picking();}
   try{const added=await pickLocalPhotos(this.context(),8-this.inputs.length);
    added.forEach((p:PhotoInput)=>{p.name='照片 '+this.nextPhotoNumber++;});this.inputs=[...this.inputs,...added];
    if(added.length)this.status='已选择 '+this.inputs.length+' 张照片，点击开始后处理。';if(!this.cooperative)await this.display.select(this.inputs);
@@ -102,11 +111,12 @@ struct Index {
  }
  private async useLocal():Promise<void>{
   if(this.busy||this.connecting)return;this.readiness.stop();this.ready=false;this.connecting=true;
-  try{await photoSession.prepareLocal();this.cooperative=false;this.connectionFailed=false;this.connectionStatus='手机独立处理 · 不使用协作算力';}
+  try{await this.resumeDisplay(true);await photoSession.prepareLocal();this.cooperative=false;this.connectionFailed=false;this.connectionStatus='手机独立处理 · 不使用协作算力';this.status='选图后即可本机处理，无需等待协作能力就绪。';await this.display.select(this.inputs);}
   catch(e){this.connectionStatus='暂不能切换：'+(e as Error).message;if(this.cooperative)this.readiness.start();}finally{this.connecting=false;}
  }
  private async run():Promise<void>{
   if(this.busy||this.connecting||this.picking||this.displayBusy||!this.inputs.length)return;
+  if(!this.cooperative)await this.resumeDisplay();
   if(this.inputs.some(needsPhotoTiles)){await this.runLarge();return;}
   if(!this.cooperative){await this.runLocal();return;}
   if(!this.ready){this.status='请等待协作能力就绪后再开始。';return;}
@@ -148,12 +158,15 @@ struct Index {
     if(this.cooperative&&!this.connecting&&!this.busy){Column({space:6}){
      Text(this.readinessMessage).fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.ready?'#16815D':'#A65B16').width('100%');
      Text(this.ready?'本次接入检查用时 '+this.readinessSeconds+' 秒':'已等待 '+this.readinessSeconds+' 秒 · 请保持图片 App 前台').fontSize(13).fontColor('#64748B').width('100%');
+     if(!this.ready&&this.readinessRecovery!=='NONE'){
+      Button(this.readinessRecovery==='AUTHORIZE'?'重新授权当前协作空间':'重新检查连接').fontSize(14).enabled(!this.picking&&!this.displayBusy).onClick(()=>{void this.connect(this.readinessRecovery==='AUTHORIZE');});
+     }
      Text('接入准备单独显示；开始后的传输、调度、计算和结果接收均计入处理耗时。').fontSize(12).fontColor('#64748B').lineHeight(19).width('100%');
     }.padding(12).backgroundColor(this.ready?'#EAF7F0':'#FFF7E8').borderRadius(12).width('100%');}
    }.padding(18).backgroundColor(Color.White).borderRadius(20).width('100%');
    Column({space:8}){
     Text(this.cooperative?'电脑实时展示':'仅展示连接').fontSize(17).fontWeight(FontWeight.Bold).fontColor('#172B49').width('100%');
-    if(this.cooperative){Text('本轮进度和成品会自动同步到协调中心的展示页，无需重新扫码。').fontSize(13).fontColor('#64748B').lineHeight(21).width('100%');}
+    if(this.cooperative){Text(this.displayConnected?'本轮由协调中心同步；改用本机后，选图、处理阶段和成品仍会显示在同一展示屏。':'本轮由协调中心同步。切换本机时将尝试连接展示屏；也可在本机模式扫码连接。').fontSize(13).fontColor('#64748B').lineHeight(21).width('100%');}
     else{
      Text(this.displayStatus).fontSize(13).fontColor(this.displayConnected?'#16815D':'#A65B16').width('100%');
      TextInput({text:this.displayCode,placeholder:'粘贴展示连接码，或点击扫码'}).fontSize(12).enabled(!this.busy&&!this.displayBusy).onChange((value:string)=>{this.displayCode=value;});

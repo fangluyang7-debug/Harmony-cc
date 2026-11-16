@@ -4,6 +4,16 @@ function readinessSession(){
  new Function('require','module','exports','setTimeout',code)(()=>({}),m,m.exports,(callback,ms)=>{now+=ms;callback();});
  return {session:new m.exports.PhotoSession(),now:()=>now};
 }
+test('already-paused local mode does not depend on the coordinator still running',async()=>{
+ const {session}=readinessSession();let pauses=0;session.host={pauseForLocal:async()=>{if(++pauses>1)throw Error('HOST_STOPPED');}};
+ await session.prepareLocal();await session.prepareLocal();assert.equal(pauses,1);assert.equal(session.port,null);
+});
+test('a stopped settled host can retire for local work but unsettled work is not discarded',async()=>{
+ const {session}=readinessSession();let closed=0;session.host={pauseForLocal:async()=>{throw Error('HOST_STOPPED');},closeForSwitch:async()=>{closed++;}};
+ await session.prepareLocal();assert.equal(closed,1);assert.equal(session.host,null);
+ const other=readinessSession().session;other.host={pauseForLocal:async()=>{throw Error('HOST_STOPPED');},closeForSwitch:async()=>{throw Error('SPACE_SWITCH_BUSY');}};
+ await assert.rejects(other.prepareLocal(),/SPACE_SWITCH_BUSY/);assert.equal(other.localPrepared,false);
+});
 
 test('batch concurrency follows physical device counts with a bounded legacy fallback',async()=>{
  const {session}=readinessSession();
@@ -83,4 +93,12 @@ test('photo status, cancellation and receipt remain available during control rec
  assert.equal(calls.length,3);
  for(const r of ['/v2/sdk/jobs','/v2/sdk/jobs/existing/start'])await assert.rejects(session.sdkRequest(r,'{}'),/SDK_COORDINATOR_OFFLINE/);
  session.host.isConnected=()=>true;await session.sdkRequest('/v2/sdk/jobs','{}');assert.equal(calls.length,4);
+});
+
+test('readiness checks authenticated App identity during control reconnect and surfaces revocation',async()=>{
+ const m={exports:{}},code=transformSync(fs.readFileSync('apps/harmony-photo/entry/src/main/ets/PhotoSession.ets','utf8'),{loader:'ts',format:'cjs'}).code;
+ let now=10;new Function('require','module','exports',code)(name=>name==='scheduler'?{monotonic:()=>now}:{},m,m.exports);
+ const session=new m.exports.PhotoSession();let probes=0;session.port={};session.host={isConnected:()=>false,pendingCapabilities:async()=>['控制连接']};
+ session.request=async()=>{probes++;return '{}';};assert.deepEqual(await session.pendingReady(),['控制连接']);await session.pendingReady();assert.equal(probes,1);
+ now+=5000;session.request=async()=>{throw Error('APP_CREDENTIAL_REVOKED');};await assert.rejects(session.pendingReady(),/APP_CREDENTIAL_REVOKED/);
 });

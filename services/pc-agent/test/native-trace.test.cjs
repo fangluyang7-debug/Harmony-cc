@@ -95,7 +95,7 @@ test('native host samples power signals and closes new admission until recovery 
  vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2021,module:ts.ModuleKind.CommonJS}}).outputText,{exports,require:name=>
   name==='@kit.BasicServicesKit'?{batteryInfo,thermal}:name==='../core/LedgerV2'?{occupiedV2:()=>[]}:{}});
  const host=Object.create(exports.NativeAgent.prototype);
- Object.assign(host,{powerSaving:'OFF',idle:()=>true,availableRam:2048,contribution:{maxCpuThreads:2,maxMemoryBytes:1024,reserveMemoryBytes:0},store:{read:()=>({state:{}})}});
+ Object.assign(host,{powerSaving:'OFF',idle:()=>true,availableRam:2048,contribution:{maxCpuThreads:2,maxMemoryBytes:1024,reserveMemoryBytes:0},store:{read:()=>({state:{}}),occupied:()=>[]}});
  const check=(reason,slots)=>{host.sampleEnergy();assert.equal(host.energyGate,reason);assert.equal(host.limits()[0].amount,slots);};
  check('LOW_BATTERY',0);batteryInfo.chargingStatus=1;check(null,2);
  level=4;check('THERMAL_LIMIT',0);level=2;host.powerSaving='ON';check('POWER_SAVE',0);

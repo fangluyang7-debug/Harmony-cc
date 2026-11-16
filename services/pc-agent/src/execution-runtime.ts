@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { DispatchOfferV2, ExecutionReceiptV2, ExecutionConfigV2, LedgerEntryV2, LedgerAdmissionV2, ArtifactRefV2, MessageEnvelopeV2, canonical } from '@harmony/scheduler-core';
 import { DurableLedger } from './durable-ledger';
 import { ExecutionTrace } from './execution-trace';
+import {executionObserver} from './execution-observer';
 
 export interface ExecutionPorts {
   imageEncoder?:ImageEncoder;
@@ -47,10 +48,12 @@ export class PcExecutionRuntime {
       });
       if(abort.signal.aborted)throw Error('CANCELLED_SETTLED');
       this.ledger.begin(task.attemptId,bytes.length,task.contract.serviceId||task.contract.capability.startsWith('photo.')?'UNKNOWN':'COLD'); // Durable RUNNING always precedes the engine call.
+      executionObserver.input(task.attemptId,bytes.length);
       const execute=()=>this.engines.run(offer,bytes,config,abort.signal);
       const started=performance.now();let wallMs:number|undefined;
       const result=trace?await trace.segment('EXECUTE',execute,ms=>{wallMs=ms;}):await execute();
       actualModel=result.model??null;
+      executionObserver.output(task.attemptId,result.hash,result.bytes.length,result.schemaId);
       wallMs??=performance.now()-started;
       if(!task.contract.capability.startsWith('photo.')&&'durationMs' in result&&typeof result.durationMs==='number'&&result.durationMs>=0&&result.durationMs<=wallMs)overheadMs=wallMs-result.durationMs;
       this.ports.measuredExecution?.(wallMs,overheadMs);
@@ -65,7 +68,9 @@ export class PcExecutionRuntime {
     }catch(error){errorCode=error instanceof Error&&/^[A-Z_]+$/.test(error.message)?error.message:'EXECUTION_FAILED';if(abort.signal.aborted||errorCode==='CANCELLED_SETTLED')state='CANCELLED_SETTLED';}
     finally{clearTimeout(deadline);}
     const receipt:ExecutionReceiptV2={attemptId:task.attemptId,coordinatorEpoch:task.coordinatorEpoch,planRevision:task.planRevision,fence,state,resourcesSettled:true,outputs,
-      actualTarget:offer.target,actualConfiguration:config.id,errorCode};this.ledger.settle(receipt,this.delivery,actualModel,overheadMs);return receipt;
+      actualTarget:offer.target,actualConfiguration:config.id,errorCode};this.ledger.settle(receipt,this.delivery,actualModel,overheadMs);
+    if(this.delivery==='BUSINESS')executionObserver.update(task.attemptId,{state,phase:state,error:errorCode,model:actualModel,settled:true},state==='SUCCEEDED'?'本机执行成功，资源已结算':state);
+    return receipt;
   }
   cancel(attemptId:string){this.ledger.cancel(attemptId);this.active.get(attemptId)?.abort.abort();}
   async close(){for(const [id]of this.active)this.cancel(id);await Promise.allSettled([...this.active.values()].map(a=>a.done));}

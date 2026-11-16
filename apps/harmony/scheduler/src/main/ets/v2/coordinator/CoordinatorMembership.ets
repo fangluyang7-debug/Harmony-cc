@@ -1,9 +1,9 @@
+import { assertCoordinatorDeviceSettled } from './CoordinatorUnadmitted';
 import { CoordinatorTransaction } from './CoordinatorDatabase';
 import { CoordinatorPeer } from './CoordinatorCredentials';
 interface Registration {installationId:string;}
 interface Binding {deviceId:string;groupId:string;holderInstanceId:string;}
 interface Device {id:string;spaceId:string;userId:string;holderId:string;}
-interface RecordState {resourcesSettled?:boolean;}
 interface CredentialMetadata {peer:CoordinatorPeer;}
 const deviceKey=(id:string):string=>JSON.stringify(['space-device-installation',id]);
 const installationKey=(id:string):string=>JSON.stringify(['space-installation',id]);
@@ -43,10 +43,7 @@ export async function activateCoordinatorMembership(db:CoordinatorTransaction,pe
  try{while(registrations.goToNextRow()){const id=registrations.getString(0);if(id.startsWith('["space-device-installation",')&&(JSON.parse(registrations.getString(1)) as Registration).installationId===installationId)linked.push((JSON.parse(id) as string[])[1]);}}finally{registrations.close();}
  for(const oldId of linked){
   if(oldId===peer.deviceId)continue;const old=await device(db,oldId);if(old===null)continue;
-  const reserved=await db.querySql('SELECT a.state,a.recordJson FROM AppJobReservation r JOIN RegisteredInstallation i ON i.id=r.appInstanceId LEFT JOIN Attempt a ON a.id=r.id WHERE i.deviceId=? AND i.groupId=?',[oldId,old.spaceId]);
-  try{while(reserved.goToNextRow()){if(reserved.getString(0)==='REJECTED')continue;const record=reserved.isColumnNull(1)?null:JSON.parse(reserved.getString(1)) as RecordState;if(record?.resourcesSettled!==true)throw Error('SPACE_SWITCH_BUSY');}}finally{reserved.close();}
-  const pending=await db.querySql('SELECT state,recordJson FROM Attempt WHERE groupId=? AND (holderInstanceId=? OR holderInstanceId IN (SELECT holderInstanceId FROM RegisteredInstallation WHERE deviceId=? AND groupId=?))',[old.spaceId,old.holderId,oldId,old.spaceId]);
-  try{while(pending.goToNextRow()){if(pending.getString(0)==='REJECTED')continue;const record=pending.isColumnNull(1)?null:JSON.parse(pending.getString(1)) as RecordState;if(record?.resourcesSettled!==true)throw Error('SPACE_SWITCH_BUSY');}}finally{pending.close();}
+  await assertCoordinatorDeviceSettled(db,oldId,old.spaceId,old.holderId);
   const credentials=await db.querySql('SELECT id,metadataJson FROM Credential WHERE groupId=? AND revoked=0',[old.spaceId]);const ids:string[]=[];
   try{while(credentials.goToNextRow())if((JSON.parse(credentials.getString(1)) as CredentialMetadata).peer.deviceId===oldId)ids.push(credentials.getString(0));}finally{credentials.close();}
   for(const id of ids){await db.executeSql('UPDATE Credential SET revoked=1,revision=revision+1 WHERE id=?',[id]);revoked.push(id);}

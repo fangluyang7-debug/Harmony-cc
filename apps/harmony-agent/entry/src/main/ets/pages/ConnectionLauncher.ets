@@ -1,3 +1,4 @@
+import { WorkSlotPanel } from './WorkSlotPanel';
 import { deviceInfo } from '@kit.BasicServicesKit';
 import { common } from '@kit.AbilityKit';
 import { scanBarcode, scanCore } from '@kit.ScanKit';
@@ -330,7 +331,9 @@ struct ConnectionLauncher {
           .onClick(() => { this.openPair(''); })
         Button('扫一扫').width('100%').backgroundColor('#25314A').enabled(!this.scanning && !this.pairing)
           .onClick(() => { this.selected = ''; void this.scan(); })
-        Button('贡献上限').width('100%').backgroundColor('#25314A').enabled(this.paired)
+        Button('任务槽').width('100%').backgroundColor(this.desktopSection === 'tasks' ? '#1756D4' : '#25314A').enabled(this.paired)
+          .onClick(() => { this.desktopSection = 'tasks'; })
+        Button('贡献上限').width('100%').backgroundColor(this.desktopSection === 'quota' ? '#1756D4' : '#25314A').enabled(this.paired)
           .onClick(() => { this.desktopSection = 'quota'; })
       }.width(this.viewportWidth < 800 ? 170 : 220).height('100%').padding({ top: 24, left: 16, right: 16 })
         .alignItems(HorizontalAlign.Start).backgroundColor('#11141C')
@@ -344,7 +347,9 @@ struct ConnectionLauncher {
             Button('重新搜索').backgroundColor('#25314A').enabled(!this.searching)
               .onClick(() => { this.desktopSection = 'discover'; void this.discover(); })
           }.width('100%').padding({ bottom: 16 })
-          if (this.paired && this.desktopSection !== 'discover') {
+          if (this.paired && this.desktopSection === 'tasks') {
+            WorkSlotPanel()
+          } else if (this.paired && this.desktopSection !== 'discover') {
             this.spaceActions()
             Column({ space: 16 }) {
               Row({ space: 12 }) {

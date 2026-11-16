@@ -1,5 +1,6 @@
 import QRCode from './qrcode.js';
 import {comparison,displayRounds,roundDevices} from './photo-display-compare.mjs';
+import {renderExecutionPlan} from './photo-execution-view.mjs';
 const $=id=>document.getElementById(id),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let selected=null,pinned=false,rows=[],generation=-1,epoch=0,current=null,signature='',renderSignature='',historySignature='';
 const detailCache=new Map();
@@ -35,9 +36,7 @@ function render(r){const stamp=JSON.stringify([r,pinned]);if(stamp===renderSigna
  $('device-strip').innerHTML=r.devices.map(d=>'<span>'+esc(d.name)+'</span>').join('')+(local?'<span>展示端 · 仅展示，不参与本轮计算</span>':'');
  $('plan-mode').textContent=local?'本机处理事件':'协调中心实际计划';
  if(local){const phase=phases.findIndex(p=>r.phase?.startsWith(p));$('graph').innerHTML='<div class="flow-row">'+phases.map((p,n)=>`<div class="node ${r.state==='SUCCEEDED'||n<phase?'done':r.state==='RUNNING'&&n===phase?'running':''}"><strong>${p}</strong><small>手机 CPU</small><span class="status">${r.state==='SUCCEEDED'?'已完成':n===phase?'当前阶段':'本机阶段'}</span></div>`).join('')+'</div>';$('plan-reason').textContent='手机独立执行，流程来自 App 实际事件；本轮没有跨设备派发。';}
- else{const w=r.workflows.find(w=>w.state!=='SUCCEEDED')??r.workflows.at(-1);$('plan-reason').textContent=w?`照片 ${w.imageIndex+1} · ${w.nodes.length} 个阶段 · 按数据依赖从上向下执行，同一行图块可并行；设备与状态来自实际派发及回执。`:'等待协调中心生成计划';
- const bands=w?[['analyze'],w.nodes.filter(n=>n.id.startsWith('prepare')).map(n=>n.id),w.nodes.filter(n=>n.id.startsWith('enhance')).map(n=>n.id),['assemble'],['deliver']]:[];
- $('graph').innerHTML=bands.map(b=>'<div class="flow-row">'+b.map(id=>{const n=w.nodes.find(n=>n.id===id);if(!n)return '';const device=r.directory.find(d=>d.id===n.target?.deviceId)?.name??'等待分配';return `<div class="node ${n.committed?'done':['RUNNING','ACCEPTED','OFFERED'].includes(n.state)?'running':''}"><strong>${esc(stage(id))}${id.match(/-\d+$/)?' '+(Number(id.split('-').at(-1))+1):''}</strong><small>${esc(device)}${n.target?' · '+esc(n.target.backend):''}</small><span class="status">${n.committed?'已提交回执':esc(n.state)}</span></div>`;}).join('')+'</div>').join('');}
+ else{$('plan-reason').textContent='按真实依赖推进：手机提交照片，协调中心规划分块，执行设备处理，成品回到手机。点击图块查看设备、输入输出和执行证据。';renderExecutionPlan(r,$('graph'));}
  $('elapsed').textContent=seconds(r.durationMs);$('count').textContent=r.results.length+' / '+r.inputs.length;$('device-count').textContent=r.devices.length+' 台';$('device-note').textContent=local?'手机计算 · 电脑仅展示':'根据任务执行回执统计';$('summary-title').textContent=r.state==='SUCCEEDED'?'本轮处理完成':'本轮未完成';$('export').href='/runs/'+encodeURIComponent(r.id);
 }
 function history(){const stamp=JSON.stringify([rows,selected]);if(stamp===historySignature)return;historySignature=stamp;const done=rows.filter(r=>r.state==='SUCCEEDED'&&Number.isFinite(r.durationMs)),max=Math.max(1,...done.map(r=>r.durationMs));$('history').innerHTML=rows.map((r,n)=>`<button class="round ${selected===r.id?'selected':''}" data-id="${esc(r.id)}"><span class="round-name"><strong>${esc(r.label)}</strong><small>${new Date(r.createdAt).toLocaleTimeString()} · ${r.inputs.length} 张照片</small><small class="round-devices">参与设备：${esc(roundDevices(r))}</small></span><span class="round-track"><i style="width:${r.state==='SUCCEEDED'?r.durationMs/max*100:0}%" class="${r.kind==='LOCAL'?'local':'coop'}"></i></span><span class="round-time">${r.state==='SUCCEEDED'?seconds(r.durationMs):r.state==='FAILED'?'未完成':'进行中'}</span></button>`).join('')||'<p class="muted">暂无记录。下一次选图与处理会自动出现在这里。</p>';

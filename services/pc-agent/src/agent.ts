@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks';
+import {executionObserver} from './execution-observer';
 import { QueueHistory, DispatchOfferV2, ExecutionConfigV2, MessageEnvelopeV2, QueuePolicy, ResourceAmountV2, YieldNoticeV2, ExecutorV2, CapabilityAdmissionV2, canonical } from '@harmony/scheduler-core';
 import { DurableLedger } from './durable-ledger';
 import { RecoveryClient, RecoveryConnection } from './recovery-client';
@@ -101,7 +102,10 @@ export class PcAgent {
   private dispatch(message:MessageEnvelopeV2){
     if(this.stopped)return;
     const offer=JSON.parse(message.payload) as DispatchOfferV2,id=offer.task.attemptId,previous=this.pending.get(id);
-    if(this.ledger.status(id)){
+    executionObserver.observe(offer);
+    const existing=this.ledger.status(id);
+    if(existing){
+      if(existing.receipt)executionObserver.update(id,{state:existing.receipt.state,phase:existing.receipt.state,settled:existing.receipt.resourcesSettled,error:existing.receipt.errorCode},'重放已有回执，未重复计算');
       try{this.ledger.replayDispatch(message);}catch(error){this.ledger.queueProtocolError(message.messageId,error instanceof Error&&error.message==='ATTEMPT_CONFLICT'?'ATTEMPT_CONFLICT':'DISPATCH_OFFER_CONFLICT');}
       void this.flush();return;
     }
@@ -109,7 +113,7 @@ export class PcAgent {
       if(canonical(JSON.parse(previous.message.payload))!==canonical(offer)){this.ledger.queueProtocolError(message.messageId,'ATTEMPT_CONFLICT');void this.flush();return;}
       void previous.done.then(()=>{if(this.ledger.status(id))this.ledger.replayDispatch(message);else this.ledger.rejectDispatch(message,'DISPATCH_PREVIOUSLY_REJECTED');return this.flush();}).catch(this.options.onError);return;
     }
-    if(this.pending.size>=8){this.ledger.rejectDispatch(message,'AGENT_BACKPRESSURE');void this.client.flush();return;}
+    if(this.pending.size>=8){executionObserver.update(id,{state:'REJECTED',error:'AGENT_BACKPRESSURE'},'本机队列已满，未执行');this.ledger.rejectDispatch(message,'AGENT_BACKPRESSURE');void this.client.flush();return;}
     const done=(async()=>{
       try{
         if((offer.target.backend!=='CPU'&&!(['CUDA','VULKAN'].includes(offer.target.backend)&&this.options.ports.imageEncoder?.gpu)&&!(offer.target.backend==='SERVICE'&&offer.task.contract.serviceId&&this.options.ports.service))||offer.task.contract.interruptibility!=='CANCEL_RESTART')throw Error('EXECUTOR_UNSUPPORTED');
@@ -125,6 +129,7 @@ export class PcAgent {
       }catch(error){
         if(!this.ledger.status(id)){
           const reason=error instanceof Error&&/^[A-Z_]{1,100}(?::[A-Z_]{1,26})?$/.test(error.message)?error.message:'EXECUTION_REJECTED';
+          executionObserver.update(id,{state:'REJECTED',error:reason},'任务未获准执行：'+reason);
           try{this.ledger.rejectDispatch(message,reason);}catch(rejection){this.options.onError(rejection);}
         }else this.options.onError(error);
       }finally{await this.flush();this.options.onExecutionSettled?.();}

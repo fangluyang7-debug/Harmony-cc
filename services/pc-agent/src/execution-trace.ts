@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { DispatchOfferV2, QueueSampleV2, TraceSpanV2 } from '@harmony/scheduler-core';
 import { TraceBuffer } from './trace-buffer';
+import {executionObserver} from './execution-observer';
 
 export interface TraceContext { traceId:string;parentSpanId:string|null;snapshotVersion:number;deviceInstanceId:string; }
 export const pcTraceClockDomainId=randomUUID();
@@ -11,10 +12,12 @@ export class ExecutionTrace {
   private activeSpan:string|null=null;
   constructor(private readonly buffer:TraceBuffer,private readonly context:TraceContext,private readonly offer:DispatchOfferV2){}
   begin(phase:string,spanId=randomUUID()){
+    executionObserver.phase(this.offer.task.attemptId,phase);
     const startMono=performance.now();let finished=false;
     return (reasonCode:string|null=null,samples?:QueueSampleV2[])=>{
       if(finished)return;finished=true;
       const endMono=performance.now();
+      executionObserver.phase(this.offer.task.attemptId,phase,true,endMono-startMono,reasonCode==='PHASE_FAILED');
       const span:TraceSpanV2={...this.context,spanId,dependsOn:this.previous?[this.previous]:[],transferId:null,
         workflowId:this.offer.task.workflowId,nodeId:this.offer.task.nodeId,attemptId:this.offer.task.attemptId,targetId:this.offer.target.targetId,
         phase,durationMs:endMono-startMono,predictedMs:null,reasonCode,startMono,endMono,clockDomainId:pcTraceClockDomainId,measurementScope:'LOCAL_INTERVAL',authoritativeSide:'SELF'};

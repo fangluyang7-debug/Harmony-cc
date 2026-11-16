@@ -57,7 +57,7 @@ async function startDisplay({host,port=7460,dataDir,coordinatorConfig,coordinato
  const nativeState=id=>store.get().runId===id?store.get():records.get(id);
  const detail=async id=>{if(id.startsWith('local:')){const s=nativeState(id.slice(6));if(!s||!visible(nativeRun(s)))throw Error('RUN_NOT_FOUND');return nativeRun(s);}if(id.startsWith('coop:')){const r=cooperativeRun(await observer.run(id.slice(5)),observer.devices);if(!visible(r))throw Error('RUN_NOT_FOUND');return r;}throw Error('RUN_NOT_FOUND');};
  const session=()=>({invitation:`http://${host}:${server.address().port}/#display=${key}`,displayOnly:true,generation:store.get().generation});
- const assets={'/':'photo-display.html','/photo-display.html':'photo-display.html','/photo-display.js':'photo-display.js','/photo.css':'photo.css','/photo-display.css':'photo-display.css','/fonts/harmony-ui.woff':'fonts/harmony-ui.woff','/qrcode.js':'qrcode.js','/photo-display-compare.mjs':'photo-display-compare.mjs'};
+ const assets={'/':'photo-display.html','/photo-display.html':'photo-display.html','/photo-display.js':'photo-display.js','/photo.css':'photo.css','/photo-display.css':'photo-display.css','/fonts/harmony-ui.woff':'fonts/harmony-ui.woff','/qrcode.js':'qrcode.js','/photo-display-compare.mjs':'photo-display-compare.mjs','/photo-execution-view.mjs':'photo-execution-view.mjs'};
  const server=http.createServer(async(req,res)=>{
   const json=(code,value)=>{res.writeHead(code,{'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(value));};
   try{

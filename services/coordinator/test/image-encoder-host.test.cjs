@@ -10,7 +10,10 @@ for(const cuda of [false,true])test('installed PC image adapter qualifies and se
  const output={model,vector:[1,0],...(cuda?{backend:'CUDA'}:{})};let host,r;
  try{
   await fs.writeFile(file,JSON.stringify({model,executorIds:[cuda?cudaExecutorId:imageExecutorId],...(cuda?{vramBytes:1048576}:{}),minimumCosine:.98,memoryBytes:67108864,cases:[{id:'reference',imageBase64:png,vector:[1,0]}]}));
-  const fixture=out=>"const input=require('node:fs').readFileSync(0);if(input.toString('base64')!=="+JSON.stringify(png)+")process.exit(1);process.stdout.write("+JSON.stringify(JSON.stringify(out))+");";
+  const workImage=await require('sharp')({create:{width:2,height:2,channels:3,background:'#ff0000'}}).png().toBuffer();
+  // Keep trusted calibration stable while injecting a failure into business
+  // input. Mutating reference answers races background requalification.
+  const fixture=out=>"const input=require('node:fs').readFileSync(0).toString('base64');if(input==="+JSON.stringify(png)+"){process.stdout.write("+JSON.stringify(JSON.stringify(output))+");}else{if(input!=="+JSON.stringify(workImage.toString('base64'))+")process.exit(1);process.stdout.write("+JSON.stringify(JSON.stringify(out))+");}";
   const health={cudaAvailable:true,backend:'CUDA',modelLoaded:true,modelHash:model.weightsHash,model,totalBytes:4194304,uuid:'12345678-1234-1234-1234-123456789abc'};
   const initial=cuda?"if(process.argv.includes('--probe')){process.stdin.resume();process.stdout.write("+JSON.stringify(JSON.stringify(health))+");}else{"+fixture(output)+"}":fixture(output);
   await fs.writeFile(script,initial);
@@ -29,7 +32,7 @@ for(const cuda of [false,true])test('installed PC image adapter qualifies and se
   const registration=await r.apps.register(owner.peer,{label:'Search',allowedContracts:['image.encode.v1'],maxConcurrent:1,resources:capacity,offlineBase:[],onlineExtra:[]},r.url);
   const source=await r.apps.exchange({registrationId:registration.registrationId,code:registration.code});
   const sdk=new SchedulerSdk(nodeSdkPort({...connection,credential:source.credential}));
-  const input=await sdk.registerInput(Buffer.from(png,'base64'),'image.raster');
+  const input=await sdk.registerInput(workImage,'image.raster');
   let candidate;
   for(const end=Date.now()+45000;!candidate&&Date.now()<end;){
     const candidates=await r.snapshots.build('team').then(r=>r.snapshot.candidates).catch(e=>{if(e.message==='GROUP_UNKNOWN')return [];throw e;});
@@ -55,7 +58,7 @@ for(const cuda of [false,true])test('installed PC image adapter qualifies and se
     assert.equal(JSON.parse(fallback.recordJson).errorCode,'CUDA_BACKEND_MISMATCH');assert.equal(fallback.committed,false);
   }
   const started=path.join(dir,'started');
-  await fs.writeFile(script,"require('fs').writeFileSync("+JSON.stringify(started)+",String(process.pid));setInterval(()=>{},1000);");
+  await fs.writeFile(script,"const input=require('fs').readFileSync(0).toString('base64');if(input==="+JSON.stringify(png)+"){process.stdout.write("+JSON.stringify(JSON.stringify(output))+");}else{require('fs').writeFileSync("+JSON.stringify(started)+",String(process.pid));setInterval(()=>{},1000);}");
   const task=await submit('encode-cancel');
   for(const end=Date.now()+10000;Date.now()<end;){if(await fs.stat(started).catch(()=>null))break;await new Promise(resolve=>setTimeout(resolve,50));}
   const pid=Number(await fs.readFile(started,'utf8'));

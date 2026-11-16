@@ -7,7 +7,7 @@ const {discoverCenters:discover}=require('../apps/windows-agent/discovery.cjs');
 const {DeviceBinding}=require('./runtime-device-binding.cjs');
 const root=path.resolve(__dirname,'..');
 const consoleAssets=new Set(['/index.html','/style.css','/app.js','/dispatch.html','/dispatch.css',
-  '/dispatch.js','/dispatch-view.mjs','/dispatch-layout.js','/dispatch-charts.mjs','/dispatch-presence.mjs','/scheduler-sdk.js',
+  '/dispatch.js','/dispatch-view.mjs','/dispatch-activity.mjs','/dispatch-layout.js','/dispatch-charts.mjs','/dispatch-presence.mjs','/scheduler-sdk.js',
   '/qrcode.js','/join-key.mjs','/photo.html','/photo.css','/photo.js','/photo-workflow.mjs','/photo-gallery.mjs','/photo-app-port.mjs']);
 function pairingAddress(value){
   const url=new URL(value);
@@ -212,7 +212,9 @@ class RuntimeControl {
   launch(script,args,env){
     if(this.child)throw Error('请先停止当前服务');
     this.state='STARTING';this.logs=[];this.coordinatorGone=false;this.connected=false;let gone=false;
+    this.executionView=null;this.executionPreviews=new (require('./execution-preview-cache.cjs').ExecutionPreviewCache)();this.previewInterestAt=0;
     const child=spawn(process.execPath,[script,...args],{cwd:root,env,windowsHide:true,stdio:['ignore','pipe','pipe','ipc']});this.child=child;
+    child.on('message',message=>{if(this.mode!=='agent')return;if(message?.type==='execution-view'&&message.view?.version===1&&Array.isArray(message.view.attempts)&&message.view.attempts.length<=96)this.executionView=message.view;else if(message?.type==='execution-preview')this.executionPreviews.put(message.id,message.preview);});
     let pending='';const collect=chunk=>{pending+=chunk.toString();const lines=pending.split(/\r?\n/);pending=lines.pop();for(const line of lines){this.log(line);if(line.startsWith('COORDINATOR_GONE'))gone=true;if(line.startsWith('Coordinator ready:')||line.startsWith('CPU host started:'))this.state='RUNNING';
       // The host reports its control channel so the page can show "connected" rather than just "process running".
       if(line.startsWith('CONTROL_ONLINE'))this.connected=true;else if(line.startsWith('CONTROL_OFFLINE')||line.startsWith('COORDINATOR_GONE'))this.connected=false;}};
@@ -383,10 +385,13 @@ async function main(options={openBrowser:true}){
     const asset=req.method==='GET'&&({
       '/':role==='agent'?'agent.html':'index.html',
       '/device':role==='center'?null:'agent.html',
-      '/desktop.js':'desktop.js'
+      '/desktop.js':'desktop.js',
+      '/execution.html':role==='center'?null:'execution.html',
+      '/execution-view.mjs':'execution-view.mjs',
+      '/execution.css':'execution.css'
     })[req.url];
     if(asset){
-      res.setHeader('Content-Type',asset.endsWith('.js')?'text/javascript; charset=utf-8':'text/html; charset=utf-8');
+      res.setHeader('Content-Type',asset.endsWith('.css')?'text/css':/\.(m?js)$/.test(asset)?'text/javascript; charset=utf-8':'text/html; charset=utf-8');
       res.end(fs.readFileSync(path.join(root,'apps/runtime-desktop',asset)));return;
     }
     if(req.method==='GET'&&req.url==='/console/workspace'){
@@ -403,6 +408,14 @@ async function main(options={openBrowser:true}){
     if(req.headers['x-runtime-token']!==token||req.headers.origin&&req.headers.origin!==origin){res.writeHead(403).end();return;}
     try{
       if(req.method==='GET'&&req.url==='/state'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({...control.snapshot(),role}));return;}
+      if(req.method==='GET'&&req.url==='/execution'&&role!=='center'){
+        if(control.child?.connected&&Date.now()-(control.previewInterestAt??0)>2000){control.previewInterestAt=Date.now();try{control.child.send({type:'execution-preview-interest'},()=>{});}catch{}}
+        res.setHeader('Content-Type','application/json');res.end(JSON.stringify({state:control.state,connected:control.connected,view:control.executionView??null,previewIds:control.executionPreviews?.ids()??[]}));return;
+      }
+      if(req.method==='GET'&&req.url.startsWith('/execution/preview/')&&role!=='center'){
+        const m=/^\/execution\/preview\/([A-Za-z0-9_.:%-]{1,384})\/(input|output)$/.exec(req.url),bytes=m?control.executionPreviews?.get(decodeURIComponent(m[1]),m[2]):null;
+        if(!bytes){res.writeHead(404).end();return;}res.setHeader('Content-Type','image/jpeg');res.setHeader('Cache-Control','no-store');res.end(bytes);return;
+      }
       if(req.method==='GET'&&req.url==='/workspace'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(await currentWorkspace()));return;}
       if(req.method==='GET'&&req.url==='/discover'&&role!=='center'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify({centers:await discover()}));return;}
       if(req.method!=='POST'||req.headers.origin!==origin)throw Error('REQUEST_REJECTED');

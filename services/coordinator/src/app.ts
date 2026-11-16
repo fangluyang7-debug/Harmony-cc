@@ -1,5 +1,8 @@
+import {DeviceTelemetryStore} from './device-telemetry';
+import {AppActivityStore} from './app-activity';
 import {serializeSqliteTransactions} from './sqlite-transactions';
 import {DisplaySessions} from './display-sessions';
+import {photoDisplayConnection} from './photo-display-connection';
 import {retryableJobError} from './job-errors';
 import {WorkflowJobs} from './workflow-jobs';
 import {ArtifactRetention} from './retention';
@@ -51,6 +54,8 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const referencePacks=options.referencePacks??(options.cpuHost?await builtinReferencePacks():builtinCpuPacks());
     const store=new CoordinatorStore(db,identity.id);
     const events=new SpaceEvents();
+    const deviceTelemetry=new DeviceTelemetryStore();
+    const appActivity=new AppActivityStore();
     const auth=new PairingService(db,identity.cert,config.domain);
     const display=new DisplaySessions(db);
     const apps=new AppRegistry(db,auth,identity.cert,config.domain);
@@ -102,6 +107,9 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
           Object.keys(body).some(k=>!['mode','bytes','padding'].includes(k))||
           (body.mode==='upload'?(typeof body.padding!=='string'||body.padding.length!==body.bytes||!/^[x]+$/.test(body.padding)):body.padding!==undefined))throw new BadRequestException('PROBE_INVALID');
         return {relayId:identity.id,padding:body.mode==='download'?'x'.repeat(body.bytes):''};
+      }
+      @Post('devices/me/telemetry')async deviceTelemetryReport(@Headers('authorization') header:string,@Body() body:any){
+        return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));deviceTelemetry.report(peer,body);events.changed(peer.groupId);return {accepted:true};});
       }
       @Post('device-settings')async deviceSettings(@Headers('authorization') header:string,@Body() body:any){
         return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));const measured=body&&typeof body==='object'&&body.measured!==undefined?measuredCapacity(body.measured):undefined;return {settings:await spaces.deviceSettings(peer,measured)};});
@@ -183,6 +191,14 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
       @Post('apps/registrations')async registerApp(@Headers('authorization') header:string,@Body() body:any){return this.jobResponse(async()=>apps.registerDeclaration(await auth.authenticate(bearer(header)),body,config.publicUrl??'https://'+config.certificateHost+':'+app.getHttpServer().address().port));}
       @Post('apps/exchange')async exchangeApp(@Body() body:any){return this.jobResponse(async()=>apps.exchange(body));}
       @Post('apps/me/performance')async appPerformance(@Headers('authorization') header:string){return this.jobResponse(async()=>apps.performance(await auth.authenticate(bearer(header))));}
+      @Post('apps/me/activity')async reportAppActivity(@Headers('authorization') header:string,@Body() body:any){
+        return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header));await apps.context(peer);appActivity.report(peer,body);events.changed(peer.groupId);return {accepted:true};});
+      }
+      @Get('apps/me/photo-display')async appPhotoDisplay(@Headers('authorization') header:string){return this.jobResponse(async()=>{
+        const context=await apps.context(await auth.authenticate(bearer(header)));
+        if(!context.identity.allowedContracts.includes('photo.enhance.v1'))throw new UnauthorizedException();
+        return photoDisplayConnection(config.publicUrl??`https://${config.certificateHost}:${config.port}`);
+      });}
       @Get('apps/me')async appIdentity(@Headers('authorization') header:string){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),context=await apps.context(peer),budget=await db.device.findUnique({where:{id:JSON.stringify(['budget',peer.deviceId])}});return {...context,deviceCapacity:budget?JSON.parse(budget.metadataJson).capacity:[]};});}
       /** Qualified-target counts per allowed contract. A count is a registration fact for the App's own routing report; the planner still chooses. */
       @Get('apps/me/capabilities')async appCapabilities(@Headers('authorization') header:string){return this.jobResponse(async()=>{const peer=await auth.authenticate(bearer(header)),context=await apps.context(peer);
@@ -245,7 +261,7 @@ export async function createCoordinator(config:CoordinatorConfig, recover:(db:Pr
     const jobs=new CpuJobs(db,directory,profiles,snapshots,allotments,artifacts,store,()=>epoch,()=>channel.flush(),planning,traces,apps,referencePacks,directTransfers),graphs=new WorkflowJobs(db,jobs,apps,artifacts,referencePacks,retention),sdk=new SdkJobs(jobs,referencePacks,graphs,retention);
     channel.onUnstarted=(tx,id)=>graphs.adoptUnstarted(tx,id);
     channel.onUnavailable=peer=>jobs.unavailable(peer);
-    const telemetry=new TelemetryView(db,directory,traces,groupId=>directTransfers.dashboard(groupId));
+    const telemetry=new TelemetryView(db,directory,traces,groupId=>directTransfers.dashboard(groupId),deviceTelemetry,appActivity);
     const spaces=new TeamSpaces(db,auth,allotments,directory,jobs,artifacts,config,()=>({ready,epoch}),snapshots,events,apps,sdk,groupId=>directTransfers.dashboard(groupId),telemetry);
     remoteEvaluation.onChanged((groupId,holderInstanceId)=>{void channel.evaluationChanged(groupId,holderInstanceId).catch(()=>{});});
     auth.onRevoked(id=>channel.revoke(id));

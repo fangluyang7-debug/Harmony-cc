@@ -1,4 +1,5 @@
 import {photoVulkanExecutorId} from './photo-accelerator';
+import {executionObserver} from './execution-observer';
 import {DeviceTelemetryPublisher} from './device-telemetry';
 import {ArtifactDescriptor,directTransfer,SignedTransfer,transfer} from '@harmony/resource-transport';
 import {ImageEncoder,imageExecutorId,cudaExecutorId} from './image-encoder';
@@ -143,17 +144,17 @@ export class CpuHost {
             if(!(error instanceof Error)||error.message!=='ARTIFACT_CACHE_FULL')throw error;
             const fallback=await request('/v2/executions/'+offer.task.attemptId+'/output',{bytes:bytes.length,contentHash:digest(bytes),schemaId,retentionFailure:'ARTIFACT_CACHE_FULL'}).catch(()=>{throw Error('ARTIFACT_CACHE_FULL');}) as {delivery:string;ticket:Parameters<typeof transfer>[1]};
             if(fallback.delivery!=='RELAY'||fallback.ticket.operation!=='WRITE'||canonical(fallback.ticket.ref)!==canonical(descriptor.ref)||fallback.ticket.bytes!==bytes.length)throw Error('ARTIFACT_ROUTE_SCOPE');
-            const send=()=>transfer(config.connection,fallback.ticket,config.connection.credential,bytes);await (trace?trace.transfer('WRITE',send):send());host.channel.forget(descriptor);return descriptor.ref;
+            const send=()=>transfer(config.connection,fallback.ticket,config.connection.credential,bytes);await (trace?trace.transfer('WRITE',send):send());host.channel.forget(descriptor);executionObserver.delivery(offer.task.attemptId,'RELAY');return descriptor.ref;
           }
-          await request('/v2/executions/'+offer.task.attemptId+'/retained',descriptor);return descriptor.ref;
+          await request('/v2/executions/'+offer.task.attemptId+'/retained',descriptor);executionObserver.delivery(offer.task.attemptId,'RETAINED');return descriptor.ref;
         }
         if(reply.delivery==='RELAY'){
           const ticket=reply.ticket;
           if(ticket.operation!=='WRITE'||ticket.bytes!==bytes.length||ticket.ref.schemaId!==schemaId||ticket.ref.contentHash!==digest(bytes))throw Error('ARTIFACT_ROUTE_SCOPE');
-          const send=()=>transfer(config.connection,ticket,config.connection.credential,bytes);await (trace?trace.transfer('WRITE',send):send());return ticket.ref;
+          const send=()=>transfer(config.connection,ticket,config.connection.credential,bytes);await (trace?trace.transfer('WRITE',send):send());executionObserver.delivery(offer.task.attemptId,'RELAY');return ticket.ref;
         }
         const t=reply.ticket;if(reply.delivery!=='LOCAL'||t.operation!=='WRITE'||t.bytes!==bytes.length||t.ref.contentHash!==digest(bytes)||t.ref.schemaId!==schemaId)throw Error('ARTIFACT_ROUTE_SCOPE');
-        await this.stageInput({contentHash:t.ref.contentHash,bytes:bytes.length,schemaId,schemaVersion:1},bytes);return t.ref;
+        await this.stageInput({contentHash:t.ref.contentHash,bytes:bytes.length,schemaId,schemaVersion:1},bytes);executionObserver.delivery(offer.task.attemptId,'LOCAL');return t.ref;
       },read:async(ref,offer,trace)=>{
         const cached=this.dataHost?.channel.lookup(offer.task.groupId,ref);
         if(cached&&cached.ownerPrincipalId===offer.task.app.principalId&&this.dataHost!.channel.available(cached))return this.dataHost!.channel.readForControl(cached);
@@ -322,6 +323,7 @@ export class CpuHost {
       try{
         const bytes=await host.channel.readForControl(cached),startMono=performance.now();
         const observation=await directTransfer(grant,connection.certificate,connection.domain,bytes),endMono=performance.now();
+        executionObserver.sent(item.producerAttemptId,a.endpoint.deviceId,bytes.length,a.ref.contentHash);
         if(this.transferTelemetry.size<16){const report=request('/v2/data/traces',{authorizationId:a.id,side:'SENDER',interval:{clockDomainId:pcTraceClockDomainId,startMono,endMono}}).catch(()=>{}).finally(()=>this.transferTelemetry.delete(report));this.transferTelemetry.add(report);}
         await request('/v2/data/observations',{authorizationId:a.id,durationMs:observation.durationMs});
       }catch(error){await request('/v2/data/deliveries/failed',{authorizationId:a.id});this.onError(error);}

@@ -99,7 +99,7 @@ test('a business service registers vector search as an ordinary target; a differ
   assert.equal((await r.db.receipt.findUnique({where:{id:requestId}})).committed,true);
   // The App's gateway reads which declared capabilities have qualified targets; counts are facts, not placement.
   const availability=JSON.parse(await appRequest(appConnection)('/v2/apps/me/capabilities',null));
-  assert.deepEqual(availability,{capabilities:[{capability:'vector.search.v1',targets:1,services:1}]});
+  assert.deepEqual(availability,{capabilities:[{capability:'vector.search.v1',targets:1,services:1,devices:1}]});
   // Data scope is a planner constraint: LOCAL_ONLY cannot leave the phone (which hosts no executor here), OWNER_SERVICE may only go to the service.
   const scoped=Buffer.from(JSON.stringify({model,vector:[1,0]}));
   await assert.rejects(request('/v2/jobs',{requestId:crypto.randomUUID(),capability:'vector.search.v1',contentHash:hash(scoped),bytes:scoped.length,parameters:JSON.stringify({indexSpaceId:'fixture',topK:1}),privacy:'LOCAL_ONLY'}),/NO_LEGAL_PLAN|NO_AVAILABLE_TARGET/);

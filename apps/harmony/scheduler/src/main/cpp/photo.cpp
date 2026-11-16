@@ -5,6 +5,7 @@
 #include <algorithm>
 #include "photo-png-napi.h"
 #ifdef HARMONY_PHOTO_NCNN
+#define HARMONY_PHOTO_SHARED_MODEL
 #include "photo-core.h"
 #endif
 struct Work {napi_async_work work;napi_deferred promise;std::vector<std::string> args;int code=1;};

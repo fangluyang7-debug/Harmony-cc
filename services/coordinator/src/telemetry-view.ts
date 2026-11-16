@@ -1,3 +1,5 @@
+import {DeviceTelemetryStore} from './device-telemetry';
+import {AppActivityStore} from './app-activity';
 import {recentJobs,recentTransfers,traceRows} from './dashboard-history';
 import {raceKey,raceIntervals} from './race-timing';
 // Human install guidance per capability (data file; see capabilities/capability-hints.json).
@@ -14,7 +16,7 @@ const finite=(value:unknown):number|null=>typeof value==='number'&&Number.isFini
 /** Member-authorized read projection. Never plans, registers Apps, issues tickets, or mutates state. */
 export class TelemetryView {
   constructor(private db:PrismaClient,private directory:DeviceDirectory,
-    private traces:TraceService,private networkView?:(groupId:string)=>Promise<unknown>){}
+    private traces:TraceService,private networkView?:(groupId:string)=>Promise<unknown>,private deviceTelemetry?:DeviceTelemetryStore,private appActivity?:AppActivityStore){}
 
   async snapshot(groupId:string,principalId:string){
     const now=Date.now();
@@ -33,10 +35,11 @@ export class TelemetryView {
     const devices=ids.map(id=>{
       const registration=registered.find(d=>d.id===id),holders=profiles.filter(p=>p.deviceId===id);
       const reservations=grants.filter(r=>r.grant.deviceId===id&&r.grant.groupId===groupId);
-      return {id,name:registration?.name??id,paired:holders.length>0||(!!registration&&pairedHolders.has(registration.holderId)),holders:holders.map(profile=>({profile,controlState:this.directory.controlState?.(groupId,profile.holderInstanceId,profile.deviceInstanceId,profile.ledgerEpoch)??'UNKNOWN',
+      return {id,name:registration?.name??id,telemetry:this.deviceTelemetry?.read(groupId,id,holders.map(p=>p.holderInstanceId))??null,paired:holders.length>0||(!!registration&&pairedHolders.has(registration.holderId)),holders:holders.map(profile=>({profile,controlState:this.directory.controlState?.(groupId,profile.holderInstanceId,profile.deviceInstanceId,profile.ledgerEpoch)??'UNKNOWN',
         resourceForecasts:profile.executors.map(e=>{const a=availability(profile,e,'REMOTE_INTERACTIVE',profile.sequence,now);return {targetId:a.targetId,reason:a.reason,blockingReason:a.blockingReason,resourceWait:a.resourceWait};}),
         evidenceFresh:profile.ownerActivity.sampledAt<=now&&profile.ownerActivity.sampledAt+profile.ownerActivity.ttlMs>now,
         qualification:profile.executors.map(e=>({targetId:e.target.targetId,...parsed(qualifications.find(q=>q.id===JSON.stringify([groupId,profile.holderInstanceId,e.target.targetId]))?.metadataJson)}))})),
+        appActivities:this.appActivity?.read(groupId,id,holders.map(p=>p.holderInstanceId))??[],
         allotments:reservations.map(r=>({holderInstanceId:r.grant.holderInstanceId,appInstanceId:r.grant.appInstanceId,version:r.grant.version,coordinatorEpoch:r.grant.coordinatorEpoch,
           base:r.grant.base,extra:r.grant.extra,reserved:r.reserved,ack:r.ack?{version:r.ack.version,occupied:r.ack.occupied,settlementSeq:r.ack.settlementSeq}:null}))};
     });

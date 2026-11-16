@@ -5,7 +5,7 @@ const {createCoordinator}=require('../dist/app');
 function browser(r){let cookie='';const send=async(route,body,origin,binary=false)=>new Promise((resolve,reject)=>{const bytes=body===undefined?null:binary?Buffer.from(body):Buffer.from(JSON.stringify(body));const q=https.request(r.url+'/v2/spaces'+route,{ca:r.identity.cert,method:bytes?(binary?'PUT':'POST'):'GET',headers:{Cookie:cookie,...(origin?{Origin:origin}:{}),...(bytes?{'Content-Type':binary?'application/octet-stream':'application/json','Content-Length':bytes.length}:{})}},res=>{if(res.headers['set-cookie'])cookie=res.headers['set-cookie'][0].split(';')[0];const chunks=[];res.on('data',b=>chunks.push(b));res.on('end',()=>{try{const data=Buffer.concat(chunks);resolve({status:res.statusCode,body:res.headers['content-type']?.startsWith('application/octet-stream')?data:JSON.parse(data)});}catch(e){reject(e);}});});q.on('error',reject);q.end(bytes);});const request=(route,body,origin)=>send(route,body,origin);request.binary=(route,body,origin)=>send(route,body,origin,true);return request;}
 async function until(check,timeoutMs=45000){const deadline=Date.now()+timeoutMs;while(Date.now()<deadline){if(await check())return;await new Promise(r=>setTimeout(r,150));}throw Error('SPACE_TIMEOUT');}
 const command=(file,args)=>new Promise((resolve,reject)=>execFile(process.execPath,[file,...args],{windowsHide:true,timeout:60000},(e,stdout,stderr)=>e?reject(Error(stderr||e.message)):resolve(stdout)));
-test('short device QR uses a pinned, single-use invitation and keeps legacy downloads compatible',async()=>{
+test('short device QR uses pinned invitations with retryable code resolution and keeps legacy downloads compatible',async()=>{
  const r=await runtime();r.config.publicUrl=r.url;
  const owner=browser(r),{pinnedOptions,pinnedRequest}=require('../dist/pinned-client');
  try{
@@ -50,7 +50,7 @@ test('short device QR uses a pinned, single-use invitation and keeps legacy down
   await assert.rejects(resolvePairingInput({invitation:legacyCode,address:r.url,fingerprint:'0'.repeat(64)}),/证书/);
   const numeric=await resolvePairingInput({invitation:legacyCode,address:r.url,fingerprint:trust.fingerprint});
   assert.deepEqual(numeric,legacyBootstrap);
-  assert.equal((await request('/v2/pairing/code',{code:legacyCode})).status,401,'numeric code is single use');
+  assert.equal((await request('/v2/pairing/code',{code:legacyCode})).status,201,'valid code resolution is retryable; device binding is enforced at exchange');
   await pinnedRequest(numeric.invitation,'/v2/pair',{inviteId:numeric.invitation.inviteId,code:numeric.invitation.code,holderInstanceId:numeric.holderInstanceId});
   const another=await owner('/'+group+'/devices',{name:'链接设备',settings,qrFormat:'link'});
   const i=another.body.invitation;

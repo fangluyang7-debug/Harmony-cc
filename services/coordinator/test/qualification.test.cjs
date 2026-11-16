@@ -28,7 +28,7 @@ test('resource pressure defers calibration without withdrawing fresh qualified e
  }finally{await r.close();}
 });
 
-test('committed same-bucket execution drift opens circuit and a new reference generation restores it',async()=>{
+test('successful latency drift updates cost history without withdrawing qualification or rerunning models',async()=>{
  const r=await runtime();let now=100,runs=0;
  try{
   const dir=new DeviceDirectory(r.db,'SIMULATED',()=>now),p=profile();await dir.ingest(peer,p);
@@ -68,18 +68,17 @@ test('committed same-bucket execution drift opens circuit and a new reference ge
   assert.deepEqual(await history(),[],'old observations expire individually');
   assert.equal(await service.advance(peer,target),'ACTIVE');
   await sample(170);
-  assert.equal(await create().advance(peer,target),'SUSPENDED');
-  assert.equal((await dir.qualification(peer,target)).admission.reasonCode,'EXECUTION_COST_DRIFT');
-  assert.equal((await dir.snapshot('g1','p1',1,contribution)).candidates.length,0);
-  assert.equal(await service.advance(peer,target),'SUSPENDED');assert.equal(runs,2);
-  now+=policy.cooldownMs+1;
-  assert.equal(await service.advance(peer,target),'CANARY');assert.equal(await service.advance(peer,target),'ACTIVE');
-  assert.equal(await service.advance(peer,target),'ACTIVE');assert.equal(runs,4);
+  assert.equal(await create().advance(peer,target),'ACTIVE');
+  assert.equal((await dir.qualification(peer,target)).admission.reasonCode,'EVALUATION_PASSED');
+  assert.ok((await dir.snapshot('g1','p1',1,contribution)).candidates.length>0);
+  for(let n=0;n<5;n++)assert.equal(await service.advance(peer,target),'ACTIVE');
+  assert.equal(runs,2,'slow successful work must not trigger extra reference inference');
+  assert.equal(JSON.parse((await r.db.calibrationJob.findUniqueOrThrow({where:{id:key}})).metadataJson).generation,job.generation);
   p.sequence++;p.executors[0].target.executorVersion='2';await dir.ingest(peer,p);
   assert.equal((await dir.snapshot('g1','p1',1,contribution)).candidates.length,0);
   assert.equal(await service.advance(peer,target),'SUSPENDED');
   assert.equal((await dir.qualification(peer,target)).admission.reasonCode,'EVIDENCE_INVALIDATED');
-  assert.equal(await service.advance(peer,target),'CANARY');assert.equal(runs,5);
+  assert.equal(await service.advance(peer,target),'CANARY');assert.equal(runs,3);
  }finally{await r.close();}
 });
 

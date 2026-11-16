@@ -15,17 +15,27 @@ export class PhotoDisplay {
  private failedConnection:boolean=false;
  private store:preferences.Preferences|null=null;
  private invitation:string='';
+ private disabled:boolean=false;
  private report:(message:string)=>void;
  constructor(report:(message:string)=>void){this.report=report;}
  connected():boolean{return this.address!==''&&!this.failedConnection;}
  async restore(context:common.UIAbilityContext):Promise<string>{
   this.store=await preferences.getPreferences(context,{name:'photo-display-v1'});
   const value=await this.store.get('invitation','') as string;
+  this.disabled=await this.store.get('disabled',false) as boolean;this.invitation=value;
   if(!value){this.report('未连接电脑展示屏 · 本轮仅在手机显示');return '';}
   this.report('正在恢复电脑展示连接…');
   try{await this.connect(value);}catch(e){this.report('展示屏未连接：'+(e as Error).message+'；本机处理仍可使用。');}
   return value;
  }
+ /** Recover at a mode/run boundary without creating a new task or result. */
+ async resume(fallback:string=''):Promise<string>{
+  if(this.connected()||this.disabled)return this.invitation;
+  const value=fallback||this.invitation;if(!value)return '';this.invitation=value;
+  try{await this.connect(value);}catch(e){this.report('展示屏未连接：'+(e as Error).message+'；手机本机处理继续。');}
+  return value;
+ }
+ canAutoConnect():boolean{return !this.disabled;}
  private async post(route:string,body:string):Promise<string>{
   const request=http.createHttp();
   try{const r=await request.request(this.address+route,{method:http.RequestMethod.POST,header:{'Content-Type':'application/json','X-Display-Key':this.key},extraData:body,connectTimeout:2500,readTimeout:5000});if(r.responseCode===403)throw Error('展示连接码已失效，请重新扫描电脑二维码');if(r.responseCode!==200)throw Error('展示连接返回 '+r.responseCode);return r.result as string;}finally{request.destroy();}
@@ -34,12 +44,12 @@ export class PhotoDisplay {
   await this.queue;const match=/^(http:\/\/\d{1,3}(?:\.\d{1,3}){3}:\d{1,5})\/#display=([a-f0-9]{36})$/.exec(value.trim());
   if(!match)throw Error('请扫描展示页二维码或粘贴完整展示连接码');
   this.address=match[1];this.key=match[2];this.failedConnection=false;
-  try{const reply=JSON.parse(await this.post('/connect','{}')) as ConnectionReply;if(!reply.displayOnly||!Number.isSafeInteger(reply.nextSeq))throw Error('不是仅展示接收端');this.seq=reply.nextSeq-1;this.invitation=value.trim();if(this.store){await this.store.put('invitation',this.invitation);await this.store.flush();}this.report('已连接展示屏 · Windows 不参与计算');}catch(e){this.address='';this.key='';throw e as Error;}
+  try{const reply=JSON.parse(await this.post('/connect','{}')) as ConnectionReply;if(!reply.displayOnly||!Number.isSafeInteger(reply.nextSeq))throw Error('不是仅展示接收端');this.seq=reply.nextSeq-1;this.invitation=value.trim();this.disabled=false;if(this.store){await this.store.put('invitation',this.invitation);await this.store.put('disabled',false);await this.store.flush();}this.report('展示通道已连接 · 切换计算模式后继续同步');}catch(e){this.address='';this.key='';throw e as Error;}
  }
- async disconnect():Promise<void>{await this.queue;this.address='';this.key='';this.invitation='';if(this.store){await this.store.put('invitation','');await this.store.flush();}this.report('展示屏已断开 · 本轮仅在手机显示');}
+ async disconnect():Promise<void>{await this.queue;this.address='';this.key='';this.invitation='';this.disabled=true;if(this.store){await this.store.put('invitation','');await this.store.put('disabled',true);await this.store.flush();}this.report('展示屏已断开 · 本轮仅在手机显示');}
  private send(event:DisplayEvent):void{
   if(!this.connected())return;event.seq=++this.seq;const body=JSON.stringify(event);
-  this.queue=this.queue.then(async()=>{if(this.failedConnection)return;try{await this.post('/event',body);}catch(e){try{await this.post('/event',body);}catch{this.failedConnection=true;this.report('展示同步中断，请重连；手机本机处理继续。');}}});
+  this.queue=this.queue.then(async()=>{if(this.failedConnection)return;try{await this.post('/event',body);}catch(e){try{await this.post('/event',body);}catch{this.failedConnection=true;this.report('展示同步中断，下次选图或开始前将尝试恢复；手机本机处理继续。');}}});
  }
  picking():void{this.runId=factory.id();this.send({seq:0,type:'PICKING',runId:this.runId});}
  async select(inputs:PhotoInput[]):Promise<void>{

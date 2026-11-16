@@ -1,4 +1,6 @@
 import './photo-installation';
+import {executionObserver} from './execution-observer';
+import {executionPreviews} from './execution-previews';
 import {openPhotoAccelerator} from './photo-accelerator';
 import path from 'node:path';
 import {openImageEncoder} from './image-encoder';
@@ -7,10 +9,12 @@ import { CpuHost, CpuHostConfig } from './host';
 import {validateDataHostConfig} from './data-host';
 import {CoordinatorGoneDetector} from './coordinator-gone';
 let stopRequested=false,shutdown:(()=>Promise<void>)|null=null;
-process.on('message',(message:any)=>{if(message==='stop'||message?.type==='shutdown'){stopRequested=true;if(shutdown)void shutdown().then(()=>process.disconnect?.());}});
+process.on('message',(message:any)=>{if(message?.type==='execution-preview-interest')executionPreviews.interest();if(message==='stop'||message?.type==='shutdown'){executionPreviews.close();stopRequested=true;if(shutdown)void shutdown().then(()=>process.disconnect?.());}});
+process.once('disconnect',()=>executionPreviews.close());
 async function main(){
   const [pairedFile,contributionFile,networkFile]=process.argv.slice(2);if(!pairedFile||!contributionFile)throw Error('HOST_ARGUMENTS');
   const config={...JSON.parse(fs.readFileSync(pairedFile,'utf8')),contribution:JSON.parse(fs.readFileSync(contributionFile,'utf8'))} as CpuHostConfig;
+  executionObserver.enable({deviceId:config.identity.deviceId,domain:config.connection.domain,gpuReady:false});
   if(networkFile)config.dataEndpoint=JSON.parse(fs.readFileSync(networkFile,'utf8'));
   if(config.dataEndpoint!==undefined&&config.dataEndpoint!==false)validateDataHostConfig(config.dataEndpoint);
   // Keep the on-disk policy in step with the automatic ceiling so the desktop quota panel and restarts see it.
@@ -41,6 +45,9 @@ async function main(){
       console.error('PHOTO_GPU_UNAVAILABLE '+reason+': only CPU photo capabilities will be advertised. '+({PHOTO_GPU_RUNTIME_MISSING:'The Vulkan engine file is missing from this installation.',PHOTO_GPU_DRIVER_MISSING:'nvidia-smi is not available; install the NVIDIA driver.',PHOTO_GPU_DEVICE_UNMATCHED:'No Vulkan device matches an NVIDIA GPU; check HARMONY_PHOTO_GPU_ID and vulkan-1.dll from the driver.',PHOTO_GPU_MEMORY_TOO_SMALL:'The matched GPU has less than 512 MiB.',PHOTO_GPU_QUALITY_FAILED:'The reference inference did not reach the quality threshold.',PHOTO_GPU_PROBE_FAILED:'The reference inference did not finish; check vcomp140.dll beside the engine and the driver.'} as Record<string,string>)[reason]);
     }
   }else if(process.env.HARMONY_PHOTO_MODEL&&!process.env.HARMONY_PHOTO_VULKAN)console.log('PHOTO_GPU_RUNTIME_MISSING: no Vulkan engine configured; photo enhancement runs on CPU only.');
+  executionObserver.setRuntime({gpuReady:!!config.imageEncoder?.gpu,backend:config.imageEncoder?.backend??'CPU',gpuName:config.imageEncoder?.gpu?.name??null,model:config.imageEncoder?.pack.manifest.model??null});
+  let lastView=-1,sendingView=false;
+  const viewTimer=setInterval(()=>{if(!process.connected||sendingView)return;const view=executionObserver.snapshot();if(view.revision===lastView)return;lastView=view.revision;sendingView=true;try{process.send?.({type:'execution-view',view},()=>{sendingView=false;});}catch{sendingView=false;}},500);viewTimer.unref();
   const detector=new CoordinatorGoneDetector();let gone=false;
   const host=await CpuHost.open(config,error=>{
     if(!gone&&detector.observe(error,Date.now())){gone=true;console.log('COORDINATOR_GONE: coordinator stopped or unreachable; pairing will be cleared.');
@@ -50,7 +57,7 @@ async function main(){
     console.error(error instanceof Error&&/^[A-Z_]+(?::[A-Z_]+)?$/.test(error.message)?error.message:
       typeof ioCode==='string'&&/^[A-Z0-9_]+$/.test(ioCode)?'CPU_HOST_IO_ERROR:'+ioCode:'CPU_HOST_OPERATION_FAILED');
   });
-  let stopping=false;const close=async()=>{if(stopping)return;stopping=true;await host.close();};
+  let stopping=false;const close=async()=>{if(stopping)return;stopping=true;clearInterval(viewTimer);executionPreviews.close();await host.close();};
   process.once('SIGINT',()=>{void close();});process.once('SIGTERM',()=>{void close();});
   shutdown=close;if(stopRequested){await close();process.disconnect?.();return;}
   host.start();console.log('CPU host started: automatic profiles, calibration and execution enabled.');

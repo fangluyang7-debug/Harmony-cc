@@ -81,16 +81,19 @@ class ShoppingBusinessCompute {
   }};
   await Promise.all([worker(),worker(),worker()]);if(stopped)throw stopped as Error;return result;
  }
- private async rankProducts(products:Product[],signal:CancellationSignal,deadline:number,audit:ShoppingAudit):Promise<void>{
+ private async rankProducts(products:Product[],signal:CancellationSignal,deadline:number,audit:ShoppingAudit,fromPhoto:boolean):Promise<void>{
   const sdk=await cooperative.availableClient();if(!sdk||products.length===0)return;
   const currency=products[0].currency||'CNY';
   if(currency!=='CNY'||products.some(p=>(p.currency||'CNY')!==currency||!/^\d{1,9}(\.\d{1,2})?$/.test(p.price))){audit.reason='PRICE_FORMAT_REQUIRES_BUSINESS_HANDLING';return;}
   const payload:CatalogInput={currency,maxPriceMinor:99999999999,items:products.map((p:Product,index:number):CatalogItem=>({id:String(index),price:p.price,currency,rank:index}))};
   if(signal.isCancellationRequested||monotonic()>=deadline)throw Error('SHOPPING_CANCELLED_OR_BUDGET');
-  const input=await sdk.registerInput(bytes(JSON.stringify(payload)),'catalog.items'),id=audit.taskId+'-'+util.generateRandomUUID(true);
+  const nodeId=fromPhoto?'image-search-price-ranking':audit.operation==='text'||audit.operation==='turn'?'text-search-price-ranking':'price-ranking';
+  // Some compatibility transports name a single execution node "compute".
+  // Preserve its business step in the workflow ID as well for device-side observation.
+  const input=await sdk.registerInput(bytes(JSON.stringify(payload)),'catalog.items'),id=audit.taskId+'-'+nodeId+'-'+util.generateRandomUUID(true);
   const job:ShoppingComputeJob={id,deviceId:'',traceId:'',state:'SUBMITTING'};audit.jobs.push(job);
   try{
-   const task=await sdk.submit({version:3,id,outputContract:'catalog.ranked',qualityTarget:'reference',nodes:[{id:'price-ranking',capability:'catalog.filter.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:id,budgetMs:Math.max(1,Math.min(30000,Math.floor(deadline-monotonic()))),resultDestination:'ORIGIN'});
+   const task=await sdk.submit({version:3,id,outputContract:'catalog.ranked',qualityTarget:'reference',nodes:[{id:nodeId,capability:'catalog.filter.v1',input,parameters:'{}',dependsOn:[]}]},{requestId:id,budgetMs:Math.max(1,Math.min(30000,Math.floor(deadline-monotonic()))),resultDestination:'ORIGIN'});
    if(signal.isCancellationRequested){await task.cancel();throw Error('SHOPPING_CANCELLED');}
    const result=await task.result(Math.max(1,Math.min(30000,deadline-monotonic()))),ranked=JSON.parse(text(result.output)) as CatalogResult;
    if(ranked.scanned!==products.length||ranked.excluded!==0||ranked.items.length!==products.length||new Set<string>(ranked.items.map(r=>r.id)).size!==products.length||ranked.items.some(r=>!/^\d+$/.test(r.id)||Number(r.id)>=products.length))throw Error('CATALOG_RESULT_INVALID');
@@ -109,7 +112,7 @@ class ShoppingBusinessCompute {
   if(photoUri&&(!products||products.length===0))audit.reason='NO_CANDIDATES_FROM_CLOUD';
   // The ordinary price-order button consumes these ranks for both text and photo results.
   if(products){const ranked=products.slice().sort((a:Product,b:Product)=>numericPrice(a)-numericPrice(b));ranked.forEach((p:Product,index:number)=>{p.comparisonRank=index;});}
-  try{if(products)await this.rankProducts(products,signal,deadline,audit);}catch(e){audit.state='PARTIAL';audit.error=(e as Error).message;audit.reason='PRICE_RANKING_UNAVAILABLE';}
+  try{if(products)await this.rankProducts(products,signal,deadline,audit,photoUri!==undefined);}catch(e){audit.state='PARTIAL';audit.error=(e as Error).message;audit.reason='PRICE_RANKING_UNAVAILABLE';}
   try{
    if(photoUri&&products&&products.length){
     if(signal.isCancellationRequested||monotonic()>=deadline)throw Error('SHOPPING_CANCELLED_OR_BUDGET');

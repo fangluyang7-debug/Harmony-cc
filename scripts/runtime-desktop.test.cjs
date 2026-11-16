@@ -20,6 +20,14 @@ test('desktop process controls require a session token and same-origin POST',asy
  const runtime=await main({openBrowser:false,role:'agent',bindingFile:path.join(isolated,'binding.json')}),url=new URL(runtime.url),base=url.origin,token=url.hash.slice(1);
  try{
   assert.equal((await fetch(base+'/state')).status,403);
+  assert.equal((await fetch(base+'/execution')).status,403);
+  const execution=await fetch(base+'/execution',{headers:{'X-Runtime-Token':token}});assert.equal(execution.status,200);assert.deepEqual(await execution.json(),{state:'STOPPED',connected:false,view:null,previewIds:[]});
+  runtime.control.executionPreviews=new (require('./execution-preview-cache.cjs').ExecutionPreviewCache)();
+  const thumbnail={width:1,height:1,image:Buffer.from([255,216,255,217]).toString('base64')};runtime.control.executionPreviews.put('actual-attempt',{input:thumbnail,output:thumbnail});
+  assert.equal((await fetch(base+'/execution/preview/actual-attempt/output')).status,403);
+  const preview=await fetch(base+'/execution/preview/actual-attempt/output',{headers:{'X-Runtime-Token':token}});assert.equal(preview.status,200);assert.equal(preview.headers.get('content-type'),'image/jpeg');assert.equal((await preview.arrayBuffer()).byteLength,4);
+  assert.equal((await fetch(base+'/execution/preview/missing/output',{headers:{'X-Runtime-Token':token}})).status,404);
+  for(const asset of ['/execution.html','/execution-view.mjs','/execution.css'])assert.equal((await fetch(base+asset)).status,200);
   assert.equal((await fetch(base+'/state',{headers:{'X-Runtime-Token':token,Origin:'https://unrelated.example'}})).status,403);
   assert.equal((await fetch(base+'/stop',{method:'POST',headers:{'X-Runtime-Token':token,'Content-Type':'application/json'},body:'{}'})).status,400);
   const state=await fetch(base+'/state',{headers:{'X-Runtime-Token':token}});assert.equal(state.status,200);assert.equal((await state.json()).state,'STOPPED');

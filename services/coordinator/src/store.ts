@@ -1,3 +1,4 @@
+import {closeRetiredUnadmitted,unadmittedClosed} from './unadmitted-closure';
 import {openRaceTiming,noteRace} from './race-timing';
 import {outboxByWireId} from './outbox-lookup';
 import {settleBatchCharge} from './batch-ready';
@@ -99,8 +100,10 @@ export class CoordinatorStore {
     if(!Number.isSafeInteger(epoch)||epoch<1)throw new Error('EPOCH_INVALID');
     await this.db.$transaction(async tx=>{
       await tx.outbox.updateMany({where:{acked:false,epoch:{not:epoch}},data:{superseded:true}});
+      await closeRetiredUnadmitted(tx,epoch);
       const attempts=await tx.attempt.findMany();
       for(const row of attempts){
+        if(await unadmittedClosed(tx,row))continue;
         const record=row.recordJson===null?null:JSON.parse(row.recordJson) as AttemptRecordV2;
         if(record!==null&&!validAttemptRecordV2(record))throw new Error('RECOVERY_RECORD_CORRUPT');
         if(record?.resourcesSettled&&!['ACCEPTED','RUNNING','SIDE_EFFECT_UNKNOWN'].includes(record.state))continue;
@@ -151,6 +154,7 @@ export class CoordinatorStore {
     if(!protocolId(groupId)||!protocolId(holderInstanceId)||!Number.isSafeInteger(epoch)||epoch<1)throw Error('RECOVERY_INVALID');
     await this.db.$transaction(async tx=>{
       for(const row of await tx.attempt.findMany({where:{groupId,holderInstanceId}})){
+        if(await unadmittedClosed(tx,row))continue;
         const record=row.recordJson===null?null:JSON.parse(row.recordJson) as AttemptRecordV2;
         if(record?.resourcesSettled)continue;
         await tx.outbox.updateMany({where:{attemptId:row.id,kind:'DispatchOffer',acked:false},data:{superseded:true}});
@@ -180,6 +184,7 @@ export class CoordinatorStore {
       if(record===null){
         if(old)throw Error('STATUS_RECORD_LOST');
         await tx.attempt.update({where:{id:row.id},data:{state:'HOLDER_RECORD_MISSING'}});
+        await closeRetiredUnadmitted(tx,epoch,row.id);
       }else{
         if(record.groupId!==groupId||record.holderInstanceId!==holderInstanceId||record.fence.deviceId!==deviceId||record.executionDigest!==row.executionDigest||
           record.principalId!==task.app.principalId||record.appInstanceId!==task.app.appInstanceId||record.businessIdempotencyKey!==task.businessIdempotencyKey||

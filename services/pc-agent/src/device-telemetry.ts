@@ -1,4 +1,6 @@
 import os from 'node:os';
+import fs from 'node:fs';
+import path from 'node:path';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 const run=promisify(execFile);
@@ -11,6 +13,8 @@ export function gpuObservation(csv:string):{gpuPercent:number|null;gpuTemperatur
 }
 /** Observation only. Slow hardware probes never block dispatch or resource admission. */
 export class DeviceTelemetryPublisher {
+ private gpuRetryAt=0;
+ private readonly gpuCommand=[path.join(process.env.SystemRoot??'C:/Windows','System32/nvidia-smi.exe'),path.join(process.env.ProgramW6432??process.env.ProgramFiles??'C:/Program Files','NVIDIA Corporation/NVSMI/nvidia-smi.exe')].find(p=>fs.existsSync(p))??'nvidia-smi';
  private pending=false;private next=0;private sensorNext=0;private sensorPending=false;
  private last=os.cpus();private sensors={batteryPercent:null as number|null,powerStatus:'UNKNOWN',sampledAt:0};
  constructor(private send:(body:DeviceTelemetry)=>Promise<unknown>,private hasGpu:boolean){}
@@ -24,7 +28,7 @@ export class DeviceTelemetryPublisher {
    void run('powershell.exe',['-NoProfile','-NonInteractive','-Command',"$b=@(Get-CimInstance Win32_Battery -ErrorAction Stop); if($b.Count -eq 0){'{\"powerStatus\":\"NO_BATTERY\",\"batteryPercent\":null}'}else{$v=$b[0]; @{batteryPercent=$v.EstimatedChargeRemaining;powerStatus=$(if($v.BatteryStatus -in @(6,7,8,9)){'CHARGING'}elseif($v.BatteryStatus -eq 1){'DISCHARGING'}elseif($v.BatteryStatus -in @(2,3)){'AC_POWER'}else{'UNKNOWN'})}|ConvertTo-Json -Compress}"],{windowsHide:true,timeout:5000,maxBuffer:4096}).then(r=>{const v=JSON.parse(r.stdout);this.sensors={batteryPercent:typeof v.batteryPercent==='number'&&v.batteryPercent>=0&&v.batteryPercent<=100?v.batteryPercent:null,powerStatus:['NO_BATTERY','CHARGING','DISCHARGING','AC_POWER','UNKNOWN'].includes(v.powerStatus)?v.powerStatus:'UNKNOWN',sampledAt:Date.now()};}).catch(()=>{this.sensors={batteryPercent:null,powerStatus:'UNKNOWN',sampledAt:Date.now()};}).finally(()=>{this.sensorPending=false;});
   }
   let gpu={gpuPercent:null as number|null,gpuTemperatureC:null as number|null,gpuName:''};
-  if(this.hasGpu)try{gpu=gpuObservation((await run('nvidia-smi',['--query-gpu=name,utilization.gpu,temperature.gpu','--format=csv,noheader,nounits'],{windowsHide:true,timeout:2000,maxBuffer:4096})).stdout);}catch{}
+  if((this.hasGpu||process.platform==='win32')&&now>=this.gpuRetryAt)try{gpu=gpuObservation((await run(this.gpuCommand,['--query-gpu=name,utilization.gpu,temperature.gpu','--format=csv,noheader,nounits'],{windowsHide:true,timeout:2000,maxBuffer:4096})).stdout);}catch{this.gpuRetryAt=Date.now()+30000;}
   const fresh=now-this.sensors.sampledAt<60000;
   await this.send({sampledAt:Date.now()+offset,cpuPercent:total>0?Math.max(0,Math.min(100,100*(1-idle/total))):null,memoryUsedBytes:os.totalmem()-os.freemem(),memoryTotalBytes:os.totalmem(),batteryPercent:fresh?this.sensors.batteryPercent:null,powerStatus:fresh?this.sensors.powerStatus:'UNKNOWN',sensorSampledAt:fresh?this.sensors.sampledAt+offset:0,...gpu});
  }

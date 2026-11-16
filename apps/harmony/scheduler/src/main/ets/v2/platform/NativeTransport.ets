@@ -45,8 +45,11 @@ export class NativeTransport {
   if(!/^\/v2\/[A-Za-z0-9_.:/-]+$/.test(route)&&!/^\/v2\/direct\/probe\?bytes=(1024|8192|32768)$/.test(route))throw Error('CONTROL_ROUTE_INVALID');
   this.lastStatus=0;
   const request=http.createHttp(),header:Record<string,string>=headers??{'Content-Type':'application/json','Authorization':'Bearer '+this.credential};
+  let deadline:number=-1;
   try{
-   const result=await request.request(this.address+route,{method,header,caPath:this.caPath,expectDataType:http.HttpDataType.ARRAY_BUFFER,connectTimeout:10000,readTimeout:10000,usingCache:false,extraData:binary===null?(body===null?'':JSON.stringify(body)):binary.buffer});
+   const operation=request.request(this.address+route,{method,header,caPath:this.caPath,expectDataType:http.HttpDataType.ARRAY_BUFFER,connectTimeout:10000,readTimeout:10000,usingCache:false,extraData:binary===null?(body===null?'':JSON.stringify(body)):binary.buffer});
+   const probe=route.startsWith('/v2/qualification/')||route==='/v2/apps/me';
+   const result=probe?await Promise.race([operation,new Promise<http.HttpResponse>((_resolve,reject)=>{deadline=setTimeout(()=>{reject(Error('READINESS_REQUEST_TIMEOUT'));},12000);})]):await operation;
    this.lastStatus=result.responseCode;
    const data=typeof result.result==='string'?bytes(result.result):new Uint8Array(result.result as ArrayBuffer);
    if(data.byteLength>8388608)throw Error('CONTROL_RESPONSE_TOO_LARGE');
@@ -59,7 +62,7 @@ export class NativeTransport {
    // 2300006 resolve host, 2300007 connect refused, 2300060 TLS peer rejected: nothing was delivered.
    if(this.lastStatus===0&&(code===2300006||code===2300007||code===2300060))this.lastStatus=-1;
    if(code===2300060)throw Error('TLS_CERTIFICATE_REJECTED');throw e as Error;
-  }finally{request.destroy();}
+  }finally{if(deadline!==-1)clearTimeout(deadline);request.destroy();}
  }
  async json(route:string,body:Object|null=null):Promise<Object>{return JSON.parse(text(await this.request(route,body))) as Object;}
  async connect(socket:webSocket.WebSocket):Promise<void>{

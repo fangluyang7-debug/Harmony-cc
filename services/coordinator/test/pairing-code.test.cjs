@@ -1,5 +1,10 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {PairingService}=require('../dist/auth');
+test('successful code resolutions do not exhaust the global invalid-guess budget',async()=>{
+ const service=new PairingService({},'','SIMULATED',()=>1000);service.readDeviceInvite=async input=>input;
+ const code=service.issuePairingCode({inviteId:'id',code:'secret',expiresAt:1000000});
+ for(let round=0;round<40;round++)await Promise.all(['phone','pc-b','harmony-pc'].map(remote=>service.redeemPairingCode(code.pairingCode,'url',remote)));
+});
 test('numeric codes remain reusable until expiry and rate limit invalid guesses',async()=>{
  let now=1000;const service=new PairingService({},'', 'SIMULATED',()=>now);
  service.readDeviceInvite=async input=>input;

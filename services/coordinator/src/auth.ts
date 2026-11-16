@@ -1,3 +1,4 @@
+import {attemptSettled} from './unadmitted-closure';
 import { createHash, randomInt, randomBytes, randomUUID, X509Certificate } from 'node:crypto';
 import { PrismaClient } from '../generated/client';
 import { protocolId } from '@harmony/scheduler-core';
@@ -32,7 +33,11 @@ export class PairingService {
     if(typeof code!=='string'||!/^\d{6}$/.test(code))throw Error('PAIRING_REJECTED');
     const value=this.shortCodes.get(code);
     if(!value||value.expiresAt<=now)throw Error('PAIRING_REJECTED');
+    const globalAttempt=this.codeAttempts.get('global');
     const result=await this.readDeviceInvite({inviteId:value.inviteId,code:value.code},address);
+    // Successful legitimate retries are not invalid guesses. Keep in-flight requests
+    // counted, and never decrement a newer window after a slow database response.
+    if(globalAttempt&&this.codeAttempts.get('global')===globalAttempt)globalAttempt.count=Math.max(0,globalAttempt.count-1);
     this.codeAttempts.delete(remote);return result;
   }
   private readonly revocations=new Set<(id:string)=>void>();
@@ -127,7 +132,7 @@ export class PairingService {
       const apps=await tx.registeredInstallation.findMany({where:{deviceId:peer.deviceId,groupId:peer.groupId}});
       const holders=[peer.holderInstanceId,...apps.map(a=>a.holderInstanceId)];
       const pending=await tx.attempt.findMany({where:{groupId:peer.groupId,holderInstanceId:{in:holders}}});
-      if(pending.some(a=>a.state!=='REJECTED'&&(!a.recordJson||!JSON.parse(a.recordJson).resourcesSettled)))throw Error('SPACE_SWITCH_BUSY');
+      for(const a of pending)if(!await attemptSettled(tx,a))throw Error('SPACE_SWITCH_BUSY');
       const reservations=await tx.appJobReservation.findMany({where:{appInstanceId:{in:apps.map(a=>a.id)}}});
       for(const r of reservations)if(!await appReservationSettled(tx,r))throw Error('SPACE_SWITCH_BUSY');
       const credentials=(await tx.credential.findMany({where:{groupId:peer.groupId,revoked:false}})).filter(c=>JSON.parse(c.metadataJson).peer.deviceId===peer.deviceId);

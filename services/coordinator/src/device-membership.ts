@@ -1,3 +1,4 @@
+import {attemptSettled} from './unadmitted-closure';
 import {Prisma} from '../generated/client';
 import type {Peer} from './channel';
 
@@ -11,7 +12,7 @@ interface ActiveDevice {deviceId:string;groupId:string;holderInstanceId:string;}
  * Missing jobs, expired reservations and admitted attempts remain conservative. */
 export async function appReservationSettled(db:Prisma.TransactionClient,reservation:{id:string;groupId:string;principalId:string}):Promise<boolean>{
  const attempt=await db.attempt.findUnique({where:{id:reservation.id}});
- if(attempt)return attempt.groupId===reservation.groupId&&(attempt.state==='REJECTED'||!!attempt.recordJson&&JSON.parse(attempt.recordJson).resourcesSettled===true);
+ if(attempt)return attempt.groupId===reservation.groupId&&await attemptSettled(db,attempt);
  const job=await db.cpuJob.findUnique({where:{id:reservation.id}});
  return !!job&&job.groupId===reservation.groupId&&job.principalId===reservation.principalId&&job.state==='CANCELLED';
 }
@@ -63,7 +64,7 @@ export async function activateDeviceMembership(db:Prisma.TransactionClient,peer:
    throw Error('SPACE_SWITCH_BUSY');
   }
   const pending=await db.attempt.findMany({where:{groupId:old.spaceId,holderInstanceId:{in:[old.holderId,...apps.map(a=>a.holderInstanceId)]}}});
-  if(pending.some(a=>a.state!=='REJECTED'&&(!a.recordJson||!JSON.parse(a.recordJson).resourcesSettled)))throw Error('SPACE_SWITCH_BUSY');
+  for(const a of pending)if(!await attemptSettled(db,a))throw Error('SPACE_SWITCH_BUSY');
   const credentials=await db.credential.findMany({where:{groupId:old.spaceId,revoked:false}});
   for(const credential of credentials){if(JSON.parse(credential.metadataJson).peer.deviceId!==oldId)continue;
    await db.credential.update({where:{id:credential.id},data:{revoked:true,revision:{increment:1}}});revoked.push(credential.id);

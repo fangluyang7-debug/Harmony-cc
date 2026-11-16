@@ -1,12 +1,18 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {builtinReferencePacks,packDigest,validateCoverage,frozenPack,tolerancePack,propertyPack}=require('@harmony/reference-capabilities');
 const {executeCpu}=require('../../pc-agent/dist/cpu-engine');
-test('installed text, vector and crop suites bind each contract case to output or a settled rejection',async()=>{
+const {cpuRegistry}=require('../../pc-agent/dist/executors/registry');
+test('installed CPU suites bind every contract case to output or settled rejection; absent optional engines are explicit',async()=>{
  for(const pack of await builtinReferencePacks()){
   validateCoverage(pack.manifest,pack.cases);
   assert.throws(()=>validateCoverage(pack.manifest,pack.cases.filter(c=>c.expect.kind!=='REJECT')),/TRUSTED_PACK_COVERAGE/);
   const altered={...pack,cases:pack.cases.map((c,i)=>i?c:{...c,expected:'different answer'})};
   assert.notEqual(packDigest(pack),packDigest(altered));
+  if(!cpuRegistry.has(pack.manifest.contract.capability)){
+   assert.ok(['image.visual-match.v1','photo.enhance.v1'].includes(pack.manifest.contract.capability),'required executor missing');
+   const c=pack.cases[0];await assert.rejects(executeCpu(pack.manifest.contract.capability,c.input,JSON.parse(c.parameters),c.config,new AbortController().signal),/CAPABILITY_UNSUPPORTED/);
+   continue;
+  }
   for(const c of pack.cases){
    const run=executeCpu(pack.manifest.contract.capability,c.input,JSON.parse(c.parameters),c.config,new AbortController().signal);
    if(c.expect.kind==='REJECT'){await assert.rejects(run,{message:c.expect.errorCode});continue;}

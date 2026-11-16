@@ -43,8 +43,12 @@ test('execution runtime persists before computing, verifies artifacts, returns t
  let published=0;const ports={authorize:async()=>({coordinatorEpoch:1,online:true,ownerIdle:true,admissionLimit:grant.extra}),read:async()=>input,
   publish:async(bytes,schemaId)=>{assert.equal(ledger.status(offer.task.attemptId).state,'RUNNING');published++;return {artifactId:'output',contentVersion:1,contentHash:digest(bytes),schemaId,schemaVersion:1};}};
  const runtime=new PcExecutionRuntime(ledger,ports);
+ const {executionObserver}=require('../dist/execution-observer'),{ExecutionTrace}=require('../dist/execution-trace'),{TraceBuffer}=require('../dist/trace-buffer');
+ executionObserver.enable({domain:'SIMULATED'});executionObserver.observe(offer);
+ const trace=new ExecutionTrace(new TraceBuffer(),{traceId:'observer-runtime',parentSpanId:null,snapshotVersion:1,deviceInstanceId:'d'},offer);
  try{
-  const a=await runtime.run(offer,config);assert.equal(a.state,'SUCCEEDED');assert.deepEqual(await runtime.run(offer,config),a);assert.equal(published,1);assert.deepEqual(occupiedV2(ledger.snapshot()),[]);
+  const a=await runtime.run(offer,config,{trace});
+  const observation=executionObserver.snapshot().attempts.find(r=>r.id===offer.task.attemptId);assert.equal(observation.state,'SUCCEEDED');assert.equal(observation.input.verified,true);assert.equal(observation.input.bytes,input.length);assert.equal(observation.output.hash,a.outputs[0].contentHash);assert.equal(observation.settled,true);assert.equal(observation.sends,undefined);for(const phase of ['LOAD','EXECUTE','PUBLISH'])assert.ok(observation.timings[phase]>=0);assert.equal(a.state,'SUCCEEDED');assert.deepEqual(await runtime.run(offer,config),a);assert.equal(published,1);assert.deepEqual(occupiedV2(ledger.snapshot()),[]);
   await runtime.close();await ledger.close();ledger=await DurableLedger.open(directory,who,certificate,()=>0);
   const restored=new PcExecutionRuntime(ledger,ports);assert.deepEqual(await restored.run(offer,config),a);assert.equal(published,1);
   const changed=structuredClone(offer);changed.task.parameters='{"different":true}';await assert.rejects(restored.run(changed,config),/CONFLICT/);

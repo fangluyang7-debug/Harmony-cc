@@ -1,3 +1,4 @@
+import { NativeWorkSlots } from './NativeWorkSlots';
 import photoRuntime from 'libharmony_photo.so';
 import {executeLocal,encoderCapability,localExecutorVersion,hasLocalExecutor} from './executors/Registry';
 import {EngineResult} from './executors/Types';
@@ -85,6 +86,7 @@ export class NativeAgent {
  private localOnly=false;
  private ready=false;
  private welcomed=false;
+ private handshakeAt=0;
  private foreground=true;
  private lifecycleForeground:()=>boolean=()=>true;
  private paused=false;
@@ -208,9 +210,12 @@ export class NativeAgent {
   agent.peerLinks=new NativePeerLinks(context,transport,peer.deviceId);agent.peerLinks.start();
   agent.lifecycleForeground=lifecycleForeground;agent.foreground=lifecycleForeground();await agent.restorePreferences();agent.timer=setInterval(()=>{void agent.tick().catch((e:Error)=>agent.error(e as Error));},2000);await agent.tick();return agent;
  }
+ private workSlots=new NativeWorkSlots(monotonic);
+ workSlotSnapshot():string{return this.workSlots.snapshot();}
  isConnected():boolean{return this.ready&&!this.stopped;}
  /** Control connection alone does not mean this App's source-side capabilities are qualified. */
  async pendingCapabilities(capabilities:string[]):Promise<string[]>{
+  if(this.stopped)throw Error('HOST_STOPPED');
   if(!this.isConnected())return ['控制连接'];
   if(!this.idle())return ['手机前台贡献'];
   const executors=this.executors();
@@ -355,7 +360,14 @@ export class NativeAgent {
    if(m.type==='Ack')await this.store.changeJournal(new HostJournalChange(j=>{j.outbox=j.outbox.filter(x=>x.messageId!==m.messageId);}));
   }
  }
+ private recoverHandshake():void{
+  if(this.stopped||this.ready||this.socket===null||monotonic()-this.handshakeAt<20000)return;
+  const stale=this.socket;this.socket=null;this.ready=false;this.welcomed=false;this.sent.clear();this.peerLinks?.invalidate();
+  // Preserve the ledger/outbox: reconnect negotiates and recovers the same identity.
+  void stale.close().catch(()=>{});this.error(Error('CONTROL_HANDSHAKE_TIMEOUT'));
+ }
  private async connect():Promise<void>{
+  this.recoverHandshake();
   if(this.connecting||this.socket!==null||this.stopped)return;this.connecting=true;this.renewAt=0;
   try{
    let info:Identity;
@@ -367,7 +379,7 @@ export class NativeAgent {
    }
    if(info.domain!==this.installation.bootstrap.domain||info.version!==2)throw Error('IDENTITY_INVALID');
    await this.store.change(new HostChange(s=>{s.journal=bindAgentJournalV2(s.journal,info.coordinatorId,info.epoch);}));
-   const socket=webSocket.createWebSocket();this.socket=socket;this.sent.clear();this.welcomed=false;
+   const socket=webSocket.createWebSocket();this.socket=socket;this.handshakeAt=monotonic();this.sent.clear();this.welcomed=false;
    socket.on('message',(_error,data)=>{if(this.socket!==socket)return;if(typeof data!=='string'){void socket.close();return;}this.work=this.work.then(()=>this.message(JSON.parse(data) as MessageEnvelopeV2)).catch((e:Error)=>{this.error(e as Error);void socket.close();});});
    socket.on('close',(_error,value)=>{if(this.socket!==socket)return;if(value?.code===4001)void this.coordinatorGone();this.peerLinks?.invalidate();this.ready=false;this.welcomed=false;this.socket=null;this.sent.clear();});
    socket.on('error',()=>{if(this.socket!==socket)return;this.peerLinks?.invalidate();this.ready=false;this.welcomed=false;this.socket=null;this.sent.clear();void socket.close().catch(()=>{});});
@@ -497,7 +509,7 @@ export class NativeAgent {
  }
  private async dispatch(message:MessageEnvelopeV2):Promise<void>{
   const offer=validateAgentOfferV2(message,this.installation.paired.peer.deviceId),id=offer.task.attemptId;
-  if(this.offered.has(id))return;this.offered.add(id);
+  if(this.offered.has(id))return;this.offered.add(id);this.workSlots.begin(offer);
   try{
    const rejected=this.store.read().journal.rejected?.find(r=>r.attemptId===id);
    if(rejected)throw Error(rejected.digest===factory.digest(canonical(offer))?rejected.reason:'ATTEMPT_CONFLICT');
@@ -507,7 +519,7 @@ export class NativeAgent {
     await this.admit(offer,message,false);await this.flush();return;
    }
    if(!this.idle()||!this.ready)throw Error('OWNER_ACTIVE');
-   const queueStart=monotonic();await this.waitTurn(offer);const queueEnd=monotonic();
+   this.workSlots.stage(id,'QUEUE');const queueStart=monotonic();await this.waitTurn(offer);const queueEnd=monotonic();
    const admitStart=monotonic();const authorization=await this.transport.json('/v2/executions/'+id+'/authorize',{} as Record<string,Object>) as Authorization;
    if(canonical(authorization.offer)!==canonical(offer))throw Error('OFFER_SCOPE');
    const evidence=authorization.qualification??await this.transport.json('/v2/qualification/'+offer.target.targetId) as Qualification;
@@ -519,14 +531,14 @@ export class NativeAgent {
    void this.flush().catch((e:Error)=>this.error(e));
    await this.execute(offer,authorization.inputTicket,null,trace);
   }catch(e){
-   if(!this.store.read().state.entries.some(x=>x.record.attemptId===id)){const reason=/^[A-Z_0-9:]+$/.test((e as Error).message)?(e as Error).message:'EXECUTION_REJECTED';await this.store.change(new HostChange(s=>{receiveAgentMessageV2(s.journal,message,s.state.groupId,factory);
+   if(!this.store.read().state.entries.some(x=>x.record.attemptId===id)){const reason=/^[A-Z_0-9:]+$/.test((e as Error).message)?(e as Error).message:'EXECUTION_REJECTED';this.workSlots.finish(id,'REJECTED',reason);await this.store.change(new HostChange(s=>{receiveAgentMessageV2(s.journal,message,s.state.groupId,factory);
     if(!s.journal.rejected)s.journal.rejected=[];
     const old=s.journal.rejected.find(r=>r.attemptId===id),digest=factory.digest(canonical(offer));
     if(old&&old.digest!==digest){const conflict:ProtocolError={version:2,code:'ATTEMPT_CONFLICT',retryable:false,messageId:message.messageId};this.enqueue(s,'ProtocolError',conflict);return;}
     const code=old?.reason??(reason==='QUEUE_STARVED'?'QUEUE_STARVED_NOT_STARTED':reason);
     if(!old)s.journal.rejected.push({attemptId:id,digest,reason:code});
     const reply:AdmissionReplyV2={attemptId:id,holderInstanceId:s.state.holderInstanceId,status:'REJECTED',reasonCode:code,record:null,wait:{value:null,source:'UNKNOWN',sampledAt:0,ttlMs:1,unit:'ms'}};this.enqueue(s,'AdmissionReply',reply,message.messageId);this.enqueue(s,'Ack',{messageId:message.messageId} as AckPayload,message.messageId);}));await this.flush();}else{await this.abortBeforeStart(id);this.error(e as Error);}
-  }finally{this.waitReasons.delete(id);this.offered.delete(id);this.running.delete(id);if(this.queueStarted.has(id)){const record=this.store.read().state.entries.find(e=>e.record.attemptId===id)?.record;if(record?.resourcesSettled){this.queue.settle(id,monotonic(),record.receipt?.state==='SUCCEEDED');this.queueStarted.delete(id);}}else{try{this.queue.removeWaiting(id);}catch(e){}}this.launching=false;this.pumpQueue();}
+  }finally{const observed=this.store.read().state.entries.find(e=>e.record.attemptId===id)?.record;this.workSlots.finish(id,observed?.receipt?.state??'UNCONFIRMED',observed?.receipt?.errorCode??'');this.waitReasons.delete(id);this.offered.delete(id);this.running.delete(id);if(this.queueStarted.has(id)){const record=this.store.read().state.entries.find(e=>e.record.attemptId===id)?.record;if(record?.resourcesSettled){this.queue.settle(id,monotonic(),record.receipt?.state==='SUCCEEDED');this.queueStarted.delete(id);}}else{try{this.queue.removeWaiting(id);}catch(e){}}this.launching=false;this.pumpQueue();}
  }
  private async abortBeforeStart(id:string):Promise<void>{
   await this.store.change(new HostChange(s=>{const entry=s.state.entries.find(e=>e.record.attemptId===id);
@@ -557,13 +569,13 @@ export class NativeAgent {
  private async execute(offer:DispatchOfferV2,ticket:Ticket|null,test:ReferenceCase|null,trace:NativeTrace|null=null):Promise<EvaluationReport|null>{
   const id=offer.task.attemptId;let overheadMs:number|undefined;let outputs:ArtifactRefV2[]=[],state='FAILED',errorCode:string|null=null,report:EvaluationReport|null=null,phase='LOAD',phaseStart=monotonic();
   try{
-   let input:Uint8Array;
+   if(test===null)this.workSlots.stage(id,'LOAD');let input:Uint8Array;
    if(test!==null)input=referenceBytes(test.input);else{if(ticket===null||ticket.operation!=='READ'||canonical(ticket.ref)!==canonical(offer.task.inputs[0]))throw Error('ARTIFACT_SCOPE');const local=offer.transferPlan.length===0&&this.inputs!==null;if(local&&(offer.task.app.appInstanceId!==this.policy?.identity.appInstanceId||offer.task.originDeviceId!==this.installation.paired.peer.deviceId))throw Error('LOCAL_INPUT_SCOPE');const cached=local?await this.inputs!.read(ticket.ref.contentHash):null;if(local&&cached===null)throw Error('SDK_INPUT_NOT_REGISTERED');const download=async():Promise<Uint8Array>=>await this.transport.request('/v2/artifacts/'+ticket!.ref.artifactId+'/'+ticket!.ref.contentVersion,null,http.RequestMethod.GET,{'Authorization':'Bearer '+ticket!.token,'X-Device-Credential':this.transport.credential});input=cached??(trace===null?await download():await trace.transfer('READ',download));if(input.byteLength!==ticket.bytes)throw Error('TRANSFER_SIZE');}
    if(hash(input)!==offer.task.inputs[0].contentHash)throw Error('INPUT_HASH');trace?.add(phase,phaseStart,monotonic());phaseStart=-1;if(this.cancelled(id))throw Error('CANCELLED_SETTLED');
-   await this.store.change(new HostChange(s=>{s.state=startAttemptV2(s.state,id,monotonic());}));const computeStart=monotonic();this.timings.start(id,computeStart,input.byteLength,offer.target.executorId==='harmony.image.cpu.v1'?'COLD':'UNKNOWN');phase='EXECUTE';phaseStart=computeStart;const result=await this.engine(offer.task.contract.capability,input,offer.task.parameters,id);const executeEnd=monotonic(),wall=executeEnd-computeStart;
+   await this.store.change(new HostChange(s=>{s.state=startAttemptV2(s.state,id,monotonic());}));const computeStart=monotonic();this.timings.start(id,computeStart,input.byteLength,offer.target.executorId==='harmony.image.cpu.v1'?'COLD':'UNKNOWN');phase='EXECUTE';phaseStart=computeStart;if(test===null)this.workSlots.stage(id,'EXECUTE',input.byteLength);const result=await this.engine(offer.task.contract.capability,input,offer.task.parameters,id);const executeEnd=monotonic(),wall=executeEnd-computeStart;
    if(result.overheadMs!==undefined&&Number.isFinite(result.overheadMs)&&result.overheadMs>=0&&result.overheadMs<=wall)overheadMs=result.overheadMs;
    if(test!==null){const compute=this.sample(wall-(overheadMs??0),'ms','PRIOR'),cold=this.sample(overheadMs??0,'ms','PRIOR');compute.ttlMs=3600000;cold.ttlMs=3600000;this.costs.set(offer.task.contract.capability,{compute,cold});}
-   trace?.add(phase,phaseStart,executeEnd);phaseStart=-1;if(this.cancelled(id))throw Error('CANCELLED_SETTLED');phase='PUBLISH';phaseStart=monotonic();
+   trace?.add(phase,phaseStart,executeEnd);phaseStart=-1;if(this.cancelled(id))throw Error('CANCELLED_SETTLED');phase='PUBLISH';phaseStart=monotonic();if(test===null)this.workSlots.stage(id,'PUBLISH',result.data.byteLength);
    if(test!==null){if(result.data.byteLength>test.maxOutputBytes)throw Error('EVALUATION_OUTPUT_LIMIT');report={settled:true,permitId:id,domain:this.installation.bootstrap.domain,output:base64.encodeToStringSync(result.data),durationMs:wall};if(overheadMs!==undefined)report.overheadMs=overheadMs;await this.db.put('evaluation:'+id,JSON.stringify(report));outputs=[{artifactId:id,contentVersion:1,contentHash:hash(result.data),schemaId:result.schemaId,schemaVersion:1}];}
    else{const publish:PublishInput={bytes:result.data.byteLength,contentHash:hash(result.data),schemaId:result.schemaId};const destination=await this.transport.json('/v2/executions/'+id+'/output',publish) as OutputTicket;const t=destination.ticket;if(t.operation!=='WRITE'||t.bytes!==result.data.byteLength||t.ref.contentHash!==hash(result.data)||t.ref.schemaId!==result.schemaId)throw Error('ARTIFACT_SCOPE');if(destination.delivery==='LOCAL'){if(this.inputs===null||this.policy?.identity.appInstanceId!==offer.task.app.appInstanceId||offer.task.originDeviceId!==this.installation.paired.peer.deviceId)throw Error('LOCAL_OUTPUT_SCOPE');await this.inputs.stage(t.ref.contentHash,t.bytes,result.data);}else{const upload=async():Promise<Uint8Array>=>await this.transport.request('/v2/artifacts/'+t.ref.artifactId+'/'+t.ref.contentVersion,null,http.RequestMethod.PUT,{'Authorization':'Bearer '+t.token,'X-Device-Credential':this.transport.credential,'Content-Type':'application/octet-stream'},result.data);if(trace===null)await upload();else await trace.transfer('WRITE',upload);}outputs=[t.ref];}
    trace?.add(phase,phaseStart,monotonic());phaseStart=-1;state='SUCCEEDED';
@@ -571,6 +583,7 @@ export class NativeAgent {
   // Persist telemetry with the receipt: a later quota ACK or socket failure must
   // not discard the completed execution's only phase measurements.
   await this.store.change(new HostChange(s=>{const entry=s.state.entries.find(x=>x.record.attemptId===id)!;const receipt:ExecutionReceiptV2={attemptId:id,coordinatorEpoch:offer.task.coordinatorEpoch,planRevision:offer.task.planRevision,fence:entry.record.fence,state,resourcesSettled:true,outputs,actualTarget:offer.target,actualConfiguration:offer.allowedConfigs[0].id,errorCode};s.state=settleAttemptV2(s.state,receipt);if(test===null){const admittedAt=entry.deadline-Math.min(offer.leaseMs,offer.task.budget.remainingMs);this.report(s,receipt,entry.record.ledgerEpoch===s.state.ledgerEpoch?Math.max(0,monotonic()-admittedAt):undefined,overheadMs);if(trace!==null&&trace.spans.length>0)this.enqueue(s,'TraceBatch',{spans:trace.spans} as TraceBatch);}}));
+  if(test===null)this.workSlots.finish(id,state,errorCode??'');
   const settled=this.store.read().state.entries.find(e=>e.record.attemptId===id);if(settled)this.timings.finish(settled,monotonic());
   if(test!==null&&report===null){report={settled:true,permitId:id,domain:this.installation.bootstrap.domain,output:'',durationMs:0};if(state==='FAILED'&&errorCode)report.errorCode=errorCode;else report.interrupted=true;await this.db.put('evaluation:'+id,JSON.stringify(report));}
   await this.ackQuota();await this.flush();return report;
@@ -582,6 +595,17 @@ export class NativeAgent {
   if(this.launching||this.offered.size>0)throw Error('EVALUATION_DEFERRED');
   this.launching=true;
   try{await this.admit(offer,null,true);}finally{this.launching=false;this.pumpQueue();}
+ }
+ private async reconcileUnadmittedEvaluation(work:Work):Promise<boolean>{
+  const state=this.store.read().state,permit=work.permit;
+  // calibrate() is serialized. A lost claim response can leave CLAIMED at the
+  // center, although this exact live host never admitted or executed it.
+  if(work.mode!=='RECONCILE'||work.ledgerEpoch!==state.ledgerEpoch||work.deviceInstanceId!==this.instance||
+   state.entries.some(e=>e.record.attemptId===permit.id)||this.running.has(permit.id)||this.launching)return false;
+  if(await this.db.get('evaluation:'+permit.id)!==null)return false;
+  const declined:EvaluationReport={notRun:true,settled:true,permitId:permit.id,domain:permit.domain,output:'',durationMs:0};
+  await this.db.put('evaluation:'+permit.id,JSON.stringify(declined));
+  await this.transport.json('/v2/evaluations/'+permit.id+'/report',declined);return true;
  }
  private async calibrate():Promise<void>{
   if(this.calibrating||!this.ready||!this.idle()||this.store.read().state.grant===null)return;this.calibrating=true;this.calibrationPending=false;
@@ -597,8 +621,9 @@ export class NativeAgent {
     else{recovered={settled:true,permitId:permit.id,domain:permit.domain,output:'',durationMs:0};const receipt=previous.record.receipt;if(receipt?.state==='FAILED'&&receipt.errorCode)recovered.errorCode=receipt.errorCode;else recovered.interrupted=true;}
     await this.transport.json('/v2/evaluations/'+permit.id+'/report',recovered);return;
    }
+   if(await this.reconcileUnadmittedEvaluation(work))return;
    // Admission records survive ledger recovery. An absent admission in a retired
-   // generation proves non-execution; an unknown current-generation claim does not.
+   // generation proves non-execution. Same live generation is checked above.
    if(work.mode==='RECONCILE'&&work.ledgerEpoch<state.ledgerEpoch&&work.deviceInstanceId!==this.instance&&!state.entries.some(x=>x.record.attemptId===permit.id)){
     const declined:EvaluationReport={notRun:true,settled:true,permitId:permit.id,domain:permit.domain,output:'',durationMs:0};
     await this.db.put('evaluation:'+permit.id,JSON.stringify(declined));

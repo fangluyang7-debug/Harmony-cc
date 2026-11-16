@@ -38,7 +38,7 @@ fs.mkdirSync(path.join(stage,'entry/src/main/resources/rawfile'),{recursive:true
 fs.copyFileSync(path.join(root,'tests/agent-conformance/fixtures/ledger-v2.json'),path.join(stage,'entry/src/main/resources/rawfile/ledger-v2.json'));
 const references=require('@harmony/reference-capabilities');
 const rawDir=path.join(stage,'entry/src/main/resources/rawfile');
-if(name==='harmony-coordinator')for(const file of ['photo-display.html','photo-display.js','photo-display.css','photo.css','photo-display-compare.mjs','qrcode.js','fonts/harmony-ui.woff']){const target=path.join(rawDir,'display',file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(root,'apps/team-space-web',file),target);}
+if(name==='harmony-coordinator')for(const file of ['photo-display.html','photo-display.js','photo-display.css','photo.css','photo-display-compare.mjs','photo-execution-view.mjs','qrcode.js','fonts/harmony-ui.woff']){const target=path.join(rawDir,'display',file);fs.mkdirSync(path.dirname(target),{recursive:true});fs.copyFileSync(path.join(root,'apps/team-space-web',file),target);}
 const packs=(await references.builtinReferencePacks()).map(p=>({manifest:p.manifest,digest:references.packDigest(p),cases:p.cases.map(c=>({...c,input:c.input.toString('base64')}))}));
 if(process.env.HARMONY_IMAGE_ENCODER_CONFIG){
  packs.push(await require('./package-harmony-image-encoder.cjs').packageImageEncoder(process.env.HARMONY_IMAGE_ENCODER_CONFIG,rawDir));

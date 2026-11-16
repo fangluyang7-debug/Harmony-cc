@@ -36,3 +36,5 @@ export async function leaveAgent(context:common.UIAbilityContext):Promise<void>{
  try{await current.leaveSpace();}catch(e){agent=null;try{agent=await NativeAgent.start(context,null,()=>desiredForeground);}catch(_){}throw e as Error;}
  agent=null;const store=await preferences.getPreferences(context,{name:'agent-connection-v1'});await store.put('left',true);await store.flush();AppStorage.setOrCreate('agentPaired',false);AppStorage.setOrCreate('agentCenter','');AppStorage.setOrCreate('agentStatus','已退出空间，可独立使用图片应用');
 }
+
+export function agentWorkSlots():string {return agent?.workSlotSnapshot()??'[]';}

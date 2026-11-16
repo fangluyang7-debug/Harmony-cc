@@ -13,10 +13,15 @@ test('registered SDK, alternatives, shared quota, queued cancellation, callback 
   await until(async()=>{try{return (await r.snapshots.build('sdk-group')).snapshot.candidates.length===2;}catch{return false;}});
   const invite=await r.auth.invite('sdk-group','app-owner','sdk-origin',r.url),owner=await r.auth.exchange({inviteId:invite.inviteId,code:invite.code,holderInstanceId:randomUUID()}),connection={address:r.url,certificate:invite.certificate,fingerprint:invite.fingerprint,credential:owner.credential,domain:'SIMULATED'};
   const policy={batchWeight:2,label:'SDK fixture',allowedContracts:['text.count.v1'],maxConcurrent:1,resources:capacity,offlineBase:[],onlineExtra:[]};
+  await r.allotments.confirmDevice(owner.peer.deviceId,capacity,[{groupId:owner.peer.groupId,holderInstanceId:owner.peer.holderInstanceId,appInstanceId:null}]);
   const ownerFile=path.join(r.config.dataDir,'owner.json'),policyFile=path.join(r.config.dataDir,'policy.json'),appFile=path.join(r.config.dataDir,'app.json');fs.writeFileSync(ownerFile,JSON.stringify({connection}));fs.writeFileSync(policyFile,JSON.stringify(policy));
   await new Promise((resolve,reject)=>execFile(process.execPath,[path.join(root,'services/pc-agent/dist/app-register-main.js'),ownerFile,policyFile,appFile],{windowsHide:true,timeout:30000},e=>e?reject(e):resolve()));
   const inviteFile=path.join(r.config.dataDir,'native-invitation.json');await new Promise((resolve,reject)=>execFile(process.execPath,[path.join(root,'services/pc-agent/dist/app-register-main.js'),ownerFile,policyFile,inviteFile,'--invite-only'],{windowsHide:true,timeout:30000},e=>e?reject(e):resolve()));const nativeInvite=JSON.parse(fs.readFileSync(inviteFile));assert.equal((await r.db.registeredInstallation.findUnique({where:{id:nativeInvite.registrationId}})).state,'INVITED');assert.equal(nativeInvite.credential,undefined);
   const config=JSON.parse(fs.readFileSync(appFile)),request=appRequest(config.connection),client=new SchedulerSdk(nodeSdkPort(config.connection));
+  // The CLI declares capabilities; quota now belongs to the coordinator. Set a
+  // server-owned small policy explicitly for the shared-quota assertions below.
+  assert.equal(config.quota.maxConcurrent,64);
+  await r.db.registeredApp.update({where:{id:config.identity.app.appId},data:{maxConcurrent:1,batchWeight:2}});
   assert.notEqual(config.connection.credential,owner.credential);
   const bytes=Buffer.from('{"text":"Hello SDK"}'),input=await client.registerInput(bytes,'text.input');
   const make=(id=randomUUID())=>({version:3,id,outputContract:'text.counts',qualityTarget:'reference',nodes:[{id:'compute',capability:'text.count.v1',input,parameters:'{}',dependsOn:[]}]}),options=()=>({requestId:randomUUID(),budgetMs:30000,resultDestination:'ORIGIN'});

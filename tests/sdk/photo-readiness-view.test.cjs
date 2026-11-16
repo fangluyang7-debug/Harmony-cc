@@ -26,3 +26,13 @@ test('elapsed setup time remains visible while the qualification request is pend
  let finish;const t=monitor(()=>new Promise(resolve=>finish=resolve));t.view.start();t.tick();t.tick();assert.equal(t.views.at(-1).elapsedMs,2000);assert.equal(t.views.at(-1).ready,false);
  finish([]);await t.flush();assert.equal(t.views.at(-1).ready,true);t.tick();assert.equal(t.views.at(-1).elapsedMs,2000);t.view.stop();assert.equal(t.ticks.size,0);
 });
+
+test('a stuck readiness probe times out, retries, and ignores its late success',async()=>{
+ let complete,calls=0;const t=monitor(()=>++calls===1?new Promise(r=>complete=r):Promise.resolve([]));
+ t.view.start();await t.advance();assert.equal(t.views.at(-1).ready,false);assert.equal(t.views.at(-1).recovery,'RETRY');assert.match(t.views.at(-1).message,/超时/);
+ complete([]);await t.flush();assert.equal(t.views.at(-1).ready,false);
+ await t.advance();assert.equal(t.views.at(-1).ready,true);assert.equal(calls,2);t.view.stop();assert.equal(t.timers.size,0);
+});
+test('revoked authorization provides an actionable state instead of ordinary calibration waiting',async()=>{
+ const t=monitor(async()=>{throw Error('APP_CREDENTIAL_REVOKED');});t.view.start();await t.flush();assert.equal(t.views.at(-1).recovery,'AUTHORIZE');assert.match(t.views.at(-1).message,/重新授权/);t.view.stop();
+});

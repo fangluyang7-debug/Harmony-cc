@@ -28,13 +28,14 @@ test('SIMULATED ordinary photo flow: source App host + peer via SDK/PlanningServ
   const local=await m.exports.matchShoppingPhoto(images,{...common,sdk:null,originTarget:null,deadline:performance.now()+30000},null);
   // Synthetic evidence selects the cooperation branch for correctness, never a speed claim.
   const team=await m.exports.matchShoppingPhoto(images,{...common,sdk:hosts[0].sdk(),originTarget:candidates.find(c=>c.deviceId===origin.deviceId).targetId,deadline:performance.now()+30000},{localMs:10000,dispatchRoundTripMs:1,remoteAvailable:true});
-  assert.deepEqual(team.pairs,local.pairs);assert.equal(team.jobs.length,3);assert.ok(team.jobs.some(j=>j.deviceId===origin.deviceId));
+  assert.deepEqual(team.pairs,local.pairs);assert.equal(team.jobs.length,3);assert.ok(team.jobs.every(j=>candidates.some(c=>c.deviceId===j.deviceId)));
   // A cheap fixture may rationally stay on the source. Do not equate an SDK
   // submission with actual two-device execution, or turn this into a speed test.
   assert.equal(team.executionMode,new Set(team.jobs.map(j=>j.deviceId)).size===2?'MULTI_DEVICE_SDK':'SINGLE_DEVICE_SDK');
   const realSdk=hosts[0].sdk(),remote=candidates.find(c=>c.deviceId!==origin.deviceId);
+  let coverageIndex=0;
   const coverageSdk={registerInput:realSdk.registerInput.bind(realSdk),releaseInput:realSdk.releaseInput.bind(realSdk),submit:async(workflow,options)=>{
-   const copy=structuredClone(workflow);if(!copy.nodes[0].targetId)copy.nodes[0].targetId=remote.targetId;return realSdk.submit(copy,options);
+   const copy=structuredClone(workflow);copy.nodes[0].targetId=coverageIndex++===0?candidates.find(c=>c.deviceId===origin.deviceId).targetId:remote.targetId;return realSdk.submit(copy,options);
   }};
   // Test-only target constraints cover both real host paths; production does
   // not pin the peer. This assertion is not evidence of automatic placement.

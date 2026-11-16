@@ -79,7 +79,7 @@ function windowsPackage(name, role) {
   const center = role === 'center';
   const service = 'services/' + (center ? 'coordinator' : 'pc-agent');
   const manifest = path.join(root, service, 'package.json');
-  const files = [service + '/dist', 'scripts/runtime-desktop.cjs', 'scripts/runtime-device-binding.cjs', 'scripts/start-coordinator-lan.cjs', 'apps/windows-agent/discovery.cjs',
+  const files = [service + '/dist', 'scripts/runtime-desktop.cjs', 'scripts/execution-preview-cache.cjs', 'scripts/runtime-device-binding.cjs', 'scripts/start-coordinator-lan.cjs', 'apps/windows-agent/discovery.cjs',
     'capabilities/coverage-requirements.json', 'capabilities/capability-hints.json', 'contracts/scheduling/v2/schema/protocol.schema.json'];
   if (center) files.push(service + '/generated/client', service + '/scripts/migrate.cjs',
     service + '/prisma', 'apps/team-space-web','scripts/photo-display-server.cjs','scripts/photo-display-coordinator.cjs','scripts/photo-display-records.cjs');
@@ -148,6 +148,7 @@ function windowsPackage(name, role) {
     const asset = path.join('apps/runtime-desktop', file);
     copy(path.join(root, asset), path.join(dest, asset));
   }
+  if (!center) for (const file of ['execution.html','execution-view.mjs','execution.css']) copy(path.join(root,'apps/runtime-desktop',file),path.join(dest,'apps/runtime-desktop',file));
   {
     copy(electronDist, dest);
     fs.renameSync(path.join(dest, 'electron.exe'), path.join(dest, center ? 'ZhiDiaoCenter.exe' : 'ZhiDiaoHongShu.exe'));
